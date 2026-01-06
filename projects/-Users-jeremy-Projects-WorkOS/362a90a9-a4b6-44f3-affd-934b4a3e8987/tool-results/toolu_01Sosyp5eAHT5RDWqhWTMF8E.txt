@@ -1,0 +1,17 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/backlog/recommendations/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    68→      .groupBy(tasks.clientId)
+    69→
+    70→    const clientLastCompletionMap = new Map(clientLastCompletion.map((c) => [c.clientId, c.lastCompletion]))
+    71→
+    72→    const weeklyClientCompletions = await db
+    73→      .select({
+    74→        clientId: tasks.clientId,
+    75→        count: sql<number>`COUNT(*)`.as("count"),
+    76→      })
+    77→      .from(tasks)
+    78→      .where(and(eq(tasks.status, "done"), gte(tasks.completedAt, weekStart)))
+    79→      .groupBy(tasks.clientId)
+    80→
+    81→    const weeklyCompletionMap = new Map(weeklyClientCompletions.map((c) => [c.clientId, Number(c.count)]))
+    82→
+    83→    const todayDrainTypes = await db

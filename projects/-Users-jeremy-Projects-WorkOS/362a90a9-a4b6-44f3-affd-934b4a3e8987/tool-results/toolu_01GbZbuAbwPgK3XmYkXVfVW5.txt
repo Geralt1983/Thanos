@@ -1,0 +1,10 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/lib/events.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    80→    return []
+    81→  }
+    82→}
+    83→
+    84→// Count deferrals for a specific task
+    85→export async function getDeferralCount(taskId: number): Promise<number> {
+    86→  try {
+    87→    const db = await getDb()
+    88→    const events = await db.select().from(taskEvents).where(eq(taskEvents.taskId, taskId))

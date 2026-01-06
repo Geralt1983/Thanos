@@ -1,0 +1,252 @@
+     1→"use client"
+     2→
+     3→import useSWR from "swr"
+     4→import { isPreviewEnvironment } from "@/lib/mock-data"
+     5→import { SWR_CONFIG } from "@/lib/fetch-utils"
+     6→
+     7→const fetcher = async (url: string) => {
+     8→  const res = await fetch(url)
+     9→  if (!res.ok) {
+    10→    throw new Error(`API error ${res.status}`)
+    11→  }
+    12→  return res.json()
+    13→}
+    14→
+    15→export interface TodayMetrics {
+    16→  completedCount: number
+    17→  earnedMinutes: number
+    18→  targetMinutes: number
+    19→  percent: number
+    20→  paceStatus: "ahead" | "on_track" | "behind" | "minimum_only"
+    21→  momentum: {
+    22→    score: number
+    23→    percent: number
+    24→    status: "crushing" | "on_track" | "behind" | "stalled"
+    25→    label: string
+    26→    expectedByNow: number
+    27→    actualMinutes: number
+    28→    dayProgress: number
+    29→  }
+    30→  streak: number
+    31→}
+    32→
+    33→export interface ClientMetrics {
+    34→  clientId: number
+    35→  clientName: string
+    36→  totalTasks: number
+    37→  completedTasks: number
+    38→  activeTasks: number
+    39→  daysSinceLastTask: number | null
+    40→  isStale: boolean
+    41→}
+    42→
+    43→let previewCompletedTasks: { id: number; completedAt: Date; effortEstimate: number }[] = []
+    44→
+    45→export function trackCompletedTask(task: { id: number; effortEstimate?: number }) {
+    46→  previewCompletedTasks.push({
+    47→    id: task.id,
+    48→    completedAt: new Date(),
+    49→    effortEstimate: task.effortEstimate || 2,
+    50→  })
+    51→}
+    52→
+    53→// Legacy alias
+    54→export const trackCompletedMove = trackCompletedTask
+    55→
+    56→export function clearPreviewCompletedTasks() {
+    57→  previewCompletedTasks = []
+    58→}
+    59→
+    60→// Legacy alias
+    61→export const clearPreviewCompletedMoves = clearPreviewCompletedTasks
+    62→
+    63→function calculatePreviewMomentum(): TodayMetrics["momentum"] {
+    64→  if (previewCompletedTasks.length === 0) {
+    65→    return {
+    66→      score: 0,
+    67→      percent: 0,
+    68→      status: "stalled",
+    69→      label: "Stalled",
+    70→      expectedByNow: 0,
+    71→      actualMinutes: 0,
+    72→      dayProgress: 0,
+    73→    }
+    74→  }
+    75→
+    76→  const now = new Date()
+    77→  const hour = now.getHours()
+    78→  const minute = now.getMinutes()
+    79→
+    80→  // Calculate day progress (9am-6pm = 9 hours)
+    81→  const workdayStart = 9
+    82→  const workdayEnd = 18
+    83→  const currentHour = hour + minute / 60
+    84→
+    85→  let dayProgress = 0
+    86→  if (currentHour >= workdayEnd) {
+    87→    dayProgress = 100
+    88→  } else if (currentHour > workdayStart) {
+    89→    dayProgress = Math.round(((currentHour - workdayStart) / (workdayEnd - workdayStart)) * 100)
+    90→  }
+    91→
+    92→  const targetMinutes = 180
+    93→  const expectedByNow = Math.round((dayProgress / 100) * targetMinutes)
+    94→  const actualMinutes = previewCompletedTasks.reduce((sum, t) => sum + t.effortEstimate * 20, 0)
+    95→
+    96→  // Score based on actual vs expected
+    97→  const score = expectedByNow > 0 ? Math.round((actualMinutes / expectedByNow) * 100) : actualMinutes > 0 ? 100 : 0
+    98→
+    99→  // Determine status
+   100→  let status: "crushing" | "on_track" | "behind" | "stalled" = "stalled"
+   101→  let label = "Stalled"
+   102→
+   103→  if (actualMinutes === 0) {
+   104→    status = "stalled"
+   105→    label = "Stalled"
+   106→  } else if (score >= 120) {
+   107→    status = "crushing"
+   108→    label = "Crushing it"
+   109→  } else if (score >= 80) {
+   110→    status = "on_track"
+   111→    label = "On track"
+   112→  } else {
+   113→    status = "behind"
+   114→    label = "Behind pace"
+   115→  }
+   116→
+   117→  return {
+   118→    score,
+   119→    percent: Math.round((actualMinutes / targetMinutes) * 100),
+   120→    status,
+   121→    label,
+   122→    expectedByNow,
+   123→    actualMinutes,
+   124→    dayProgress,
+   125→  }
+   126→}
+   127→
+   128→function getPreviewMetrics(): TodayMetrics {
+   129→  const earnedMinutes = previewCompletedTasks.reduce((sum, t) => sum + t.effortEstimate * 20, 0)
+   130→  const targetMinutes = 180
+   131→  const percent = Math.round((earnedMinutes / targetMinutes) * 100)
+   132→
+   133→  return {
+   134→    completedCount: previewCompletedTasks.length,
+   135→    earnedMinutes,
+   136→    targetMinutes,
+   137→    percent,
+   138→    paceStatus: percent >= 100 ? "on_track" : "behind",
+   139→    momentum: calculatePreviewMomentum(),
+   140→    streak: 0,
+   141→  }
+   142→}
+   143→
+   144→function getPreviewClientMetrics(): ClientMetrics[] {
+   145→  return [
+   146→    {
+   147→      clientId: 1,
+   148→      clientName: "Acme Corp",
+   149→      totalTasks: 5,
+   150→      completedTasks: 2,
+   151→      activeTasks: 3,
+   152→      daysSinceLastTask: 1,
+   153→      isStale: false,
+   154→    },
+   155→    {
+   156→      clientId: 2,
+   157→      clientName: "TechStart",
+   158→      totalTasks: 4,
+   159→      completedTasks: 1,
+   160→      activeTasks: 3,
+   161→      daysSinceLastTask: 0,
+   162→      isStale: false,
+   163→    },
+   164→    {
+   165→      clientId: 3,
+   166→      clientName: "Global Media",
+   167→      totalTasks: 3,
+   168→      completedTasks: 0,
+   169→      activeTasks: 3,
+   170→      daysSinceLastTask: 3,
+   171→      isStale: true,
+   172→    },
+   173→    {
+   174→      clientId: 4,
+   175→      clientName: "Internal",
+   176→      totalTasks: 2,
+   177→      completedTasks: 1,
+   178→      activeTasks: 1,
+   179→      daysSinceLastTask: 0,
+   180→      isStale: false,
+   181→    },
+   182→    {
+   183→      clientId: 5,
+   184→      clientName: "Side Project",
+   185→      totalTasks: 1,
+   186→      completedTasks: 0,
+   187→      activeTasks: 1,
+   188→      daysSinceLastTask: 5,
+   189→      isStale: true,
+   190→    },
+   191→  ]
+   192→}
+   193→
+   194→export function useMetrics() {
+   195→  const {
+   196→    data: todayData,
+   197→    error: todayError,
+   198→    isLoading: todayLoading,
+   199→    mutate: mutateToday,
+   200→  } = useSWR<TodayMetrics>("/api/metrics/today", fetcher, {
+   201→    ...SWR_CONFIG.default,
+   202→    onError: () => {},
+   203→  })
+   204→
+   205→  const {
+   206→    data: clientsData,
+   207→    error: clientsError,
+   208→    isLoading: clientsLoading,
+   209→    mutate: mutateClients,
+   210→  } = useSWR<ClientMetrics[]>("/api/metrics/clients", fetcher, {
+   211→    ...SWR_CONFIG.default,
+   212→    onError: () => {},
+   213→  })
+   214→
+   215→  const isPreview = typeof window !== "undefined" && isPreviewEnvironment()
+   216→
+   217→  const today = todayError && isPreview ? getPreviewMetrics() : todayData
+   218→  const clients = clientsError && isPreview ? getPreviewClientMetrics() : clientsData || []
+   219→
+   220→  const checkMilestone = async () => {
+   221→    try {
+   222→      await fetch("/api/notifications/milestone", { method: "POST" })
+   223→      mutateToday()
+   224→    } catch (error) {
+   225→      console.error("Failed to check milestone:", error)
+   226→    }
+   227→  }
+   228→
+   229→  const refresh = () => {
+   230→    if (isPreview && todayError) {
+   231→      // In preview mode with failed API, trigger a re-render by mutating with new data
+   232→      mutateToday(getPreviewMetrics(), false)
+   233→    } else {
+   234→      mutateToday()
+   235→      mutateClients()
+   236→    }
+   237→  }
+   238→
+   239→  return {
+   240→    today,
+   241→    clients,
+   242→    isLoading: todayLoading || clientsLoading,
+   243→    error: !isPreview ? todayError || clientsError : null,
+   244→    checkMilestone,
+   245→    refresh,
+   246→  }
+   247→}
+   248→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

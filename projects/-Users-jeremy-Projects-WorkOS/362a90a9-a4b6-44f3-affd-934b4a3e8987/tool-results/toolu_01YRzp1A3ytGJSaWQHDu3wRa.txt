@@ -1,0 +1,100 @@
+     1→import { NextResponse } from "next/server"
+     2→import { getDb } from "@/lib/db"
+     3→import { moves } from "@/lib/schema"
+     4→import { eq } from "drizzle-orm"
+     5→
+     6→function getDateInTimezone(date: Date, timezone: string): string {
+     7→  return date.toLocaleDateString("en-CA", { timeZone: timezone }) // en-CA gives YYYY-MM-DD format
+     8→}
+     9→
+    10→export async function GET(request: Request) {
+    11→  const { searchParams } = new URL(request.url)
+    12→  const weeks = Number.parseInt(searchParams.get("weeks") || "12")
+    13→  const timezone = searchParams.get("timezone") || "America/New_York"
+    14→
+    15→  try {
+    16→    const db = getDb()
+    17→    const startDate = new Date()
+    18→    startDate.setDate(startDate.getDate() - weeks * 7)
+    19→
+    20→    const completedMoves = await db
+    21→      .select({
+    22→        completedAt: moves.completedAt,
+    23→        effortEstimate: moves.effortEstimate,
+    24→      })
+    25→      .from(moves)
+    26→      .where(eq(moves.status, "done"))
+    27→
+    28→    // Group by date in JavaScript
+    29→    const countMap = new Map<string, { count: number; minutes: number }>()
+    30→
+    31→    for (const move of completedMoves) {
+    32→      if (!move.completedAt) continue
+    33→
+    34→      const completedAtDate = move.completedAt instanceof Date ? move.completedAt : new Date(String(move.completedAt))
+    35→      const dateKey = getDateInTimezone(completedAtDate, timezone)
+    36→
+    37→      // Only include dates within range
+    38→      if (new Date(dateKey) < startDate) continue
+    39→
+    40→      const existing = countMap.get(dateKey) || { count: 0, minutes: 0 }
+    41→      countMap.set(dateKey, {
+    42→        count: existing.count + 1,
+    43→        minutes: existing.minutes + (move.effortEstimate || 1) * 20,
+    44→      })
+    45→    }
+    46→
+    47→    // Build full calendar grid
+    48→    const heatmapData: { date: string; count: number; minutes: number; level: number }[] = []
+    49→
+    50→    for (let i = weeks * 7; i >= 0; i--) {
+    51→      const date = new Date()
+    52→      date.setDate(date.getDate() - i)
+    53→      const dateStr = getDateInTimezone(date, timezone)
+    54→      const data = countMap.get(dateStr)
+    55→
+    56→      const minutes = data?.minutes || 0
+    57→      // Level 0-4 based on percentage of goal (180 min)
+    58→      let level = 0
+    59→      if (minutes > 0) {
+    60→        const percentage = minutes / 180
+    61→        if (percentage >= 1) level = 4
+    62→        else if (percentage >= 0.75) level = 3
+    63→        else if (percentage >= 0.5) level = 2
+    64→        else level = 1
+    65→      }
+    66→
+    67→      heatmapData.push({
+    68→        date: dateStr,
+    69→        count: data?.count || 0,
+    70→        minutes,
+    71→        level,
+    72→      })
+    73→    }
+    74→
+    75→    return NextResponse.json({ heatmap: heatmapData })
+    76→  } catch (error) {
+    77→    console.error("Failed to fetch heatmap:", error)
+    78→
+    79→    const mockHeatmap = []
+    80→    for (let i = weeks * 7; i >= 0; i--) {
+    81→      const date = new Date()
+    82→      date.setDate(date.getDate() - i)
+    83→      const dateStr = getDateInTimezone(date, timezone)
+    84→      const level = Math.random() > 0.3 ? Math.floor(Math.random() * 5) : 0
+    85→      const minutes = level * 45
+    86→      mockHeatmap.push({
+    87→        date: dateStr,
+    88→        count: level > 0 ? Math.ceil(level * 1.5) : 0,
+    89→        minutes,
+    90→        level,
+    91→      })
+    92→    }
+    93→    return NextResponse.json({ heatmap: mockHeatmap })
+    94→  }
+    95→}
+    96→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

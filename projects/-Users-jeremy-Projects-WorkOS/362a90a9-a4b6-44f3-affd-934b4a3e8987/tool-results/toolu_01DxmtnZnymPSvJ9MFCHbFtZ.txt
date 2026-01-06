@@ -1,0 +1,15 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/backlog/recommendations/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    79→      .groupBy(tasks.clientId)
+    80→
+    81→    const weeklyCompletionMap = new Map(weeklyClientCompletions.map((c) => [c.clientId, Number(c.count)]))
+    82→
+    83→    const todayDrainTypes = await db
+    84→      .select({
+    85→        drainType: tasks.drainType,
+    86→      })
+    87→      .from(tasks)
+    88→      .where(and(eq(tasks.status, "done"), gte(tasks.completedAt, todayStart)))
+    89→
+    90→    const usedDrainTypesToday = new Set(todayDrainTypes.map((m) => m.drainType).filter(Boolean))
+    91→
+    92→    // Get clients with completions today

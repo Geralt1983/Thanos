@@ -1,0 +1,52 @@
+     1→import type React from "react"
+     2→import type { Metadata } from "next"
+     3→import { Geist, Geist_Mono } from "next/font/google"
+     4→import { Analytics } from "@vercel/analytics/next"
+     5→import "./globals.css"
+     6→import { MovesLayout } from "@/components/moves-layout"
+     7→
+     8→const _geist = Geist({ subsets: ["latin"] })
+     9→const _geistMono = Geist_Mono({ subsets: ["latin"] })
+    10→
+    11→export const metadata: Metadata = {
+    12→  title: "SaaS Metrics Dashboard",
+    13→  description: "Real-time dashboard insights",
+    14→  generator: "v0.app",
+    15→  icons: {
+    16→    icon: [
+    17→      {
+    18→        url: "/icon-light-32x32.png",
+    19→        media: "(prefers-color-scheme: light)",
+    20→      },
+    21→      {
+    22→        url: "/icon-dark-32x32.png",
+    23→        media: "(prefers-color-scheme: dark)",
+    24→      },
+    25→      {
+    26→        url: "/icon.svg",
+    27→        type: "image/svg+xml",
+    28→      },
+    29→    ],
+    30→    apple: "/apple-icon.png",
+    31→  },
+    32→}
+    33→
+    34→export default function RootLayout({
+    35→  children,
+    36→}: Readonly<{
+    37→  children: React.ReactNode
+    38→}>) {
+    39→  return (
+    40→    <html lang="en" className="dark">
+    41→      <body className={`font-sans antialiased`}>
+    42→        <MovesLayout>{children}</MovesLayout>
+    43→        <Analytics />
+    44→      </body>
+    45→    </html>
+    46→  )
+    47→}
+    48→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

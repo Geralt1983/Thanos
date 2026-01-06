@@ -1,0 +1,10 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/notifications/evening/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    78→    // Update daily log
+    79→    const [existingLog] = await db.select().from(dailyLog).where(eq(dailyLog.date, dateStr))
+    80→
+    81→    const logData = {
+    82→      completedTasks: completedToday.map((t) => t.id),
+    83→      clientsTouched: Array.from(clientsTouched),
+    84→      summary: `${rating} day - ${percent}% (${earnedMinutes}min)`,
+    85→    }
+    86→

@@ -1,0 +1,1040 @@
+2025-12-21T03:35:27.803Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (24.7ms): security find-generic-password -a $USER -w -s "Claude Code"
+2025-12-21T03:35:27.830Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (26.7ms): security find-generic-password -a "jeremy" -w -s "Claude Code-credentials"
+2025-12-21T03:35:27.841Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2025-12-21T03:35:27.841Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2025-12-21T03:35:27.841Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2025-12-21T03:35:27.841Z [DEBUG] [LSP SERVER MANAGER] initialize() called
+2025-12-21T03:35:27.841Z [DEBUG] [LSP SERVER MANAGER] Calling getAllLspServers()
+2025-12-21T03:35:27.848Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288127848
+2025-12-21T03:35:27.848Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:27.848Z [DEBUG] Temp file written successfully, size: 29671 bytes
+2025-12-21T03:35:27.848Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:27.848Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288127848 to /Users/jeremy/.claude.json
+2025-12-21T03:35:27.848Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:27.850Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288127850
+2025-12-21T03:35:27.850Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:27.850Z [DEBUG] Temp file written successfully, size: 29706 bytes
+2025-12-21T03:35:27.850Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:27.850Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288127850 to /Users/jeremy/.claude.json
+2025-12-21T03:35:27.850Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:27.852Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2025-12-21T03:35:27.856Z [DEBUG] Stats cache does not exist, returning empty cache
+2025-12-21T03:35:27.857Z [DEBUG] Stats cache empty, processing all historical data in background
+2025-12-21T03:35:27.869Z [DEBUG] Loading skills from directories: managed=/Library/Application Support/ClaudeCode/.claude/skills, user=/Users/jeremy/.claude/skills, project=[]
+2025-12-21T03:35:27.869Z [DEBUG] >>>>> getPluginSkills CALLED <<<<<
+2025-12-21T03:35:27.992Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (120.9ms): ps aux | grep -E "Visual Studio Code|Code Helper|Cursor Helper|Windsurf Helper|IntelliJ IDEA|PyCharm
+2025-12-21T03:35:27.992Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
+2025-12-21T03:35:28.184Z [DEBUG] Creating shell snapshot for zsh (/bin/zsh)
+2025-12-21T03:35:28.184Z [DEBUG] Looking for shell config file: /Users/jeremy/.zshrc
+2025-12-21T03:35:28.184Z [DEBUG] Snapshots directory: /Users/jeremy/.claude/shell-snapshots
+2025-12-21T03:35:28.185Z [DEBUG] Creating snapshot at: /Users/jeremy/.claude/shell-snapshots/snapshot-zsh-1766288128184-wvyr9p.sh
+2025-12-21T03:35:28.185Z [DEBUG] Shell binary exists: true
+2025-12-21T03:35:28.185Z [DEBUG] Execution timeout: 10000ms
+2025-12-21T03:35:28.185Z [DEBUG] Writing to temp file: /Users/jeremy/.claude/todos/b2c5799c-8420-420c-9576-4436995df8a3-agent-b2c5799c-8420-420c-9576-4436995df8a3.json.tmp.32198.1766288128185
+2025-12-21T03:35:28.186Z [DEBUG] Temp file written successfully, size: 2 bytes
+2025-12-21T03:35:28.186Z [DEBUG] Renaming /Users/jeremy/.claude/todos/b2c5799c-8420-420c-9576-4436995df8a3-agent-b2c5799c-8420-420c-9576-4436995df8a3.json.tmp.32198.1766288128185 to /Users/jeremy/.claude/todos/b2c5799c-8420-420c-9576-4436995df8a3-agent-b2c5799c-8420-420c-9576-4436995df8a3.json
+2025-12-21T03:35:28.186Z [DEBUG] File /Users/jeremy/.claude/todos/b2c5799c-8420-420c-9576-4436995df8a3-agent-b2c5799c-8420-420c-9576-4436995df8a3.json written atomically
+2025-12-21T03:35:28.194Z [DEBUG] Total LSP servers loaded: 0
+2025-12-21T03:35:28.195Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2025-12-21T03:35:28.195Z [DEBUG] Total plugin skills loaded: 0
+2025-12-21T03:35:28.195Z [DEBUG] Total plugin commands loaded: 0
+2025-12-21T03:35:28.195Z [DEBUG] Registered 0 hooks from 0 plugins
+2025-12-21T03:35:28.196Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2025-12-21T03:35:28.196Z [DEBUG] LSP manager initialized with 0 servers
+2025-12-21T03:35:28.196Z [DEBUG] Loaded 0 unique skills (managed: 0, user: 0, project: 0, duplicates removed: 0)
+2025-12-21T03:35:28.197Z [DEBUG] LSP server manager initialized successfully
+2025-12-21T03:35:28.197Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2025-12-21T03:35:28.197Z [DEBUG] Attempting to auto-install official marketplace
+2025-12-21T03:35:28.200Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills
+2025-12-21T03:35:28.390Z [ERROR] AxiosError: Error
+    at KU (/$bunfs/root/claude:59:1143)
+    at <anonymous> (/$bunfs/root/claude:60:10080)
+    at emit (node:events:92:22)
+    at endReadableNT (internal:streams/readable:861:50)
+    at processTicksAndRejections (native:7:39)
+    at request (/$bunfs/root/claude:62:2147)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.394Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288128394
+2025-12-21T03:35:28.394Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:28.394Z [DEBUG] Temp file written successfully, size: 29769 bytes
+2025-12-21T03:35:28.395Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:28.395Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288128394 to /Users/jeremy/.claude.json
+2025-12-21T03:35:28.395Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:28.396Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288128396
+2025-12-21T03:35:28.396Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:28.397Z [DEBUG] Temp file written successfully, size: 29799 bytes
+2025-12-21T03:35:28.397Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:28.397Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288128396 to /Users/jeremy/.claude.json
+2025-12-21T03:35:28.397Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:28.401Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288128401
+2025-12-21T03:35:28.401Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:28.404Z [DEBUG] Temp file written successfully, size: 29824 bytes
+2025-12-21T03:35:28.405Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:28.405Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288128401 to /Users/jeremy/.claude.json
+2025-12-21T03:35:28.405Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:28.540Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (9.1ms)
+2025-12-21T03:35:28.558Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (6.2ms)
+2025-12-21T03:35:28.567Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (7.8ms)
+2025-12-21T03:35:28.580Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (5.2ms)
+2025-12-21T03:35:28.597Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (5.4ms)
+2025-12-21T03:35:28.637Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (9.9ms)
+2025-12-21T03:35:28.649Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (9.0ms)
+2025-12-21T03:35:28.676Z [DEBUG] [SLOW OPERATION DETECTED] fs.unlinkSync (11.6ms)
+2025-12-21T03:35:28.722Z [DEBUG] Git remote URL: git@github.com:Geralt1983/Council-of-Reeds.git
+2025-12-21T03:35:28.722Z [DEBUG] Parsed repository: Geralt1983/Council-of-Reeds from git@github.com:Geralt1983/Council-of-Reeds.git
+2025-12-21T03:35:28.722Z [DEBUG] Parsed repository: Geralt1983/Council-of-Reeds from URL: git@github.com:Geralt1983/Council-of-Reeds.git
+2025-12-21T03:35:28.723Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288128723
+2025-12-21T03:35:28.723Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:28.723Z [DEBUG] Temp file written successfully, size: 29934 bytes
+2025-12-21T03:35:28.723Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:28.723Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288128723 to /Users/jeremy/.claude.json
+2025-12-21T03:35:28.723Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:28.723Z [DEBUG] Added /Users/jeremy/Projects/MoneyOS to tracked paths for repo geralt1983/council-of-reeds
+2025-12-21T03:35:28.727Z [DEBUG] Shell snapshot created successfully (1091 bytes)
+2025-12-21T03:35:28.729Z [DEBUG] Ripgrep first use test: PASSED (mode=builtin, path=/Users/jeremy/.claude/downloads/claude-2.0.67-darwin-arm64)
+2025-12-21T03:35:28.752Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288128752
+2025-12-21T03:35:28.752Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:28.752Z [DEBUG] Temp file written successfully, size: 29978 bytes
+2025-12-21T03:35:28.752Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:28.752Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288128752 to /Users/jeremy/.claude.json
+2025-12-21T03:35:28.753Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:28.753Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288128753
+2025-12-21T03:35:28.753Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:28.753Z [DEBUG] Temp file written successfully, size: 30035 bytes
+2025-12-21T03:35:28.753Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:28.753Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288128753 to /Users/jeremy/.claude.json
+2025-12-21T03:35:28.753Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:28.754Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/15dd73fa-1b05-461b-89bb-bb66c61a2c85.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/15dd73fa-1b05-461b-89bb-bb66c61a2c85.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/6ad15a72-4055-4aff-b28e-6462b5425c44.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/6ad15a72-4055-4aff-b28e-6462b5425c44.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/777ce3c7-f2c7-48d0-bb98-1ca92cd5e498.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/777ce3c7-f2c7-48d0-bb98-1ca92cd5e498.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/83c66bdd-4aac-439a-ac2f-bcd1627f36c8.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/83c66bdd-4aac-439a-ac2f-bcd1627f36c8.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/45a38b51-3e2e-4a2e-bd96-15236adc5d79.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/45a38b51-3e2e-4a2e-bd96-15236adc5d79.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d0578e4b-069f-4f38-90f2-c5415cd69044.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d0578e4b-069f-4f38-90f2-c5415cd69044.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/06eceaed-9022-4b72-bde7-64cb8acc2027.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/06eceaed-9022-4b72-bde7-64cb8acc2027.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b6a1523e-75b7-4b17-a5a1-4afb0be0515c.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b6a1523e-75b7-4b17-a5a1-4afb0be0515c.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/5d04d268-0bba-42be-92e4-42c211e2761d.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/5d04d268-0bba-42be-92e4-42c211e2761d.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/0e519762-4c52-45c7-9669-8d656522cf6f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/0e519762-4c52-45c7-9669-8d656522cf6f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/e521790c-962f-4e02-a6dc-7869a5297247.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/e521790c-962f-4e02-a6dc-7869a5297247.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4c53594b-d282-4ff3-80d5-b0b17962bca6.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4c53594b-d282-4ff3-80d5-b0b17962bca6.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/078a4c93-5626-4abe-9046-dfd9cdfb582b.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/078a4c93-5626-4abe-9046-dfd9cdfb582b.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/23ad35ba-ffc8-4a0a-8d6e-4e93ae108a3f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/23ad35ba-ffc8-4a0a-8d6e-4e93ae108a3f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d68b8c22-9e27-4dda-85c5-434b6b0c1f92.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d68b8c22-9e27-4dda-85c5-434b6b0c1f92.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/30e4602c-de5f-404c-8ec4-3544572eec2b.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/30e4602c-de5f-404c-8ec4-3544572eec2b.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/f0c6b3df-3791-42ef-b4fa-0f5c8f10a9dc.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/f0c6b3df-3791-42ef-b4fa-0f5c8f10a9dc.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/dd9ee54d-4d46-4998-8f71-e7e9cf992aa4.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/dd9ee54d-4d46-4998-8f71-e7e9cf992aa4.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/c45c7f65-b118-4a99-8630-ddde00fb0931.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/c45c7f65-b118-4a99-8630-ddde00fb0931.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.755Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/cadd88dc-42d3-4ca1-b6f8-036d19783ce5.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/cadd88dc-42d3-4ca1-b6f8-036d19783ce5.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.756Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288128756
+2025-12-21T03:35:28.756Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:28.756Z [DEBUG] Temp file written successfully, size: 60628 bytes
+2025-12-21T03:35:28.756Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:28.756Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288128756 to /Users/jeremy/.claude.json
+2025-12-21T03:35:28.757Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a96deec3-0900-45cf-9a9e-7cc138c924b1.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a96deec3-0900-45cf-9a9e-7cc138c924b1.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d9b418a9-c6c9-4c8c-95b0-7645f7783874.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d9b418a9-c6c9-4c8c-95b0-7645f7783874.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9a7cec90-0545-4e5b-922a-64849ec750e3.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9a7cec90-0545-4e5b-922a-64849ec750e3.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d3103b7d-645a-4d9c-8d35-02c6e3aab664.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d3103b7d-645a-4d9c-8d35-02c6e3aab664.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/12a3b36a-e15f-47c5-a638-aea6bc3ae727.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/12a3b36a-e15f-47c5-a638-aea6bc3ae727.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/8a1bde85-248b-4221-8312-ed88511dd8a6.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/8a1bde85-248b-4221-8312-ed88511dd8a6.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4fc43a6d-2554-4ed2-976e-d882df71b3a6.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4fc43a6d-2554-4ed2-976e-d882df71b3a6.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7827aa6b-d519-4797-a8af-44f49d5d514f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7827aa6b-d519-4797-a8af-44f49d5d514f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/95c58185-8d16-482b-b575-ad45a2af323f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/95c58185-8d16-482b-b575-ad45a2af323f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/258898a6-afa1-460a-941c-7a203bced5cf.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/258898a6-afa1-460a-941c-7a203bced5cf.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/eacc1a4d-6d24-4265-aa07-904d3d6f72cf.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/eacc1a4d-6d24-4265-aa07-904d3d6f72cf.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/1edec4a4-a50b-4844-a966-67ff1c8d8e1f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/1edec4a4-a50b-4844-a966-67ff1c8d8e1f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9e95a5e1-7aea-467a-9d52-e446c6c7b4ca.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9e95a5e1-7aea-467a-9d52-e446c6c7b4ca.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/571790d9-8b6c-476d-8f28-21ca4e633559.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/571790d9-8b6c-476d-8f28-21ca4e633559.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/2f757537-9bce-4dec-b399-eb02cd9a7936.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/2f757537-9bce-4dec-b399-eb02cd9a7936.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/bcf35035-7d0b-4751-ab12-336a528a4795.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/bcf35035-7d0b-4751-ab12-336a528a4795.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/2656445c-6476-4c01-ab60-4f8ecd40d83d.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/2656445c-6476-4c01-ab60-4f8ecd40d83d.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7664110b-3937-4b78-bbfd-0dcb13100be5.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7664110b-3937-4b78-bbfd-0dcb13100be5.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/e2bf81d0-351e-46ce-a4d3-453cc710f823.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/e2bf81d0-351e-46ce-a4d3-453cc710f823.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/1d4a1a6a-c93f-43ae-9352-bedcc43f5faf.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/1d4a1a6a-c93f-43ae-9352-bedcc43f5faf.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.757Z [DEBUG] Install: Starting installation process (force=false, target=undefined)
+2025-12-21T03:35:28.757Z [DEBUG] Install: Calling installLatest(force=true, target=undefined, forceReinstall=false)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/ced51790-f850-4cb5-b285-881c5fb4a938.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/ced51790-f850-4cb5-b285-881c5fb4a938.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7ef508de-1424-412e-b56d-5b7fe23beb34.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7ef508de-1424-412e-b56d-5b7fe23beb34.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/dfb2084d-f182-4bcd-a2ea-71e58a99a6fc.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/dfb2084d-f182-4bcd-a2ea-71e58a99a6fc.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/bdd48386-0ac9-4af6-ba97-86638fd625a3.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/bdd48386-0ac9-4af6-ba97-86638fd625a3.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/3bea6735-0b5d-42ca-9212-0d80653d075e.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/3bea6735-0b5d-42ca-9212-0d80653d075e.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b6ae4f56-8079-4565-aa67-089d1694a080.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b6ae4f56-8079-4565-aa67-089d1694a080.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/49b43063-680a-4e48-a473-f0997f73d33b.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/49b43063-680a-4e48-a473-f0997f73d33b.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/47c23ee4-c46a-4ad7-bf49-b109aa9f969b.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/47c23ee4-c46a-4ad7-bf49-b109aa9f969b.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/eb69e258-6218-453a-ae97-3eeabc2b48af.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/eb69e258-6218-453a-ae97-3eeabc2b48af.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.763Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/bc16ca8a-92e1-449c-9cdf-4813bd8288f3.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/bc16ca8a-92e1-449c-9cdf-4813bd8288f3.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/96ae05b8-6c00-4f7a-810f-31d996812f22.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/96ae05b8-6c00-4f7a-810f-31d996812f22.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/223a2c3e-41b3-439d-90ac-3e5dfdcb33e0.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/223a2c3e-41b3-439d-90ac-3e5dfdcb33e0.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/79ab7339-1170-421e-aa0d-8fb20e870afc.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/79ab7339-1170-421e-aa0d-8fb20e870afc.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/c259c747-40d6-4304-9739-dbf8b6e28daf.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/c259c747-40d6-4304-9739-dbf8b6e28daf.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/76479072-427f-49dc-851a-7aa7f199d3a5.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/76479072-427f-49dc-851a-7aa7f199d3a5.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9a284136-50cd-4c33-b15f-7476baa5a3c4.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9a284136-50cd-4c33-b15f-7476baa5a3c4.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7902f9b6-6a53-434e-ad09-ffd591234135.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7902f9b6-6a53-434e-ad09-ffd591234135.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/c07209d5-8937-4af8-84a3-5179fd41de2d.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/c07209d5-8937-4af8-84a3-5179fd41de2d.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/678839c3-4ed5-458b-bc8c-1299aceec8c8.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/678839c3-4ed5-458b-bc8c-1299aceec8c8.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/5325742b-1fe4-42a0-ada9-77b15eede2b2.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/5325742b-1fe4-42a0-ada9-77b15eede2b2.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/aa0fa281-3f0d-4e14-9930-7a220cb17903.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/aa0fa281-3f0d-4e14-9930-7a220cb17903.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d0a3cfee-c46e-43bc-88f8-12a8a28a97e6.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d0a3cfee-c46e-43bc-88f8-12a8a28a97e6.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/713ae2c0-f9ee-4e26-87e7-892f53d26dcf.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/713ae2c0-f9ee-4e26-87e7-892f53d26dcf.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/80ee76b1-236b-42cb-87a0-cfccef79b5f1.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/80ee76b1-236b-42cb-87a0-cfccef79b5f1.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/ac0d9b93-c249-4dac-bf92-7597676c18fe.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/ac0d9b93-c249-4dac-bf92-7597676c18fe.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/1da44996-f7db-462b-ac8e-b0fb50fa6ec8.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/1da44996-f7db-462b-ac8e-b0fb50fa6ec8.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/83b2b8e4-0527-420d-bac2-7adba23832ba.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/83b2b8e4-0527-420d-bac2-7adba23832ba.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/e8f06843-f5da-4a78-a23c-11330dbc5a4b.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/e8f06843-f5da-4a78-a23c-11330dbc5a4b.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/2a7422b4-a73d-4b4c-8e60-58f4b50368bb.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/2a7422b4-a73d-4b4c-8e60-58f4b50368bb.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a73c02f5-0580-4769-9ea6-28c99a1a8e2f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a73c02f5-0580-4769-9ea6-28c99a1a8e2f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d34b7593-8096-481a-8486-05a200d57ea7.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d34b7593-8096-481a-8486-05a200d57ea7.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a7c0896b-0402-4410-9308-b94ba777791d.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a7c0896b-0402-4410-9308-b94ba777791d.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/811e3499-7c0b-4405-9dca-9506d9fd09a2.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/811e3499-7c0b-4405-9dca-9506d9fd09a2.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/58d141ab-509e-4d41-abd9-49f76fc64c1a.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/58d141ab-509e-4d41-abd9-49f76fc64c1a.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/ab04e13e-1b38-44e5-8e3f-89f3dad5dc77.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/ab04e13e-1b38-44e5-8e3f-89f3dad5dc77.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a532a601-6506-4f25-ba73-5705590329ad.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/a532a601-6506-4f25-ba73-5705590329ad.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/54a93c1a-9ed9-4e19-a616-695b521b9e04.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/54a93c1a-9ed9-4e19-a616-695b521b9e04.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/489ecc7b-917b-459f-8b98-54b7cf31d851.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/489ecc7b-917b-459f-8b98-54b7cf31d851.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b5c5811c-d789-4d43-9688-dc6cd0e7054f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b5c5811c-d789-4d43-9688-dc6cd0e7054f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/48cf5ceb-3913-4b94-a67e-754954f86f04.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/48cf5ceb-3913-4b94-a67e-754954f86f04.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/eb0b8531-9db0-4b35-be69-398d3427c57d.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/eb0b8531-9db0-4b35-be69-398d3427c57d.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/087f7d07-9fc5-451b-a512-9f0f0542228c.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/087f7d07-9fc5-451b-a512-9f0f0542228c.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/15ca1e0d-a525-432c-8e3f-f1f5ef01e6e9.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/15ca1e0d-a525-432c-8e3f-f1f5ef01e6e9.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d35ac702-9f6c-406a-8bdd-588de9effc9f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/d35ac702-9f6c-406a-8bdd-588de9effc9f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/68d463a8-6e1d-4aa4-a569-6a34a523218e.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/68d463a8-6e1d-4aa4-a569-6a34a523218e.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9140fe05-1e30-46fe-a477-c4c517e59ffd.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/9140fe05-1e30-46fe-a477-c4c517e59ffd.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/fc5836a7-ee28-4715-a0d3-1cfa57b449c1.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/fc5836a7-ee28-4715-a0d3-1cfa57b449c1.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/5cdd4f51-9019-4c23-9d3b-afbfd3cfaf50.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/5cdd4f51-9019-4c23-9d3b-afbfd3cfaf50.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b84ef5f3-72f2-4580-a025-8c48b0b9201f.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b84ef5f3-72f2-4580-a025-8c48b0b9201f.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4e8272dc-ee2d-4398-bd59-381f184ee762.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4e8272dc-ee2d-4398-bd59-381f184ee762.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7303d26a-c171-4c9c-a5b2-47c2e4015c94.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/7303d26a-c171-4c9c-a5b2-47c2e4015c94.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/150436b9-d1f4-4c24-95a2-d43908ca5195.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/150436b9-d1f4-4c24-95a2-d43908ca5195.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/f9b2b5a3-5105-438b-88da-b42d472cbb41.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/f9b2b5a3-5105-438b-88da-b42d472cbb41.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/628db047-af5e-470f-b8d0-3113a9177616.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/628db047-af5e-470f-b8d0-3113a9177616.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/721579ab-f2f9-4128-86c5-2beaa82e693e.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/721579ab-f2f9-4128-86c5-2beaa82e693e.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/58c03054-7bb0-42bb-b0bc-ac77b4e056db.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/58c03054-7bb0-42bb-b0bc-ac77b4e056db.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b6f5dace-ce29-46df-9900-3b51905380dc.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/b6f5dace-ce29-46df-9900-3b51905380dc.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/cf35a9ca-aa86-44b2-9f12-1d4efb39cc2d.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/cf35a9ca-aa86-44b2-9f12-1d4efb39cc2d.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/547d1722-8191-426c-bb44-c8b6531d77b8.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/547d1722-8191-426c-bb44-c8b6531d77b8.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.764Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4a8e81a4-8151-442a-afe3-0fd8ec50854c.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Council/4a8e81a4-8151-442a-afe3-0fd8ec50854c.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.765Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy--claude-squad-worktrees-archangel-185a94bd3897f4d0/f42148ac-ba21-454a-b3ff-29e9296cc870.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy--claude-squad-worktrees-archangel-185a94bd3897f4d0/f42148ac-ba21-454a-b3ff-29e9296cc870.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.765Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-obsidian-ai-vault/e8273da5-2b37-479b-aa59-819dc0c892d4.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-obsidian-ai-vault/e8273da5-2b37-479b-aa59-819dc0c892d4.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.765Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-obsidian-ai-vault/7b5ad085-19c3-47e0-9042-c6784316f8f3.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-obsidian-ai-vault/7b5ad085-19c3-47e0-9042-c6784316f8f3.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.765Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Project-Hellfire/6b74472e-48b6-490a-a185-99e03bdc11e2.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Project-Hellfire/6b74472e-48b6-490a-a185-99e03bdc11e2.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.765Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Archon/2dc20bbc-25ee-44fd-9f45-bfe25f037b0b.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Archon/2dc20bbc-25ee-44fd-9f45-bfe25f037b0b.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.765Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Project-Hellfire/2448ab60-4dae-4e54-9e9f-2a33e4b9a440.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Project-Hellfire/2448ab60-4dae-4e54-9e9f-2a33e4b9a440.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.765Z [ERROR] Error: Error: Error opening file /Users/jeremy/.claude/projects/-Users-jeremy-Projects-Project-Hellfire/f671c55b-1c2c-4026-aec8-b6afc784804b.jsonl: Error: ENOENT: no such file or directory, open '/Users/jeremy/.claude/projects/-Users-jeremy-Projects-Project-Hellfire/f671c55b-1c2c-4026-aec8-b6afc784804b.jsonl'
+    at CM (/$bunfs/root/claude:78:175)
+    at async <anonymous> (/$bunfs/root/claude:3875:3838)
+    at async jFT (/$bunfs/root/claude:3875:3683)
+    at async <anonymous> (/$bunfs/root/claude:3875:9283)
+    at async aHA (/$bunfs/root/claude:3875:141)
+    at async KC_ (/$bunfs/root/claude:3875:9079)
+    at processTicksAndRejections (native:7:39)
+2025-12-21T03:35:28.766Z [DEBUG] Stats cache saved successfully (lastComputedDate: 2025-12-20)
+2025-12-21T03:35:28.766Z [DEBUG] Stats cache updated with 76 sessions
+2025-12-21T03:35:28.813Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (22.3ms): security find-generic-password -a "jeremy" -w -s "Claude Code-credentials"
+2025-12-21T03:35:28.839Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (21.4ms): security find-generic-password -a "jeremy" -w -s "Claude Code-credentials"
+2025-12-21T03:35:28.930Z [DEBUG] Checking for native installer update to version 2.0.75
+2025-12-21T03:35:28.932Z [DEBUG] Downloading native installer version 2.0.75
+2025-12-21T03:35:29.036Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288129036
+2025-12-21T03:35:29.036Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:29.036Z [DEBUG] Temp file written successfully, size: 60710 bytes
+2025-12-21T03:35:29.036Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:29.036Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288129036 to /Users/jeremy/.claude.json
+2025-12-21T03:35:29.036Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:29.256Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288129256
+2025-12-21T03:35:29.256Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:29.256Z [DEBUG] Temp file written successfully, size: 60773 bytes
+2025-12-21T03:35:29.256Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:29.256Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288129256 to /Users/jeremy/.claude.json
+2025-12-21T03:35:29.256Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:29.284Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (27.3ms): security find-generic-password -a "jeremy" -w -s "Claude Code-credentials"
+2025-12-21T03:35:29.309Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (25.6ms): security find-generic-password -a "jeremy" -w -s "Claude Code-credentials"
+2025-12-21T03:35:29.365Z [DEBUG] [SLOW OPERATION DETECTED] execSyncWithDefaults (28.6ms): security find-generic-password -a "jeremy" -w -s "Claude Code-credentials"
+2025-12-21T03:35:29.938Z [DEBUG] Stream started - received first chunk
+2025-12-21T03:35:29.966Z [DEBUG] Added marketplace source: claude-plugins-official
+2025-12-21T03:35:29.966Z [DEBUG] Successfully auto-installed official marketplace
+2025-12-21T03:35:29.967Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288129967
+2025-12-21T03:35:29.967Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:29.968Z [DEBUG] Temp file written successfully, size: 60868 bytes
+2025-12-21T03:35:29.968Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:29.968Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288129967 to /Users/jeremy/.claude.json
+2025-12-21T03:35:29.968Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:30.242Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288130242
+2025-12-21T03:35:30.243Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:30.243Z [DEBUG] Temp file written successfully, size: 60868 bytes
+2025-12-21T03:35:30.243Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:30.243Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288130242 to /Users/jeremy/.claude.json
+2025-12-21T03:35:30.243Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:34.897Z [DEBUG] Successfully updated to version 2.0.75
+2025-12-21T03:35:34.898Z [DEBUG] Writing to temp file: /Users/jeremy/.claude.json.tmp.32198.1766288134898
+2025-12-21T03:35:34.898Z [DEBUG] Preserving file permissions: 100644
+2025-12-21T03:35:34.898Z [DEBUG] Temp file written successfully, size: 60909 bytes
+2025-12-21T03:35:34.898Z [DEBUG] Applied original permissions to temp file
+2025-12-21T03:35:34.898Z [DEBUG] Renaming /Users/jeremy/.claude.json.tmp.32198.1766288134898 to /Users/jeremy/.claude.json
+2025-12-21T03:35:34.899Z [DEBUG] File /Users/jeremy/.claude.json written atomically
+2025-12-21T03:35:34.899Z [DEBUG] Native installer: Set installMethod to "native" and disabled legacy auto-updater for protection
+2025-12-21T03:35:34.899Z [DEBUG] Install: installLatest returned version=2.0.75, wasUpdated=true, lockFailed=false
+2025-12-21T03:35:34.899Z [DEBUG] Install: Setup launcher completed with 0 messages
+2025-12-21T03:35:34.899Z [DEBUG] Install: Cleaning up npm installations after successful install
+2025-12-21T03:35:36.744Z [ERROR] Failed to uninstall global npm package @anthropic-ai/claude-code: npm error code ENOTEMPTY
+npm error syscall rename
+npm error path /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code
+npm error dest /opt/homebrew/lib/node_modules/@anthropic-ai/.claude-code-2DTsDk1V
+npm error errno -66
+npm error ENOTEMPTY: directory not empty, rename '/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code' -> '/opt/homebrew/lib/node_modules/@anthropic-ai/.claude-code-2DTsDk1V'
+npm error A complete log of this run can be found in: /Users/jeremy/.npm/_logs/2025-12-21T03_35_36_361Z-debug-0.log
+2025-12-21T03:35:36.744Z [DEBUG] Attempting manual removal due to ENOTEMPTY error
+2025-12-21T03:35:36.831Z [ERROR] Failed to uninstall global npm package @anthropic-ai/claude-code: npm error code ENOTEMPTY
+npm error syscall rename
+npm error path /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code
+npm error dest /opt/homebrew/lib/node_modules/@anthropic-ai/.claude-code-2DTsDk1V
+npm error errno -66
+npm error ENOTEMPTY: directory not empty, rename '/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code' -> '/opt/homebrew/lib/node_modules/@anthropic-ai/.claude-code-2DTsDk1V'
+npm error A complete log of this run can be found in: /Users/jeremy/.npm/_logs/2025-12-21T03_35_36_361Z-debug-0.log
+2025-12-21T03:35:36.831Z [DEBUG] Cleanup errors: Failed to remove global npm installation of @anthropic-ai/claude-code: npm error code ENOTEMPTY
+npm error syscall rename
+npm error path /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code
+npm error dest /opt/homebrew/lib/node_modules/@anthropic-ai/.claude-code-2DTsDk1V
+npm error errno -66
+npm error ENOTEMPTY: directory not empty, rename '/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code' -> '/opt/homebrew/lib/node_modules/@anthropic-ai/.claude-code-2DTsDk1V'
+npm error A complete log of this run can be found in: /Users/jeremy/.npm/_logs/2025-12-21T03_35_36_361Z-debug-0.log
+2025-12-21T03:35:36.831Z [DEBUG] Install: Shell PATH already configured

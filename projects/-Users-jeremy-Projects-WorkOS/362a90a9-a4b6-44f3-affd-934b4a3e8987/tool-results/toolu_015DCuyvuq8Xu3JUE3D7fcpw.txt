@@ -1,0 +1,5 @@
+total 8
+drwx------@ 3 jeremy  staff    96 Dec 26 10:44 .
+drwxr-xr-x@ 4 jeremy  staff   128 Dec 23 21:10 ..
+-rw-------@ 1 jeremy  staff  1299 Dec 26 10:44 settings.local.json
+No settings file

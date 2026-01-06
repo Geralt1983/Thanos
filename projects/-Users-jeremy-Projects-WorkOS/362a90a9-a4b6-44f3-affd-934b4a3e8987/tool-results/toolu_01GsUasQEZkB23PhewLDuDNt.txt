@@ -1,0 +1,43 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/triage/auto-fix/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    10→      .select()
+    11→      .from(clients)
+    12→      .where(and(eq(clients.isActive, 1), ne(clients.type, "internal")))
+    13→
+    14→    const actions: { action: string; clientName: string; taskTitle?: string }[] = []
+    15→
+    16→    for (const client of allClients) {
+    17→      const clientTasks = await db
+    18→        .select()
+    19→        .from(tasks)
+    20→        .where(and(eq(tasks.clientId, client.id), ne(tasks.status, "done")))
+    21→
+    22→      const active = clientTasks.filter((t) => t.status === "active")
+    23→      const queued = clientTasks.filter((t) => t.status === "queued")
+    24→      const backlog = clientTasks.filter((t) => t.status === "backlog")
+    25→
+    26→      // Auto-promote if missing active
+    27→      if (active.length === 0 && queued.length > 0) {
+    28→        const toPromote = queued[0]
+    29→        await db.update(tasks).set({ status: "active", updatedAt: new Date() }).where(eq(tasks.id, toPromote.id))
+    30→        actions.push({
+    31→          action: "promoted_to_active",
+    32→          clientName: client.name,
+    33→          taskTitle: toPromote.title,
+    34→        })
+    35→      }
+    36→
+    37→      // Auto-promote if missing queued
+    38→      if (queued.length === 0 && backlog.length > 0) {
+    39→        const toPromote = backlog[0]
+    40→        await db.update(tasks).set({ status: "queued", updatedAt: new Date() }).where(eq(tasks.id, toPromote.id))
+    41→        actions.push({
+    42→          action: "promoted_to_queued",
+    43→          clientName: client.name,
+    44→          taskTitle: toPromote.title,
+    45→        })
+    46→      }
+    47→    }
+    48→
+    49→    return NextResponse.json({
+    50→      success: true,
+    51→      actionsCount: actions.length,

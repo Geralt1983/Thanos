@@ -1,0 +1,10 @@
+8ac4b536 fix: Improve cloud MCP server stability and error handling
+a8238c3d fix: Enhance cloud MCP server authentication with robust error handling
+1f631020 Fix: Resolve JWT import error and dependency conflicts
+5893160f fix: Enable Grok participation in cloud MCP server
+3b57d2ce Merge pull request #7 from Geralt1983/feature/conversation-formatting
+d526963b feat: Add human-like conversation formatting for MCP output
+c7fe4fec feat: Add human-like conversation formatting for MCP output
+f2203e51 refactor: improve test suite based on CodeRabbit feedback
+dde314fd 🔧 Add comprehensive test suite for Grok integration verification
+5c6fc9aa fix: resolve Grok API key environment variable mismatch

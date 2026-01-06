@@ -1,0 +1,10 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/tasks/heatmap/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    21→      .select({
+    22→        completedAt: tasks.completedAt,
+    23→        effortEstimate: tasks.effortEstimate,
+    24→      })
+    25→      .from(tasks)
+    26→      .where(eq(tasks.status, "done"))
+    27→
+    28→    // Group by date in JavaScript
+    29→    const countMap = new Map<string, { count: number; minutes: number }>()

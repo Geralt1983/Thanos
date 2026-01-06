@@ -1,0 +1,39 @@
+{
+  "database": "chromadb",
+  "path": "~/.claude/Memory/vectors",
+  "embedding_model": "text-embedding-3-small",
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "collections": {
+    "conversations": {
+      "description": "All conversations with Claude",
+      "chunking": "by_exchange",
+      "metadata": ["date", "topic", "domain", "people"]
+    },
+    "commitments": {
+      "description": "All commitments made",
+      "chunking": "one_per_chunk",
+      "metadata": ["date", "to_whom", "deadline", "status", "domain"]
+    },
+    "decisions": {
+      "description": "Decisions and reasoning",
+      "chunking": "decision_plus_reasoning",
+      "metadata": ["date", "domain", "alternatives_considered"]
+    },
+    "daily_logs": {
+      "description": "Daily log entries",
+      "chunking": "by_section",
+      "metadata": ["date", "energy", "mood", "domain"]
+    },
+    "learnings": {
+      "description": "Insights and learnings",
+      "chunking": "by_insight",
+      "metadata": ["date", "domain", "source"]
+    },
+    "client_interactions": {
+      "description": "Client-specific interactions",
+      "chunking": "by_interaction",
+      "metadata": ["date", "client", "topic", "outcome"]
+    }
+  }
+}

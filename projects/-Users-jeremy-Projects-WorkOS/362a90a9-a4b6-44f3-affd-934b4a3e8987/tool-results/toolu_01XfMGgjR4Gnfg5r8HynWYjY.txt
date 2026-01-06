@@ -1,0 +1,315 @@
+     1→"use client"
+     2→
+     3→import { useState, useCallback, useEffect } from "react"
+     4→import { Button } from "@/components/ui/button"
+     5→import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
+     6→import { Loader2, Plus, Minus, Sparkles, Send } from "lucide-react"
+     7→import { cn } from "@/lib/utils"
+     8→import { useClients } from "@/hooks/use-tasks"
+     9→
+    10→interface EstimateResult {
+    11→  client: string | null
+    12→  title: string
+    13→  points: number
+    14→  reasoning: string
+    15→  confidence: number
+    16→  raw_input: string
+    17→}
+    18→
+    19→interface QuickCaptureProps {
+    20→  onTaskCreated?: () => void
+    21→}
+    22→
+    23→export function QuickCapture({ onTaskCreated }: QuickCaptureProps) {
+    24→  const { clients } = useClients()
+    25→  const [input, setInput] = useState("")
+    26→  const [isEstimating, setIsEstimating] = useState(false)
+    27→  const [isAdding, setIsAdding] = useState(false)
+    28→  const [estimate, setEstimate] = useState<EstimateResult | null>(null)
+    29→  const [adjustedPoints, setAdjustedPoints] = useState<number | null>(null)
+    30→  const [selectedClientId, setSelectedClientId] = useState<string>("none")
+    31→  const [error, setError] = useState<string | null>(null)
+    32→
+    33→  const currentPoints = adjustedPoints ?? estimate?.points ?? 0
+    34→
+    35→  // When estimate comes in, try to match the detected client
+    36→  useEffect(() => {
+    37→    if (estimate?.client && clients.length > 0) {
+    38→      const matched = clients.find(
+    39→        (c) => c.name.toLowerCase() === estimate.client?.toLowerCase()
+    40→      )
+    41→      if (matched) {
+    42→        setSelectedClientId(String(matched.id))
+    43→      } else {
+    44→        setSelectedClientId("none")
+    45→      }
+    46→    }
+    47→  }, [estimate?.client, clients])
+    48→
+    49→  const handleEstimate = useCallback(async () => {
+    50→    if (!input.trim()) return
+    51→
+    52→    setIsEstimating(true)
+    53→    setError(null)
+    54→    setEstimate(null)
+    55→    setAdjustedPoints(null)
+    56→    setSelectedClientId("none")
+    57→
+    58→    try {
+    59→      const res = await fetch("/api/ai/estimate-points", {
+    60→        method: "POST",
+    61→        headers: { "Content-Type": "application/json" },
+    62→        body: JSON.stringify({ raw_input: input.trim() }),
+    63→      })
+    64→
+    65→      if (!res.ok) throw new Error("Failed to estimate")
+    66→
+    67→      const data: EstimateResult = await res.json()
+    68→      setEstimate(data)
+    69→    } catch (err) {
+    70→      setError("Failed to estimate points")
+    71→      console.error(err)
+    72→    } finally {
+    73→      setIsEstimating(false)
+    74→    }
+    75→  }, [input])
+    76→
+    77→  const handleKeyDown = (e: React.KeyboardEvent) => {
+    78→    if (e.key === "Enter" && !e.shiftKey && !estimate) {
+    79→      e.preventDefault()
+    80→      handleEstimate()
+    81→    }
+    82→  }
+    83→
+    84→  const handleAddToBacklog = async () => {
+    85→    if (!estimate) return
+    86→
+    87→    setIsAdding(true)
+    88→    setError(null)
+    89→
+    90→    const clientId = selectedClientId !== "none" ? Number(selectedClientId) : null
+    91→
+    92→    try {
+    93→      const res = await fetch("/api/tasks", {
+    94→        method: "POST",
+    95→        headers: { "Content-Type": "application/json" },
+    96→        body: JSON.stringify({
+    97→          title: estimate.title,
+    98→          status: "backlog",
+    99→          clientId,
+   100→          pointsAiGuess: estimate.points,
+   101→          pointsFinal: adjustedPoints,
+   102→        }),
+   103→      })
+   104→
+   105→      if (!res.ok) throw new Error("Failed to create task")
+   106→
+   107→      // Reset state
+   108→      setInput("")
+   109→      setEstimate(null)
+   110→      setAdjustedPoints(null)
+   111→      setSelectedClientId("none")
+   112→      onTaskCreated?.()
+   113→    } catch (err) {
+   114→      setError("Failed to add task")
+   115→      console.error(err)
+   116→    } finally {
+   117→      setIsAdding(false)
+   118→    }
+   119→  }
+   120→
+   121→  const adjustPoints = (delta: number) => {
+   122→    const current = adjustedPoints ?? estimate?.points ?? 5
+   123→    const newValue = Math.max(1, Math.min(10, current + delta))
+   124→    setAdjustedPoints(newValue)
+   125→  }
+   126→
+   127→  const resetCapture = () => {
+   128→    setInput("")
+   129→    setEstimate(null)
+   130→    setAdjustedPoints(null)
+   131→    setSelectedClientId("none")
+   132→    setError(null)
+   133→  }
+   134→
+   135→  const getPointsColor = (value: number) => {
+   136→    if (value <= 2) return "text-emerald-400"
+   137→    if (value <= 4) return "text-green-400"
+   138→    if (value <= 6) return "text-yellow-400"
+   139→    if (value <= 8) return "text-orange-400"
+   140→    return "text-red-400"
+   141→  }
+   142→
+   143→  const getPointsLabel = (value: number) => {
+   144→    if (value <= 2) return "Quick"
+   145→    if (value <= 4) return "Routine"
+   146→    if (value <= 6) return "Meaningful"
+   147→    if (value <= 8) return "Heavy"
+   148→    return "Major"
+   149→  }
+   150→
+   151→  const selectedClient = clients.find((c) => String(c.id) === selectedClientId)
+   152→
+   153→  return (
+   154→    <div className="w-full space-y-3">
+   155→      {/* Input Section */}
+   156→      <div className="relative">
+   157→        <input
+   158→          type="text"
+   159→          value={input}
+   160→          onChange={(e) => setInput(e.target.value)}
+   161→          onKeyDown={handleKeyDown}
+   162→          placeholder="What needs to get done?"
+   163→          disabled={isEstimating || !!estimate}
+   164→          className={cn(
+   165→            "w-full px-4 py-3 rounded-lg",
+   166→            "bg-zinc-900 border border-zinc-800",
+   167→            "text-zinc-100 placeholder:text-zinc-500",
+   168→            "focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500",
+   169→            "disabled:opacity-50 disabled:cursor-not-allowed",
+   170→            "transition-all duration-200"
+   171→          )}
+   172→        />
+   173→        {!estimate && (
+   174→          <button
+   175→            onClick={handleEstimate}
+   176→            disabled={!input.trim() || isEstimating}
+   177→            className={cn(
+   178→              "absolute right-2 top-1/2 -translate-y-1/2",
+   179→              "p-2 rounded-md",
+   180→              "bg-violet-600 hover:bg-violet-500",
+   181→              "disabled:opacity-50 disabled:cursor-not-allowed",
+   182→              "transition-colors duration-200"
+   183→            )}
+   184→          >
+   185→            {isEstimating ? (
+   186→              <Loader2 className="w-4 h-4 animate-spin text-white" />
+   187→            ) : (
+   188→              <Sparkles className="w-4 h-4 text-white" />
+   189→            )}
+   190→          </button>
+   191→        )}
+   192→      </div>
+   193→
+   194→      {/* Error Message */}
+   195→      {error && (
+   196→        <div className="px-3 py-2 rounded-lg bg-red-950/50 border border-red-900/50 text-red-400 text-sm">
+   197→          {error}
+   198→        </div>
+   199→      )}
+   200→
+   201→      {/* Estimate Result */}
+   202→      {estimate && (
+   203→        <div className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 space-y-4">
+   204→          {/* Client Selector & Title */}
+   205→          <div className="space-y-2">
+   206→            <div className="flex items-center gap-2">
+   207→              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+   208→                <SelectTrigger className="w-[160px] bg-zinc-800 border-zinc-700 text-zinc-100">
+   209→                  <SelectValue placeholder="Select client" />
+   210→                </SelectTrigger>
+   211→                <SelectContent className="bg-zinc-900 border-zinc-800">
+   212→                  <SelectItem value="none" className="text-zinc-400 focus:bg-zinc-800 focus:text-zinc-100">
+   213→                    No client
+   214→                  </SelectItem>
+   215→                  {clients.map((client) => (
+   216→                    <SelectItem
+   217→                      key={client.id}
+   218→                      value={String(client.id)}
+   219→                      className="text-zinc-100 focus:bg-zinc-800 focus:text-zinc-100"
+   220→                    >
+   221→                      {client.name}
+   222→                    </SelectItem>
+   223→                  ))}
+   224→                </SelectContent>
+   225→              </Select>
+   226→              {estimate.client && selectedClientId === "none" && (
+   227→                <span className="text-xs text-zinc-500">
+   228→                  AI detected: {estimate.client}
+   229→                </span>
+   230→              )}
+   231→            </div>
+   232→            <h3 className="text-lg font-medium text-zinc-100">{estimate.title}</h3>
+   233→          </div>
+   234→
+   235→          {/* Points Display & Adjustment */}
+   236→          <div className="flex items-center justify-between">
+   237→            <div className="flex items-center gap-3">
+   238→              <Button
+   239→                variant="outline"
+   240→                size="icon-sm"
+   241→                onClick={() => adjustPoints(-1)}
+   242→                disabled={currentPoints <= 1}
+   243→                className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600"
+   244→              >
+   245→                <Minus className="w-4 h-4" />
+   246→              </Button>
+   247→
+   248→              <div className="flex items-center gap-2">
+   249→                <span className={cn("text-3xl font-bold tabular-nums", getPointsColor(currentPoints))}>
+   250→                  {currentPoints}
+   251→                </span>
+   252→                <div className="flex flex-col">
+   253→                  <span className={cn("text-sm font-medium", getPointsColor(currentPoints))}>
+   254→                    {getPointsLabel(currentPoints)}
+   255→                  </span>
+   256→                  <span className="text-xs text-zinc-500">points</span>
+   257→                </div>
+   258→              </div>
+   259→
+   260→              <Button
+   261→                variant="outline"
+   262→                size="icon-sm"
+   263→                onClick={() => adjustPoints(1)}
+   264→                disabled={currentPoints >= 10}
+   265→                className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600"
+   266→              >
+   267→                <Plus className="w-4 h-4" />
+   268→              </Button>
+   269→            </div>
+   270→
+   271→            {adjustedPoints !== null && adjustedPoints !== estimate.points && (
+   272→              <span className="text-xs text-zinc-500">
+   273→                AI said {estimate.points}
+   274→              </span>
+   275→            )}
+   276→          </div>
+   277→
+   278→          {/* Reasoning */}
+   279→          <p className="text-sm text-zinc-400">{estimate.reasoning}</p>
+   280→
+   281→          {/* Actions */}
+   282→          <div className="flex gap-2">
+   283→            <Button
+   284→              onClick={handleAddToBacklog}
+   285→              disabled={isAdding}
+   286→              className="flex-1 bg-violet-600 hover:bg-violet-500 text-white"
+   287→            >
+   288→              {isAdding ? (
+   289→                <Loader2 className="w-4 h-4 animate-spin" />
+   290→              ) : (
+   291→                <>
+   292→                  <Send className="w-4 h-4" />
+   293→                  Add to Backlog
+   294→                </>
+   295→              )}
+   296→            </Button>
+   297→            <Button
+   298→              variant="outline"
+   299→              onClick={resetCapture}
+   300→              disabled={isAdding}
+   301→              className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-zinc-300"
+   302→            >
+   303→              Cancel
+   304→            </Button>
+   305→          </div>
+   306→        </div>
+   307→      )}
+   308→    </div>
+   309→  )
+   310→}
+   311→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

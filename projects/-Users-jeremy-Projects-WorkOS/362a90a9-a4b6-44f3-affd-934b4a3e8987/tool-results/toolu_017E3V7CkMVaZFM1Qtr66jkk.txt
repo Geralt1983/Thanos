@@ -1,0 +1,8 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/triage/auto-fix/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+     1→import { NextResponse } from "next/server"
+     2→import { getDb } from "@/lib/db"
+     3→import { tasks, clients } from "@/lib/schema"
+     4→import { eq, ne, and } from "drizzle-orm"
+     5→
+     6→export async function POST() {
+     7→  try {

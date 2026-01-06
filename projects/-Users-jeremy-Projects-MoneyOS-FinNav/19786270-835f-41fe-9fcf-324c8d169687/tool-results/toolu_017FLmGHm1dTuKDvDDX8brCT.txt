@@ -1,0 +1,3 @@
+e0ae141 feat: Implement core finance features (Plaid, accounts, transactions, budgets)
+b217705 feat: Convert to Supabase for auth and database
+1ed4c6b Init commit

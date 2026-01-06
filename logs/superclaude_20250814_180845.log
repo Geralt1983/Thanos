@@ -1,0 +1,23 @@
+2025-08-14 18:08:45 | DEBUG    | superclaude | SuperClaude called with operation: install
+2025-08-14 18:08:45 | DEBUG    | superclaude | Arguments: {'verbose': False, 'quiet': False, 'install_dir': PosixPath('/Users/jeremy/.claude'), 'dry_run': False, 'force': False, 'yes': False, 'operation': 'install', 'quick': False, 'minimal': False, 'profile': None, 'components': None, 'no_backup': False, 'list_components': False, 'diagnose': False}
+2025-08-14 18:08:45 | INFO     | superclaude | Executing operation: install
+2025-08-14 18:08:45 | INFO     | superclaude | Starting install operation
+2025-08-14 18:08:45 | INFO     | superclaude.security | [ALLOW] Claude directory installation validated: /Users/jeremy/.claude (PID: 3592)
+2025-08-14 18:08:45 | INFO     | superclaude | Initializing installation system...
+2025-08-14 18:08:45 | DEBUG    | superclaude | Discovered 0 .md files in /Users/jeremy/Projects/Project Hellfire/venv/lib/python3.13/site-packages/SuperClaude/Hooks
+2025-08-14 18:08:45 | DEBUG    | superclaude | Discovered 9 .md files in /Users/jeremy/Projects/Project Hellfire/venv/lib/python3.13/site-packages/SuperClaude/Core
+2025-08-14 18:08:45 | DEBUG    | superclaude | Files found: ['CLAUDE.md', 'COMMANDS.md', 'FLAGS.md', 'MCP.md', 'MODES.md', 'ORCHESTRATOR.md', 'PERSONAS.md', 'PRINCIPLES.md', 'RULES.md']
+2025-08-14 18:08:45 | DEBUG    | superclaude | Discovered 17 .md files in /Users/jeremy/Projects/Project Hellfire/venv/lib/python3.13/site-packages/SuperClaude/Commands
+2025-08-14 18:08:45 | DEBUG    | superclaude | Files found: ['analyze.md', 'build.md', 'cleanup.md', 'design.md', 'document.md', 'estimate.md', 'explain.md', 'git.md', 'implement.md', 'improve.md', 'index.md', 'load.md', 'spawn.md', 'task.md', 'test.md', 'troubleshoot.md', 'workflow.md']
+2025-08-14 18:08:45 | INFO     | superclaude | Validating system requirements...
+2025-08-14 18:08:45 | INFO     | superclaude | All system requirements met
+2025-08-14 18:08:45 | WARNING  | superclaude | Installation directory already exists: /Users/jeremy/.claude
+2025-08-14 18:08:45 | ERROR    | superclaude | Error in install operation: EOF when reading a line
+Traceback (most recent call last):
+  File "/Users/jeremy/Projects/Project Hellfire/venv/lib/python3.13/site-packages/setup/operations/install.py", line 507, in run
+    if not args.yes and not confirm("Continue and update existing installation?", default=False):
+                            ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jeremy/Projects/Project Hellfire/venv/lib/python3.13/site-packages/setup/utils/ui.py", line 249, in confirm
+    response = input("> ").strip().lower()
+               ~~~~~^^^^^^
+EOFError: EOF when reading a line

@@ -1,0 +1,113 @@
+     1→import { type NextRequest, NextResponse } from "next/server"
+     2→import { getDb } from "@/lib/db"
+     3→import { moves, clients } from "@/lib/schema"
+     4→import { eq } from "drizzle-orm"
+     5→import { logMoveEvent, determineEventType } from "@/lib/events"
+     6→
+     7→// GET single move
+     8→export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+     9→  try {
+    10→    const db = getDb()
+    11→    const { id } = await params
+    12→    const [move] = await db
+    13→      .select({
+    14→        id: moves.id,
+    15→        clientId: moves.clientId,
+    16→        title: moves.title,
+    17→        description: moves.description,
+    18→        status: moves.status,
+    19→        effortEstimate: moves.effortEstimate,
+    20→        effortActual: moves.effortActual,
+    21→        drainType: moves.drainType,
+    22→        sortOrder: moves.sortOrder,
+    23→        subtasks: moves.subtasks,
+    24→        createdAt: moves.createdAt,
+    25→        updatedAt: moves.updatedAt,
+    26→        completedAt: moves.completedAt,
+    27→        clientName: clients.name,
+    28→      })
+    29→      .from(moves)
+    30→      .leftJoin(clients, eq(moves.clientId, clients.id))
+    31→      .where(eq(moves.id, Number.parseInt(id, 10)))
+    32→
+    33→    if (!move) {
+    34→      return NextResponse.json({ error: "Move not found" }, { status: 404 })
+    35→    }
+    36→
+    37→    return NextResponse.json(move)
+    38→  } catch (error) {
+    39→    console.error("Failed to fetch move:", error)
+    40→    return NextResponse.json({ error: "Failed to fetch move" }, { status: 500 })
+    41→  }
+    42→}
+    43→
+    44→// PATCH update move
+    45→export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    46→  try {
+    47→    const db = getDb()
+    48→    const { id } = await params
+    49→    const moveId = Number.parseInt(id, 10)
+    50→    const body = await request.json()
+    51→
+    52→    const [currentMove] = await db.select({ status: moves.status }).from(moves).where(eq(moves.id, moveId)).limit(1)
+    53→
+    54→    const updateData = {
+    55→      ...body,
+    56→      updatedAt: new Date(),
+    57→    }
+    58→
+    59→    const [updated] = await db.update(moves).set(updateData).where(eq(moves.id, moveId)).returning()
+    60→
+    61→    if (!updated) {
+    62→      return NextResponse.json({ error: "Move not found" }, { status: 404 })
+    63→    }
+    64→
+    65→    if (body.status && currentMove && body.status !== currentMove.status) {
+    66→      const eventType = determineEventType(currentMove.status, body.status)
+    67→      await logMoveEvent({
+    68→        moveId,
+    69→        eventType,
+    70→        fromStatus: currentMove.status,
+    71→        toStatus: body.status,
+    72→      })
+    73→    } else if (body.title || body.description || body.effortEstimate || body.drainType) {
+    74→      // Log edit event for non-status changes
+    75→      await logMoveEvent({
+    76→        moveId,
+    77→        eventType: "edited",
+    78→        metadata: { fields: Object.keys(body) },
+    79→      })
+    80→    }
+    81→
+    82→    return NextResponse.json(updated)
+    83→  } catch (error) {
+    84→    console.error("Failed to update move:", error)
+    85→    return NextResponse.json({ error: "Failed to update move" }, { status: 500 })
+    86→  }
+    87→}
+    88→
+    89→// DELETE move
+    90→export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    91→  try {
+    92→    const db = getDb()
+    93→    const { id } = await params
+    94→    const [deleted] = await db
+    95→      .delete(moves)
+    96→      .where(eq(moves.id, Number.parseInt(id, 10)))
+    97→      .returning()
+    98→
+    99→    if (!deleted) {
+   100→      return NextResponse.json({ error: "Move not found" }, { status: 404 })
+   101→    }
+   102→
+   103→    return NextResponse.json({ success: true })
+   104→  } catch (error) {
+   105→    console.error("Failed to delete move:", error)
+   106→    return NextResponse.json({ error: "Failed to delete move" }, { status: 500 })
+   107→  }
+   108→}
+   109→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

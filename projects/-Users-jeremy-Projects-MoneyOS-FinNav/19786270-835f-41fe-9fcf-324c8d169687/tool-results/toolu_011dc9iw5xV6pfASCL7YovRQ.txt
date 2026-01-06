@@ -1,0 +1,8 @@
+* frontend_implementation
+  remotes/origin/HEAD -> origin/frontend_implementation
+  remotes/origin/claude/review-project-progress-qxIGv
+  remotes/origin/frontend_implementation
+---RECENT COMMITS---
+e0ae141 feat: Implement core finance features (Plaid, accounts, transactions, budgets)
+b217705 feat: Convert to Supabase for auth and database
+1ed4c6b Init commit

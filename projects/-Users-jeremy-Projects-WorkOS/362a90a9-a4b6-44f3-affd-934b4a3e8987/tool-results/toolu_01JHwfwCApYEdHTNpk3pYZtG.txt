@@ -1,0 +1,10 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/client-memory/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    47→
+    48→    // Merge clients with their memory settings and stats
+    49→    const clientsWithMemory = allClients.map((client) => {
+    50→      const memory = allMemory.find((m) => m.clientName === client.name)
+    51→      const tasksThisWeek = weeklyTasksMap.get(client.id) || 0
+    52→      const lastCompletedAt = lastActivityMap.get(client.id)
+    53→
+    54→      // Calculate days since last activity
+    55→      let daysSinceActivity: number | null = null

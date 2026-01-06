@@ -1,0 +1,1190 @@
+     1→# FinNav - AI-Enhanced Personal Finance Platform
+     2→
+     3→## Product Specification v1.0
+     4→
+     5→---
+     6→
+     7→## Executive Summary
+     8→
+     9→FinNav is an AI-powered personal finance platform that goes beyond traditional expense tracking. While inspired by Copilot Money's elegant design and core functionality, FinNav differentiates through deep AI integration that provides proactive financial guidance, predictive insights, and personalized automation.
+    10→
+    11→**Core Differentiator**: Where Copilot shows you what happened, FinNav tells you what to do about it.
+    12→
+    13→---
+    14→
+    15→## Table of Contents
+    16→
+    17→1. [Product Vision](#product-vision)
+    18→2. [Target Users](#target-users)
+    19→3. [Core Features](#core-features)
+    20→4. [AI Capabilities](#ai-capabilities)
+    21→5. [Technical Architecture](#technical-architecture)
+    22→6. [Data Models](#data-models)
+    23→7. [API Specification](#api-specification)
+    24→8. [Security & Privacy](#security--privacy)
+    25→9. [Integrations](#integrations)
+    26→10. [UI/UX Guidelines](#uiux-guidelines)
+    27→11. [Roadmap](#roadmap)
+    28→
+    29→---
+    30→
+    31→## Product Vision
+    32→
+    33→### Mission
+    34→Democratize financial intelligence by giving everyone access to AI-powered insights previously available only to those with financial advisors.
+    35→
+    36→### Vision Statement
+    37→FinNav transforms personal finance from passive tracking to active optimization, using AI to understand your unique financial DNA and guide you toward your goals.
+    38→
+    39→### Core Principles
+    40→
+    41→1. **AI-First**: Every feature enhanced by intelligent automation
+    42→2. **Privacy-Centric**: Your data stays yours; AI runs locally where possible
+    43→3. **Actionable Over Informational**: Insights lead to one-tap actions
+    44→4. **Predictive Over Reactive**: Warn before problems, not after
+    45→5. **Personalized Over Generic**: No two users see the same experience
+    46→
+    47→---
+    48→
+    49→## Target Users
+    50→
+    51→### Primary Personas
+    52→
+    53→#### 1. The Busy Professional (Ages 28-45)
+    54→- Income: $75K-$200K
+    55→- Pain Points: No time to manage money, worried about optimization
+    56→- Goals: Automate finances, maximize savings, build wealth
+    57→- AI Value: "Handle my finances like a personal CFO"
+    58→
+    59→#### 2. The Financial Newbie (Ages 22-30)
+    60→- Income: $40K-$80K
+    61→- Pain Points: Overwhelmed by financial decisions, no financial education
+    62→- Goals: Learn good habits, avoid mistakes, start investing
+    63→- AI Value: "Teach me and guide my decisions"
+    64→
+    65→#### 3. The Optimizer (Ages 30-50)
+    66→- Income: $100K+
+    67→- Pain Points: Already doing well but wants to maximize
+    68→- Goals: Tax optimization, investment rebalancing, wealth building
+    69→- AI Value: "Find the 1% improvements I'm missing"
+    70→
+    71→#### 4. The Couple/Family (Ages 28-45)
+    72→- Combined Income: $100K-$300K
+    73→- Pain Points: Coordinating finances, planning for kids, shared goals
+    74→- Goals: Unified view, fair splitting, family financial planning
+    75→- AI Value: "Help us work together toward our goals"
+    76→
+    77→---
+    78→
+    79→## Core Features
+    80→
+    81→### 1. Account Aggregation
+    82→
+    83→#### 1.1 Bank & Credit Card Connections
+    84→- **Plaid Integration**: Connect 12,000+ financial institutions
+    85→- **Real-time Sync**: Balance and transaction updates every 4 hours
+    86→- **Manual Accounts**: Support for cash, assets, and manual tracking
+    87→- **Multi-currency**: Automatic conversion with daily rates
+    88→
+    89→#### 1.2 Investment Accounts
+    90→- Brokerage accounts (stocks, ETFs, mutual funds)
+    91→- Retirement accounts (401k, IRA, Roth IRA)
+    92→- Crypto wallets (Coinbase, major exchanges)
+    93→- Real estate (Zillow Zestimate integration)
+    94→
+    95→#### 1.3 Liability Tracking
+    96→- Credit cards with APR tracking
+    97→- Mortgages with amortization schedules
+    98→- Student loans
+    99→- Auto loans
+   100→- Personal loans
+   101→
+   102→### 2. Transaction Management
+   103→
+   104→#### 2.1 Smart Categorization
+   105→- **AI Auto-categorization**: 95%+ accuracy using transaction context
+   106→- **Learning System**: Improves from user corrections
+   107→- **Custom Categories**: User-defined with AI suggestions
+   108→- **Split Transactions**: Divide single transactions across categories
+   109→- **Recurring Detection**: Automatic identification of subscriptions/bills
+   110→
+   111→#### 2.2 Transaction Features
+   112→- Search with natural language ("coffee last month")
+   113→- Bulk editing and re-categorization
+   114→- Attachments (receipts, notes)
+   115→- Location tagging
+   116→- Tags and flags for custom organization
+   117→
+   118→### 3. Budgeting System
+   119→
+   120→#### 3.1 Budget Types
+   121→- **Category Budgets**: Traditional per-category limits
+   122→- **Flex Budgets**: AI-optimized dynamic allocation
+   123→- **Goal-Based Budgets**: Reverse-engineer from savings goals
+   124→- **Envelope System**: Virtual envelopes for cash-flow management
+   125→- **Pay Period Sync**: Align budgets with pay cycles
+   126→
+   127→#### 3.2 Budget Intelligence
+   128→- Rollover unused amounts
+   129→- Seasonal adjustment suggestions
+   130→- Anomaly alerts
+   131→- Pace tracking ("You're spending faster than usual")
+   132→- Reallocation suggestions between categories
+   133→
+   134→### 4. Net Worth Tracking
+   135→
+   136→#### 4.1 Asset Classes
+   137→- Cash & Bank Accounts
+   138→- Investments (stocks, bonds, funds)
+   139→- Retirement Accounts
+   140→- Real Estate
+   141→- Vehicles
+   142→- Crypto & Digital Assets
+   143→- Other Assets (collectibles, etc.)
+   144→
+   145→#### 4.2 Liability Classes
+   146→- Credit Cards
+   147→- Mortgages
+   148→- Student Loans
+   149→- Auto Loans
+   150→- Personal Loans
+   151→- Other Debts
+   152→
+   153→#### 4.3 Analytics
+   154→- Net worth over time
+   155→- Asset allocation visualization
+   156→- Debt payoff projections
+   157→- Milestone tracking
+   158→- Comparison to goals
+   159→
+   160→### 5. Subscription & Bill Management
+   161→
+   162→#### 5.1 Detection & Tracking
+   163→- Automatic subscription detection from transactions
+   164→- Price change alerts
+   165→- Free trial expiration warnings
+   166→- Annual vs monthly cost comparison
+   167→- Category breakdown (streaming, software, services)
+   168→
+   169→#### 5.2 Bill Management
+   170→- Due date tracking with smart reminders
+   171→- Bill negotiation suggestions
+   172→- Provider alternatives with savings estimates
+   173→- Payment history and trends
+   174→
+   175→### 6. Goals & Planning
+   176→
+   177→#### 6.1 Goal Types
+   178→- Emergency fund
+   179→- Debt payoff
+   180→- Major purchase
+   181→- Vacation/travel
+   182→- Investment targets
+   183→- Custom goals
+   184→
+   185→#### 6.2 Goal Features
+   186→- Visual progress tracking
+   187→- Automated contributions
+   188→- Timeline projections
+   189→- Priority ranking
+   190→- Goal conflicts detection
+   191→
+   192→### 7. Reports & Analytics
+   193→
+   194→#### 7.1 Standard Reports
+   195→- Monthly spending summary
+   196→- Income vs expenses
+   197→- Category trends
+   198→- Year-over-year comparisons
+   199→- Tax-ready reports
+   200→
+   201→#### 7.2 Custom Reports
+   202→- Date range selection
+   203→- Category filtering
+   204→- Account filtering
+   205→- Export (PDF, CSV, Excel)
+   206→- Scheduled email delivery
+   207→
+   208→---
+   209→
+   210→## AI Capabilities
+   211→
+   212→### 1. Conversational AI Assistant ("Fin")
+   213→
+   214→#### 1.1 Natural Language Queries
+   215→```
+   216→User: "How much did I spend on food this month?"
+   217→Fin: "You've spent $847 on food this month, which is $123 more than
+   218→      your average. Most of this ($412) was dining out. Would you
+   219→      like me to suggest some ways to reduce this?"
+   220→```
+   221→
+   222→#### 1.2 Proactive Insights
+   223→```
+   224→Fin: "I noticed your electricity bill jumped 40% this month. This
+   225→      usually happens when AC usage increases in summer. Based on
+   226→      last year's pattern, I'd suggest budgeting an extra $80/month
+   227→      for the next 3 months."
+   228→```
+   229→
+   230→#### 1.3 Action Execution
+   231→```
+   232→User: "Move $500 to my emergency fund"
+   233→Fin: "I'll schedule a $500 transfer from your Chase Checking to
+   234→      your Marcus Savings for tomorrow. This will bring your
+   235→      emergency fund to $8,500 (2.8 months of expenses). Confirm?"
+   236→```
+   237→
+   238→### 2. Predictive Analytics
+   239→
+   240→#### 2.1 Cash Flow Forecasting
+   241→- 30/60/90 day projections
+   242→- Bill timing optimization
+   243→- Low balance warnings
+   244→- Optimal payment scheduling
+   245→
+   246→#### 2.2 Spending Predictions
+   247→- Category-level forecasts
+   248→- Seasonal adjustments
+   249→- Event-based predictions (holidays, vacations)
+   250→- Lifestyle change detection
+   251→
+   252→#### 2.3 Goal Achievement Probability
+   253→- Monte Carlo simulations for goal timelines
+   254→- Risk-adjusted projections
+   255→- Scenario modeling
+   256→
+   257→### 3. Personalized Recommendations
+   258→
+   259→#### 3.1 Savings Opportunities
+   260→- Subscription optimization ("You have 3 streaming services, average user has 1.7")
+   261→- Bill negotiation targets ("Users with your profile save $340/year on car insurance")
+   262→- Bank account optimization ("Moving to X would earn you $120 more/year")
+   263→- Credit card recommendations based on spending patterns
+   264→
+   265→#### 3.2 Debt Optimization
+   266→- Avalanche vs snowball comparison with your actual numbers
+   267→- Refinancing opportunities
+   268→- Balance transfer suggestions
+   269→- Extra payment impact calculator
+   270→
+   271→#### 3.3 Investment Insights
+   272→- Rebalancing suggestions
+   273→- Tax-loss harvesting opportunities
+   274→- Contribution optimization (401k match, IRA limits)
+   275→- Risk assessment vs stated goals
+   276→
+   277→### 4. Behavioral Intelligence
+   278→
+   279→#### 4.1 Spending Pattern Analysis
+   280→- Emotional spending detection
+   281→- Impulse purchase patterns
+   282→- Time-of-day spending habits
+   283→- Location-based trends
+   284→
+   285→#### 4.2 Habit Formation
+   286→- Streak tracking for positive behaviors
+   287→- Gentle nudges for goals
+   288→- Celebration of milestones
+   289→- Personalized challenge suggestions
+   290→
+   291→#### 4.3 Anomaly Detection
+   292→- Unusual transaction alerts
+   293→- Potential fraud flagging
+   294→- Merchant error detection
+   295→- Duplicate charge identification
+   296→
+   297→### 5. AI-Powered Automation
+   298→
+   299→#### 5.1 Smart Rules Engine
+   300→```yaml
+   301→Example Rule:
+   302→  Trigger: Paycheck deposited
+   303→  Actions:
+   304→    - Transfer 20% to savings
+   305→    - Pay all due bills
+   306→    - Notify if remaining < $500
+   307→    - Suggest discretionary budget for period
+   308→```
+   309→
+   310→#### 5.2 Intelligent Categorization
+   311→- Context-aware merchant mapping
+   312→- Time-based category inference
+   313→- Amount-based splitting suggestions
+   314→- Cross-user learning (privacy-preserved)
+   315→
+   316→#### 5.3 Proactive Alerts
+   317→- Before overdraft warnings
+   318→- Budget pace alerts
+   319→- Goal at-risk notifications
+   320→- Opportunity alerts (high-yield savings rate changes)
+   321→
+   322→---
+   323→
+   324→## Technical Architecture
+   325→
+   326→### System Overview
+   327→
+   328→```
+   329→┌─────────────────────────────────────────────────────────────────┐
+   330→│                         Client Layer                             │
+   331→├─────────────────────────────────────────────────────────────────┤
+   332→│  React + TypeScript │ React Native │ Progressive Web App        │
+   333→│  shadcn/ui + Tailwind │ Local AI Inference (WebLLM/ONNX)        │
+   334→└─────────────────────────────────────────────────────────────────┘
+   335→                                │
+   336→                                ▼
+   337→┌─────────────────────────────────────────────────────────────────┐
+   338→│                         API Gateway                              │
+   339→├─────────────────────────────────────────────────────────────────┤
+   340→│  Express.js │ Rate Limiting │ Auth │ Request Validation         │
+   341→└─────────────────────────────────────────────────────────────────┘
+   342→                                │
+   343→                ┌───────────────┼───────────────┐
+   344→                ▼               ▼               ▼
+   345→┌───────────────────┐ ┌─────────────────┐ ┌─────────────────────┐
+   346→│   Core Services   │ │   AI Services   │ │ Integration Services│
+   347→├───────────────────┤ ├─────────────────┤ ├─────────────────────┤
+   348→│ • User Service    │ │ • Chat Service  │ │ • Plaid Service     │
+   349→│ • Account Service │ │ • Insight Gen   │ │ • Market Data       │
+   350→│ • Transaction Svc │ │ • Prediction    │ │ • Notification Svc  │
+   351→│ • Budget Service  │ │ • Categorizer   │ │ • Export Service    │
+   352→│ • Goal Service    │ │ • Anomaly Det   │ │ • Webhook Handler   │
+   353→│ • Report Service  │ │ • Recommendation│ │ • OAuth Providers   │
+   354→└───────────────────┘ └─────────────────┘ └─────────────────────┘
+   355→                │               │               │
+   356→                └───────────────┼───────────────┘
+   357→                                ▼
+   358→┌─────────────────────────────────────────────────────────────────┐
+   359→│                        Data Layer                                │
+   360→├─────────────────────────────────────────────────────────────────┤
+   361→│  MongoDB (Primary) │ Redis (Cache/Queue) │ TimescaleDB (Series) │
+   362→└─────────────────────────────────────────────────────────────────┘
+   363→                                │
+   364→                                ▼
+   365→┌─────────────────────────────────────────────────────────────────┐
+   366→│                     AI/ML Infrastructure                         │
+   367→├─────────────────────────────────────────────────────────────────┤
+   368→│  OpenAI API │ Anthropic API │ Local Models │ Vector DB (Pinecone)│
+   369→└─────────────────────────────────────────────────────────────────┘
+   370→```
+   371→
+   372→### Technology Stack
+   373→
+   374→#### Frontend
+   375→- **Framework**: React 18+ with TypeScript
+   376→- **State Management**: Zustand or Jotai
+   377→- **UI Components**: shadcn/ui + Radix UI
+   378→- **Styling**: Tailwind CSS
+   379→- **Charts**: Recharts or Nivo
+   380→- **Build Tool**: Vite
+   381→- **Mobile**: React Native (future)
+   382→
+   383→#### Backend
+   384→- **Runtime**: Node.js 20+
+   385→- **Framework**: Express.js with TypeScript
+   386→- **Validation**: Zod
+   387→- **ORM**: Prisma or Mongoose
+   388→- **Queue**: BullMQ with Redis
+   389→- **Caching**: Redis
+   390→
+   391→#### Database
+   392→- **Primary**: MongoDB Atlas
+   393→- **Cache**: Redis
+   394→- **Time Series**: TimescaleDB (for historical data)
+   395→- **Vector Store**: Pinecone (for AI embeddings)
+   396→
+   397→#### AI/ML
+   398→- **LLM Providers**: OpenAI, Anthropic (already integrated)
+   399→- **Embeddings**: OpenAI text-embedding-3-small
+   400→- **Local Inference**: ONNX Runtime (for categorization)
+   401→- **ML Framework**: TensorFlow.js (browser predictions)
+   402→
+   403→#### Infrastructure
+   404→- **Hosting**: Railway / Render / AWS
+   405→- **CDN**: Cloudflare
+   406→- **Monitoring**: Sentry + Datadog
+   407→- **Logging**: Axiom or Logtail
+   408→
+   409→---
+   410→
+   411→## Data Models
+   412→
+   413→### Core Entities
+   414→
+   415→```typescript
+   416→// User
+   417→interface User {
+   418→  id: string;
+   419→  email: string;
+   420→  passwordHash: string;
+   421→  profile: UserProfile;
+   422→  settings: UserSettings;
+   423→  subscription: SubscriptionTier;
+   424→  onboardingCompleted: boolean;
+   425→  createdAt: Date;
+   426→  updatedAt: Date;
+   427→}
+   428→
+   429→interface UserProfile {
+   430→  firstName: string;
+   431→  lastName: string;
+   432→  avatar?: string;
+   433→  timezone: string;
+   434→  currency: string;
+   435→  locale: string;
+   436→}
+   437→
+   438→interface UserSettings {
+   439→  notifications: NotificationSettings;
+   440→  privacy: PrivacySettings;
+   441→  display: DisplaySettings;
+   442→  ai: AISettings;
+   443→}
+   444→
+   445→// Financial Institution Connection
+   446→interface Institution {
+   447→  id: string;
+   448→  userId: string;
+   449→  plaidItemId: string;
+   450→  plaidAccessToken: string; // encrypted
+   451→  name: string;
+   452→  logo?: string;
+   453→  primaryColor?: string;
+   454→  status: 'active' | 'error' | 'pending_reauth';
+   455→  lastSync: Date;
+   456→  errorCode?: string;
+   457→  accounts: Account[];
+   458→}
+   459→
+   460→// Account
+   461→interface Account {
+   462→  id: string;
+   463→  institutionId?: string; // null for manual accounts
+   464→  userId: string;
+   465→  plaidAccountId?: string;
+   466→
+   467→  name: string;
+   468→  officialName?: string;
+   469→  type: AccountType;
+   470→  subtype: AccountSubtype;
+   471→
+   472→  balance: {
+   473→    current: number;
+   474→    available?: number;
+   475→    limit?: number; // for credit accounts
+   476→  };
+   477→
+   478→  currency: string;
+   479→  isHidden: boolean;
+   480→  isManual: boolean;
+   481→
+   482→  // For investment accounts
+   483→  holdings?: Holding[];
+   484→
+   485→  // For credit/loan accounts
+   486→  apr?: number;
+   487→  minimumPayment?: number;
+   488→  nextPaymentDue?: Date;
+   489→
+   490→  lastSynced: Date;
+   491→  createdAt: Date;
+   492→}
+   493→
+   494→type AccountType =
+   495→  | 'depository'
+   496→  | 'credit'
+   497→  | 'loan'
+   498→  | 'investment'
+   499→  | 'other';
+   500→
+   501→type AccountSubtype =
+   502→  | 'checking' | 'savings' | 'money_market' | 'cd'
+   503→  | 'credit_card'
+   504→  | 'mortgage' | 'student' | 'auto' | 'personal'
+   505→  | 'brokerage' | '401k' | 'ira' | 'roth_ira' | 'hsa'
+   506→  | 'crypto' | 'real_estate' | 'vehicle' | 'other';
+   507→
+   508→// Transaction
+   509→interface Transaction {
+   510→  id: string;
+   511→  accountId: string;
+   512→  userId: string;
+   513→  plaidTransactionId?: string;
+   514→
+   515→  amount: number; // positive = expense, negative = income
+   516→  currency: string;
+   517→
+   518→  date: Date;
+   519→  authorizedDate?: Date;
+   520→
+   521→  name: string; // original merchant name
+   522→  merchantName?: string; // cleaned merchant name
+   523→  merchantId?: string;
+   524→
+   525→  category: Category;
+   526→  categoryId: string;
+   527→  categoryConfidence: number; // 0-1 AI confidence
+   528→  isUserCategorized: boolean;
+   529→
+   530→  pending: boolean;
+   531→
+   532→  // Recurring detection
+   533→  isRecurring: boolean;
+   534→  recurringId?: string;
+   535→
+   536→  // Metadata
+   537→  location?: {
+   538→    address?: string;
+   539→    city?: string;
+   540→    region?: string;
+   541→    postalCode?: string;
+   542→    country?: string;
+   543→    lat?: number;
+   544→    lon?: number;
+   545→  };
+   546→
+   547→  paymentChannel: 'online' | 'in_store' | 'other';
+   548→
+   549→  // User additions
+   550→  notes?: string;
+   551→  tags: string[];
+   552→  attachments: Attachment[];
+   553→
+   554→  // Split transactions
+   555→  splits?: TransactionSplit[];
+   556→  parentTransactionId?: string;
+   557→
+   558→  isExcludedFromBudget: boolean;
+   559→  isExcludedFromReports: boolean;
+   560→
+   561→  createdAt: Date;
+   562→  updatedAt: Date;
+   563→}
+   564→
+   565→// Category
+   566→interface Category {
+   567→  id: string;
+   568→  userId?: string; // null for system categories
+   569→  name: string;
+   570→  icon: string;
+   571→  color: string;
+   572→  parentId?: string; // for subcategories
+   573→  type: 'income' | 'expense' | 'transfer';
+   574→  isSystem: boolean;
+   575→  keywords: string[]; // for AI training
+   576→  createdAt: Date;
+   577→}
+   578→
+   579→// Budget
+   580→interface Budget {
+   581→  id: string;
+   582→  userId: string;
+   583→  name: string;
+   584→
+   585→  type: 'category' | 'total' | 'goal';
+   586→  period: 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+   587→
+   588→  amount: number;
+   589→  rollover: boolean;
+   590→  rolledAmount: number;
+   591→
+   592→  categoryIds: string[]; // categories this budget covers
+   593→
+   594→  // For flex budgets
+   595→  isFlexible: boolean;
+   596→  flexMin?: number;
+   597→  flexMax?: number;
+   598→
+   599→  startDate: Date;
+   600→  endDate?: Date;
+   601→
+   602→  isActive: boolean;
+   603→  createdAt: Date;
+   604→}
+   605→
+   606→// Goal
+   607→interface Goal {
+   608→  id: string;
+   609→  userId: string;
+   610→  name: string;
+   611→  description?: string;
+   612→  icon: string;
+   613→  color: string;
+   614→
+   615→  type: GoalType;
+   616→  targetAmount: number;
+   617→  currentAmount: number;
+   618→
+   619→  targetDate?: Date;
+   620→
+   621→  // Linked accounts for tracking
+   622→  linkedAccountIds: string[];
+   623→
+   624→  // Auto-contribution
+   625→  autoContribute: boolean;
+   626→  contributionAmount?: number;
+   627→  contributionFrequency?: 'weekly' | 'biweekly' | 'monthly';
+   628→  contributionAccountId?: string;
+   629→
+   630→  priority: number;
+   631→  status: 'active' | 'completed' | 'paused' | 'cancelled';
+   632→
+   633→  completedAt?: Date;
+   634→  createdAt: Date;
+   635→}
+   636→
+   637→type GoalType =
+   638→  | 'emergency_fund'
+   639→  | 'debt_payoff'
+   640→  | 'savings'
+   641→  | 'investment'
+   642→  | 'purchase'
+   643→  | 'vacation'
+   644→  | 'custom';
+   645→
+   646→// Recurring Transaction (Subscription/Bill)
+   647→interface RecurringTransaction {
+   648→  id: string;
+   649→  userId: string;
+   650→
+   651→  name: string;
+   652→  merchantName: string;
+   653→  merchantId?: string;
+   654→
+   655→  amount: number;
+   656→  frequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+   657→
+   658→  categoryId: string;
+   659→  accountId: string;
+   660→
+   661→  type: 'subscription' | 'bill' | 'income';
+   662→
+   663→  nextDate: Date;
+   664→  lastDate?: Date;
+   665→
+   666→  // For bills
+   667→  dueDay?: number;
+   668→  reminderDays?: number;
+   669→  autoPay: boolean;
+   670→
+   671→  status: 'active' | 'paused' | 'cancelled';
+   672→
+   673→  // Detection metadata
+   674→  transactionIds: string[]; // linked transactions
+   675→  confidence: number;
+   676→
+   677→  createdAt: Date;
+   678→}
+   679→
+   680→// AI Conversation
+   681→interface AIConversation {
+   682→  id: string;
+   683→  userId: string;
+   684→
+   685→  messages: AIMessage[];
+   686→
+   687→  context: {
+   688→    accountIds?: string[];
+   689→    transactionIds?: string[];
+   690→    dateRange?: { start: Date; end: Date };
+   691→  };
+   692→
+   693→  createdAt: Date;
+   694→  updatedAt: Date;
+   695→}
+   696→
+   697→interface AIMessage {
+   698→  id: string;
+   699→  role: 'user' | 'assistant' | 'system';
+   700→  content: string;
+   701→
+   702→  // For assistant messages
+   703→  actions?: AIAction[];
+   704→  insights?: AIInsight[];
+   705→
+   706→  model?: string;
+   707→  tokens?: { input: number; output: number };
+   708→
+   709→  createdAt: Date;
+   710→}
+   711→
+   712→interface AIAction {
+   713→  type: 'transfer' | 'categorize' | 'budget' | 'goal' | 'alert';
+   714→  description: string;
+   715→  payload: Record<string, unknown>;
+   716→  status: 'suggested' | 'confirmed' | 'executed' | 'rejected';
+   717→}
+   718→
+   719→interface AIInsight {
+   720→  id: string;
+   721→  userId: string;
+   722→
+   723→  type: InsightType;
+   724→  priority: 'low' | 'medium' | 'high' | 'urgent';
+   725→
+   726→  title: string;
+   727→  description: string;
+   728→
+   729→  data: Record<string, unknown>;
+   730→
+   731→  action?: {
+   732→    label: string;
+   733→    type: string;
+   734→    payload: Record<string, unknown>;
+   735→  };
+   736→
+   737→  isRead: boolean;
+   738→  isDismissed: boolean;
+   739→
+   740→  expiresAt?: Date;
+   741→  createdAt: Date;
+   742→}
+   743→
+   744→type InsightType =
+   745→  | 'spending_anomaly'
+   746→  | 'budget_warning'
+   747→  | 'bill_reminder'
+   748→  | 'savings_opportunity'
+   749→  | 'subscription_alert'
+   750→  | 'goal_progress'
+   751→  | 'cash_flow_forecast'
+   752→  | 'investment_suggestion'
+   753→  | 'debt_optimization'
+   754→  | 'price_increase'
+   755→  | 'refund_detected'
+   756→  | 'duplicate_charge';
+   757→```
+   758→
+   759→---
+   760→
+   761→## API Specification
+   762→
+   763→### Authentication
+   764→
+   765→```
+   766→POST /api/auth/register
+   767→POST /api/auth/login
+   768→POST /api/auth/logout
+   769→POST /api/auth/refresh
+   770→POST /api/auth/forgot-password
+   771→POST /api/auth/reset-password
+   772→GET  /api/auth/me
+   773→```
+   774→
+   775→### Accounts
+   776→
+   777→```
+   778→GET    /api/accounts
+   779→GET    /api/accounts/:id
+   780→POST   /api/accounts (manual account)
+   781→PUT    /api/accounts/:id
+   782→DELETE /api/accounts/:id
+   783→POST   /api/accounts/:id/sync
+   784→GET    /api/accounts/:id/transactions
+   785→```
+   786→
+   787→### Institutions (Plaid)
+   788→
+   789→```
+   790→POST /api/institutions/link-token
+   791→POST /api/institutions/exchange-token
+   792→GET  /api/institutions
+   793→GET  /api/institutions/:id
+   794→DELETE /api/institutions/:id
+   795→POST /api/institutions/:id/reauth
+   796→```
+   797→
+   798→### Transactions
+   799→
+   800→```
+   801→GET    /api/transactions
+   802→GET    /api/transactions/:id
+   803→PUT    /api/transactions/:id
+   804→DELETE /api/transactions/:id
+   805→POST   /api/transactions/:id/split
+   806→POST   /api/transactions/bulk-categorize
+   807→GET    /api/transactions/search
+   808→```
+   809→
+   810→### Categories
+   811→
+   812→```
+   813→GET    /api/categories
+   814→POST   /api/categories
+   815→PUT    /api/categories/:id
+   816→DELETE /api/categories/:id
+   817→POST   /api/categories/merge
+   818→```
+   819→
+   820→### Budgets
+   821→
+   822→```
+   823→GET    /api/budgets
+   824→GET    /api/budgets/:id
+   825→POST   /api/budgets
+   826→PUT    /api/budgets/:id
+   827→DELETE /api/budgets/:id
+   828→GET    /api/budgets/:id/progress
+   829→GET    /api/budgets/suggestions
+   830→```
+   831→
+   832→### Goals
+   833→
+   834→```
+   835→GET    /api/goals
+   836→GET    /api/goals/:id
+   837→POST   /api/goals
+   838→PUT    /api/goals/:id
+   839→DELETE /api/goals/:id
+   840→POST   /api/goals/:id/contribute
+   841→GET    /api/goals/:id/projections
+   842→```
+   843→
+   844→### Recurring Transactions
+   845→
+   846→```
+   847→GET    /api/recurring
+   848→GET    /api/recurring/:id
+   849→PUT    /api/recurring/:id
+   850→DELETE /api/recurring/:id
+   851→POST   /api/recurring/detect
+   852→```
+   853→
+   854→### Reports
+   855→
+   856→```
+   857→GET  /api/reports/spending
+   858→GET  /api/reports/income
+   859→GET  /api/reports/net-worth
+   860→GET  /api/reports/cash-flow
+   861→GET  /api/reports/categories
+   862→POST /api/reports/custom
+   863→GET  /api/reports/export/:format
+   864→```
+   865→
+   866→### AI
+   867→
+   868→```
+   869→POST /api/ai/chat
+   870→GET  /api/ai/conversations
+   871→GET  /api/ai/conversations/:id
+   872→DELETE /api/ai/conversations/:id
+   873→
+   874→GET  /api/ai/insights
+   875→PUT  /api/ai/insights/:id/read
+   876→PUT  /api/ai/insights/:id/dismiss
+   877→POST /api/ai/insights/:id/action
+   878→
+   879→GET  /api/ai/predictions/cash-flow
+   880→GET  /api/ai/predictions/spending
+   881→GET  /api/ai/recommendations
+   882→```
+   883→
+   884→### Webhooks (Plaid)
+   885→
+   886→```
+   887→POST /api/webhooks/plaid
+   888→```
+   889→
+   890→---
+   891→
+   892→## Security & Privacy
+   893→
+   894→### Data Protection
+   895→
+   896→1. **Encryption at Rest**
+   897→   - All PII encrypted with AES-256
+   898→   - Plaid tokens encrypted with separate key
+   899→   - Database-level encryption on MongoDB Atlas
+   900→
+   901→2. **Encryption in Transit**
+   902→   - TLS 1.3 for all connections
+   903→   - Certificate pinning on mobile
+   904→
+   905→3. **Access Control**
+   906→   - JWT with short expiry (15 min)
+   907→   - Refresh token rotation
+   908→   - Session management with device tracking
+   909→   - Rate limiting per user and IP
+   910→
+   911→### Privacy Features
+   912→
+   913→1. **Data Minimization**
+   914→   - Only collect necessary data
+   915→   - Automatic deletion of old data (configurable)
+   916→   - Export and delete capabilities (GDPR/CCPA)
+   917→
+   918→2. **AI Privacy**
+   919→   - Option for local-only AI processing
+   920→   - No training on user data without consent
+   921→   - Anonymization for aggregate insights
+   922→
+   923→3. **Third-Party Data**
+   924→   - Plaid data handled per their security standards
+   925→   - No selling of user data
+   926→   - Clear disclosure of data usage
+   927→
+   928→### Compliance
+   929→
+   930→- SOC 2 Type II (target)
+   931→- GDPR compliant
+   932→- CCPA compliant
+   933→- PCI DSS (for any payment processing)
+   934→
+   935→---
+   936→
+   937→## Integrations
+   938→
+   939→### Financial Data
+   940→
+   941→1. **Plaid** (Primary)
+   942→   - Bank accounts
+   943→   - Credit cards
+   944→   - Investments
+   945→   - Transactions
+   946→
+   947→2. **Finicity** (Backup/Alternative)
+   948→   - Additional institution coverage
+   949→
+   950→3. **Coinbase/Crypto**
+   951→   - Cryptocurrency holdings
+   952→   - Transaction history
+   953→
+   954→4. **Zillow API**
+   955→   - Real estate valuations
+   956→
+   957→### Market Data
+   958→
+   959→1. **Alpha Vantage / Polygon**
+   960→   - Stock prices
+   961→   - Fund data
+   962→   - Crypto prices
+   963→
+   964→2. **FRED API**
+   965→   - Economic indicators
+   966→   - Interest rates
+   967→
+   968→### Notifications
+   969→
+   970→1. **SendGrid** - Email
+   971→2. **Twilio** - SMS
+   972→3. **Firebase** - Push notifications
+   973→
+   974→### Analytics
+   975→
+   976→1. **Mixpanel** - Product analytics
+   977→2. **Sentry** - Error tracking
+   978→3. **Datadog** - Infrastructure monitoring
+   979→
+   980→---
+   981→
+   982→## UI/UX Guidelines
+   983→
+   984→### Design Principles
+   985→
+   986→1. **Clarity Over Density**
+   987→   - One primary action per screen
+   988→   - Progressive disclosure of details
+   989→   - White space is valuable
+   990→
+   991→2. **Instant Feedback**
+   992→   - Optimistic updates
+   993→   - Skeleton loading states
+   994→   - Haptic feedback on mobile
+   995→
+   996→3. **Consistent Patterns**
+   997→   - Same gestures across the app
+   998→   - Predictable navigation
+   999→   - Familiar financial conventions
+  1000→
+  1001→### Visual Design
+  1002→
+  1003→1. **Color Palette**
+  1004→   ```
+  1005→   Primary: #10B981 (Emerald - growth/money)
+  1006→   Secondary: #6366F1 (Indigo - trust)
+  1007→   Danger: #EF4444 (Red - alerts/debt)
+  1008→   Warning: #F59E0B (Amber - caution)
+  1009→   Success: #22C55E (Green - positive)
+  1010→
+  1011→   Background: #FFFFFF / #0F172A (dark mode)
+  1012→   Surface: #F8FAFC / #1E293B (dark mode)
+  1013→   Text: #1E293B / #F8FAFC (dark mode)
+  1014→   ```
+  1015→
+  1016→2. **Typography**
+  1017→   - Headlines: Inter (bold)
+  1018→   - Body: Inter (regular)
+  1019→   - Numbers: JetBrains Mono (for financial data)
+  1020→
+  1021→3. **Iconography**
+  1022→   - Lucide Icons (consistent with shadcn/ui)
+  1023→   - Custom category icons
+  1024→   - Animated micro-interactions
+  1025→
+  1026→### Key Screens
+  1027→
+  1028→1. **Dashboard**
+  1029→   - Net worth summary
+  1030→   - Recent transactions
+  1031→   - AI insight cards
+  1032→   - Quick actions
+  1033→
+  1034→2. **Accounts**
+  1035→   - Grouped by institution
+  1036→   - Balance trends
+  1037→   - Quick account details
+  1038→
+  1039→3. **Transactions**
+  1040→   - Infinite scroll list
+  1041→   - Quick categorization
+  1042→   - Search and filters
+  1043→
+  1044→4. **Budgets**
+  1045→   - Visual progress bars
+  1046→   - Period comparison
+  1047→   - Category breakdown
+  1048→
+  1049→5. **AI Assistant**
+  1050→   - Chat interface
+  1051→   - Quick prompts
+  1052→   - Action buttons
+  1053→
+  1054→---
+  1055→
+  1056→## Roadmap
+  1057→
+  1058→### Phase 1: Foundation (Weeks 1-4)
+  1059→
+  1060→- [ ] User authentication (complete)
+  1061→- [ ] Plaid integration
+  1062→- [ ] Account syncing
+  1063→- [ ] Transaction import
+  1064→- [ ] Basic categorization
+  1065→- [ ] Manual account support
+  1066→
+  1067→### Phase 2: Core Finance (Weeks 5-8)
+  1068→
+  1069→- [ ] Smart categorization with AI
+  1070→- [ ] Budget creation and tracking
+  1071→- [ ] Recurring transaction detection
+  1072→- [ ] Basic reporting
+  1073→- [ ] Net worth calculation
+  1074→
+  1075→### Phase 3: AI Integration (Weeks 9-12)
+  1076→
+  1077→- [ ] Chat assistant (Fin)
+  1078→- [ ] Proactive insights
+  1079→- [ ] Spending predictions
+  1080→- [ ] Anomaly detection
+  1081→- [ ] Recommendation engine
+  1082→
+  1083→### Phase 4: Advanced Features (Weeks 13-16)
+  1084→
+  1085→- [ ] Goals and planning
+  1086→- [ ] Investment tracking
+  1087→- [ ] Subscription management
+  1088→- [ ] Bill reminders
+  1089→- [ ] Custom reports
+  1090→
+  1091→### Phase 5: Optimization (Weeks 17-20)
+  1092→
+  1093→- [ ] Performance optimization
+  1094→- [ ] Offline support
+  1095→- [ ] Advanced AI features
+  1096→- [ ] API polish
+  1097→- [ ] Security audit
+  1098→
+  1099→### Phase 6: Mobile & Launch (Weeks 21-24)
+  1100→
+  1101→- [ ] React Native app
+  1102→- [ ] App Store submission
+  1103→- [ ] Marketing site
+  1104→- [ ] Public launch
+  1105→
+  1106→---
+  1107→
+  1108→## Success Metrics
+  1109→
+  1110→### User Engagement
+  1111→- Daily Active Users (DAU)
+  1112→- Session duration
+  1113→- Feature adoption rates
+  1114→- AI interaction frequency
+  1115→
+  1116→### Financial Impact
+  1117→- Average savings identified
+  1118→- Budget adherence rates
+  1119→- Goal completion rates
+  1120→- Debt reduction tracking
+  1121→
+  1122→### Product Health
+  1123→- App performance (load times, crashes)
+  1124→- API response times
+  1125→- AI accuracy rates
+  1126→- User satisfaction (NPS)
+  1127→
+  1128→---
+  1129→
+  1130→## Appendix
+  1131→
+  1132→### A. System Categories
+  1133→
+  1134→```typescript
+  1135→const SYSTEM_CATEGORIES = [
+  1136→  // Income
+  1137→  { name: 'Salary', icon: 'briefcase', type: 'income' },
+  1138→  { name: 'Freelance', icon: 'laptop', type: 'income' },
+  1139→  { name: 'Investments', icon: 'trending-up', type: 'income' },
+  1140→  { name: 'Refunds', icon: 'rotate-ccw', type: 'income' },
+  1141→  { name: 'Other Income', icon: 'plus-circle', type: 'income' },
+  1142→
+  1143→  // Expenses
+  1144→  { name: 'Housing', icon: 'home', type: 'expense',
+  1145→    children: ['Rent', 'Mortgage', 'Property Tax', 'Home Insurance', 'Maintenance'] },
+  1146→  { name: 'Transportation', icon: 'car', type: 'expense',
+  1147→    children: ['Gas', 'Auto Insurance', 'Parking', 'Public Transit', 'Rideshare', 'Auto Maintenance'] },
+  1148→  { name: 'Food & Drink', icon: 'utensils', type: 'expense',
+  1149→    children: ['Groceries', 'Restaurants', 'Coffee', 'Bars', 'Fast Food'] },
+  1150→  { name: 'Shopping', icon: 'shopping-bag', type: 'expense',
+  1151→    children: ['Clothing', 'Electronics', 'Home Goods', 'Personal Care'] },
+  1152→  { name: 'Entertainment', icon: 'tv', type: 'expense',
+  1153→    children: ['Streaming', 'Games', 'Movies', 'Events', 'Hobbies'] },
+  1154→  { name: 'Health', icon: 'heart', type: 'expense',
+  1155→    children: ['Doctor', 'Pharmacy', 'Gym', 'Mental Health'] },
+  1156→  { name: 'Utilities', icon: 'zap', type: 'expense',
+  1157→    children: ['Electric', 'Water', 'Gas', 'Internet', 'Phone'] },
+  1158→  { name: 'Subscriptions', icon: 'repeat', type: 'expense' },
+  1159→  { name: 'Travel', icon: 'plane', type: 'expense',
+  1160→    children: ['Flights', 'Hotels', 'Vacation'] },
+  1161→  { name: 'Education', icon: 'book', type: 'expense',
+  1162→    children: ['Tuition', 'Books', 'Courses'] },
+  1163→  { name: 'Personal', icon: 'user', type: 'expense',
+  1164→    children: ['Hair', 'Beauty', 'Gifts'] },
+  1165→  { name: 'Financial', icon: 'credit-card', type: 'expense',
+  1166→    children: ['Bank Fees', 'Interest', 'Late Fees'] },
+  1167→
+  1168→  // Transfer
+  1169→  { name: 'Transfer', icon: 'arrow-right-left', type: 'transfer' },
+  1170→];
+  1171→```
+  1172→
+  1173→### B. AI Prompt Templates
+  1174→
+  1175→See separate document: `AI_PROMPTS.md`
+  1176→
+  1177→### C. Error Codes
+  1178→
+  1179→See separate document: `ERROR_CODES.md`
+  1180→
+  1181→---
+  1182→
+  1183→*Document Version: 1.0*
+  1184→*Last Updated: December 2024*
+  1185→*Author: FinNav Team*
+  1186→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

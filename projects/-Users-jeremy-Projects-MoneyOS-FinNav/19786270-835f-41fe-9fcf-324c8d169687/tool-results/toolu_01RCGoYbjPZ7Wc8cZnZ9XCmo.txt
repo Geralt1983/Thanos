@@ -1,0 +1,7 @@
+Accounts.tsx
+BlankPage.tsx
+Budgets.tsx
+Dashboard.tsx
+Login.tsx
+Register.tsx
+Transactions.tsx

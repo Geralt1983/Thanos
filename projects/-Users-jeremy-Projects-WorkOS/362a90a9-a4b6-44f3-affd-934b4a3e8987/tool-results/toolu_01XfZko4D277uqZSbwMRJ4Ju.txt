@@ -1,0 +1,10 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/layout.tsx has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+     2→import type { Metadata } from "next"
+     3→import { Geist, Geist_Mono } from "next/font/google"
+     4→import { Analytics } from "@vercel/analytics/next"
+     5→import "./globals.css"
+     6→import { TasksLayout } from "@/components/tasks-layout"
+     7→
+     8→const _geist = Geist({ subsets: ["latin"] })
+     9→const _geistMono = Geist_Mono({ subsets: ["latin"] })
+    10→

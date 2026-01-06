@@ -1,0 +1,7 @@
+/Users/jeremy/Projects/v0-work-os-3-0
+/Users/jeremy/Projects/ai-memory-layer/deployments/v1.23.0_20250809_064352
+/Users/jeremy/.claude/projects/-Users-jeremy-Projects-v0-work-os-3-0
+/Users/jeremy/.cache/uv/builds-v0
+/Users/jeremy/.cache/uv/git-v0
+/Users/jeremy/.cache/uv/archive-v0
+/Users/jeremy/.cache/uv/archive-v0/L8GH8zR8A_qs4-V0pt-Hk

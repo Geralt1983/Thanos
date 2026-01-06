@@ -1,0 +1,77 @@
+     1→"use client"
+     2→
+     3→import type React from "react"
+     4→import { useState, useEffect } from "react"
+     5→
+     6→import { useIsMobile } from "@/hooks/use-mobile"
+     7→import { SynapseSidebar } from "@/components/synapse-sidebar"
+     8→import { SynapseMobileSheet } from "@/components/synapse-mobile-sheet"
+     9→import useSWR from "swr"
+    10→
+    11→interface MovesLayoutProps {
+    12→  children: React.ReactNode
+    13→}
+    14→
+    15→export function MovesLayout({ children }: MovesLayoutProps) {
+    16→  const isMobile = useIsMobile()
+    17→  const [isCollapsed, setIsCollapsed] = useState(true) // Default collapsed until loaded
+    18→
+    19→  // Load collapsed state from localStorage on mount
+    20→  useEffect(() => {
+    21→    const stored = localStorage.getItem("synapse-sidebar-collapsed")
+    22→    setIsCollapsed(stored === "true")
+    23→  }, [])
+    24→
+    25→  // Listen for changes to collapsed state
+    26→  useEffect(() => {
+    27→    const handleStorageChange = () => {
+    28→      const stored = localStorage.getItem("synapse-sidebar-collapsed")
+    29→      setIsCollapsed(stored === "true")
+    30→    }
+    31→
+    32→    // Custom event for same-tab updates
+    33→    window.addEventListener("synapse-collapse-change", handleStorageChange)
+    34→    // Storage event for cross-tab updates
+    35→    window.addEventListener("storage", handleStorageChange)
+    36→
+    37→    return () => {
+    38→      window.removeEventListener("synapse-collapse-change", handleStorageChange)
+    39→      window.removeEventListener("storage", handleStorageChange)
+    40→    }
+    41→  }, [])
+    42→
+    43→  // Fetch avoidance warning for sidebar
+    44→  const { data: avoidanceData } = useSWR(
+    45→    "/api/avoidance",
+    46→    async (url) => {
+    47→      try {
+    48→        const res = await fetch(url)
+    49→        if (!res.ok) return null
+    50→        return res.json()
+    51→      } catch {
+    52→        return null
+    53→      }
+    54→    },
+    55→    { revalidateOnFocus: false, refreshInterval: 60000 },
+    56→  )
+    57→
+    58→  // Generate warning message from avoidance data
+    59→  const avoidanceWarning =
+    60→    avoidanceData?.staleClients?.length > 0
+    61→      ? `${avoidanceData.staleClients.length} client${avoidanceData.staleClients.length > 1 ? "s" : ""} need attention`
+    62→      : null
+    63→
+    64→  return (
+    65→    <div className="min-h-screen bg-black">
+    66→      <div className={isMobile ? "" : isCollapsed ? "" : "mr-[380px] transition-[margin] duration-300"}>{children}</div>
+    67→
+    68→      {/* Synapse chat - sidebar on desktop, floating sheet on mobile */}
+    69→      {isMobile ? <SynapseMobileSheet /> : <SynapseSidebar avoidanceWarning={avoidanceWarning} />}
+    70→    </div>
+    71→  )
+    72→}
+    73→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

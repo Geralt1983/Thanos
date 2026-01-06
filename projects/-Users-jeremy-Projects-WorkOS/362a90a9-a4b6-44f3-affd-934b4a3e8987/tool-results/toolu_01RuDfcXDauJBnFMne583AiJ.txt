@@ -1,0 +1,17 @@
+The file /Users/jeremy/.claude/settings.local.json has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+     1→{
+     2→  "permissions": {
+     3→    "allow": [
+     4→      "mcp__claude-flow__swarm_init",
+     5→      "mcp__claude-flow__swarm_status",
+     6→      "mcp__claude-flow__agents_spawn_parallel",
+     7→      "mcp__claude-flow__task_orchestrate",
+     8→      "mcp__claude-flow__task_status",
+     9→      "mcp__claude-flow__agent_spawn",
+    10→      "mcp__claude-flow__agent_list",
+    11→      "mcp__claude-flow__features_detect",
+    12→      "mcp__claude-flow__health_check",
+    13→      "Bash(git init:*)",
+    14→      "Bash(git remote add:*)",
+    15→      "Bash(git add:*)",
+    16→      "Bash(git branch:*)",

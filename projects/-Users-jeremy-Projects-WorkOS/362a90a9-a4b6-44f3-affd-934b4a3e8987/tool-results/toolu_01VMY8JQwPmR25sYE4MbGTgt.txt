@@ -1,0 +1,1 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/tasks/heatmap/route.ts has been updated. All occurrences of 'moves.' were successfully replaced with 'tasks.'.

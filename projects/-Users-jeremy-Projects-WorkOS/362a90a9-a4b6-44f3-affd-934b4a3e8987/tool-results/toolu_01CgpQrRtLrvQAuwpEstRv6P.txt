@@ -1,0 +1,26 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/backlog/grouped/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    24→export async function GET() {
+    25→  try {
+    26→    const db = getDb()
+    27→
+    28→    // Get all backlog tasks grouped by client
+    29→    const backlogTasks = await db
+    30→      .select({
+    31→        id: tasks.id,
+    32→        title: tasks.title,
+    33→        clientId: tasks.clientId,
+    34→        drainType: tasks.drainType,
+    35→        effortEstimate: tasks.effortEstimate,
+    36→        createdAt: tasks.createdAt,
+    37→        sortOrder: tasks.sortOrder,
+    38→        clientName: clients.name,
+    39→        clientColor: clients.color,
+    40→      })
+    41→      .from(tasks)
+    42→      .leftJoin(clients, eq(tasks.clientId, clients.id))
+    43→      .where(eq(tasks.status, "backlog"))
+    44→      .orderBy(asc(tasks.sortOrder))
+    45→
+    46→    // Get client memory for stale days
+    47→    const memories = await db.select().from(clientMemory)
+    48→    const memoryMap = new Map(memories.map((m) => [m.clientName, m]))

@@ -1,0 +1,14 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/components/tasks-layout.tsx has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+     7→import { SynapseSidebar } from "@/components/synapse-sidebar"
+     8→import { SynapseMobileSheet } from "@/components/synapse-mobile-sheet"
+     9→import useSWR from "swr"
+    10→
+    11→interface TasksLayoutProps {
+    12→  children: React.ReactNode
+    13→}
+    14→
+    15→export function TasksLayout({ children }: TasksLayoutProps) {
+    16→  const isMobile = useIsMobile()
+    17→  const [isCollapsed, setIsCollapsed] = useState(true) // Default collapsed until loaded
+    18→
+    19→  // Load collapsed state from localStorage on mount

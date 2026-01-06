@@ -1,0 +1,15 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/backlog/recommendations/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+   104→    // Current hour for energy matching (EST)
+   105→    const hour = estNow.getHours()
+   106→    const { types: preferredDrainTypes, label: timeLabel } = getPreferredDrainTypes(hour)
+   107→
+   108→    const scored: ScoredTask[] = backlogTasks.map((task) => {
+   109→      const clientName = task.clientName || "Unknown"
+   110→      const clientId = task.clientId
+   111→
+   112→      // Calculate days in backlog (use backlogEnteredAt if available)
+   113→      const backlogDate = task.backlogEnteredAt || task.createdAt
+   114→      const daysInBacklog = Math.floor((Date.now() - new Date(backlogDate).getTime()) / (1000 * 60 * 60 * 24))
+   115→
+   116→      let score = 0
+   117→      const reasons: string[] = []

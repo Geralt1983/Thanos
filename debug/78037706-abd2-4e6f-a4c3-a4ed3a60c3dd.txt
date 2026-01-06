@@ -1,0 +1,498 @@
+2025-12-27T23:26:26.433Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-27T23:26:26.435Z [DEBUG] [Claude in Chrome] Starting MCP server
+2025-12-27T23:26:26.437Z [DEBUG] [Claude in Chrome] MCP server started
+2025-12-27T23:26:26.438Z [INFO] [Claude in Chrome] Socket security validation passed
+2025-12-27T23:26:26.475Z [INFO] [Claude in Chrome] Successfully connected to bridge server
+2025-12-27T23:30:56.822Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:03.148Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:12.032Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:22.382Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:27.389Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:35.392Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:40.902Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:50.653Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:31:56.497Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:32:02.284Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:32:10.812Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:32:17.555Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:32:24.019Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:32:34.947Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:33:07.272Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:33:14.232Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:33:22.177Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:33:28.111Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:33:35.864Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:33:45.406Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:33:51.970Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:34:00.796Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:34:23.913Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:34:29.378Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:34:35.911Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:34:42.245Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:34:52.202Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:35:01.239Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:35:07.902Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:35:14.316Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:35:20.034Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-27T23:35:27.652Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T04:48:05.732Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T04:48:13.373Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T04:48:19.538Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:00:20.376Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:00:59.990Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:01:15.716Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:01:25.129Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:01:39.093Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:01:49.743Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:02:07.339Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:02:17.516Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:02:28.589Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:02:36.946Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:02:45.572Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:02:55.093Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:03:04.217Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:04:12.529Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:04:19.642Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:04:29.477Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:04:37.118Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:04:45.276Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:04:52.894Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:05:02.540Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:05:11.567Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:05:18.782Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:05:29.390Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:05:59.390Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:07:21.317Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:07:30.242Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:07:31.270Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:08:13.289Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:08:19.973Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:08:29.764Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:08:38.405Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:08:46.908Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:08:53.110Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:09:03.656Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:09:12.987Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:09:26.368Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:09:28.140Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:10:35.816Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:10:46.185Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:10:56.135Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:11:06.896Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:11:13.833Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:11:22.551Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:11:30.865Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:11:41.506Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:11:48.889Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:11:57.886Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:12:08.066Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:12:09.608Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:12:31.752Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:13:54.787Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:14:09.304Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:14:14.134Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:15:08.623Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:15:19.024Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:15:33.801Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:15:53.021Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:16:04.121Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:16:18.902Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:16:44.536Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:17:03.279Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:17:13.940Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:17:27.853Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:17:38.275Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:17:49.615Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:18:05.101Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:18:15.942Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:18:19.797Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:24:07.301Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:24:35.378Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:24:49.073Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-28T05:25:01.917Z [INFO] [Claude in Chrome] Received tool response: [object Object]
+2025-12-29T01:54:11.882Z [INFO] [Claude in Chrome] Reconnecting in 1000ms (attempt 1)
+2025-12-29T01:54:12.930Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:54:12.958Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:54:13.092Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:54:13.094Z [INFO] [Claude in Chrome] Reconnecting in 1500ms (attempt 2)
+2025-12-29T01:54:14.604Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:54:14.605Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:54:14.610Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:54:14.611Z [INFO] [Claude in Chrome] Reconnecting in 2250ms (attempt 3)
+2025-12-29T01:54:16.867Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:54:16.868Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:54:16.870Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:54:16.870Z [INFO] [Claude in Chrome] Reconnecting in 3375ms (attempt 4)
+2025-12-29T01:54:20.260Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:54:20.261Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:54:20.270Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:54:20.270Z [INFO] [Claude in Chrome] Reconnecting in 5063ms (attempt 5)
+2025-12-29T01:54:25.334Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:54:25.335Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:54:25.342Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:54:25.343Z [INFO] [Claude in Chrome] Reconnecting in 7594ms (attempt 6)
+2025-12-29T01:54:32.937Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:54:32.937Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:54:32.937Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:54:32.937Z [INFO] [Claude in Chrome] Reconnecting in 11391ms (attempt 7)
+2025-12-29T01:54:44.329Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:54:44.329Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:54:44.332Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:54:44.332Z [INFO] [Claude in Chrome] Reconnecting in 17086ms (attempt 8)
+2025-12-29T01:55:01.418Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:55:01.419Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:55:01.423Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:55:01.423Z [INFO] [Claude in Chrome] Reconnecting in 25629ms (attempt 9)
+2025-12-29T01:55:27.052Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:55:27.056Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:55:27.064Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:55:27.064Z [INFO] [Claude in Chrome] Reconnecting in 30000ms (attempt 10)
+2025-12-29T01:55:57.065Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T01:55:57.066Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T01:55:57.068Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T01:55:57.068Z [INFO] [Claude in Chrome] Max reconnection attempts reached
+2025-12-29T11:14:50.105Z [INFO] [Claude in Chrome] Executing tool: tabs_context_mcp
+2025-12-29T11:14:50.109Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:14:50.113Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:14:50.123Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at async ensureConnected (/$bunfs/root/claude:2596:27223)
+    at async <anonymous> (/$bunfs/root/claude:2596:31247)
+    at async <anonymous> (/$bunfs/root/claude:2596:31998)
+    at async <anonymous> (/$bunfs/root/claude:2596:17356)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:14:50.123Z [INFO] [Claude in Chrome] Reconnecting in 1000ms (attempt 1)
+2025-12-29T11:14:51.125Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:14:51.126Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:14:51.127Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:14:51.127Z [INFO] [Claude in Chrome] Reconnecting in 1500ms (attempt 2)
+2025-12-29T11:14:52.628Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:14:52.628Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:14:52.629Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:14:52.629Z [INFO] [Claude in Chrome] Reconnecting in 2250ms (attempt 3)
+2025-12-29T11:14:54.886Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:14:54.888Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:14:54.891Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:14:54.891Z [INFO] [Claude in Chrome] Reconnecting in 3375ms (attempt 4)
+2025-12-29T11:14:55.124Z [INFO] [Claude in Chrome] Error calling tool: l1T [SocketConnectionError]: [Claude in Chrome] Connection attempt timed out after 5000ms
+    at <anonymous> (/$bunfs/root/claude:2596:27284)
+2025-12-29T11:14:58.268Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:14:58.271Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:14:58.273Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:14:58.274Z [INFO] [Claude in Chrome] Reconnecting in 5063ms (attempt 5)
+2025-12-29T11:15:03.337Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:15:03.338Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:15:03.340Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:15:03.340Z [INFO] [Claude in Chrome] Reconnecting in 7594ms (attempt 6)
+2025-12-29T11:15:10.935Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:15:10.935Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:15:10.939Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:15:10.939Z [INFO] [Claude in Chrome] Reconnecting in 11391ms (attempt 7)
+2025-12-29T11:15:22.330Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:15:22.331Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:15:22.336Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:15:22.336Z [INFO] [Claude in Chrome] Reconnecting in 17086ms (attempt 8)
+2025-12-29T11:15:39.423Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:15:39.424Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:15:39.439Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:15:39.439Z [INFO] [Claude in Chrome] Reconnecting in 25629ms (attempt 9)
+2025-12-29T11:16:05.067Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:16:05.069Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:16:05.070Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:16:05.070Z [INFO] [Claude in Chrome] Reconnecting in 30000ms (attempt 10)
+2025-12-29T11:16:35.071Z [INFO] [Claude in Chrome] Attempting to connect to: /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+2025-12-29T11:16:35.072Z [INFO] [Claude in Chrome] Socket not found, will be created by server
+2025-12-29T11:16:35.073Z [INFO] [Claude in Chrome] Socket error: Error: connect ENOENT /var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy
+    at afterConnect (node:net:1153:39)
+    at connectError (node:net:350:48)
+    at doConnect (unknown)
+    at kConnectPipe (node:net:365:19)
+    at internalConnect (node:net:1061:93)
+    at connect (node:net:630:58)
+    at connect (/$bunfs/root/claude:2596:25281)
+    at processTicksAndRejections (native:7:39) {
+  errno: -2,
+  syscall: 'connect',
+  port: undefined,
+  address: '/var/folders/px/24y2tnvj4rsdcs9bq0y3k0r40000gp/T/claude-mcp-browser-bridge-jeremy',
+  code: 'ENOENT'
+}
+2025-12-29T11:16:35.073Z [INFO] [Claude in Chrome] Max reconnection attempts reached

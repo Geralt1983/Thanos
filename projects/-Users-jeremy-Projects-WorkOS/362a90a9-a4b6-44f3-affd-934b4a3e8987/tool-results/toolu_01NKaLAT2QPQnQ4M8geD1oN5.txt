@@ -1,0 +1,93 @@
+     1→/**
+     2→ * Shared API fetch utilities
+     3→ * Centralizes fetch logic to avoid duplication across hooks
+     4→ */
+     5→
+     6→const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ""
+     7→
+     8→/**
+     9→ * Type-safe API fetch wrapper with error handling
+    10→ */
+    11→export async function apiFetch<T>(
+    12→  path: string,
+    13→  options?: RequestInit
+    14→): Promise<T> {
+    15→  const url = `${API_BASE_URL}${path}`
+    16→
+    17→  const res = await fetch(url, {
+    18→    ...options,
+    19→    headers: {
+    20→      "Content-Type": "application/json",
+    21→      ...options?.headers,
+    22→    },
+    23→  })
+    24→
+    25→  if (!res.ok) {
+    26→    const error = await res.text().catch(() => "Unknown error")
+    27→    throw new Error(`API error ${res.status}: ${error}`)
+    28→  }
+    29→
+    30→  return res.json()
+    31→}
+    32→
+    33→/**
+    34→ * SWR fetcher function for GET requests
+    35→ */
+    36→export const swrFetcher = <T>(url: string): Promise<T> => apiFetch<T>(url)
+    37→
+    38→/**
+    39→ * Shared SWR configuration presets
+    40→ */
+    41→export const SWR_CONFIG = {
+    42→  /** Default config for most data */
+    43→  default: {
+    44→    refreshInterval: 30000, // 30s instead of 10s
+    45→    revalidateOnFocus: true,
+    46→    revalidateOnReconnect: true,
+    47→  },
+    48→  /** Config for real-time data like chat */
+    49→  realtime: {
+    50→    refreshInterval: 15000, // 15s instead of 5s
+    51→    revalidateOnFocus: false,
+    52→  },
+    53→  /** Config for less frequently changing data */
+    54→  slow: {
+    55→    refreshInterval: 60000, // 60s
+    56→    revalidateOnFocus: true,
+    57→  },
+    58→  /** Config for rarely changing data */
+    59→  static: {
+    60→    refreshInterval: 120000, // 2 minutes
+    61→    revalidateOnFocus: false,
+    62→  },
+    63→} as const
+    64→
+    65→/**
+    66→ * Parse and validate an ID parameter
+    67→ * Returns the parsed number or throws an error
+    68→ */
+    69→export function parseId(id: string | number): number {
+    70→  const parsed = typeof id === "number" ? id : Number.parseInt(id, 10)
+    71→  if (Number.isNaN(parsed) || parsed < 1 || parsed > Number.MAX_SAFE_INTEGER) {
+    72→    throw new Error(`Invalid ID: ${id}`)
+    73→  }
+    74→  return parsed
+    75→}
+    76→
+    77→/**
+    78→ * Safely parse an optional ID parameter
+    79→ * Returns the parsed number or undefined if invalid
+    80→ */
+    81→export function parseOptionalId(id: string | number | undefined | null): number | undefined {
+    82→  if (id === undefined || id === null || id === "") return undefined
+    83→  try {
+    84→    return parseId(id)
+    85→  } catch {
+    86→    return undefined
+    87→  }
+    88→}
+    89→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

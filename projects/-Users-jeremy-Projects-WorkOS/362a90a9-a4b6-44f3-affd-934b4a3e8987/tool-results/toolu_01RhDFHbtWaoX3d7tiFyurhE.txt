@@ -1,0 +1,8 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/tasks/heatmap/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+     1→import { NextResponse } from "next/server"
+     2→import { getDb } from "@/lib/db"
+     3→import { tasks } from "@/lib/schema"
+     4→import { eq } from "drizzle-orm"
+     5→
+     6→function getDateInTimezone(date: Date, timezone: string): string {
+     7→  return date.toLocaleDateString("en-CA", { timeZone: timezone }) // en-CA gives YYYY-MM-DD format

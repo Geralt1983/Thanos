@@ -1,0 +1,86 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/backlog/recommendations/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+   131→        score += 15
+   132→        reasons.push(`${clientName} needs attention (concerned sentiment)`)
+   133→      }
+   134→
+   135→      // 1. CLIENT COMPLETION RECENCY (weight: 25 max)
+   136→      const lastCompletion = clientId ? clientLastCompletionMap.get(clientId) : null
+   137→      if (lastCompletion) {
+   138→        const daysSinceCompletion = Math.floor(
+   139→          (Date.now() - new Date(lastCompletion).getTime()) / (1000 * 60 * 60 * 24),
+   140→        )
+   141→        if (daysSinceCompletion >= 1) {
+   142→          const recencyScore = Math.min(daysSinceCompletion * 5, 25)
+   143→          score += recencyScore
+   144→          if (daysSinceCompletion >= 3) {
+   145→            reasons.push(`${clientName} hasn't been touched in ${daysSinceCompletion} days`)
+   146→          }
+   147→        }
+   148→      } else if (clientId) {
+   149→        score += 25
+   150→        reasons.push(`${clientName} has no completions yet`)
+   151→      }
+   152→
+   153→      // 2. WEEKLY CLIENT COVERAGE (weight: 20 max)
+   154→      const weeklyCount = clientId ? weeklyCompletionMap.get(clientId) || 0 : 0
+   155→      if (weeklyCount === 0) {
+   156→        score += 20
+   157→        reasons.push(`${clientName} has 0 tasks this week`)
+   158→      } else if (weeklyCount === 1) {
+   159→        score += 10
+   160→      }
+   161→
+   162→      // 3. DRAIN TYPE BALANCE (weight: 15)
+   163→      if (task.drainType && !usedDrainTypesToday.has(task.drainType)) {
+   164→        score += 15
+   165→        reasons.push(`No ${task.drainType} work done today`)
+   166→      }
+   167→
+   168→      // 4. ENERGY-TIME MATCH (weight: 15)
+   169→      const energyMatch = preferredDrainTypes.includes(task.drainType || "")
+   170→      if (energyMatch) {
+   171→        score += 15
+   172→        if (!reasons.some((r) => r.includes(task.drainType || ""))) {
+   173→          reasons.push(`${task.drainType} work fits ${timeLabel}`)
+   174→        }
+   175→      }
+   176→
+   177→      // 5. BACKLOG AGE (weight: 10 max)
+   178→      const ageScore = Math.min(daysInBacklog, 10)
+   179→      score += ageScore
+   180→      if (daysInBacklog >= 14) {
+   181→        reasons.push(`${daysInBacklog} days in backlog`)
+   182→      }
+   183→
+   184→      // 6. QUICK WIN BONUS (weight: 10)
+   185→      if (task.effortEstimate === 1) {
+   186→        score += 10
+   187→        reasons.push("Quick win to build momentum")
+   188→      }
+   189→
+   190→      // 7. CLIENT ALREADY TOUCHED TODAY (penalty: -30)
+   191→      if (clientId && touchedTodayClientIds.has(clientId)) {
+   192→        score -= 30
+   193→      }
+   194→
+   195→      // 8. SMALL RANDOM FACTOR (0-5)
+   196→      score += Math.random() * 5
+   197→
+   198→      return {
+   199→        id: task.id,
+   200→        title: task.title,
+   201→        clientId: task.clientId,
+   202→        clientName: task.clientName,
+   203→        clientColor: task.clientColor,
+   204→        drainType: task.drainType,
+   205→        effortEstimate: task.effortEstimate,
+   206→        createdAt: task.createdAt,
+   207→        score: Math.round(score * 10) / 10,
+   208→        reason: reasons.length > 0 ? reasons[0] : "Good next candidate",
+   209→        daysInBacklog,
+   210→      }
+   211→    })
+   212→
+   213→    // Sort by score, take top picks, ensure client diversity
+   214→    const sorted = scored.sort((a, b) => b.score - a.score)
+   215→    const recommendations: ScoredMove[] = []

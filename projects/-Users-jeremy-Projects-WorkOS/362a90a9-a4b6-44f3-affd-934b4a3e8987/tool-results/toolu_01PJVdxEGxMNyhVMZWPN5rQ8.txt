@@ -1,0 +1,115 @@
+     1→import { NextResponse } from "next/server"
+     2→import { getDb } from "@/lib/db"
+     3→import { moves, clients, dailyLog } from "@/lib/schema"
+     4→import { eq, and, gte } from "drizzle-orm"
+     5→import { sendNtfyNotification } from "@/lib/ntfy"
+     6→
+     7→function getDayRating(percent: number): { rating: string; emoji: string } {
+     8→  if (percent >= 150) return { rating: "S", emoji: "star" }
+     9→  if (percent >= 125) return { rating: "A+", emoji: "fire" }
+    10→  if (percent >= 100) return { rating: "A", emoji: "tada" }
+    11→  if (percent >= 75) return { rating: "B", emoji: "thumbsup" }
+    12→  if (percent >= 50) return { rating: "C", emoji: "ok_hand" }
+    13→  if (percent >= 25) return { rating: "D", emoji: "thinking_face" }
+    14→  return { rating: "F", emoji: "disappointed" }
+    15→}
+    16→
+    17→export async function POST() {
+    18→  try {
+    19→    const db = getDb()
+    20→    const today = new Date()
+    21→    const dateStr = today.toISOString().split("T")[0]
+    22→    today.setHours(0, 0, 0, 0)
+    23→
+    24→    // Get today's completed moves
+    25→    const completedToday = await db
+    26→      .select()
+    27→      .from(moves)
+    28→      .where(and(eq(moves.status, "done"), gte(moves.completedAt, today)))
+    29→
+    30→    const earnedMinutes = completedToday.reduce((sum, m) => sum + (m.effortEstimate || 2) * 20, 0)
+    31→    const targetMinutes = 180
+    32→    const percent = Math.round((earnedMinutes / targetMinutes) * 100)
+    33→    const { rating, emoji } = getDayRating(percent)
+    34→
+    35→    // Calculate hours worked (based on effort with 1.5x multiplier for overhead)
+    36→    const hoursWorked = ((earnedMinutes * 1.5) / 60).toFixed(1)
+    37→
+    38→    // Get clients touched today
+    39→    const allClients = await db.select().from(clients).where(eq(clients.isActive, 1))
+    40→    const clientsTouched = new Set(completedToday.map((m) => m.clientId).filter(Boolean))
+    41→    const clientNames = allClients.filter((c) => clientsTouched.has(c.id)).map((c) => c.name)
+    42→
+    43→    // Build summary message
+    44→    let message = `Day Rating: ${rating} (${percent}%)\n`
+    45→    message += `Earned: ${earnedMinutes} min | Target: ${targetMinutes} min\n`
+    46→    message += `Hours invested: ~${hoursWorked}h\n\n`
+    47→
+    48→    message += `Tasks Completed (${completedToday.length}):\n`
+    49→    if (completedToday.length === 0) {
+    50→      message += "- No tasks completed today\n"
+    51→    } else {
+    52→      completedToday.slice(0, 5).forEach((m) => {
+    53→        const effort = m.effortEstimate || 2
+    54→        message += `- ${m.title} (${effort * 20}min)\n`
+    55→      })
+    56→      if (completedToday.length > 5) {
+    57→        message += `- ...and ${completedToday.length - 5} more\n`
+    58→      }
+    59→    }
+    60→
+    61→    message += `\nClients Touched (${clientNames.length}):\n`
+    62→    if (clientNames.length === 0) {
+    63→      message += "- None\n"
+    64→    } else {
+    65→      clientNames.forEach((name) => {
+    66→        message += `- ${name}\n`
+    67→      })
+    68→    }
+    69→
+    70→    // Send notification
+    71→    await sendNtfyNotification({
+    72→      title: `4PM Daily Summary - ${rating}`,
+    73→      message,
+    74→      priority: percent >= 100 ? 4 : 3,
+    75→      tags: [emoji, "sunset", "workos"],
+    76→    })
+    77→
+    78→    // Update daily log
+    79→    const [existingLog] = await db.select().from(dailyLog).where(eq(dailyLog.date, dateStr))
+    80→
+    81→    const logData = {
+    82→      completedMoves: completedToday.map((m) => m.id),
+    83→      clientsTouched: Array.from(clientsTouched),
+    84→      summary: `${rating} day - ${percent}% (${earnedMinutes}min)`,
+    85→    }
+    86→
+    87→    if (existingLog) {
+    88→      await db.update(dailyLog).set(logData).where(eq(dailyLog.id, existingLog.id))
+    89→    } else {
+    90→      await db.insert(dailyLog).values({
+    91→        id: `log-${dateStr}`,
+    92→        date: dateStr,
+    93→        ...logData,
+    94→        notificationsSent: [],
+    95→      })
+    96→    }
+    97→
+    98→    return NextResponse.json({
+    99→      success: true,
+   100→      rating,
+   101→      percent,
+   102→      earnedMinutes,
+   103→      hoursWorked,
+   104→      completedCount: completedToday.length,
+   105→    })
+   106→  } catch (error) {
+   107→    console.error("Evening notification error:", error)
+   108→    return NextResponse.json({ error: "Failed to send evening notification" }, { status: 500 })
+   109→  }
+   110→}
+   111→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

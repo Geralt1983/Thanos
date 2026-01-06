@@ -1,0 +1,29 @@
+# Credentials & Secrets
+.credentials.json
+*.key
+*.pem
+
+# Caches & Temp
+stats-cache.json
+shell-snapshots/
+.superclaude-metadata.json
+file-history/
+chrome/
+
+# User-Specific Settings (not state)
+settings.json
+todos/
+history.jsonl
+
+# External Tool Directories
+.claude-code/
+.claude-monitor/
+.claude-squad/
+.claude-flow/
+.swarm/
+
+# OS & System Files
+.DS_Store
+*.swp
+*.swo
+*~

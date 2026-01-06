@@ -1,0 +1,3 @@
+/Users/jeremy/Projects/WorkOS
+/Users/jeremy/.claude/projects/-Users-jeremy-Projects-WorkOS
+/Users/jeremy/Library/Caches/claude-cli-nodejs/-Users-jeremy-Projects-WorkOS

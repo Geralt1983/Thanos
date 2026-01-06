@@ -1,0 +1,25 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/backlog/recommendations/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    37→    const weekStart = new Date(estNow)
+    38→    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (weekStart.getDay() === 0 ? -6 : 1))
+    39→    weekStart.setHours(0, 0, 0, 0)
+    40→
+    41→    // Get all backlog tasks with client info
+    42→    const backlogTasks = await db
+    43→      .select({
+    44→        id: tasks.id,
+    45→        title: tasks.title,
+    46→        clientId: tasks.clientId,
+    47→        drainType: tasks.drainType,
+    48→        effortEstimate: tasks.effortEstimate,
+    49→        createdAt: tasks.createdAt,
+    50→        backlogEnteredAt: tasks.backlogEnteredAt,
+    51→        clientName: clients.name,
+    52→        clientColor: clients.color,
+    53→      })
+    54→      .from(tasks)
+    55→      .leftJoin(clients, eq(tasks.clientId, clients.id))
+    56→      .where(eq(tasks.status, "backlog"))
+    57→
+    58→    const allClientMemory = await db.select().from(clientMemory)
+    59→    const memoryMap = new Map(allClientMemory.map((m) => [m.clientName, m]))
+    60→

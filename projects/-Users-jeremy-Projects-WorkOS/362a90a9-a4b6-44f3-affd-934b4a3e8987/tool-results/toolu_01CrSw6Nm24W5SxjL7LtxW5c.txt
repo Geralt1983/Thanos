@@ -1,0 +1,19 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/client-memory/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    22→
+    23→    // Get all client memory entries
+    24→    const allMemory = await db.select().from(clientMemory)
+    25→
+    26→    const weeklyTasks = await db
+    27→      .select({
+    28→        clientId: tasks.clientId,
+    29→        count: sql<number>`COUNT(*)`.as("count"),
+    30→      })
+    31→      .from(tasks)
+    32→      .where(and(eq(tasks.status, "done"), gte(tasks.completedAt, weekStart)))
+    33→      .groupBy(tasks.clientId)
+    34→
+    35→    const weeklyTasksMap = new Map(weeklyTasks.map((w) => [w.clientId, Number(w.count)]))
+    36→
+    37→    const lastActivity = await db
+    38→      .select({
+    39→        clientId: moves.clientId,

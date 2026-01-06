@@ -1,0 +1,71 @@
+     1→import { NextResponse } from "next/server"
+     2→import { getDb } from "@/lib/db"
+     3→import { moves, clients } from "@/lib/schema"
+     4→import { eq, ne } from "drizzle-orm"
+     5→
+     6→export async function GET() {
+     7→  try {
+     8→    const db = getDb()
+     9→    const allClients = await db.select().from(clients).where(eq(clients.isActive, 1))
+    10→    const allMoves = await db.select().from(moves).where(ne(moves.status, "done"))
+    11→
+    12→    const issues: { clientName: string; issues: string[] }[] = []
+    13→    const missingFields: { moveId: number; title: string; clientName: string; missing: string[] }[] = []
+    14→
+    15→    for (const client of allClients) {
+    16→      if (client.type === "internal") continue
+    17→
+    18→      const clientMoves = allMoves.filter((m) => m.clientId === client.id)
+    19→      const active = clientMoves.filter((m) => m.status === "active")
+    20→      const queued = clientMoves.filter((m) => m.status === "queued")
+    21→      const backlog = clientMoves.filter((m) => m.status === "backlog")
+    22→
+    23→      const clientIssues: string[] = []
+    24→      if (active.length === 0) clientIssues.push("No active move")
+    25→      if (queued.length === 0) clientIssues.push("No queued move")
+    26→      if (backlog.length === 0) clientIssues.push("Empty backlog")
+    27→
+    28→      if (clientIssues.length > 0) {
+    29→        issues.push({ clientName: client.name, issues: clientIssues })
+    30→      }
+    31→
+    32→      // Check for missing fields
+    33→      for (const move of clientMoves) {
+    34→        const missing: string[] = []
+    35→        if (!move.drainType) missing.push("drain type")
+    36→        if (!move.effortEstimate) missing.push("effort estimate")
+    37→
+    38→        if (missing.length > 0) {
+    39→          missingFields.push({
+    40→            moveId: move.id,
+    41→            title: move.title,
+    42→            clientName: client.name,
+    43→            missing,
+    44→          })
+    45→        }
+    46→      }
+    47→    }
+    48→
+    49→    return NextResponse.json({
+    50→      date: new Date().toISOString().split("T")[0],
+    51→      pipelineHealth: {
+    52→        totalClients: allClients.filter((c) => c.type !== "internal").length,
+    53→        healthyClients: allClients.filter((c) => c.type !== "internal").length - issues.length,
+    54→        clientsWithIssues: issues,
+    55→      },
+    56→      missingFields,
+    57→      summary: {
+    58→        totalIssues: issues.reduce((sum, i) => sum + i.issues.length, 0) + missingFields.length,
+    59→        isHealthy: issues.length === 0 && missingFields.length === 0,
+    60→      },
+    61→    })
+    62→  } catch (error) {
+    63→    console.error("Failed to run triage:", error)
+    64→    return NextResponse.json({ error: "Failed to run triage" }, { status: 500 })
+    65→  }
+    66→}
+    67→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

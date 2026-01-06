@@ -1,0 +1,11 @@
+ff921a9 refactor: Rename moves→tasks and complexity→points throughout codebase
+a1f6d63 Replace effort scoring with complexity on task cards
+9ce158c Add client selector dropdown to QuickCapture
+1c8ad5d Fix QuickCapture to pass clientId when creating move
+01b2efb Add complexity-based task tracking
+518b8b3 fix: refine streak calculation to count weekdays only
+7876757 fix: correct timezone issue in Activity heatmap
+4590833 fix: correct timezone issue in Activity heatmap
+dd5eeab fix: correct timezone handling in completion history
+331a1ca fix: correct timezone issue in completion history grouping
+Shell cwd was reset to /Users/jeremy/Projects/WorkOS

@@ -1,0 +1,21 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/tasks/[id]/demote/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    23→      return NextResponse.json(move)
+    24→    }
+    25→
+    26→    const newStatus = statusOrder[currentIndex - 1]
+    27→    const [updated] = await db
+    28→      .update(tasks)
+    29→      .set({
+    30→        status: newStatus,
+    31→        updatedAt: new Date(),
+    32→      })
+    33→      .where(eq(tasks.id, Number.parseInt(id, 10)))
+    34→      .returning()
+    35→
+    36→    return NextResponse.json(updated)
+    37→  } catch (error) {
+    38→    console.error("Failed to demote task:", error)
+    39→    return NextResponse.json({ error: "Failed to demote task" }, { status: 500 })
+    40→  }
+    41→}
+    42→

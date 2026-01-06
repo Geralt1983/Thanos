@@ -1,0 +1,33 @@
+total 32
+drwxr-xr-x@ 10 jeremy  staff   320 Dec 24 01:00 .
+drwxr-xr-x@ 27 jeremy  staff   864 Dec 25 17:20 ..
+drwxr-xr-x@ 21 jeremy  staff   672 Dec 24 01:09 api
+drwxr-xr-x@  3 jeremy  staff    96 Dec 25 00:44 clients
+-rw-r--r--@  1 jeremy  staff  5380 Dec 23 21:14 globals.css
+drwxr-xr-x@  3 jeremy  staff    96 Dec 25 00:18 history
+-rw-r--r--@  1 jeremy  staff  1134 Dec 23 21:14 layout.tsx
+drwxr-xr-x@  3 jeremy  staff    96 Dec 25 00:47 metrics
+-rw-r--r--@  1 jeremy  staff   100 Dec 23 21:14 page.tsx
+drwxr-xr-x@  3 jeremy  staff    96 Dec 25 00:18 tasks
+---
+total 392
+drwxr-xr-x@ 29 jeremy  staff    928 Dec 25 17:27 .
+drwxr-xr-x@ 27 jeremy  staff    864 Dec 25 17:20 ..
+-rw-r--r--@  1 jeremy  staff   6448 Dec 25 00:41 completion-heatmap.tsx
+-rw-r--r--@  1 jeremy  staff   5120 Dec 25 00:47 completion-history.tsx
+-rw-r--r--@  1 jeremy  staff   9218 Dec 25 17:24 completion-timeline.tsx
+-rw-------@  1 jeremy  staff   2547 Dec 24 23:34 confetti.tsx
+-rw-r--r--@  1 jeremy  staff   3832 Dec 25 17:26 done-today.tsx
+-rw-r--r--@  1 jeremy  staff  25134 Dec 24 23:48 edit-task-dialog.tsx
+-rw-r--r--@  1 jeremy  staff    121 Dec 23 21:14 focus-view.tsx
+-rw-r--r--@  1 jeremy  staff   3196 Dec 25 17:27 graveyard.tsx
+-rw-r--r--@  1 jeremy  staff   6902 Dec 25 00:05 grouped-backlog.tsx
+-rw-r--r--@  1 jeremy  staff    128 Dec 23 21:14 mobile-moves-view.tsx
+-rw-r--r--@  1 jeremy  staff    122 Dec 23 21:14 moves-board.tsx
+-rw-r--r--@  1 jeremy  staff   2326 Dec 23 21:14 moves-layout.tsx
+-rw-r--r--@  1 jeremy  staff    120 Dec 23 21:14 moves-list.tsx
+-rw-r--r--@  1 jeremy  staff  12147 Dec 24 23:40 new-task-dialog.tsx
+-rw-r--r--@  1 jeremy  staff    354 Dec 23 21:14 page-header.tsx
+-rw-------@  1 jeremy  staff  10108 Dec 24 01:08 quick-capture.tsx
+-rw-r--r--@  1 jeremy  staff   3359 Dec 23 21:14 rewrite-dialog.tsx
+Shell cwd was reset to /Users/jeremy/Projects/WorkOS

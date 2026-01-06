@@ -1,0 +1,28 @@
+total 24
+drwxr-xr-x@ 13 jeremy  staff   416 Dec 21 00:12 .
+drwxr-xr-x@ 14 jeremy  staff   448 Dec 21 00:07 ..
+drwx------@  4 jeremy  staff   128 Dec 21 00:06 accounts
+drwxr-xr-x@  3 jeremy  staff    96 Dec 20 23:17 auth
+drwx------@  4 jeremy  staff   128 Dec 21 00:12 budgets
+drwx------@  3 jeremy  staff    96 Dec 21 00:06 categories
+-rw-------@  1 jeremy  staff   323 Dec 20 23:08 health.ts
+drwx------@  7 jeremy  staff   224 Dec 21 00:05 institutions
+drwxr-xr-x@  4 jeremy  staff   128 Dec 21 00:04 lib
+-rw-------@  1 jeremy  staff  1551 Dec 20 23:17 profile.ts
+drwx------@  4 jeremy  staff   128 Dec 21 00:06 transactions
+-rw-------@  1 jeremy  staff   419 Dec 20 23:09 tsconfig.json
+drwx------@  3 jeremy  staff    96 Dec 21 00:05 webhooks
+total 80
+drwxr-xr-x@ 13 jeremy  staff   416 Dec 21 00:07 .
+drwxr-xr-x@ 14 jeremy  staff   448 Dec 21 00:07 ..
+-rw-r--r--@  1 jeremy  staff   443 Dec 20 22:39 components.json
+-rw-r--r--@  1 jeremy  staff   840 Dec 20 22:39 eslint.config.js
+-rw-r--r--@  1 jeremy  staff   517 Dec 20 22:39 index.html
+-rw-r--r--@  1 jeremy  staff  2705 Dec 21 00:07 package.json
+-rw-r--r--@  1 jeremy  staff    81 Dec 20 22:39 postcss.config.js
+drwxr-xr-x@ 13 jeremy  staff   416 Dec 21 00:11 src
+-rw-r--r--@  1 jeremy  staff  2431 Dec 20 22:39 tailwind.config.js
+-rw-r--r--@  1 jeremy  staff   801 Dec 20 22:39 tsconfig.app.json
+-rw-r--r--@  1 jeremy  staff   250 Dec 20 22:39 tsconfig.json
+-rw-r--r--@  1 jeremy  staff   594 Dec 20 22:39 tsconfig.node.json
+-rw-r--r--@  1 jeremy  staff   846 Dec 20 22:39 vite.config.ts

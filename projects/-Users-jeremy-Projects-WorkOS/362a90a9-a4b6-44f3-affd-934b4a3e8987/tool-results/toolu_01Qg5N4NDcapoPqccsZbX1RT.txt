@@ -1,0 +1,18 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/backlog/grouped/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    53→    const estNow = new Date(now.getTime() + (now.getTimezoneOffset() + estOffset) * 60000)
+    54→    const todayStart = new Date(estNow)
+    55→    todayStart.setHours(0, 0, 0, 0)
+    56→
+    57→    const todayTasks = await db
+    58→      .select({
+    59→        clientName: clients.name,
+    60→      })
+    61→      .from(tasks)
+    62→      .leftJoin(clients, eq(tasks.clientId, clients.id))
+    63→      .where(and(eq(tasks.status, "done"), gte(tasks.completedAt, todayStart)))
+    64→
+    65→    const touchedToday = new Set(todayTasks.map((t) => t.clientName))
+    66→
+    67→    // Group by client
+    68→    const grouped = new Map<number, ClientGroup>()
+    69→

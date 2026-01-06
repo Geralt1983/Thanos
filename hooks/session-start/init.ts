@@ -1,0 +1,150 @@
+/**
+ * Life OS Session Start Hook
+ * Runs at the beginning of each Claude Code session
+ */
+
+import { readFile, readdir } from 'fs/promises';
+import { join } from 'path';
+
+const CLAUDE_DIR = join(process.env.HOME!, '.claude');
+
+interface SessionStartResult {
+  hasInbox: boolean;
+  inboxCount: number;
+  dueCommitments: string[];
+  currentFocus: string;
+}
+
+export default async function sessionStart(): Promise<SessionStartResult> {
+  console.log('🚀 Life OS initializing...\n');
+
+  // 1. Load current state
+  let currentFocus = '';
+  let commitments = '';
+  let today = '';
+
+  try {
+    currentFocus = await readFile(join(CLAUDE_DIR, 'State/CurrentFocus.md'), 'utf-8');
+  } catch { currentFocus = 'No focus set'; }
+
+  try {
+    commitments = await readFile(join(CLAUDE_DIR, 'State/Commitments.md'), 'utf-8');
+  } catch { commitments = ''; }
+
+  try {
+    today = await readFile(join(CLAUDE_DIR, 'State/Today.md'), 'utf-8');
+  } catch { today = ''; }
+
+  // 2. Check inbox for new items
+  const inboxPath = join(CLAUDE_DIR, 'Inbox');
+  let inboxItems: string[] = [];
+  try {
+    inboxItems = await readdir(inboxPath);
+    // Filter out hidden files and processed folder
+    inboxItems = inboxItems.filter(f => !f.startsWith('.') && f !== 'processed');
+  } catch {
+    inboxItems = [];
+  }
+  const hasInbox = inboxItems.length > 0;
+
+  // 3. Check for due commitments
+  const dueCommitments = extractDueCommitments(commitments);
+
+  // 4. Generate session brief
+  console.log('═══════════════════════════════════════');
+  console.log('         LIFE OS SESSION START          ');
+  console.log('═══════════════════════════════════════\n');
+
+  if (hasInbox) {
+    console.log(`📥 INBOX: ${inboxItems.length} items waiting to process`);
+    inboxItems.forEach(item => console.log(`   - ${item}`));
+    console.log('');
+  }
+
+  if (dueCommitments.length > 0) {
+    console.log('⚠️  DUE SOON:');
+    dueCommitments.forEach(c => console.log(`   - ${c}`));
+    console.log('');
+  }
+
+  const focusSection = extractSection(currentFocus, 'Right Now');
+  console.log('📋 CURRENT FOCUS:');
+  console.log(focusSection || '   No focus set');
+  console.log('');
+
+  const top3 = extractSection(currentFocus, "Today's Top 3");
+  console.log("✅ TODAY'S TOP 3:");
+  console.log(top3 || '   No priorities set');
+  console.log('');
+
+  console.log('═══════════════════════════════════════\n');
+
+  return {
+    hasInbox,
+    inboxCount: inboxItems.length,
+    dueCommitments,
+    currentFocus: focusSection,
+  };
+}
+
+/**
+ * Extract commitments due within 48 hours
+ */
+function extractDueCommitments(content: string): string[] {
+  const lines = content.split('\n');
+  const due: string[] = [];
+  const now = new Date();
+  const in48Hours = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+  for (const line of lines) {
+    // Look for lines with dates that might be due soon
+    // Format: - [ ] Task | Person | DATE | Status
+    const match = line.match(/- \[ \] (.+?) \| .+? \| (\d{4}-\d{2}-\d{2}|\w+day|today|tomorrow)/i);
+    if (match) {
+      const [, task, dateStr] = match;
+      const dueDate = parseDate(dateStr);
+      if (dueDate && dueDate <= in48Hours) {
+        due.push(`${task} (${dateStr})`);
+      }
+    }
+  }
+
+  return due;
+}
+
+/**
+ * Parse various date formats
+ */
+function parseDate(dateStr: string): Date | null {
+  const lower = dateStr.toLowerCase();
+  const now = new Date();
+
+  if (lower === 'today') {
+    return now;
+  }
+  if (lower === 'tomorrow') {
+    return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  }
+  if (lower.includes('day')) {
+    // Handle "Monday", "Tuesday", etc.
+    return null; // Would need more logic
+  }
+
+  // Try ISO date format
+  const parsed = new Date(dateStr);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Extract a section from markdown by header
+ */
+function extractSection(content: string, header: string): string {
+  const regex = new RegExp(`## ${header}\\n([\\s\\S]*?)(?=\\n##|$)`, 'i');
+  const match = content.match(regex);
+  return match ? match[1].trim() : '';
+}
+
+// Run if executed directly
+if (import.meta.main) {
+  sessionStart();
+}

@@ -1,0 +1,10 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/tasks/[id]/promote/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    19→    }
+    20→
+    21→    const currentIndex = statusOrder.indexOf(task.status)
+    22→    if (currentIndex >= statusOrder.length - 1) {
+    23→      return NextResponse.json(task)
+    24→    }
+    25→
+    26→    const newStatus = statusOrder[currentIndex + 1]
+    27→    const [updated] = await db

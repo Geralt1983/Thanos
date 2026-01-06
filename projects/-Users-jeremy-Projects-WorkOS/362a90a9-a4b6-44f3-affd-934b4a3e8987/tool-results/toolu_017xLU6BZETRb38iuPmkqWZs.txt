@@ -1,0 +1,10 @@
+The file /Users/jeremy/Projects/v0-work-os-3-0/lib/events.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
+    69→    console.error("[events] Failed to log task event:", err)
+    70→  }
+    71→}
+    72→
+    73→// Get event history for a task
+    74→export async function getTaskHistory(taskId: number) {
+    75→  try {
+    76→    const db = await getDb()
+    77→    return db.select().from(taskEvents).where(eq(taskEvents.taskId, taskId)).orderBy(taskEvents.createdAt)
