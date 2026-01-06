@@ -27,3 +27,4 @@ history.jsonl
 *.swp
 *.swo
 *~
+plugins/marketplaces/claude-plugins-official/
