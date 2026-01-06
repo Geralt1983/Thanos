@@ -14,7 +14,7 @@
 ## Enhancement Requests (Today)
 - [x] Voice capture integration for mobile/terminal (complete - Mac: whisper.cpp, Android: termux-api)
 - [x] Journaling workflow enhancement (complete - terminal-native)
-- [ ] Memory system improvements (pending)
+- [x] Memory system improvements (complete - vectorized semantic memory with ChromaDB + FastAPI)
 - [x] Week 2-4 feature roadmap review (Architecture-Week2.md created)
 
 ## Work Block
