@@ -1,8 +1,0 @@
-The file /Users/jeremy/Projects/v0-work-os-3-0/app/api/notifications/evening/route.ts has been updated. Here's the result of running `cat -n` on a snippet of the edited file:
-     1→import { NextResponse } from "next/server"
-     2→import { getDb } from "@/lib/db"
-     3→import { tasks, clients, dailyLog } from "@/lib/schema"
-     4→import { eq, and, gte } from "drizzle-orm"
-     5→import { sendNtfyNotification } from "@/lib/ntfy"
-     6→
-     7→function getDayRating(percent: number): { rating: string; emoji: string } {

@@ -1,5 +1,0 @@
-total 0
-drwxr-xr-x@  4 jeremy  staff  128 Dec 23 21:10 .
-drwxr-xr-x  21 jeremy  staff  672 Dec 23 21:14 ..
-drwx------@  3 jeremy  staff   96 Dec 26 10:44 .claude
-drwxr-xr-x@  3 jeremy  staff   96 Dec 23 21:10 .claude-flow

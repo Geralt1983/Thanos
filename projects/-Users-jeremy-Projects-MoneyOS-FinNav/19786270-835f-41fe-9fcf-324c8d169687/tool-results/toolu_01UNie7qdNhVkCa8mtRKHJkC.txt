@@ -1,1 +1,0 @@
-<tool_use_error>File does not exist. Current working directory: /Users/jeremy/Projects/MoneyOS</tool_use_error>

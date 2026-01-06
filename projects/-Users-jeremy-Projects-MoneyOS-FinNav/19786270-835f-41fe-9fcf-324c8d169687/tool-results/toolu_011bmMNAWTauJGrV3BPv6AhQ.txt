@@ -1,8 +1,0 @@
-total 0
-drwxr-xr-x@  5 jeremy  staff  160 Dec 21 00:17 .
-drwxr-xr-x  19 jeremy  staff  608 Dec 20 22:33 ..
-drwx------@  3 jeremy  staff   96 Dec 21 00:21 .claude
-drwxr-xr-x@  3 jeremy  staff   96 Dec 21 00:17 .claude-flow
-drwxr-xr-x@ 14 jeremy  staff  448 Dec 21 00:07 FinNav
----
-No README found

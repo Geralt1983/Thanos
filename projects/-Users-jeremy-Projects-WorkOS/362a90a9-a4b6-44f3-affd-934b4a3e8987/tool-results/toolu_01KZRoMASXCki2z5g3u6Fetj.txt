@@ -1,1 +1,0 @@
-Shell cwd was reset to /Users/jeremy/Projects/WorkOS

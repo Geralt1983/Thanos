@@ -1,8 +1,0 @@
-/Users/jeremy/Projects/v0-work-os-3-0/components/moves-layout.tsx:11:interface MovesLayoutProps {
-/Users/jeremy/Projects/v0-work-os-3-0/components/moves-layout.tsx:15:export function MovesLayout({ children }: MovesLayoutProps) {
-/Users/jeremy/Projects/v0-work-os-3-0/components/focus-view.tsx:2:export function FocusView() {
-/Users/jeremy/Projects/v0-work-os-3-0/components/moves-list.tsx:2:export function MovesList() {
-/Users/jeremy/Projects/v0-work-os-3-0/components/mobile-moves-view.tsx:2:export function MobileMovesView() {
-/Users/jeremy/Projects/v0-work-os-3-0/components/moves-board.tsx:2:export function MovesBoard() {
-/Users/jeremy/Projects/v0-work-os-3-0/app/layout.tsx:6:import { MovesLayout } from "@/components/moves-layout"
-/Users/jeremy/Projects/v0-work-os-3-0/app/layout.tsx:42:        <MovesLayout>{children}</MovesLayout>
