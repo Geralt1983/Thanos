@@ -9,6 +9,9 @@ shell-snapshots/
 .superclaude-metadata.json
 file-history/
 chrome/
+debug/
+statsig/
+projects/
 
 # User-Specific Settings (not state)
 settings.json
