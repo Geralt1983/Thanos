@@ -32,7 +32,7 @@
 
 Test the sync script:
 ```bash
-bash /Users/jeremy/.claude/Tools/sync-lifeos.sh
+bash /Users/jeremy/.claude/Tools/sync-thanos.sh
 ```
 
 Should auto-commit and push any changes.

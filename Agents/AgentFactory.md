@@ -93,7 +93,7 @@ triggers: ["phrase 1", "phrase 2", "phrase 3"]
 
 When creating a new agent:
 - [ ] Create file in Agents/
-- [ ] Add to LIFE-OS.md routing
+- [ ] Add to THANOS.md routing
 - [ ] Define trigger phrases
 - [ ] Specify Skills/Context access
 - [ ] Write example interactions

@@ -5,7 +5,7 @@
 CLAUDE_DIR="$HOME/.claude"
 
 echo "═══════════════════════════════════════"
-echo "         LIFE OS SESSION START          "
+echo "         THANOS SESSION START          "
 echo "═══════════════════════════════════════"
 echo ""
 

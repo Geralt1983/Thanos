@@ -3,8 +3,8 @@
 
 set -e
 
-LIFEOS_DIR="/Users/jeremy/.claude"
-cd "$LIFEOS_DIR"
+THANOS_DIR="/Users/jeremy/.claude"
+cd "$THANOS_DIR"
 
 # Check if we have changes
 if [[ -z $(git status -s) ]]; then
@@ -15,7 +15,7 @@ fi
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 git add State/ History/ Skills/ Context/ Inbox/ Memory/
 git add CLAUDE.md COMMANDS.md FLAGS.md PRINCIPLES.md RULES.md
-git add MCP.md PERSONAS.md ORCHESTRATOR.md MODES.md LIFE-OS.md
+git add MCP.md PERSONAS.md ORCHESTRATOR.md MODES.md THANOS.md
 git add -f .gitignore
 
 # Create commit

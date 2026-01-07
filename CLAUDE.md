@@ -9,5 +9,5 @@
 @ORCHESTRATOR.md
 @MODES.md
 @CLAUDE-FLOW.md
-@LIFE-OS.md
+@THANOS.md
 @Context/CORE.md

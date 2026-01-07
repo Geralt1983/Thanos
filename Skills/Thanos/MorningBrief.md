@@ -18,7 +18,7 @@ Activate morning brief when:
 
 ```
 ═══════════════════════════════════════
-    THANOS ACTIVATED - LIFE OS ONLINE
+    THANOS ACTIVATED - THANOS ONLINE
 ═══════════════════════════════════════
 
 **[{TIME} EST] - {DAY}, {DATE}**
@@ -106,7 +106,7 @@ After user provides energy level:
 
 ```
 ═══════════════════════════════════════
-    THANOS ACTIVATED - LIFE OS ONLINE
+    THANOS ACTIVATED - THANOS ONLINE
 ═══════════════════════════════════════
 
 **[07:15 EST] - Monday, January 6, 2026**

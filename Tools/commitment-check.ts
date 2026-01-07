@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Commitment Check Tool
- * Surface due and overdue commitments from Life OS
+ * Surface due and overdue commitments from Thanos
  *
  * Usage:
  *   bun commitment-check.ts           # Show due within 48 hours
@@ -103,7 +103,7 @@ async function main() {
   const showAll = args.includes('--all') || args.includes('-a');
   const showOverdueOnly = args.includes('--overdue') || args.includes('-o');
 
-  console.log('📋 Life OS Commitment Check\n');
+  console.log('📋 Thanos Commitment Check\n');
 
   let content: string;
   try {

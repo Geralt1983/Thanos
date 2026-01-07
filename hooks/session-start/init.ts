@@ -1,5 +1,5 @@
 /**
- * Life OS Session Start Hook
+ * Thanos Session Start Hook
  * Runs at the beginning of each Claude Code session
  */
 
@@ -16,7 +16,7 @@ interface SessionStartResult {
 }
 
 export default async function sessionStart(): Promise<SessionStartResult> {
-  console.log('🚀 Life OS initializing...\n');
+  console.log('🚀 Thanos initializing...\n');
 
   // 1. Load current state
   let currentFocus = '';
@@ -52,7 +52,7 @@ export default async function sessionStart(): Promise<SessionStartResult> {
 
   // 4. Generate session brief
   console.log('═══════════════════════════════════════');
-  console.log('         LIFE OS SESSION START          ');
+  console.log('         THANOS SESSION START          ');
   console.log('═══════════════════════════════════════\n');
 
   if (hasInbox) {

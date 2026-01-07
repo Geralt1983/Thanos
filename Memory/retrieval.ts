@@ -1,6 +1,6 @@
 /**
- * Life OS Memory Retrieval System
- * Vector-based semantic search across all Life OS history
+ * Thanos Memory Retrieval System
+ * Vector-based semantic search across all Thanos history
  */
 
 import { ChromaClient, Collection } from 'chromadb';

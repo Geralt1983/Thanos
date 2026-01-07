@@ -70,7 +70,7 @@ Activate when:
 5. Generate 2-3 sentence summary
 6. Write to History/Sessions/{timestamp}.md
 7. Store summary in Claude Flow memory for cross-session access
-8. Execute git sync: `bash /Users/jeremy/.claude/Tools/sync-lifeos.sh`
+8. Execute git sync: `bash /Users/jeremy/.claude/Tools/sync-thanos.sh`
 
 **Memory Storage:**
 ```

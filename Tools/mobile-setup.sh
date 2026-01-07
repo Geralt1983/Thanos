@@ -10,11 +10,11 @@ git clone git@github.com:Geralt1983/Thanos.git .claude
 
 # Set up auto-pull on Termux startup
 mkdir -p ~/.termux/boot
-cat > ~/.termux/boot/lifeos-sync.sh << 'EOF'
+cat > ~/.termux/boot/thanos-sync.sh << 'EOF'
 #!/data/data/com.termux/files/usr/bin/bash
 cd ~/.claude && git pull --quiet
 EOF
-chmod +x ~/.termux/boot/lifeos-sync.sh
+chmod +x ~/.termux/boot/thanos-sync.sh
 
 echo "✓ Thanos cloned to ~/.claude"
 echo "✓ Auto-sync on Termux boot enabled"

@@ -1,5 +1,5 @@
 /**
- * Life OS Session Stop Hook
+ * Thanos Session Stop Hook
  * Runs at the end of each Claude Code session
  */
 

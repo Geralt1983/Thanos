@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Inbox Processing Tool
- * Process items in the Life OS inbox
+ * Process items in the Thanos inbox
  *
  * Usage:
  *   bun inbox-process.ts          # List inbox items
@@ -101,7 +101,7 @@ async function main() {
   const args = process.argv.slice(2);
   const autoMode = args.includes('--auto') || args.includes('-a');
 
-  console.log('📥 Life OS Inbox Processor\n');
+  console.log('📥 Thanos Inbox Processor\n');
 
   const items = await getInboxItems();
 

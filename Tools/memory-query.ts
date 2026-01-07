@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Memory Query Tool
- * Query the Life OS vector memory system from command line
+ * Query the Thanos vector memory system from command line
  *
  * Usage:
  *   bun memory-query.ts "what did I decide about X"
@@ -57,7 +57,7 @@ async function main() {
 
   if (!args.query) {
     console.log(`
-Memory Query Tool - Search your Life OS memory
+Memory Query Tool - Search your Thanos memory
 
 Usage:
   bun memory-query.ts "your query here"

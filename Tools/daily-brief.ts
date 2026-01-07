@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Daily Brief Generator
- * Generate morning brief from Life OS state files
+ * Generate morning brief from Thanos state files
  *
  * Usage:
  *   bun daily-brief.ts              # Generate brief
