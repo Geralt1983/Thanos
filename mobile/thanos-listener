@@ -1,0 +1,113 @@
+#!/bin/bash
+#
+# ████████╗██╗  ██╗ █████╗ ███╗   ██╗ ██████╗ ███████╗
+# ╚══██╔══╝██║  ██║██╔══██╗████╗  ██║██╔═══██╗██╔════╝
+#    ██║   ███████║███████║██╔██╗ ██║██║   ██║███████╗
+#    ██║   ██╔══██║██╔══██║██║╚██╗██║██║   ██║╚════██║
+#    ██║   ██║  ██║██║  ██║██║ ╚████║╚██████╔╝███████║
+#    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝
+#
+#  Audio Listener - Plays quotes when triggered by Claude Code
+#
+#  Install: Copy to ~/bin/thanos-listener on Termux
+#  Run: thanos-listener (or add to .bashrc for auto-start)
+#
+
+SOUNDS_DIR=~/storage/shared/Sounds
+TOPIC="thanos-jeremy-workos"
+
+# Verify sounds exist
+if [ ! -d "$SOUNDS_DIR" ]; then
+    echo "❌ Sounds directory not found: $SOUNDS_DIR"
+    echo "   Run: termux-setup-storage"
+    echo "   Then place MP3s in: $SOUNDS_DIR"
+    exit 1
+fi
+
+echo "🟣 Thanos listener active..."
+echo "   Topic: ntfy.sh/$TOPIC"
+echo "   Sounds: $SOUNDS_DIR"
+echo ""
+echo "   Waiting for triggers..."
+echo ""
+
+# Listen forever
+while true; do
+    curl -s "ntfy.sh/$TOPIC/raw" | while read -r trigger; do
+
+        # Log received trigger
+        echo "⚡ Received: $trigger"
+
+        case "$trigger" in
+            # Task completion
+            snap|task|done|complete)
+                SOUND="thanos-ill-do-it-myself.mp3"
+                ;;
+
+            # Finished/inevitable
+            inevitable|finish|end|ship)
+                SOUND="thanos-inevitable.mp3"
+                ;;
+
+            # Balance/cleanup
+            balanced|cleanup|refactor|organize)
+                SOUND="thanos-perfectly-balanced.mp3"
+                ;;
+
+            # Starting/destiny
+            destiny|start|begin|init)
+                SOUND="thanos-destiny.mp3"
+                ;;
+
+            # Deletion/sacrifice
+            price|delete|remove|drop)
+                SOUND="thanos-small-price.mp3"
+                ;;
+
+            # Difficult tasks
+            hard|difficult|complex|deep)
+                SOUND="thanos-hardest-choices.mp3"
+                ;;
+
+            # Work-OS specific
+            move|workos)
+                SOUND="thanos-ill-do-it-myself.mp3"
+                ;;
+
+            milestone)
+                SOUND="thanos-inevitable.mp3"
+                ;;
+
+            stale|memphis)
+                SOUND="thanos-destiny.mp3"
+                ;;
+
+            # Random for anything else
+            random|*)
+                QUOTES=(
+                    "thanos-ill-do-it-myself.mp3"
+                    "thanos-inevitable.mp3"
+                    "thanos-perfectly-balanced.mp3"
+                    "thanos-destiny.mp3"
+                    "thanos-small-price.mp3"
+                    "thanos-hardest-choices.mp3"
+                )
+                SOUND=${QUOTES[$RANDOM % ${#QUOTES[@]}]}
+                ;;
+        esac
+
+        # Play if file exists
+        if [ -f "$SOUNDS_DIR/$SOUND" ]; then
+            termux-media-player play "$SOUNDS_DIR/$SOUND" &
+            echo "🔊 Playing: $SOUND"
+        else
+            echo "⚠️  Sound not found: $SOUND"
+            echo "   Expected: $SOUNDS_DIR/$SOUND"
+        fi
+
+    done
+
+    # Reconnect if disconnected
+    echo "🔄 Reconnecting..."
+    sleep 2
+done

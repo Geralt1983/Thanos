@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.workos.cache-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/npx</string>
+        <string>tsx</string>
+        <string>/Users/jeremy/Projects/Thanos/mcp-servers/workos-mcp/scripts/sync-cache.ts</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- Add your database URL here or load from .env -->
+        <!-- <key>WORKOS_DATABASE_URL</key> -->
+        <!-- <string>postgres://...</string> -->
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/jeremy/Projects/Thanos/mcp-servers/workos-mcp</string>
+
+    <key>StartInterval</key>
+    <integer>300</integer><!-- Every 5 minutes -->
+
+    <key>StandardOutPath</key>
+    <string>/tmp/workos-cache-sync.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/workos-cache-sync-error.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
