@@ -16,6 +16,24 @@
 
 **Pattern detected**: ~5.5h actual sleep despite 6-7h in bed. Sullivan wake-ups killing efficiency. HRV running 11-12 (low). Body compensating with deeper sleep when possible.
 
+## WorkOS Progress
+- **Points**: 3/18 🔄 (min: 12)
+- **Tasks Completed**: 2
+- **Streak**: 0 days
+- **Active Pipeline**: 7pts → Potential: 10pts
+- **Pace**: 17% of target
+
+### Active Tasks (Today)
+- [ ] ScottCare interface build and scoping (Kentucky) [5pts]
+- [ ] Send DS-3053 consent form to kids' mother [2pts]
+
+### Up Next (Queued)
+- Prepare for Thursday Kentucky meeting (Kentucky)
+- Send build & style guide to Orlando (Orlando)
+- Review Alabama PCT tasks for accuracy (Linardo) (Orlando)
+- Catch up with David (Orlando)
+- Update Sherlocks (Raleigh)
+
 ## Top 3 Priorities
 1. [ ] ScottCare interface build and scoping
 2. [ ] Continue Week 1 energy baseline logging

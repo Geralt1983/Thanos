@@ -17,11 +17,6 @@ Each commitment includes:
   - Context: Sent 2026-01-05
 
 ### Raleigh
-- [ ] Have the Baptist status report | Baptist team | 2026-01-08 EOD | Not Started
-  - Context: Memphis project
-  - Source: Session 2026-01-07-1750
-
-### Raleigh
 - [ ] [Add as commitments arise]
 
 ### Orlando
@@ -31,9 +26,10 @@ Each commitment includes:
 - [ ] ScottCare/VersaCare interface build and scoping | Kentucky | TBD | In Progress
   - Context: Interface build and scoping for cardiac rehab integration
 
-- [ ] Finish the ScottCare interface spec | Kentucky team | 2026-01-14 | Not Started
+
+- [ ] Email the spec to the Kentucky team | Kentucky team | 2026-01-09 EOD | Not Started
   - Context: Kentucky project
-  - Source: Session 2026-01-07-1751
+  - Source: Session 2026-01-07-1757
 
 ---
 
@@ -43,16 +39,12 @@ Each commitment includes:
 - [x] Discuss Connor/financial coach follow-up | Ashley | Today (before evening) | Complete
   - Context: Full go confirmed. Ready to email Connor.
 
-- [ ] Send Ashley the grocery list by tonight | Ashley | 2026-01-07 EOD | Not Started
-  - Context: Added via extract-commitment
-  - Source: Session 2026-01-07-1751
-
 ### Finance
 - [ ] Email Connor back re: payment discussion | Connor | Tonight (2026-01-07) | Ready
   - Context: Ashley confirmed. Send tonight.
 
 ### Family
-- [ ] **PASSPORTS: Corin & Chayah** | Kids/European trip | 2026-02-07 | 🔴 IN PROGRESS
+- [ ] **PASSPORTS: Corin & Chayah** | Kids/European trip | 2026-02-07 | IN PROGRESS
   - Context: 1 MONTH DEADLINE. 6 tasks created. CRITICAL PATH: DS-3053 consent form to their mother for notarization. Start NOW.
   - Next action: Contact their mother about consent form TODAY
 
@@ -68,10 +60,6 @@ Each commitment includes:
 - [x] Pick up tirzepatide Rx from CVS | Self | 2026-01-06 | Complete
 - [ ] In bed by 10pm (lights out by 10:30pm) | Self | Daily | Not Started
   - Context: Pattern detected - hyperfocus on new systems disrupts sleep. Hard stop needed.
-
-- [ ] Be in bed by 10pm every night | Self | TBD | Not Started
-  - Context: Added via extract-commitment
-  - Source: Session 2026-01-07-1751
 
 ---
 
