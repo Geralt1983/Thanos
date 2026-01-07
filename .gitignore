@@ -31,3 +31,34 @@ history.jsonl
 *.swo
 *~
 plugins/marketplaces/claude-plugins-official/
+
+# System directories (not part of repo)
+.ssh/
+Library/
+bin/
+inbox/
+~/
+
+# Memory data (local only)
+.memory/
+.memory-v2/
+memory/
+
+# Claude Flow runtime
+.claude-flow@alpha/
+.hive-mind/
+.mcp.json
+claude-flow
+
+# Node/build artifacts
+node_modules/
+dist/
+.npmrc
+
+# Nested project artifacts
+mcp-servers/workos-mcp/.claude/
+mcp-servers/workos-mcp/.memory/
+mcp-servers/workos-mcp/node_modules/
+mcp-servers/workos-mcp/dist/
+mcp-servers/workos-mcp/mcp-servers/
+mcp-servers/workos-mcp/.npmrc
