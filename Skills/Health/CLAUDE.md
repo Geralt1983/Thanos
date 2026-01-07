@@ -7,5 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #206 | 10:01 AM | 🔵 | Thanos project renamed from LifeOS | ~249 |
+| #250 | 10:23 AM | 🔵 | Health Optimization skill manages ADHD medication and energy protocols | ~533 |
 </claude-mem-context>

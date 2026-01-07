@@ -1,13 +1,14 @@
-# Nova Client Profile
+# Kentucky Client Profile
 
 ## Overview
-- **Client Name:** Nova
+- **Client Name:** Kentucky
 - **Status:** Active
 - **Relationship Start:** [Date]
 - **Primary Contact:** [Name]
 
 ## Current Projects
-- [Project 1]
+- ScottCare/VersaCare interface build and scoping
+- Cardiac rehab integration
 
 ## Billing
 - **Rate:** $[rate]/hour
@@ -26,14 +27,15 @@
 
 ## History
 ### Recent Interactions
-- [Date]: [Summary]
+- 2026-01-07: Provider matching blocker identification in progress
 
 ## Notes
-- [Client-specific notes]
+- VersaCare cardiac rehab data integration
+- Working through HL7 interface issues
 
 ## Active Commitments
-- [ ] [Commitment to this client]
+- [ ] Provider matching - identify actual blocker
 
 ---
 
-*Last updated: 2026-01-05*
+*Last updated: 2026-01-07*

@@ -1,13 +1,18 @@
 # Raleigh Client Profile
 
 ## Overview
-- **Client Name:** Raleigh
+- **Client Name:** Raleigh (NC DHHS)
+- **Organization:** Department of Human Health and Services
 - **Status:** Active
 - **Relationship Start:** [Date]
 - **Primary Contact:** [Name]
 
 ## Current Projects
-- [Project 1]
+
+### Rolling Go-Live Project
+- **Status:** Active
+- **Focus:** Phased Epic go-live support
+- **Notes:** [Details]
 
 ## Billing
 - **Rate:** $[rate]/hour
@@ -29,11 +34,11 @@
 - [Date]: [Summary]
 
 ## Notes
-- [Client-specific notes]
+- Government client (DHHS)
 
 ## Active Commitments
-- [ ] [Commitment to this client]
+- [ ] [Add as commitments arise]
 
 ---
 
-*Last updated: 2026-01-05*
+*Last updated: 2026-01-07*

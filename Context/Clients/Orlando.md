@@ -3,16 +3,20 @@
 ## Overview
 - **Client Name:** Orlando
 - **Status:** Active
+- **Role:** FTE (not contractor)
 - **Relationship Start:** [Date]
 - **Primary Contact:** [Name]
 
 ## Current Projects
-- [Project 1]
+
+### Epic On-Call Finder Integration
+- **Status:** Active
+- **Role:** Lead/Owner
+- **Focus:** On-Call Finder integration and management
 
 ## Billing
-- **Rate:** $[rate]/hour
-- **Terms:** [Net 30, etc.]
-- **Invoice Contact:** [Name/Email]
+- **Type:** FTE/Salary
+- **Notes:** [Details]
 
 ## Key Contacts
 | Name | Role | Email | Phone | Notes |
@@ -29,11 +33,12 @@
 - [Date]: [Summary]
 
 ## Notes
-- [Client-specific notes]
+- FTE position (not hourly consulting)
+- Owns Epic On-Call Finder integration
 
 ## Active Commitments
-- [ ] [Commitment to this client]
+- [ ] [Add as commitments arise]
 
 ---
 
-*Last updated: 2026-01-05*
+*Last updated: 2026-01-07*

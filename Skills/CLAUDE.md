@@ -7,5 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #206 | 10:01 AM | 🔵 | Thanos project renamed from LifeOS | ~249 |
+| #322 | 11:49 AM | ✅ | Claude Flow natural language command shortcuts documented | ~370 |
 </claude-mem-context>

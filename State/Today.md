@@ -1,34 +1,40 @@
-# Today - 2026-01-06 (Tuesday)
+# Today - 2026-01-07 (Wednesday)
 
 ## Morning Brief
-- **Sleep**: 6.5 hours, fragmented (bed 10:30pm, asleep 12am, 3x wake-ups, alarm 6:30am)
-- **Sleep quality**: Poor - hyperfocus on Thanos build delayed sleep onset
-- **Energy**: 5-6/10 (suboptimal due to fragmented sleep)
-- **Night notes**: 3am Sullivan feed + 2 other wake-ups
+- **Sleep**: ⚠️ **RING NOT SYNCED** - Open Oura app to sync today's data
+- **Yesterday's Oura Score**: 75 (rebounded from 62)
+- **Readiness**: 81 ✅ (recovery index 100, HRV balance 81)
+- **Energy**: [Log mid-morning]
+- **Night notes**: Sullivan woke 3x again. Two nights fragmented.
+
+### Oura Week 1 Baseline (Jan 4-6)
+| Date | Sleep | Deep | REM | Restful | Actual Sleep | Awake |
+|------|-------|------|-----|---------|--------------|-------|
+| Jan 4 | 68 | 82 | 62 | 74 | 5h 26m | 59m |
+| Jan 5 | **62** ⚠️ | 87 | 55 | **44** | 5h 27m | **1h 47m** |
+| Jan 6 | 75 | 96 | 92 | 51 | ~5h 30m | - |
+
+**Pattern detected**: ~5.5h actual sleep despite 6-7h in bed. Sullivan wake-ups killing efficiency. HRV running 11-12 (low). Body compensating with deeper sleep when possible.
 
 ## Top 3 Priorities
-1. [x] Log baseline energy data (Week 1 data collection starts)
-2. [ ] Voice capture + journaling + memory enhancements
-3. [x] Pick up tirzepatide Rx from CVS ✅
-
-## Enhancement Requests (Today)
-- [x] Voice capture integration for mobile/terminal (complete - Mac: whisper.cpp, Android: termux-api)
-- [x] Journaling workflow enhancement (complete - terminal-native)
-- [x] Memory system improvements (complete - vectorized semantic memory with ChromaDB + FastAPI)
-- [x] Week 2-4 feature roadmap review (Architecture-Week2.md created)
+1. [ ] ScottCare interface build and scoping
+2. [ ] Continue Week 1 energy baseline logging
+3. [ ] Talk to Ashley re: Connor/financial coach follow-up
 
 ## Work Block
-- [x] 3:00 PM Raleigh SUP demo - ✅ WENT GREAT
-- [ ] ScottCare provider matching - identify actual blocker
-- [ ] Client status check (Memphis/Raleigh/Orlando/Nova)
+- [ ] ScottCare: Interface build and scoping (Kentucky)
+
+## Thanos Maintenance
+- ✅ LifeOS → Thanos rename complete (last night)
+- [ ] Test any new integrations
 
 ## Evening Protocol
 - Log end-of-day energy level
-- Session close with git sync
+- **10pm hard stop** - You're in Week 1 baseline. Sleep matters.
 
 ## Why Today Matters
-Week 1 baseline data. You're mapping natural energy patterns without medication. This is foundation data for optimizing your entire schedule.
+Week 1 baseline data continues. Yesterday was fragmented sleep (6.5h, 3 wake-ups). Today's data point matters for the pattern.
 
 ---
 
-*Created: 2026-01-06 08:17 EST*
+*Created: 2026-01-07 06:11 EST*

@@ -7,7 +7,7 @@
 
 ## Work Block
 - ScottCare provider matching - identify and document actual blocker
-- Client status check (pick one: Memphis/Raleigh/Orlando/Nova)
+- Client status check (pick one: Memphis/Raleigh/Orlando/Kentucky)
 
 ## Evening Protocol
 - Log end-of-day energy level

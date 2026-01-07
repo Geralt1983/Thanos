@@ -14,10 +14,10 @@
 - Considering sunroom → home office conversion
 
 ## Work Situation
-- Active clients: Memphis, Raleigh, Orlando, Nova, Baptist Rehab
+- Active clients: Memphis, Raleigh, Orlando, Kentucky
 - Target: $500k+ annually
 - Target hours: 15-20 billable per week
-- Current focus: Baptist Rehab/Optimization project, ScottCare integration
+- Current focus: Memphis (Baptist Rehab/Optimization), Kentucky (ScottCare integration)
 
 ## How My Brain Works
 - ADHD - executive function challenges

@@ -7,8 +7,14 @@
 - **Primary Contact:** [Name]
 
 ## Current Projects
-- [Project 1]
-- [Project 2]
+
+### Baptist Rehab - Optimization Project
+- **Status:** In Progress
+- **Focus:** System optimization and workflow improvements
+- **Key deliverables:**
+  - Status reports
+  - Performance metrics
+  - Optimization recommendations
 
 ## Billing
 - **Rate:** $[rate]/hour
@@ -18,7 +24,9 @@
 ## Key Contacts
 | Name | Role | Email | Phone | Notes |
 |------|------|-------|-------|-------|
-| | | | | |
+| | Project Lead | | | |
+| | Technical | | | |
+| | Billing | | | |
 
 ## System Details
 - **Epic Version:** [Version]
@@ -27,22 +35,14 @@
 
 ## History
 ### Recent Interactions
-- [Date]: [Summary]
-
-### Major Milestones
-- [Date]: [Milestone]
+- 2026-01-05: Status report sent on Optimization project
 
 ## Notes
-- [Client-specific quirks]
-- [Things to remember]
-- [Communication preferences]
+- Baptist Rehab is part of Memphis engagement
 
 ## Active Commitments
-- [ ] [Commitment to this client]
-
-## Waiting For
-- [ ] [Things client owes]
+- [ ] [Add as commitments arise]
 
 ---
 
-*Last updated: 2026-01-05*
+*Last updated: 2026-01-07*

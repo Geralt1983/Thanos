@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #206 | 10:01 AM | 🔵 | Thanos project renamed from LifeOS | ~249 |
+| #252 | 10:23 AM | 🔵 | Thanos V2 Architecture defines comprehensive auto-persistence and agent routing system | ~657 |
+| #241 | " | 🔵 | Morning Brief Protocol automates daily startup routine | ~413 |
 </claude-mem-context>

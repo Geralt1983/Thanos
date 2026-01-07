@@ -24,7 +24,7 @@
 - [ ] Memphis - [if any]
 - [ ] Raleigh - [if any]
 - [ ] Orlando - [if any]
-- [ ] Nova - [if any]
+- [ ] Kentucky - [if any]
 
 ## Personal Goals
 - [ ] [Add personal goals]
