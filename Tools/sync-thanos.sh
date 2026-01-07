@@ -1,5 +1,5 @@
 #!/bin/bash
-# Life OS Git Sync - Auto-commit and push state
+# Thanos Git Sync - Auto-commit and push state
 
 set -e
 
@@ -19,7 +19,7 @@ git add MCP.md PERSONAS.md ORCHESTRATOR.md MODES.md LIFE-OS.md
 git add -f .gitignore
 
 # Create commit
-git commit -m "Life OS sync: ${TIMESTAMP}" --quiet
+git commit -m "Thanos sync: ${TIMESTAMP}" --quiet
 
 # Push to remote (if configured)
 if git remote get-url origin &>/dev/null; then

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Life OS Session Start Hook
+# Thanos Session Start Hook
 # Outputs context for Claude at session start
 
 CLAUDE_DIR="$HOME/.claude"
@@ -57,7 +57,7 @@ fi
 
 echo "═══════════════════════════════════════"
 echo ""
-echo "To see full Life OS context, say: '/pa:daily'"
+echo "To see full Thanos context, say: '/pa:daily'"
 echo ""
 
 exit 0

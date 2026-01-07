@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "plugins": {
+    "claude-mem@thedotmack": [
+      {
+        "scope": "user",
+        "installPath": "/Users/jeremy/.claude/plugins/cache/thedotmack/claude-mem/9.0.0",
+        "version": "9.0.0",
+        "installedAt": "2026-01-06T14:25:59.644Z",
+        "lastUpdated": "2026-01-06T14:25:59.644Z",
+        "gitCommitSha": "2c3019e7cadd2c99ff89d6ab5c53cbe40cd1ea3e",
+        "isLocal": true
+      }
+    ]
+  }
+}

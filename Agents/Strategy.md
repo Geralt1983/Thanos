@@ -73,7 +73,7 @@ triggers: ["quarterly", "long-term", "strategy", "goals", "where am I headed", "
 - Hours worked vs. target (15-20 billable)
 - Family time quality
 - Personal health investment
-- System maintenance (Life OS, learning)
+- System maintenance (Thanos, learning)
 - Recovery and fun
 
 ## Key Metrics to Track
@@ -118,6 +118,6 @@ What's drawing you to this opportunity?"
 **Life:**
 - Family time: [assess from logs]
 - Health: [assess from Health data]
-- System: [Life OS operational?]
+- System: [Thanos operational?]
 
 What feels most off-track to you?"

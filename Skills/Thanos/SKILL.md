@@ -1,12 +1,12 @@
 ---
-name: Life OS Management
+name: Thanos Management
 description: System maintenance, memory queries, and pattern analysis. USE WHEN user mentions system, memory, patterns, history, past conversations, what did I, or meta-level system questions.
 ---
 
-# Life OS Management Skill
+# Thanos Management Skill
 
 ## System Overview
-Life OS is Jeremy's external prefrontal cortex - managing tasks, tracking commitments, surfacing patterns, and providing total recall across all life domains.
+Thanos is Jeremy's external prefrontal cortex - managing tasks, tracking commitments, surfacing patterns, and providing total recall across all life domains.
 
 ## Core Components
 - **State/**: Current state (focus, commitments, waiting-for)

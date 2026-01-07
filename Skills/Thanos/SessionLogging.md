@@ -54,7 +54,7 @@ Activate when:
 - Mood: {brief descriptor}
 
 ---
-*Auto-logged by Life OS*
+*Auto-logged by Thanos*
 ```
 
 ---

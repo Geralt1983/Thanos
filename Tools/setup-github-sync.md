@@ -1,15 +1,15 @@
-# Life OS GitHub Sync Setup
+# Thanos GitHub Sync Setup
 
 ## One-Time GitHub Setup
 
 1. **Create private GitHub repo:**
    ```bash
-   gh repo create life-os --private --source=/Users/jeremy/.claude
+   gh repo create thanos --private --source=/Users/jeremy/.claude
    ```
 
 2. **Or manually:**
    - Go to https://github.com/new
-   - Name: `life-os`
+   - Name: `thanos`
    - Private: ✓
    - Don't initialize with README
    - Create repository
@@ -17,14 +17,14 @@
 3. **Add remote:**
    ```bash
    cd /Users/jeremy/.claude
-   git remote add origin git@github.com:YOUR_USERNAME/life-os.git
+   git remote add origin git@github.com:YOUR_USERNAME/thanos.git
    ```
 
 4. **Initial push:**
    ```bash
    cd /Users/jeremy/.claude
    git add .
-   git commit -m "Initial Life OS commit"
+   git commit -m "Initial Thanos commit"
    git push -u origin main
    ```
 
@@ -50,9 +50,9 @@ git push
 
 Already configured:
 - Termux + Tailscale for remote access
-- Git clone on mobile: `git clone git@github.com:YOUR_USERNAME/life-os.git ~/.claude`
+- Git clone on mobile: `git clone git@github.com:YOUR_USERNAME/thanos.git ~/.claude`
 - Auto-sync on session close
 
 ---
 
-*Part of Thanos Life OS*
+*Part of Thanos Thanos*

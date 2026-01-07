@@ -48,9 +48,12 @@ Each commitment includes:
 ---
 
 ## Commitments to Self
-- [x] Build Life OS | Self | 2026-01-05 | Complete
+- [x] Build Thanos | Self | 2026-01-05 | Complete
 - [ ] Maintain 15-20 billable hours/week | Self | Weekly | Tracking
-- [ ] Daily energy logging | Self | Daily | Not Started
+- [x] Daily energy logging | Self | Daily | In Progress (started 2026-01-06)
+- [ ] Pick up tirzepatide Rx from CVS | Self | 2026-01-06 | Not Started
+- [ ] In bed by 10pm (lights out by 10:30pm) | Self | Daily | Not Started
+  - Context: Pattern detected - hyperfocus on new systems disrupts sleep. Hard stop needed.
 
 ---
 

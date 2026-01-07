@@ -38,7 +38,7 @@
 - Strong relationship with Ashley
 - Being present for Sullivan
 - Health optimization
-- This Life OS as the foundation for everything
+- This Thanos as the foundation for everything
 
 ## Communication Preferences
 - Direct over diplomatic

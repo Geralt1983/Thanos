@@ -17,7 +17,7 @@ This file contains context about the user to help the personal assistant provide
 - Healthcare IT consulting
 
 ### Projects
-- **Life OS**: Personal productivity and multi-persona system
+- **Thanos**: Personal productivity and multi-persona system
 - **Thanos**: [Project description]
 - [Add other active projects]
 

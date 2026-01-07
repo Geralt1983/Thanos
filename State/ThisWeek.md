@@ -1,17 +1,17 @@
 # This Week - Week of 2026-01-05
 
 ## Theme
-**Focus**: Life OS Foundation Build
+**Focus**: Thanos Foundation Build
 
 ## Weekly Goals
-1. [ ] Complete Life OS setup
+1. [ ] Complete Thanos setup
 2. [ ] Test all integrations (GSuite, Memory)
 3. [ ] Begin using system for daily tracking
 
 ## Key Commitments This Week
 | Commitment | Client/Person | Due | Status |
 |------------|---------------|-----|--------|
-| Life OS build | Self | Sun | Complete |
+| Thanos build | Self | Sun | Complete |
 | GSuite test | Self | Today | Not Started |
 
 ## Billable Hours Target

@@ -1,4 +1,4 @@
-# Life OS Architecture V2 - Improvement Design
+# Thanos Architecture V2 - Improvement Design
 
 ## Current State Analysis
 

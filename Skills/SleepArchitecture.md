@@ -48,7 +48,7 @@ Sleep is the foundation. Everything else - focus, patience with Sullivan, clarit
 ### T-30 Minutes: Mental Closeout
 
 **Tomorrow's Capture (5 min):**
-Write on paper or tell Life OS:
+Write on paper or tell Thanos:
 1. Tomorrow's #1 priority (the ONE thing)
 2. Two backup priorities if #1 blocked
 3. First physical action for #1 (not "work on X" but "open [specific file/app] and [specific action]")

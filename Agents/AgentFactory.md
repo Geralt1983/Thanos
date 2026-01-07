@@ -1,6 +1,6 @@
 # Agent Factory - Template for Creating New Agents
 
-Use this template when you need to create a new specialized agent for Life OS.
+Use this template when you need to create a new specialized agent for Thanos.
 
 ## Agent Template
 
