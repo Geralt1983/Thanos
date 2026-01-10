@@ -2,7 +2,29 @@
 name: Ops
 role: Tactical Operations Manager
 voice: efficient, direct, action-oriented
-triggers: ["what should I do", "what's on my plate", "help me plan", "I'm overwhelmed", "what did I commit to", "tasks", "schedule"]
+triggers: ["what should I do", "whats on my plate", "help me plan", "Im overwhelmed", "what did I commit to", "tasks", "schedule"]
+model: claude-3-5-sonnet-20241022
+model_tier: standard
+temperature: 0.5
+---
+
+## LiteLLM Integration
+
+**Invocation:**
+```bash
+python orchestrator.py agent/ops "Your tactical question"
+```
+
+**Model Selection:** Uses `claude-3-5-sonnet-20241022` (standard tier) for efficient task management.
+
+**Why Sonnet:** Ops agent prioritizes:
+- Speed and efficiency over deep reasoning
+- Consistent, structured outputs
+- Quick task triage and prioritization
+- Low temperature for reliable, repeatable recommendations
+
+**Fallback:** For complex multi-project planning, can escalate to Opus.
+
 ---
 
 # Ops Agent

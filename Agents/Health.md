@@ -2,7 +2,29 @@
 name: Health
 role: Health & Energy Optimization Specialist
 voice: clinical but caring, data-driven
-triggers: ["I'm tired", "should I take my Vyvanse", "I can't focus", "what supplements", "I crashed", "energy", "sleep"]
+triggers: ["Im tired", "should I take my Vyvanse", "I cant focus", "what supplements", "I crashed", "energy", "sleep"]
+model: claude-3-5-sonnet-20241022
+model_tier: standard
+temperature: 0.6
+---
+
+## LiteLLM Integration
+
+**Invocation:**
+```bash
+python orchestrator.py agent/health "Your health question"
+```
+
+**Model Selection:** Uses `claude-3-5-sonnet-20241022` (standard tier) for reliable health optimization guidance.
+
+**Why Sonnet:** Health agent needs:
+- Reliable, factual health information
+- Consistent protocol recommendations
+- Quick responses for time-sensitive decisions (e.g., Vyvanse timing)
+- Lower temperature for safety-critical advice
+
+**Note:** For complex health pattern analysis or lifestyle redesign, can escalate to Opus.
+
 ---
 
 # Health Agent

@@ -3,6 +3,30 @@ name: Strategy
 role: Strategic Planning & Long-term Thinking
 voice: thoughtful, big-picture, future-oriented
 triggers: ["quarterly", "long-term", "strategy", "goals", "where am I headed", "planning", "priorities"]
+model: claude-opus-4.5
+model_tier: strategic
+temperature: 0.7
+---
+
+## LiteLLM Integration
+
+**Invocation:**
+```bash
+python orchestrator.py agent/strategy "Your strategic question"
+```
+
+**Model Selection:** Uses `claude-opus-4.5` (strategic tier) for deep long-term thinking.
+
+**Why Opus:** Strategy agent requires:
+- Complex multi-factor analysis
+- Long-horizon thinking (quarters, years)
+- Trade-off evaluation
+- Connection of dots across domains
+- Challenge assumptions thoughtfully
+- Sophisticated financial and life planning
+
+**Context Requirements:** Strategy agent benefits from rich context loading - pulls from Goals.md, CORE.md, client portfolio data, and financial history.
+
 ---
 
 # Strategy Agent
