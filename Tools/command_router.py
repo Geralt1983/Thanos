@@ -72,6 +72,15 @@ class CommandRouter:
         self.state_reader = state_reader
         self.thanos_dir = thanos_dir
         self.current_agent = "ops"  # Track current agent
+        self.current_model = None  # None = use default from config
+
+        # Available models (from config/api.json)
+        self._available_models = {
+            "opus": "claude-opus-4-5-20251101",
+            "sonnet": "claude-sonnet-4-20250514",
+            "haiku": "claude-3-5-haiku-20241022",
+        }
+        self._default_model = "opus"
 
         # MemOS integration (lazy initialization)
         self._memos: Optional[MemOS] = None
@@ -207,6 +216,8 @@ class CommandRouter:
             'branches': (self._cmd_branches, "List branches", []),
             'switch': (self._cmd_switch, "Switch to branch", ["branch"]),
             'patterns': (self._cmd_patterns, "Show conversation patterns", []),
+            'model': (self._cmd_model, "Switch AI model", ["name"]),
+            'm': (self._cmd_model, "Switch model (alias)", ["name"]),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -396,13 +407,14 @@ class CommandRouter:
   /branches      - List all branches of this session
   /switch <ref>  - Switch to a different branch (by name or id)
   /patterns      - Show conversation patterns and usage analytics
+  /model [name]  - Switch AI model (opus, sonnet, haiku)
   /run <cmd>     - Run a Thanos command (e.g., /run pa:daily)
   /help          - Show this help
   /quit          - Exit interactive mode
 
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
-  /r = /resume, /h = /help, /q = /quit
+  /r = /resume, /m = /model, /h = /help, /q = /quit
 
 {Colors.DIM}Tip: Use \""" for multi-line input{Colors.RESET}
 """)
@@ -900,3 +912,42 @@ class CommandRouter:
 
         print(f"\n{Colors.DIM}Based on {total_sessions} saved sessions{Colors.RESET}\n")
         return CommandResult()
+
+    def _cmd_model(self, args: str) -> CommandResult:
+        """Switch AI model for responses."""
+        if not args:
+            # Show current model and available options
+            current = self.current_model or self._default_model
+            print(f"\n{Colors.CYAN}AI Model:{Colors.RESET}")
+            print(f"  Current: {current} ({self._available_models.get(current, 'unknown')})")
+            print(f"\n{Colors.CYAN}Available Models:{Colors.RESET}")
+            for alias, full_name in self._available_models.items():
+                marker = "→" if alias == current else " "
+                # Add cost hints
+                if alias == "opus":
+                    cost = "$15/$75 per 1M tokens (most capable)"
+                elif alias == "sonnet":
+                    cost = "$3/$15 per 1M tokens (balanced)"
+                else:
+                    cost = "$0.25/$1.25 per 1M tokens (fastest)"
+                print(f"  {marker} {alias:8} {full_name}")
+                print(f"           {Colors.DIM}{cost}{Colors.RESET}")
+            print(f"\n{Colors.DIM}Usage: /model <opus|sonnet|haiku>{Colors.RESET}\n")
+            return CommandResult()
+
+        model_name = args.lower().strip()
+        if model_name in self._available_models:
+            old_model = self.current_model or self._default_model
+            self.current_model = model_name
+            print(f"{Colors.CYAN}Model switched:{Colors.RESET} {old_model} → {model_name}")
+            print(f"{Colors.DIM}Using: {self._available_models[model_name]}{Colors.RESET}")
+            return CommandResult()
+        else:
+            print(f"{Colors.DIM}Unknown model: {model_name}{Colors.RESET}")
+            print(f"Available: {', '.join(self._available_models.keys())}")
+            return CommandResult(success=False)
+
+    def get_current_model(self) -> str:
+        """Get the current model full name for API calls."""
+        model_alias = self.current_model or self._default_model
+        return self._available_models.get(model_alias, self._available_models[self._default_model])
