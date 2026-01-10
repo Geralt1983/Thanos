@@ -1,0 +1,93 @@
+{
+  "litellm": {
+    "providers": {
+      "anthropic": {
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "models": {
+          "opus": "claude-opus-4-5-20251101",
+          "sonnet": "claude-sonnet-4-20250514",
+          "haiku": "claude-3-5-haiku-20241022"
+        }
+      },
+      "openai": {
+        "api_key_env": "OPENAI_API_KEY",
+        "models": {
+          "gpt4": "gpt-4-turbo-preview",
+          "gpt4o": "gpt-4o",
+          "gpt35": "gpt-3.5-turbo"
+        }
+      },
+      "google": {
+        "api_key_env": "GOOGLE_API_KEY",
+        "models": {
+          "gemini_pro": "gemini/gemini-pro",
+          "gemini_flash": "gemini/gemini-1.5-flash"
+        }
+      }
+    },
+    "default_provider": "anthropic",
+    "default_model": "claude-opus-4-5-20251101",
+    "fallback_chain": [
+      "claude-opus-4-5-20251101",
+      "claude-sonnet-4-20250514",
+      "gpt-4o",
+      "claude-3-5-haiku-20241022"
+    ],
+    "timeout": 600,
+    "max_retries": 3,
+    "retry_delay": 1.0
+  },
+  "model_routing": {
+    "rules": {
+      "complex": {
+        "model": "claude-opus-4-5-20251101",
+        "indicators": ["architecture", "analysis", "strategy", "planning", "debug"],
+        "min_complexity": 0.7
+      },
+      "standard": {
+        "model": "claude-sonnet-4-20250514",
+        "indicators": ["task", "summary", "format", "quick"],
+        "min_complexity": 0.3
+      },
+      "simple": {
+        "model": "claude-3-5-haiku-20241022",
+        "indicators": ["lookup", "translate", "format", "simple"],
+        "max_complexity": 0.3
+      }
+    },
+    "complexity_factors": {
+      "token_count_weight": 0.3,
+      "keyword_weight": 0.4,
+      "history_length_weight": 0.3
+    },
+    "default_complexity": 0.5
+  },
+  "usage_tracking": {
+    "enabled": true,
+    "storage_path": "State/usage.json",
+    "alert_threshold": 100000,
+    "cost_projection_enabled": true,
+    "pricing": {
+      "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+      "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+      "claude-3-5-haiku-20241022": {"input": 0.00025, "output": 0.00125},
+      "gpt-4o": {"input": 0.005, "output": 0.015},
+      "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
+      "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
+      "gemini/gemini-pro": {"input": 0.00025, "output": 0.0005},
+      "gemini/gemini-1.5-flash": {"input": 0.000075, "output": 0.0003}
+    }
+  },
+  "caching": {
+    "enabled": true,
+    "ttl_seconds": 3600,
+    "storage_path": "Memory/cache/",
+    "max_cache_size_mb": 100,
+    "cache_by_model": true
+  },
+  "defaults": {
+    "max_tokens": 4096,
+    "temperature": 1.0,
+    "stream": false
+  }
+}

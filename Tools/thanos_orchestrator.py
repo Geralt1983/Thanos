@@ -25,23 +25,30 @@ from typing import Optional, Dict, List, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
 from datetime import datetime
 
-# Ensure Thanos project is in path for imports
+# Ensure Thanos project is in path for imports BEFORE importing from Tools
 _THANOS_DIR = Path(__file__).parent.parent
 if str(_THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(_THANOS_DIR))
 
+from Tools.error_logger import log_error
+
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
-    from Tools.claude_api_client import ClaudeAPIClient
+    from Tools.litellm_client import LiteLLMClient
 
 _api_client_module = None
 
 def _get_api_client_module():
-    """Lazy load the API client module."""
+    """Lazy load the LiteLLM client module (with fallback to direct Anthropic)."""
     global _api_client_module
     if _api_client_module is None:
-        from Tools import claude_api_client
-        _api_client_module = claude_api_client
+        try:
+            from Tools import litellm_client
+            _api_client_module = litellm_client
+        except ImportError:
+            # Fallback to direct Anthropic client if LiteLLM unavailable
+            from Tools import claude_api_client
+            _api_client_module = claude_api_client
     return _api_client_module
 
 
@@ -134,7 +141,7 @@ class Command:
 class ThanosOrchestrator:
     """Main orchestrator for Thanos personal assistant."""
 
-    def __init__(self, base_dir: str = None, api_client: "ClaudeAPIClient" = None):
+    def __init__(self, base_dir: str = None, api_client: "LiteLLMClient" = None):
         self.base_dir = Path(base_dir) if base_dir else Path(__file__).parent.parent
         self.api_client = api_client
 
@@ -222,8 +229,12 @@ You track patterns and surface them.""")
             try:
                 today_state = state_file.read_text()
                 parts.append(f"\n## Today's State\n{today_state[:2000]}")  # Limit size
-            except:
-                pass
+            except (OSError, IOError) as e:
+                # File read errors are not critical for system prompt
+                log_error("thanos_orchestrator", e, "Failed to read Today.md for system prompt")
+            except Exception as e:
+                # Unexpected errors should be logged
+                log_error("thanos_orchestrator", e, "Unexpected error reading Today.md")
 
         return "\n\n".join(parts)
 
@@ -234,19 +245,90 @@ You track patterns and surface them.""")
             self.api_client = api_module.init_client(str(self.base_dir / "config" / "api.json"))
 
     def find_agent(self, message: str) -> Optional[Agent]:
-        """Find the best matching agent for a message."""
+        """Find the best matching agent for a message using intent detection.
+
+        Uses a scoring system to find the best match:
+        1. Direct trigger matches (highest priority)
+        2. Keyword/phrase matching with scoring
+        3. Question type detection
+        4. Default to Ops for task-related, Strategy for big-picture
+        """
         message_lower = message.lower()
 
+        # Score each agent based on matches
+        agent_scores = {}
+
+        # Extended keyword mappings for each agent type
+        agent_keywords = {
+            'ops': {
+                'high': ['what should i do', 'whats on my plate', 'help me plan', 'overwhelmed',
+                         'what did i commit', 'process inbox', 'clear my inbox', 'prioritize'],
+                'medium': ['task', 'tasks', 'todo', 'to-do', 'schedule', 'plan', 'organize',
+                           'today', 'tomorrow', 'this week', 'deadline', 'due'],
+                'low': ['busy', 'work', 'productive', 'efficiency']
+            },
+            'coach': {
+                'high': ['i keep doing this', 'why cant i', 'im struggling', 'pattern',
+                         'be honest', 'accountability', 'avoiding', 'procrastinating'],
+                'medium': ['habit', 'stuck', 'motivation', 'discipline', 'consistent',
+                           'excuse', 'failing', 'trying', 'again'],
+                'low': ['feel', 'feeling', 'hard', 'difficult']
+            },
+            'strategy': {
+                'high': ['quarterly', 'long-term', 'strategy', 'goals', 'where am i headed',
+                         'big picture', 'priorities', 'direction'],
+                'medium': ['should i take this client', 'revenue', 'growth', 'future',
+                           'planning', 'decision', 'tradeoff', 'invest'],
+                'low': ['career', 'business', 'opportunity', 'risk']
+            },
+            'health': {
+                'high': ['im tired', 'should i take my vyvanse', 'i cant focus', 'supplements',
+                         'i crashed', 'energy', 'sleep', 'medication'],
+                'medium': ['exhausted', 'fatigue', 'focus', 'concentration', 'adhd',
+                           'stimulant', 'caffeine', 'workout', 'exercise'],
+                'low': ['rest', 'break', 'recovery', 'burnout']
+            }
+        }
+
+        # First pass: Check direct triggers from agent definitions
         for agent in self.agents.values():
+            agent_key = agent.name.lower()
+            agent_scores[agent_key] = 0
+
             for trigger in agent.triggers:
                 if trigger.lower() in message_lower:
-                    return agent
+                    agent_scores[agent_key] += 10  # High weight for direct triggers
 
-        # Default to Ops for task-related queries
-        if any(word in message_lower for word in ['task', 'do', 'plan', 'schedule']):
+        # Second pass: Score based on keyword matching
+        for agent_key, keywords in agent_keywords.items():
+            if agent_key not in agent_scores:
+                agent_scores[agent_key] = 0
+
+            for kw in keywords.get('high', []):
+                if kw in message_lower:
+                    agent_scores[agent_key] += 5
+            for kw in keywords.get('medium', []):
+                if kw in message_lower:
+                    agent_scores[agent_key] += 2
+            for kw in keywords.get('low', []):
+                if kw in message_lower:
+                    agent_scores[agent_key] += 1
+
+        # Find the agent with the highest score
+        best_agent = max(agent_scores.items(), key=lambda x: x[1]) if agent_scores else (None, 0)
+
+        if best_agent[1] > 0:
+            return self.agents.get(best_agent[0])
+
+        # Default behavior based on question type
+        if any(word in message_lower for word in ['what should', 'help me', 'need to', 'have to']):
             return self.agents.get('ops')
 
-        return None
+        if any(word in message_lower for word in ['should i', 'is it worth', 'best approach']):
+            return self.agents.get('strategy')
+
+        # Final fallback: Ops is the default tactical agent
+        return self.agents.get('ops')
 
     def find_command(self, query: str) -> Optional[Command]:
         """Find a command by name or pattern."""
@@ -334,14 +416,43 @@ You track patterns and surface them.""")
             )
 
     def route(self, message: str, stream: bool = False) -> str:
-        """Auto-route a message to the appropriate handler."""
-        # Check for command pattern
-        cmd_match = re.match(r'^/(\w+:\w+)\s*(.*)?$', message)
+        """Auto-route a message to the appropriate handler using natural language understanding.
+
+        Routing priority:
+        1. Explicit command pattern (/pa:daily)
+        2. Command shortcut detection (daily, email, tasks)
+        3. Agent trigger matching
+        4. Default to chat with best-fit agent
+        """
+        message_lower = message.lower().strip()
+
+        # 1. Check for explicit command pattern
+        cmd_match = re.match(r'^/?(\w+:\w+)\s*(.*)?$', message)
         if cmd_match:
             return self.run_command(cmd_match.group(1), cmd_match.group(2) or "", stream)
 
-        # Otherwise chat with auto-detected agent
-        return self.chat(message, stream=stream)
+        # 2. Check for command keywords in natural language
+        command_keywords = {
+            # Daily/Morning routines
+            ("daily", "morning brief", "start my day", "what's today"): "pa:daily",
+            ("email", "emails", "inbox", "messages"): "pa:email",
+            ("schedule", "calendar", "meetings", "appointments"): "pa:schedule",
+            ("tasks", "todo", "to-do", "to do list"): "pa:tasks",
+            ("weekly", "week review", "weekly review", "this week"): "pa:weekly",
+        }
+
+        for keywords, cmd in command_keywords.items():
+            if any(kw in message_lower for kw in keywords):
+                # Only trigger if it's a short request (likely a command, not a question about it)
+                if len(message.split()) <= 4:
+                    return self.run_command(cmd, "", stream)
+
+        # 3. Find best agent based on triggers and context
+        agent = self.find_agent(message)
+
+        # 4. Chat with the detected agent (or default)
+        agent_name = agent.name if agent else None
+        return self.chat(message, agent=agent_name, stream=stream)
 
     def list_commands(self) -> List[str]:
         """List all available commands."""
@@ -393,8 +504,15 @@ def _log_hook_error(error: str):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(log_file, 'a') as f:
             f.write(f"[{timestamp}] [thanos-orchestrator] {error}\n")
-    except Exception:
-        pass  # Silently fail - we can't break hooks
+    except (OSError, IOError) as e:
+        # Can't write to log file - note to stderr but don't break hooks
+        import sys
+        print(f"[hooks] Cannot write to log file: {e}", file=sys.stderr)
+    except Exception as e:
+        # Truly unexpected errors - still don't break hooks
+        # But at least try to write to stderr
+        import sys
+        print(f"[CRITICAL] Error logging hook error: {e}", file=sys.stderr)
 
 
 def _output_hook_response(context: str):
@@ -483,7 +601,13 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
                     session_log += f"- Focus: {ctx['focus']}\n"
                 if ctx["pending_commitments"] > 0:
                     session_log += f"- Pending commitments: {ctx['pending_commitments']}\n"
-            except Exception:
+            except (OSError, IOError) as e:
+                # State file read errors - note in log but continue
+                log_error("thanos_orchestrator", e, "Failed to read state for session log")
+                session_log += "- [Context unavailable]\n"
+            except Exception as e:
+                # Unexpected errors
+                log_error("thanos_orchestrator", e, "Unexpected error reading context for session log")
                 session_log += "- [Context unavailable]\n"
 
             session_log += f"""
