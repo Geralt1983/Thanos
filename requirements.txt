@@ -2,6 +2,12 @@
 anthropic>=0.75.0      # Claude API client
 httpx>=0.27.0          # Async HTTP client (Oura API)
 asyncpg>=0.29.0        # PostgreSQL async driver (WorkOS/Neon)
+tiktoken>=0.5.0        # Accurate token counting
+
+# MemOS - Hybrid Memory System
+neo4j>=5.0.0           # Neo4j graph database driver (AuraDB)
+chromadb>=0.5.0        # ChromaDB vector database
+openai>=1.0.0          # OpenAI embeddings for vector search
 
 # Future: MCP SDK for full protocol support
 # mcp>=1.0.0

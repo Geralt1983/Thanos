@@ -31,13 +31,33 @@ from .base import BaseAdapter, ToolResult
 from .workos import WorkOSAdapter
 from .oura import OuraAdapter
 
+# Conditional Neo4j import (requires neo4j package)
+try:
+    from .neo4j_adapter import Neo4jAdapter
+    NEO4J_AVAILABLE = True
+except ImportError:
+    Neo4jAdapter = None
+    NEO4J_AVAILABLE = False
+
+# Conditional ChromaDB import (requires chromadb package)
+try:
+    from .chroma_adapter import ChromaAdapter
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    ChromaAdapter = None
+    CHROMADB_AVAILABLE = False
+
 __all__ = [
     'BaseAdapter',
     'ToolResult',
     'WorkOSAdapter',
     'OuraAdapter',
+    'Neo4jAdapter',
+    'ChromaAdapter',
     'AdapterManager',
     'get_default_manager',
+    'NEO4J_AVAILABLE',
+    'CHROMADB_AVAILABLE',
 ]
 
 logger = logging.getLogger(__name__)
@@ -242,6 +262,22 @@ async def get_default_manager() -> AdapterManager:
             logger.info("Registered Oura adapter")
         except Exception as e:
             logger.warning(f"Failed to register Oura adapter: {e}")
+
+        # Register Neo4j adapter if available and configured
+        if NEO4J_AVAILABLE:
+            try:
+                _default_manager.register(Neo4jAdapter())
+                logger.info("Registered Neo4j adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register Neo4j adapter: {e}")
+
+        # Register ChromaDB adapter if available
+        if CHROMADB_AVAILABLE:
+            try:
+                _default_manager.register(ChromaAdapter())
+                logger.info("Registered ChromaDB adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register ChromaDB adapter: {e}")
 
         _default_manager._initialized = True
 
