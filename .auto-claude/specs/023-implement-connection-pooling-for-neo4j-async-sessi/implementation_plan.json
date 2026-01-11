@@ -2,7 +2,7 @@
   "feature": "Implement connection pooling for Neo4j async sessions",
   "description": "The Neo4j adapter creates a new session for each operation via `async with self._driver.session()`. While the driver has built-in pooling, session creation overhead can be reduced by reusing sessions for related operations within a request context.",
   "created_at": "2026-01-11T00:03:37.687Z",
-  "updated_at": "2026-01-11T02:11:53.026Z",
+  "updated_at": "2026-01-11T02:14:54.084Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "phases": [
@@ -111,14 +111,15 @@
           "subtask_id": "3.1",
           "title": "Refactor commitment operations",
           "description": "Update _create_commitment, _complete_commitment, and _get_commitments to accept optional session parameter while maintaining backward compatibility",
-          "status": "pending",
+          "status": "completed",
           "estimated_effort": "medium",
           "dependencies": [
             "2.3"
           ],
           "files_involved": [
             "Tools/adapters/neo4j_adapter.py"
-          ]
+          ],
+          "completion_notes": "Successfully updated _create_commitment, _complete_commitment, and _get_commitments to accept optional session parameter. Each method now supports both session reuse (when session is provided) and backward compatibility (when session is None). Methods properly handle both Session and Transaction objects from Neo4jSessionContext."
         },
         {
           "subtask_id": "3.2",

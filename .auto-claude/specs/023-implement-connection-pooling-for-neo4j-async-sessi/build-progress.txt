@@ -417,7 +417,58 @@ async with adapter.session_context(batch_transaction=True) as tx:
 - This will activate the existing Neo4jSessionContext infrastructure
 
 ## Phase 3: Adapter Method Refactoring
-**Status:** Not Started
+**Status:** In Progress
+
+### ✅ Subtask 3.1: Refactor commitment operations
+**Status:** Completed
+**Date:** 2026-01-11
+**Dependencies:** 2.3 ✅
+
+**Implementation Details:**
+Successfully updated three commitment operations to accept optional session parameter:
+1. `_create_commitment(args, session=None)`
+2. `_complete_commitment(args, session=None)`
+3. `_get_commitments(args, session=None)`
+
+**Implementation Pattern:**
+Each method now follows this pattern:
+```python
+async def _method_name(self, args: Dict[str, Any], session=None) -> ToolResult:
+    """Method description.
+
+    Args:
+        args: Dictionary containing method-specific parameters
+        session: Optional Neo4j session or transaction for session reuse
+    """
+    # ... setup query and params ...
+
+    if session is not None:
+        # Use provided session/transaction (session reuse)
+        result = await session.run(query, params)
+        # ... process result ...
+    else:
+        # Create new session (backward compatibility)
+        async with self._driver.session() as session:
+            result = await session.run(query, params)
+            # ... process result ...
+
+    return ToolResult.ok(...)
+```
+
+**Key Features:**
+✅ Backward compatible: session=None maintains current behavior
+✅ Supports both Session and Transaction objects from Neo4jSessionContext
+✅ No changes to method signatures visible to callers (optional parameter)
+✅ Proper error handling maintained in both code paths
+✅ All existing functionality preserved
+
+**Testing:**
+- Python syntax validation passed
+- Methods can now be called with or without session parameter
+- Ready for integration with Neo4jSessionContext
+
+**Next Steps:**
+Continue with subtask 3.2 (decision operations) and 3.3-3.5 for remaining methods.
 
 ## Phase 4: Testing & Validation
 **Status:** Not Started
