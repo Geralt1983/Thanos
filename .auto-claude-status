@@ -1,10 +1,10 @@
 {
   "active": true,
-  "spec": "026-split-massive-mcp-server-index-ts-into-domain-modu",
+  "spec": "012-neo4j-cypher-query-construction-uses-string-interp",
   "state": "building",
   "subtasks": {
-    "completed": 24,
-    "total": 28,
+    "completed": 0,
+    "total": 14,
     "in_progress": 1,
     "failed": 0
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 7,
-    "started_at": "2026-01-10T23:16:53.699801"
+    "number": 1,
+    "started_at": "2026-01-11T08:32:20.088918"
   },
-  "last_update": "2026-01-10T23:38:43.865809"
+  "last_update": "2026-01-11T08:32:20.186753"
 }
