@@ -1329,6 +1329,445 @@ class TestUsageTracker:
 
 
 # ============================================================================
+# UsageTracker Integration Tests (Async Writer)
+# ============================================================================
+
+class TestUsageTrackerIntegration:
+    """Integration tests for UsageTracker with async writer in realistic scenarios."""
+
+    def test_rapid_record_calls_non_blocking(self, temp_dir):
+        """Multiple rapid record() calls should not block the main thread."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Record 100 calls as fast as possible
+        start = time.time()
+        for i in range(100):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=100 + i,
+                output_tokens=50 + i,
+                cost_usd=0.01,
+                latency_ms=100.0,
+                operation="test_rapid"
+            )
+        elapsed = time.time() - start
+
+        # All 100 records should queue in <100ms (non-blocking)
+        assert elapsed < 0.1, f"100 records took {elapsed}s, expected <0.1s (blocking detected)"
+
+        # Flush and verify all records were persisted
+        tracker.flush(timeout=5.0)
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 100
+
+        tracker._shutdown()
+
+    def test_data_consistency_after_flush(self, temp_dir):
+        """Data should be consistent and complete after flush."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {
+            "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+            "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015}
+        }
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Record different models and providers
+        records = [
+            {"model": "claude-opus-4-5-20251101", "input": 1000, "output": 500, "cost": 0.0525},
+            {"model": "claude-opus-4-5-20251101", "input": 2000, "output": 1000, "cost": 0.105},
+            {"model": "claude-sonnet-4-20250514", "input": 1500, "output": 750, "cost": 0.01575},
+            {"model": "claude-sonnet-4-20250514", "input": 500, "output": 250, "cost": 0.00525},
+        ]
+
+        for rec in records:
+            tracker.record(
+                model=rec["model"],
+                input_tokens=rec["input"],
+                output_tokens=rec["output"],
+                cost_usd=rec["cost"],
+                latency_ms=1500.0,
+                operation="test_consistency"
+            )
+
+        # Flush and verify
+        tracker.flush(timeout=5.0)
+        data = json.loads(storage_path.read_text())
+
+        # Verify all sessions recorded
+        assert len(data["sessions"]) == 4
+
+        # Verify model breakdown
+        assert data["model_breakdown"]["claude-opus-4-5-20251101"]["calls"] == 2
+        assert data["model_breakdown"]["claude-opus-4-5-20251101"]["tokens"] == 4500  # (1000+500) + (2000+1000)
+        assert data["model_breakdown"]["claude-sonnet-4-20250514"]["calls"] == 2
+        assert data["model_breakdown"]["claude-sonnet-4-20250514"]["tokens"] == 3000  # (1500+750) + (500+250)
+
+        # Verify provider breakdown (all anthropic)
+        assert data["provider_breakdown"]["anthropic"]["calls"] == 4
+        assert data["provider_breakdown"]["anthropic"]["tokens"] == 7500
+
+        # Verify daily totals
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert data["daily_totals"][today]["calls"] == 4
+        assert data["daily_totals"][today]["tokens"] == 7500
+        assert abs(data["daily_totals"][today]["cost"] - 0.17775) < 0.001
+
+        tracker._shutdown()
+
+    def test_streaming_scenario_incremental_updates(self, temp_dir):
+        """Simulate streaming with many small incremental usage updates."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Simulate streaming with 50 small incremental chunks
+        start = time.time()
+        for chunk_num in range(50):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=0,  # Only output tokens in streaming
+                output_tokens=10,  # Small chunk
+                cost_usd=0.00075,  # 10 tokens * 0.075 / 1000
+                latency_ms=50.0,
+                operation="streaming_chunk",
+                metadata={"chunk": chunk_num, "stream": True}
+            )
+        elapsed = time.time() - start
+
+        # Should complete very quickly without blocking
+        assert elapsed < 0.1, f"Streaming {50} chunks took {elapsed}s (blocking detected)"
+
+        # Flush and verify
+        tracker.flush(timeout=5.0)
+        data = json.loads(storage_path.read_text())
+
+        # All 50 chunks should be recorded
+        assert len(data["sessions"]) == 50
+
+        # Verify aggregation
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert data["daily_totals"][today]["calls"] == 50
+        assert data["daily_totals"][today]["tokens"] == 500  # 50 chunks * 10 tokens
+
+        tracker._shutdown()
+
+    def test_concurrent_api_calls_recording(self, temp_dir):
+        """Concurrent API calls should safely record usage without data loss."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        def simulate_api_call(call_id):
+            """Simulate a single API call recording usage."""
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=100 + call_id,
+                output_tokens=50 + call_id,
+                cost_usd=0.01,
+                latency_ms=1000.0,
+                operation="concurrent_test",
+                metadata={"call_id": call_id}
+            )
+
+        # Launch 10 threads, each simulating 10 API calls
+        threads = []
+        num_threads = 10
+        calls_per_thread = 10
+
+        start = time.time()
+        for thread_id in range(num_threads):
+            t = threading.Thread(
+                target=lambda tid: [simulate_api_call(tid * calls_per_thread + i)
+                                   for i in range(calls_per_thread)],
+                args=(thread_id,)
+            )
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        elapsed = time.time() - start
+
+        # Should complete quickly (non-blocking)
+        assert elapsed < 1.0, f"Concurrent recording took {elapsed}s"
+
+        # Flush and verify all records persisted
+        tracker.flush(timeout=10.0)
+        data = json.loads(storage_path.read_text())
+
+        # All 100 calls should be recorded (10 threads * 10 calls)
+        assert len(data["sessions"]) == num_threads * calls_per_thread
+
+        # Verify no data was lost or corrupted
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert data["daily_totals"][today]["calls"] == num_threads * calls_per_thread
+
+        tracker._shutdown()
+
+    def test_no_data_loss_on_shutdown(self, temp_dir):
+        """Verify no data is lost when shutdown is called with pending records."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Queue many records
+        num_records = 75
+        for i in range(num_records):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=100,
+                output_tokens=50,
+                cost_usd=0.01,
+                latency_ms=1000.0,
+                operation="shutdown_test",
+                metadata={"record_id": i}
+            )
+
+        # Immediately shutdown (records still in queue/buffer)
+        tracker._shutdown()
+
+        # All records should be persisted
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == num_records
+
+        # Verify totals
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert data["daily_totals"][today]["calls"] == num_records
+        assert data["daily_totals"][today]["tokens"] == num_records * 150  # 100 input + 50 output
+
+    def test_rapid_shutdown_no_data_loss(self, temp_dir):
+        """Test rapid shutdown scenario preserves all queued data."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Queue records very quickly then shutdown
+        for i in range(50):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=10 * (i + 1),
+                output_tokens=5 * (i + 1),
+                cost_usd=0.001 * (i + 1),
+                latency_ms=100.0,
+                operation="rapid_shutdown"
+            )
+
+        # Immediate shutdown
+        tracker._shutdown()
+
+        # Verify all data persisted
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 50
+
+        # Verify correct token totals
+        expected_total = sum((10 * (i + 1) + 5 * (i + 1)) for i in range(50))
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert data["daily_totals"][today]["tokens"] == expected_total
+
+    def test_get_today_with_async_writes(self, temp_dir):
+        """get_today should flush and return accurate current stats."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Record some usage
+        for i in range(10):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=100,
+                output_tokens=50,
+                cost_usd=0.01,
+                latency_ms=1000.0
+            )
+
+        # get_today should flush and return latest data
+        today_stats = tracker.get_today()
+        assert today_stats["calls"] == 10
+        assert today_stats["tokens"] == 1500  # 10 * (100 + 50)
+
+        tracker._shutdown()
+
+    def test_get_summary_with_async_writes(self, temp_dir):
+        """get_summary should flush and return accurate statistics."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {
+            "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+            "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015}
+        }
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Record usage for different models
+        for i in range(5):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=1000,
+                output_tokens=500,
+                cost_usd=0.0525,
+                latency_ms=2000.0
+            )
+            tracker.record(
+                model="claude-sonnet-4-20250514",
+                input_tokens=500,
+                output_tokens=250,
+                cost_usd=0.00525,
+                latency_ms=1000.0
+            )
+
+        # get_summary should flush and aggregate
+        summary = tracker.get_summary(30)
+        assert summary["total_calls"] == 10
+        assert summary["total_tokens"] == 11250  # 5 * (1500 + 750)
+        assert abs(summary["total_cost_usd"] - 0.28875) < 0.001
+
+        # Verify model breakdown
+        assert summary["model_breakdown"]["claude-opus-4-5-20251101"]["calls"] == 5
+        assert summary["model_breakdown"]["claude-sonnet-4-20250514"]["calls"] == 5
+
+        tracker._shutdown()
+
+    def test_writer_stats_accessible(self, temp_dir):
+        """get_writer_stats should expose async writer statistics."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Queue some records
+        for i in range(15):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=100,
+                output_tokens=50,
+                cost_usd=0.01,
+                latency_ms=1000.0
+            )
+
+        # Get writer stats
+        stats = tracker.get_writer_stats()
+        assert "total_records" in stats
+        assert "buffer_size" in stats
+        assert "queue_size" in stats
+        assert stats["total_records"] == 15
+
+        tracker._shutdown()
+
+    def test_flush_timeout_behavior(self, temp_dir):
+        """flush should respect timeout parameter."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Queue records
+        for i in range(20):
+            tracker.record(
+                model="claude-opus-4-5-20251101",
+                input_tokens=100,
+                output_tokens=50,
+                cost_usd=0.01,
+                latency_ms=1000.0
+            )
+
+        # Flush with reasonable timeout
+        start = time.time()
+        success = tracker.flush(timeout=5.0)
+        elapsed = time.time() - start
+
+        assert success is True
+        assert elapsed < 5.0  # Should complete well before timeout
+
+        # Verify data was flushed
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 20
+
+        tracker._shutdown()
+
+    def test_high_frequency_realistic_workload(self, temp_dir):
+        """Simulate realistic high-frequency workload with mixed operations."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {
+            "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+            "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+            "claude-3-5-haiku-20241022": {"input": 0.00025, "output": 0.00125}
+        }
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        models = [
+            "claude-opus-4-5-20251101",
+            "claude-sonnet-4-20250514",
+            "claude-3-5-haiku-20241022"
+        ]
+
+        # Simulate 200 API calls with different models
+        start = time.time()
+        for i in range(200):
+            model = models[i % 3]
+            tracker.record(
+                model=model,
+                input_tokens=50 + (i % 100),
+                output_tokens=25 + (i % 50),
+                cost_usd=0.005,
+                latency_ms=500.0 + (i % 1000),
+                operation="mixed_workload",
+                metadata={"request_id": i}
+            )
+        elapsed = time.time() - start
+
+        # Should be very fast (non-blocking)
+        assert elapsed < 0.5, f"200 records took {elapsed}s (blocking detected)"
+
+        # Flush and verify
+        tracker.flush(timeout=10.0)
+        data = json.loads(storage_path.read_text())
+
+        # Verify all records
+        assert len(data["sessions"]) == 200
+
+        # Verify model distribution
+        for model in models:
+            # Each model should have ~67 calls (200 / 3, rounded)
+            calls = data["model_breakdown"][model]["calls"]
+            assert 60 <= calls <= 70, f"{model} has {calls} calls"
+
+        tracker._shutdown()
+
+    def test_metadata_preservation(self, temp_dir):
+        """Metadata should be preserved through async write pipeline."""
+        storage_path = temp_dir / "usage.json"
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
+        tracker = UsageTracker(str(storage_path), pricing)
+
+        # Record with metadata
+        tracker.record(
+            model="claude-opus-4-5-20251101",
+            input_tokens=100,
+            output_tokens=50,
+            cost_usd=0.01,
+            latency_ms=1500.0,
+            operation="test_metadata",
+            metadata={
+                "user_id": "user123",
+                "session_id": "session456",
+                "complexity": "high",
+                "cached": False
+            }
+        )
+
+        tracker.flush(timeout=5.0)
+        data = json.loads(storage_path.read_text())
+
+        # Verify metadata was preserved
+        session = data["sessions"][0]
+        assert session["metadata"]["user_id"] == "user123"
+        assert session["metadata"]["session_id"] == "session456"
+        assert session["metadata"]["complexity"] == "high"
+        assert session["metadata"]["cached"] is False
+
+        tracker._shutdown()
+
+
+# ============================================================================
 # ComplexityAnalyzer Tests
 # ============================================================================
 
