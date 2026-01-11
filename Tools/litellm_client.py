@@ -254,6 +254,9 @@ class AsyncUsageWriter:
         - Time-based flush triggers
         - Size-based flush triggers
         - Manual flush requests
+
+        Optimization: Batch dequeues multiple records from queue before
+        flushing to maximize I/O efficiency.
         """
         last_flush_time = time.time()
 
@@ -262,8 +265,18 @@ class AsyncUsageWriter:
                 # Wait for record with timeout (for periodic checks)
                 record = self._queue.get(timeout=0.1)
 
+                # Batch dequeue: drain additional available records from queue
+                # to maximize batching efficiency (reduces I/O operations)
+                records_batch = [record]
+                while not self._queue.empty() and len(records_batch) < self._flush_threshold * 2:
+                    try:
+                        records_batch.append(self._queue.get_nowait())
+                    except Empty:
+                        break
+
+                # Add all batched records to buffer in single lock acquisition
                 with self._buffer_lock:
-                    self._buffer.append(record)
+                    self._buffer.extend(records_batch)
 
                 # Check flush triggers
                 should_flush = (
