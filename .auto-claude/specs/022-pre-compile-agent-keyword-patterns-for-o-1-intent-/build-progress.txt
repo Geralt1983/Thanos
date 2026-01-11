@@ -96,9 +96,25 @@ The find_agent() method (lines 247-331) uses nested loops to check keywords:
 - Complexity: O(n*m) → O(m)
 - Estimated speedup: 5-10x for typical messages
 
-### Phase 4: Advanced Optimization (Optional - Skipped)
-Phase 4 (Aho-Corasick trie-based matcher) is optional and not required. The regex-based
-KeywordMatcher achieves excellent performance (~12μs average) and meets all requirements.
+### Phase 4: Advanced Optimization (Optional - Research Complete, Implementation Skipped)
+- ✅ **Subtask 4.1**: Researched and selected Aho-Corasick library
+  - **Selected library:** pyahocorasick (if implementing, with ahocorasick_rs as alternative)
+  - **Decision:** SKIP Phase 4 implementation entirely
+  - **Rationale:**
+    - Current regex performance is excellent (~12μs average)
+    - Aho-Corasick benefits only appear at 500+ keywords (we have 92)
+    - Adds external C/Rust dependency without meaningful benefit
+    - Benchmark research shows minimal speedup at current scale
+  - **Key findings:**
+    - pyahocorasick: C-based, mature, well-documented (industry standard)
+    - ahocorasick_rs: Rust-based, 1.5-7x faster than pyahocorasick
+    - ahocorapy: Pure Python, slower without PyPy
+    - Crossover point: Aho-Corasick beats regex at 500-1000+ keywords
+  - Research document: aho_corasick_research.md
+- ⏭️ **Subtask 4.2-4.4**: Skipped (not needed based on research)
+
+Phase 4 research completed but implementation skipped. The regex-based KeywordMatcher
+achieves excellent performance (~12μs average) and meets all requirements.
 
 ### Phase 5: Documentation & Cleanup (Pending)
 - ⏳ **Subtask 5.1**: Add docstrings and inline comments
