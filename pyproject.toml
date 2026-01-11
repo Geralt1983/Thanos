@@ -1,0 +1,122 @@
+# Python Project Configuration
+# Ruff linting and formatting configuration for Thanos codebase
+
+[tool.ruff]
+# Set line length to 100 characters (balances readability with modern screen sizes)
+line-length = 100
+
+# Target Python 3.9+ (based on codebase analysis: async/await, dataclasses, type hints)
+target-version = "py39"
+
+# Exclude directories that shouldn't be linted
+exclude = [
+    ".auto-claude",
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "*.egg-info",
+    "build",
+    "dist",
+    "node_modules",
+    ".swarm",
+    ".hive-mind",
+    "backups",
+]
+
+# Enable comprehensive rule sets for code quality
+select = [
+    "F",     # Pyflakes - catch common errors (undefined variables, unused imports, etc.)
+    "E",     # pycodestyle errors - PEP 8 style violations
+    "W",     # pycodestyle warnings - additional style issues
+    "I",     # isort - import sorting and organization
+    "N",     # pep8-naming - enforce naming conventions
+    "D",     # pydocstyle - docstring style checking
+    "UP",    # pyupgrade - modernize Python code (use newer syntax)
+    "B",     # flake8-bugbear - find likely bugs and design problems
+    "C4",    # flake8-comprehensions - better list/dict/set comprehensions
+    "T20",   # flake8-print - catch print statements (should use logging)
+    "RET",   # flake8-return - improve return statement clarity
+    "SIM",   # flake8-simplify - suggest code simplifications
+    "PTH",   # flake8-use-pathlib - prefer pathlib over os.path
+    "ARG",   # flake8-unused-arguments - catch unused function arguments
+]
+
+# Ignore specific rules that conflict with project style or are too strict
+ignore = [
+    "D100",   # Missing docstring in public module - not all modules need docstrings
+    "D104",   # Missing docstring in public package - __init__.py files often don't need them
+    "D203",   # 1 blank line required before class docstring - conflicts with D211
+    "D213",   # Multi-line docstring summary should start at the second line - conflicts with D212
+    "D401",   # First line of docstring should be in imperative mood - too strict
+    "T201",   # print found - legitimate in CLI tools and scripts
+    "B008",   # Do not perform function calls in argument defaults - needed for FastAPI/dependency injection
+    "SIM108", # Use ternary operator - sometimes if/else is clearer
+]
+
+# Allow autofix for these rule categories
+fixable = [
+    "F",      # Auto-remove unused imports, fix undefined names where possible
+    "E",      # Auto-fix whitespace issues
+    "W",      # Auto-fix warnings
+    "I",      # Auto-sort imports
+    "UP",     # Auto-upgrade syntax
+    "C4",     # Auto-fix comprehensions
+]
+
+# Never auto-fix these (require manual review)
+unfixable = [
+    "B",      # Bugbear issues need manual review
+    "ARG",    # Removing arguments could break interfaces
+]
+
+# Per-file rule ignores for special cases
+[tool.ruff.per-file-ignores]
+# Test files can have longer lines, unused variables, and different patterns
+"tests/**/*.py" = [
+    "E501",   # Line too long - test data/fixtures can be long
+    "ARG",    # Unused arguments - fixtures and mocks often have unused params
+    "D",      # Docstrings - not critical for test functions
+    "B011",   # assert False - common in pytest
+]
+
+# __init__.py files can have unused imports (they're re-exported)
+"**/__init__.py" = [
+    "F401",   # Unused imports - often used for module-level exports
+    "D104",   # Missing docstring in public package
+]
+
+# Commands/scripts can use print statements
+"commands/**/*.py" = [
+    "T201",   # print found - CLI commands legitimately use print
+]
+
+# Configuration for import sorting (isort-compatible)
+[tool.ruff.isort]
+# Use double-line spacing between import groups for clarity
+lines-after-imports = 2
+
+# Group imports: stdlib, third-party, first-party, local
+known-first-party = ["Tools", "commands", "tests"]
+
+# Combine "as" imports on the same line
+combine-as-imports = true
+
+# Force imports to the top of the file
+force-sort-within-sections = true
+
+# Naming convention enforcement
+[tool.ruff.pep8-naming]
+# Allow common naming exceptions
+classmethod-decorators = [
+    "classmethod",
+    "pydantic.validator",
+    "pydantic.root_validator",
+]
+
+# Docstring configuration
+[tool.ruff.pydocstyle]
+# Use Google-style docstrings (matches existing codebase patterns)
+convention = "google"
