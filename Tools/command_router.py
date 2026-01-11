@@ -80,6 +80,43 @@ class CommandRouter:
         self._memos: Optional[MemOS] = None
         self._memos_initialized = False
 
+        # Initialize routing modules
+        self.persona_router = PersonaRouter(orchestrator, current_agent=self.current_agent)
+        self.registry = CommandRegistry()
+
+        # Initialize handler classes with dependency injection
+        # Create a getter for current_agent to allow handlers to access it
+        current_agent_getter = lambda: self.current_agent
+
+        self.agent_handler = AgentHandler(
+            orchestrator, session_manager, context_manager, state_reader, thanos_dir,
+            current_agent_getter=current_agent_getter
+        )
+        self.session_handler = SessionHandler(
+            orchestrator, session_manager, context_manager, state_reader, thanos_dir,
+            current_agent_getter=current_agent_getter
+        )
+        self.state_handler = StateHandler(
+            orchestrator, session_manager, context_manager, state_reader, thanos_dir,
+            current_agent_getter=current_agent_getter
+        )
+        self.memory_handler = MemoryHandler(
+            orchestrator, session_manager, context_manager, state_reader, thanos_dir,
+            current_agent_getter=current_agent_getter
+        )
+        self.analytics_handler = AnalyticsHandler(
+            orchestrator, session_manager, context_manager, state_reader, thanos_dir,
+            current_agent_getter=current_agent_getter
+        )
+        self.model_handler = ModelHandler(
+            orchestrator, session_manager, context_manager, state_reader, thanos_dir,
+            current_agent_getter=current_agent_getter
+        )
+        self.core_handler = CoreHandler(
+            orchestrator, session_manager, context_manager, state_reader, thanos_dir,
+            current_agent_getter=current_agent_getter
+        )
+
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
         self._register_commands()
