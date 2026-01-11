@@ -83,6 +83,33 @@ The formatter applies Black-compatible formatting:
 
 ### Pre-Commit Workflow
 
+#### Option 1: Automated Pre-Commit Hooks (Recommended)
+
+Install pre-commit hooks to automatically run linting and formatting before each commit:
+
+```bash
+# Install pre-commit (included in requirements-dev.txt)
+pip install pre-commit
+
+# Install git hooks
+pre-commit install
+
+# (Optional) Run on all files to test
+pre-commit run --all-files
+```
+
+Once installed, pre-commit will automatically:
+1. Run `ruff check --fix` to auto-fix linting issues
+2. Run `ruff format` to format code consistently
+3. Block the commit if any issues can't be auto-fixed
+
+To bypass hooks temporarily (not recommended):
+```bash
+git commit --no-verify
+```
+
+#### Option 2: Manual Pre-Commit Workflow
+
 **Before committing any code, always run:**
 
 ```bash

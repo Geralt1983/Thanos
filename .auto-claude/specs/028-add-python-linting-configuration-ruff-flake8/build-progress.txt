@@ -1545,3 +1545,200 @@ No functional changes - purely formatting improvements for consistency.
 **Quality**: Excellent - 33 files formatted with Black-compatible style, zero functional changes
 
 ---
+
+## Phase 5: Documentation and Integration
+
+### Subtask 5.1: Create CONTRIBUTING.md or Update README (COMPLETED)
+
+**Status**: ✅ COMPLETED
+**Completed**: 2026-01-11 15:00:00 UTC
+**Commit**: 60836af
+
+#### What Was Created:
+
+Created comprehensive `CONTRIBUTING.md` file in the project root to provide developer guidelines for code linting and contribution standards.
+
+**File**: `./CONTRIBUTING.md` (381 lines)
+
+#### Documentation Coverage:
+
+**1. Installation Instructions (4 Methods):**
+- Via pip in virtual environment (recommended)
+- Via pip directly
+- Via pipx (global CLI tool)
+- Via homebrew (macOS)
+
+**2. Linting Commands (All Three Required):**
+
+**Check Command:**
+```bash
+ruff check .
+```
+- Comprehensive documentation with examples
+- Explains what violations are reported
+- Shows how to check specific files/directories
+
+**Auto-Fix Command:**
+```bash
+ruff check --fix .
+```
+- Details on auto-fixable issues (import sorting, unused imports, quotes, whitespace, trailing commas, line spacing)
+- Clarifies which issues require manual fixes
+- Examples of specific file/directory fixes
+
+**Format Command:**
+```bash
+ruff format .
+```
+- Black-compatible formatting details
+- Explains formatting rules applied (double quotes, 4 spaces, 100 char lines, consistent spacing)
+- Examples of formatting specific files/directories
+
+**3. Pre-Commit Workflow:**
+- Step-by-step workflow: fix → format → verify → test
+- Clear recommendation: "Before committing any code, always run"
+- Emphasizes running `ruff check .` to verify no violations remain
+- Includes pytest integration
+
+**4. Configuration Details:**
+- Line length: 100 characters
+- Target Python: 3.9+
+- Quote style: Double quotes
+- Enabled rules explanation
+- References to pyproject.toml and .ruffignore
+
+**5. Common Linting Issues and Fixes:**
+- Unused imports (F401) - before/after examples
+- Unused variables (F841) - proper use of underscore
+- Line too long (E501) - function signature wrapping
+- Missing docstrings (D102, D103) - Google-style docstring example
+- Import sorting (I001) - correct order examples
+
+**6. Intentional Violations:**
+- When to use `noqa` comments
+- How to ignore specific rules
+- How to ignore multiple rules
+- Best practice: only use when necessary with documentation
+
+**7. IDE Integration:**
+
+**VS Code:**
+- Ruff extension recommendation
+- Complete settings.json configuration
+- Format on save setup
+- Auto-fix on save configuration
+
+**PyCharm:**
+- External tool setup
+- Plugin recommendation
+
+**Vim/Neovim:**
+- ALE, Syntastic, nvim-lspconfig with ruff-lsp
+
+**8. Testing Guidelines:**
+- How to run all tests
+- How to run tests with coverage
+- How to run specific test files
+
+**9. Pull Request Guidelines:**
+Checklist:
+- ✅ All linting checks pass
+- ✅ Code is formatted
+- ✅ Tests pass
+- ✅ No debugging code
+- ✅ Descriptive commit messages
+- ✅ Documentation updated
+
+**10. Code Style Guidelines:**
+
+**General Principles:**
+- Readability over cleverness
+- Explicit is better than implicit
+- DRY (Don't Repeat Yourself)
+- Single Responsibility
+- Type hints usage
+- Docstrings requirement
+
+**Python-Specific:**
+- Line length: 100 chars max
+- Indentation: 4 spaces
+- Quotes: Double quotes
+- Imports: Sorted (stdlib, third-party, local)
+- Naming conventions: snake_case, PascalCase, UPPER_CASE
+
+**11. Comprehensive Example:**
+- Full example module with:
+  - Module-level docstring
+  - Proper imports
+  - Class definition with docstring
+  - __init__ method with Google-style docstring
+  - Public method with type hints and docstring
+  - Private helper methods
+  - Constants in UPPER_CASE
+  - Proper formatting throughout
+
+#### Quality Verification:
+
+✅ **Complete Coverage**: All three linting commands documented (check, check --fix, format)
+✅ **Developer Guidelines**: Clear pre-commit workflow with step-by-step instructions
+✅ **Real Examples**: Before/after code samples for common issues
+✅ **IDE Integration**: Setup instructions for popular editors
+✅ **Well-Structured**: Logical flow from installation to contribution
+✅ **Professional**: Comprehensive, clear, and actionable documentation
+
+#### Key Features:
+
+**Actionable Documentation:**
+- Every command explained with examples
+- Clear workflow for developers to follow
+- Common issues with solutions
+- No ambiguity about when to run commands
+
+**Best Practices:**
+- Emphasizes running linting before commits
+- Recommends automated IDE integration
+- Includes testing in workflow
+- Provides PR checklist
+
+**Accessibility:**
+- Installation options for different preferences
+- IDE setup for popular editors
+- Examples for different skill levels
+- Questions section with helpful resources
+
+**Comprehensive Coverage:**
+- Installation ✅
+- All three commands (check, fix, format) ✅
+- Pre-commit guidelines ✅
+- Configuration details ✅
+- Common issues ✅
+- IDE integration ✅
+- Testing ✅
+- PR guidelines ✅
+- Style guide ✅
+- Complete example ✅
+
+#### Task Requirements Met:
+
+✅ **Documented 'ruff check .'**: Complete explanation with examples
+✅ **Documented 'ruff check --fix .'**: Auto-fix capabilities and usage
+✅ **Documented 'ruff format .'**: Formatting details and Black compatibility
+✅ **Guidelines for running linting before commits**: 4-step pre-commit workflow
+✅ **Developer-friendly**: Clear, actionable, comprehensive
+
+#### Files Modified:
+
+- ✅ Created: `CONTRIBUTING.md` (381 lines, comprehensive developer guide)
+- ✅ Committed: 60836af "auto-claude: 5.1 - Document linting commands"
+
+#### Next Steps:
+
+1. ✅ **Subtask 5.1**: CONTRIBUTING.md created
+2. ➡️ **Subtask 5.2**: Create pre-commit hook configuration (optional)
+3. ➡️ **Subtask 5.3**: Add linting to CI/CD workflow (optional)
+4. ➡️ **Phase 6**: Verification and QA
+
+**Status**: ✅ COMPLETED
+**Quality**: Excellent - Comprehensive, actionable documentation with all three commands documented and clear pre-commit guidelines
+
+---

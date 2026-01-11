@@ -2,3 +2,4 @@
 
 # Linting and code quality
 ruff>=0.1.0            # Fast Python linter and formatter (replaces flake8, isort, etc.)
+pre-commit>=2.20.0     # Git pre-commit hooks framework for automated code quality checks
