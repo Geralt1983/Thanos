@@ -2023,5 +2023,255 @@ class TestPatternIntegration(unittest.TestCase):
         self.assertIsNone(engine.pattern_analyzer)
 
 
+class TestAdaptiveContent(unittest.TestCase):
+    """Test suite for adaptive briefing content based on recent activity."""
+
+    def setUp(self):
+        """Set up test fixtures before each test."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.state_dir = Path(self.temp_dir) / "State"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create minimal State files
+        (self.state_dir / "Commitments.md").write_text("# Commitments\n")
+        (self.state_dir / "ThisWeek.md").write_text("# This Week\n")
+        (self.state_dir / "CurrentFocus.md").write_text("# Current Focus\n")
+
+        # Initialize engine with patterns enabled
+        config = {
+            "patterns": {
+                "enabled": True,
+                "minimum_days_required": 14
+            }
+        }
+        self.engine = BriefingEngine(state_dir=str(self.state_dir), config=config)
+
+    def tearDown(self):
+        """Clean up after each test."""
+        shutil.rmtree(self.temp_dir)
+
+    def test_track_briefing_activity(self):
+        """Test tracking briefing generation."""
+        result = self.engine._track_briefing_activity("morning")
+        self.assertTrue(result)
+
+        # Verify activity file was created
+        activity_file = self.state_dir / ".briefing_activity.json"
+        self.assertTrue(activity_file.exists())
+
+        # Verify content
+        with open(activity_file, 'r') as f:
+            data = json.load(f)
+        self.assertIn("briefings", data)
+        self.assertEqual(len(data["briefings"]), 1)
+        self.assertEqual(data["briefings"][0]["type"], "morning")
+
+    def test_get_last_activity_date_no_activity(self):
+        """Test getting last activity date when no activity exists."""
+        last_activity = self.engine._get_last_activity_date()
+        self.assertIsNone(last_activity)
+
+    def test_get_last_activity_date_with_briefing(self):
+        """Test getting last activity date from briefing activity."""
+        self.engine._track_briefing_activity("morning")
+        last_activity = self.engine._get_last_activity_date()
+        self.assertIsNotNone(last_activity)
+        self.assertEqual(last_activity, self.engine.today)
+
+    def test_get_last_activity_date_with_task_completion(self):
+        """Test getting last activity date from task completions."""
+        # Add a task completion from 2 days ago
+        from datetime import timedelta
+        past_date = self.engine.today - timedelta(days=2)
+
+        if self.engine.pattern_analyzer:
+            self.engine.pattern_analyzer.record_task_completion(
+                "Test task",
+                completion_date=past_date
+            )
+
+            last_activity = self.engine._get_last_activity_date()
+            self.assertIsNotNone(last_activity)
+            self.assertEqual(last_activity, past_date)
+
+    def test_count_recent_activities_none(self):
+        """Test counting recent activities when none exist."""
+        count = self.engine._count_recent_activities(days=7)
+        self.assertEqual(count, 0)
+
+    def test_count_recent_activities_with_briefings(self):
+        """Test counting recent activities with briefings."""
+        self.engine._track_briefing_activity("morning")
+        self.engine._track_briefing_activity("evening")
+
+        count = self.engine._count_recent_activities(days=7)
+        self.assertGreaterEqual(count, 2)
+
+    def test_count_overdue_tasks_none(self):
+        """Test counting overdue tasks when none exist."""
+        context = self.engine.gather_context()
+        count = self.engine._count_overdue_tasks(context)
+        self.assertEqual(count, 0)
+
+    def test_count_overdue_tasks_with_overdue(self):
+        """Test counting overdue tasks."""
+        from datetime import timedelta
+
+        # Create commitments with overdue items
+        past_date = (self.engine.today - timedelta(days=3)).isoformat()
+        content = f"""# Commitments
+
+## Work
+- [ ] Overdue task 1 (due: {past_date})
+- [ ] Overdue task 2 (due: {past_date})
+- [ ] Future task (due: 2030-12-31)
+- [x] Completed overdue (due: {past_date})
+"""
+        (self.state_dir / "Commitments.md").write_text(content)
+
+        context = self.engine.gather_context()
+        count = self.engine._count_overdue_tasks(context)
+        self.assertEqual(count, 2)  # Only incomplete overdue tasks
+
+    def test_adaptive_mode_normal(self):
+        """Test adaptive mode returns normal when no special conditions."""
+        # Track recent activity
+        self.engine._track_briefing_activity("morning")
+
+        context = self.engine.gather_context()
+        result = self.engine.get_adaptive_briefing_mode(context)
+
+        self.assertEqual(result["mode"], "normal")
+        self.assertIn("reasoning", result)
+        self.assertIsInstance(result["recommendations"], list)
+
+    def test_adaptive_mode_reentry(self):
+        """Test adaptive mode detects inactivity (reentry mode)."""
+        from datetime import timedelta
+
+        # Create old activity (5 days ago)
+        activity_file = self.state_dir / ".briefing_activity.json"
+        old_date = (self.engine.today - timedelta(days=5)).isoformat()
+        activity_data = {
+            "briefings": [{
+                "date": old_date,
+                "type": "morning",
+                "timestamp": datetime.now().isoformat()
+            }],
+            "metadata": {"last_updated": datetime.now().isoformat()}
+        }
+        with open(activity_file, 'w') as f:
+            json.dump(activity_data, f)
+
+        context = self.engine.gather_context()
+        result = self.engine.get_adaptive_briefing_mode(context)
+
+        self.assertEqual(result["mode"], "reentry")
+        self.assertEqual(result["days_inactive"], 5)
+        self.assertIn("ease back in", result["reasoning"].lower())
+        self.assertGreater(len(result["recommendations"]), 0)
+
+    def test_adaptive_mode_catchup(self):
+        """Test adaptive mode detects many overdue tasks (catchup mode)."""
+        from datetime import timedelta
+
+        # Create many overdue tasks
+        past_date = (self.engine.today - timedelta(days=3)).isoformat()
+        content = f"""# Commitments
+
+## Work
+- [ ] Overdue 1 (due: {past_date})
+- [ ] Overdue 2 (due: {past_date})
+- [ ] Overdue 3 (due: {past_date})
+- [ ] Overdue 4 (due: {past_date})
+- [ ] Overdue 5 (due: {past_date})
+- [ ] Overdue 6 (due: {past_date})
+"""
+        (self.state_dir / "Commitments.md").write_text(content)
+
+        # Track recent activity to avoid reentry mode
+        self.engine._track_briefing_activity("morning")
+
+        context = self.engine.gather_context()
+        result = self.engine.get_adaptive_briefing_mode(context)
+
+        self.assertEqual(result["mode"], "catchup")
+        self.assertGreaterEqual(result["overdue_tasks"], 5)
+        self.assertIn("overdue", result["reasoning"].lower())
+
+    def test_adaptive_mode_concise(self):
+        """Test adaptive mode detects high activity (concise mode)."""
+        from datetime import timedelta
+
+        # Create many recent activities
+        if self.engine.pattern_analyzer:
+            for i in range(20):
+                days_ago = i % 7  # Spread across last 7 days
+                completion_date = self.engine.today - timedelta(days=days_ago)
+                self.engine.pattern_analyzer.record_task_completion(
+                    f"Task {i}",
+                    completion_date=completion_date
+                )
+
+        context = self.engine.gather_context()
+        result = self.engine.get_adaptive_briefing_mode(context)
+
+        self.assertEqual(result["mode"], "concise")
+        self.assertGreaterEqual(result["recent_activities"], 15)
+        self.assertIn("active", result["reasoning"].lower())
+
+    def test_adaptive_mode_priority_order(self):
+        """Test that adaptive modes have correct priority (inactivity > catchup > concise)."""
+        from datetime import timedelta
+
+        # Create conditions for multiple modes:
+        # 1. Old activity (for reentry)
+        # 2. Overdue tasks (for catchup)
+        # 3. Many task completions (for concise)
+
+        # Old activity
+        activity_file = self.state_dir / ".briefing_activity.json"
+        old_date = (self.engine.today - timedelta(days=5)).isoformat()
+        activity_data = {
+            "briefings": [{
+                "date": old_date,
+                "type": "morning",
+                "timestamp": datetime.now().isoformat()
+            }],
+            "metadata": {"last_updated": datetime.now().isoformat()}
+        }
+        with open(activity_file, 'w') as f:
+            json.dump(activity_data, f)
+
+        # Overdue tasks
+        past_date = (self.engine.today - timedelta(days=3)).isoformat()
+        content = f"""# Commitments
+
+## Work
+- [ ] Overdue 1 (due: {past_date})
+- [ ] Overdue 2 (due: {past_date})
+- [ ] Overdue 3 (due: {past_date})
+- [ ] Overdue 4 (due: {past_date})
+- [ ] Overdue 5 (due: {past_date})
+"""
+        (self.state_dir / "Commitments.md").write_text(content)
+
+        context = self.engine.gather_context()
+        result = self.engine.get_adaptive_briefing_mode(context)
+
+        # Inactivity should take priority
+        self.assertEqual(result["mode"], "reentry")
+
+    def test_adaptive_mode_in_template_data(self):
+        """Test that adaptive mode is included in template data."""
+        context = self.engine.gather_context()
+        template_data = self.engine._prepare_template_data(context, "morning")
+
+        self.assertIn("adaptive_mode", template_data)
+        self.assertIsInstance(template_data["adaptive_mode"], dict)
+        self.assertIn("mode", template_data["adaptive_mode"])
+        self.assertIn("reasoning", template_data["adaptive_mode"])
+
+
 if __name__ == '__main__':
     unittest.main()

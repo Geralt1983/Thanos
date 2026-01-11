@@ -1117,6 +1117,13 @@ class BriefingEngine:
             "custom_sections": custom_sections or [],
         }
 
+        # Get adaptive briefing mode (if not explicitly disabled)
+        adaptive_mode = kwargs.get("adaptive_mode")
+        if adaptive_mode is None:
+            # Calculate adaptive mode by default
+            adaptive_mode = self.get_adaptive_briefing_mode(context)
+        template_data["adaptive_mode"] = adaptive_mode
+
         # Prepare section data using the new section system
         sections_data = self.prepare_sections_data(
             context,
@@ -1731,4 +1738,247 @@ class BriefingEngine:
             "improvements_for_tomorrow": improvements,
             "health_trend": trend_data,
             "from_prompts": True
+        }
+
+    def _track_briefing_activity(self, briefing_type: str = "morning") -> bool:
+        """
+        Track when a briefing is generated for activity monitoring.
+
+        Args:
+            briefing_type: Type of briefing generated (morning/evening)
+
+        Returns:
+            True if successfully tracked, False otherwise.
+        """
+        activity_file = self.state_dir / ".briefing_activity.json"
+
+        # Load existing activity data
+        if activity_file.exists():
+            try:
+                with open(activity_file, 'r', encoding='utf-8') as f:
+                    activity_data = json.load(f)
+            except Exception:
+                activity_data = {"briefings": [], "metadata": {}}
+        else:
+            activity_data = {"briefings": [], "metadata": {}}
+
+        # Add new briefing activity
+        activity_data["briefings"].append({
+            "date": self.today.isoformat(),
+            "type": briefing_type,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Keep only last 90 days of data
+        cutoff_date = (self.today - timedelta(days=90)).isoformat()
+        activity_data["briefings"] = [
+            b for b in activity_data["briefings"]
+            if b["date"] >= cutoff_date
+        ]
+
+        # Sort by date (most recent first)
+        activity_data["briefings"].sort(
+            key=lambda x: x["date"],
+            reverse=True
+        )
+
+        activity_data["metadata"]["last_updated"] = datetime.now().isoformat()
+
+        # Save updated data
+        try:
+            with open(activity_file, 'w', encoding='utf-8') as f:
+                json.dump(activity_data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception:
+            return False
+
+    def _get_last_activity_date(self) -> Optional[date]:
+        """
+        Get the date of the last briefing or task activity.
+
+        Returns:
+            Date of last activity, or None if no activity found.
+        """
+        last_dates = []
+
+        # Check briefing activity
+        activity_file = self.state_dir / ".briefing_activity.json"
+        if activity_file.exists():
+            try:
+                with open(activity_file, 'r', encoding='utf-8') as f:
+                    activity_data = json.load(f)
+                    if activity_data.get("briefings"):
+                        last_briefing_date = activity_data["briefings"][0]["date"]
+                        last_dates.append(date.fromisoformat(last_briefing_date))
+            except Exception:
+                pass
+
+        # Check task completions from PatternAnalyzer
+        if self.pattern_analyzer is not None:
+            completions = self.pattern_analyzer.patterns_data.get("task_completions", [])
+            if completions:
+                # Completions are sorted by date (most recent first)
+                last_completion_date = completions[0]["completion_date"]
+                last_dates.append(date.fromisoformat(last_completion_date))
+
+        # Return the most recent activity date
+        if last_dates:
+            return max(last_dates)
+        return None
+
+    def _count_recent_activities(self, days: int = 7) -> int:
+        """
+        Count the number of activities (briefings + task completions) in recent days.
+
+        Args:
+            days: Number of days to look back
+
+        Returns:
+            Total count of activities.
+        """
+        count = 0
+        cutoff_date = (self.today - timedelta(days=days)).isoformat()
+
+        # Count briefings
+        activity_file = self.state_dir / ".briefing_activity.json"
+        if activity_file.exists():
+            try:
+                with open(activity_file, 'r', encoding='utf-8') as f:
+                    activity_data = json.load(f)
+                    count += len([
+                        b for b in activity_data.get("briefings", [])
+                        if b["date"] >= cutoff_date
+                    ])
+            except Exception:
+                pass
+
+        # Count task completions
+        if self.pattern_analyzer is not None:
+            completions = self.pattern_analyzer.patterns_data.get("task_completions", [])
+            count += len([
+                c for c in completions
+                if c["completion_date"] >= cutoff_date
+            ])
+
+        return count
+
+    def _count_overdue_tasks(self, context: Optional[Dict[str, Any]] = None) -> int:
+        """
+        Count the number of overdue tasks in the context.
+
+        Args:
+            context: Briefing context. If None, will gather fresh context.
+
+        Returns:
+            Number of overdue tasks.
+        """
+        if context is None:
+            context = self.gather_context()
+
+        overdue_count = 0
+        today_str = self.today.isoformat()
+
+        # Check commitments for overdue items
+        for commitment in context.get("commitments", []):
+            # Use is_complete field (not completed)
+            if commitment.get("is_complete"):
+                continue
+            # Use deadline field (not due_date)
+            deadline = commitment.get("deadline")
+            if deadline and deadline < today_str:
+                overdue_count += 1
+
+        # Check this week tasks for overdue items
+        tasks = context.get("this_week", {}).get("tasks", [])
+        for task in tasks:
+            if task.get("completed"):
+                continue
+            due_date = task.get("due_date")
+            if due_date and due_date < today_str:
+                overdue_count += 1
+
+        return overdue_count
+
+    def get_adaptive_briefing_mode(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Determine the adaptive briefing mode based on recent activity.
+
+        Analyzes:
+        - Days since last activity (inactivity detection)
+        - Recent activity volume (high activity detection)
+        - Overdue tasks count (catch-up mode detection)
+
+        Args:
+            context: Briefing context. If None, will gather fresh context.
+
+        Returns:
+            Dictionary with adaptation information:
+            - mode: 'reentry' | 'concise' | 'catchup' | 'normal'
+            - days_inactive: Number of days since last activity (None if active)
+            - recent_activities: Count of activities in last 7 days
+            - overdue_tasks: Number of overdue tasks
+            - reasoning: Human-readable explanation
+            - recommendations: List of adaptive recommendations
+        """
+        if context is None:
+            context = self.gather_context()
+
+        last_activity = self._get_last_activity_date()
+        days_inactive = None
+        if last_activity:
+            days_inactive = (self.today - last_activity).days
+
+        recent_activities = self._count_recent_activities(days=7)
+        overdue_tasks = self._count_overdue_tasks(context)
+
+        # Determine mode based on conditions
+        mode = "normal"
+        reasoning = "Regular briefing with standard content."
+        recommendations = []
+
+        # Priority 1: Inactivity (3+ days without activity)
+        if days_inactive is not None and days_inactive >= 3:
+            mode = "reentry"
+            reasoning = f"You haven't checked in for {days_inactive} days. Let's ease back in gently."
+            recommendations.extend([
+                "Welcome back! Take a moment to review what's changed.",
+                "Focus on understanding your current commitments before diving into tasks.",
+                "Consider starting with quick wins to build momentum.",
+                "Don't feel pressured to tackle everything at once."
+            ])
+
+        # Priority 2: Many overdue tasks (5+ tasks)
+        elif overdue_tasks >= 5:
+            mode = "catchup"
+            reasoning = f"You have {overdue_tasks} overdue tasks. Let's focus on catching up."
+            recommendations.extend([
+                f"You have {overdue_tasks} overdue items that need attention.",
+                "Prioritize the most urgent overdue tasks first.",
+                "Consider rescheduling less urgent items to reduce overwhelm.",
+                "Break large overdue tasks into smaller, manageable steps.",
+                "Set realistic goals for today - progress is better than perfection."
+            ])
+
+        # Priority 3: High activity (15+ activities in last 7 days)
+        elif recent_activities >= 15:
+            mode = "concise"
+            reasoning = f"You've been very active ({recent_activities} activities in 7 days). Here's a concise briefing."
+            recommendations.extend([
+                "You're on a productive streak! Keep it up.",
+                "Quick priorities to maintain momentum.",
+                "Remember to balance productivity with rest.",
+                "Watch for signs of burnout - it's okay to take breaks."
+            ])
+
+        # Track this briefing activity
+        self._track_briefing_activity()
+
+        return {
+            "mode": mode,
+            "days_inactive": days_inactive,
+            "recent_activities": recent_activities,
+            "overdue_tasks": overdue_tasks,
+            "reasoning": reasoning,
+            "recommendations": recommendations,
+            "detected_at": datetime.now().isoformat()
         }
