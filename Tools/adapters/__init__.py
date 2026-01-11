@@ -28,9 +28,24 @@ import logging
 from typing import Any, Optional
 
 from .base import BaseAdapter, ToolResult
-from .oura import OuraAdapter
-from .workos import WorkOSAdapter
 
+# Conditional Oura import (requires httpx package)
+try:
+    from .oura import OuraAdapter
+
+    OURA_AVAILABLE = True
+except ImportError:
+    OuraAdapter = None
+    OURA_AVAILABLE = False
+
+# Conditional WorkOS import (requires asyncpg package)
+try:
+    from .workos import WorkOSAdapter
+
+    WORKOS_AVAILABLE = True
+except ImportError:
+    WorkOSAdapter = None
+    WORKOS_AVAILABLE = False
 
 # Conditional Neo4j import (requires neo4j package)
 try:
@@ -59,6 +74,8 @@ __all__ = [
     "ChromaAdapter",
     "AdapterManager",
     "get_default_manager",
+    "WORKOS_AVAILABLE",
+    "OURA_AVAILABLE",
     "NEO4J_AVAILABLE",
     "CHROMADB_AVAILABLE",
 ]
@@ -244,18 +261,21 @@ async def get_default_manager() -> AdapterManager:
     if _default_manager is None:
         _default_manager = AdapterManager()
 
-        # Register default adapters
-        try:
-            _default_manager.register(WorkOSAdapter())
-            logger.info("Registered WorkOS adapter")
-        except Exception as e:
-            logger.warning(f"Failed to register WorkOS adapter: {e}")
+        # Register WorkOS adapter if available
+        if WORKOS_AVAILABLE:
+            try:
+                _default_manager.register(WorkOSAdapter())
+                logger.info("Registered WorkOS adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register WorkOS adapter: {e}")
 
-        try:
-            _default_manager.register(OuraAdapter())
-            logger.info("Registered Oura adapter")
-        except Exception as e:
-            logger.warning(f"Failed to register Oura adapter: {e}")
+        # Register Oura adapter if available
+        if OURA_AVAILABLE:
+            try:
+                _default_manager.register(OuraAdapter())
+                logger.info("Registered Oura adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register Oura adapter: {e}")
 
         # Register Neo4j adapter if available and configured
         if NEO4J_AVAILABLE:
