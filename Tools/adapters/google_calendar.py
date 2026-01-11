@@ -891,6 +891,47 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                 },
             },
+            {
+                "name": "check_conflicts",
+                "description": "Check if a proposed time slot conflicts with existing calendar events. Includes support for tentative events, travel time buffer, and flexible boundaries. Useful for scheduling validation and double-booking prevention.",
+                "parameters": {
+                    "start_time": {
+                        "type": "string",
+                        "description": "Start time of proposed slot in ISO 8601 format (YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "End time of proposed slot in ISO 8601 format (YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID to check for conflicts. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "buffer_minutes": {
+                        "type": "integer",
+                        "description": "Buffer time in minutes to add before and after existing events (travel time). Defaults to 0.",
+                        "required": False,
+                    },
+                    "consider_tentative": {
+                        "type": "boolean",
+                        "description": "Include tentative events when checking for conflicts. Defaults to True.",
+                        "required": False,
+                    },
+                    "flexibility_minutes": {
+                        "type": "integer",
+                        "description": "Allow this many minutes of overlap tolerance (flexible boundaries). Defaults to 0.",
+                        "required": False,
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone for time calculations (e.g., 'America/New_York', 'UTC'). Defaults to system timezone.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -921,6 +962,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_get_today_events(arguments)
             elif tool_name == "find_free_slots":
                 return await self._tool_find_free_slots(arguments)
+            elif tool_name == "check_conflicts":
+                return await self._tool_check_conflicts(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -1930,6 +1973,383 @@ class GoogleCalendarAdapter(BaseAdapter):
         except ValueError as e:
             # Handle authentication errors from _get_service()
             return ToolResult.fail(str(e))
+
+    async def _tool_check_conflicts(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Check if a proposed time slot conflicts with existing calendar events.
+
+        This tool validates whether a proposed time slot is available or conflicts
+        with existing calendar events. It provides intelligent conflict detection with:
+        - Tentative event handling (optional inclusion)
+        - Travel time buffer (adds buffer before/after existing events)
+        - Flexible boundaries (allows minor overlap tolerance)
+        - Detailed conflict information for decision-making
+
+        Conflict Detection Logic:
+        1. Fetch all events in the proposed time range (plus buffer)
+        2. Filter out declined events and cancelled events
+        3. Optionally include/exclude tentative events based on parameter
+        4. Apply buffer time around existing events (travel time)
+        5. Check for overlaps considering flexibility tolerance
+        6. Return detailed conflict list with recommendations
+
+        Args:
+            arguments: Tool parameters including:
+                - start_time: Proposed slot start time (required)
+                - end_time: Proposed slot end time (required)
+                - calendar_id: Calendar to check (default: 'primary')
+                - buffer_minutes: Buffer around existing events (default: 0)
+                - consider_tentative: Include tentative events (default: True)
+                - flexibility_minutes: Overlap tolerance (default: 0)
+                - timezone: Timezone for calculations (default: system timezone)
+
+        Returns:
+            ToolResult containing conflict analysis and recommendations
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract and validate required parameters
+            start_time_str = arguments.get("start_time")
+            end_time_str = arguments.get("end_time")
+
+            if not start_time_str:
+                return ToolResult.fail("Missing required parameter: start_time")
+            if not end_time_str:
+                return ToolResult.fail("Missing required parameter: end_time")
+
+            # Extract optional parameters with defaults
+            calendar_id = arguments.get("calendar_id", "primary")
+            buffer_minutes = arguments.get("buffer_minutes", 0)
+            consider_tentative = arguments.get("consider_tentative", True)
+            flexibility_minutes = arguments.get("flexibility_minutes", 0)
+            timezone_str = arguments.get("timezone")
+
+            # Validate parameters
+            if buffer_minutes < 0:
+                return ToolResult.fail("buffer_minutes must be non-negative")
+
+            if flexibility_minutes < 0:
+                return ToolResult.fail("flexibility_minutes must be non-negative")
+
+            # Determine timezone
+            if timezone_str:
+                try:
+                    tz = ZoneInfo(timezone_str)
+                except Exception:
+                    return ToolResult.fail(
+                        f"Invalid timezone: {timezone_str}. Use IANA timezone names like 'America/New_York' or 'UTC'."
+                    )
+            else:
+                # Use system local timezone
+                try:
+                    tz = ZoneInfo("localtime")
+                except Exception:
+                    # Fallback to UTC if local timezone cannot be determined
+                    tz = ZoneInfo("UTC")
+
+            # Parse proposed slot times
+            try:
+                proposed_start = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                if not proposed_start.tzinfo:
+                    proposed_start = proposed_start.replace(tzinfo=tz)
+
+                proposed_end = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+                if not proposed_end.tzinfo:
+                    proposed_end = proposed_end.replace(tzinfo=tz)
+
+            except ValueError as e:
+                return ToolResult.fail(
+                    f"Invalid time format: {str(e)}. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"
+                )
+
+            # Validate time range
+            if proposed_end <= proposed_start:
+                return ToolResult.fail("end_time must be after start_time")
+
+            # Calculate proposed slot duration
+            proposed_duration_minutes = (proposed_end - proposed_start).total_seconds() / 60
+
+            # Expand search window to account for buffer time
+            # We need to check events that might conflict when buffer is applied
+            from datetime import timedelta
+            search_start = proposed_start - timedelta(minutes=buffer_minutes)
+            search_end = proposed_end + timedelta(minutes=buffer_minutes)
+
+            # Fetch events from Google Calendar API
+            time_min = search_start.isoformat()
+            time_max = search_end.isoformat()
+
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                maxResults=100,  # Should be sufficient for conflict checking
+                singleEvents=True,
+                orderBy="startTime",
+            ).execute()
+
+            raw_events = events_result.get("items", [])
+
+            # Format and filter events
+            formatted_events = []
+            for event in raw_events:
+                # Skip cancelled events
+                if event.get("status") == "cancelled":
+                    continue
+
+                # Parse event data
+                start = event.get("start", {})
+                end = event.get("end", {})
+                is_all_day = "date" in start and "dateTime" not in start
+
+                # Skip all-day events - they don't block specific times
+                if is_all_day:
+                    continue
+
+                start_time = start.get("dateTime")
+                end_time = end.get("dateTime")
+
+                if not start_time or not end_time:
+                    continue
+
+                # Format attendees
+                attendees = []
+                for attendee in event.get("attendees", []):
+                    attendees.append({
+                        "email": attendee.get("email"),
+                        "response_status": attendee.get("responseStatus"),
+                        "self": attendee.get("self", False),
+                    })
+
+                formatted_event = {
+                    "id": event.get("id"),
+                    "summary": event.get("summary", "(No title)"),
+                    "description": event.get("description"),
+                    "location": event.get("location"),
+                    "start": start_time,
+                    "end": end_time,
+                    "is_all_day": False,
+                    "status": event.get("status", "confirmed"),
+                    "attendees": attendees,
+                    "organizer": {
+                        "email": event.get("organizer", {}).get("email"),
+                        "is_self": event.get("organizer", {}).get("self", False),
+                    },
+                    "transparency": event.get("transparency", "opaque"),
+                    "color_id": event.get("colorId"),
+                    "conference_data": event.get("conferenceData"),
+                    "visibility": event.get("visibility", "default"),
+                }
+
+                formatted_events.append(formatted_event)
+
+            # Apply event filters but use conflict_detection context
+            # This ensures we check all relevant events unless explicitly filtered
+            filtered_events = self._apply_event_filters(
+                formatted_events, filter_context="conflict_detection", calendar_id=calendar_id
+            )
+
+            # Check for conflicts
+            conflicts = []
+            near_conflicts = []  # Events that are close but not actual conflicts
+
+            for event in filtered_events:
+                # Skip tentative events if not considering them
+                if event.get("status") == "tentative" and not consider_tentative:
+                    continue
+
+                # Skip events marked as "transparent" (free time)
+                if event.get("transparency") == "transparent":
+                    continue
+
+                # Skip events the user has declined
+                user_declined = False
+                if not event.get("organizer", {}).get("is_self", False):
+                    for attendee in event.get("attendees", []):
+                        if attendee.get("self", False) and attendee.get("response_status") == "declined":
+                            user_declined = True
+                            break
+
+                if user_declined:
+                    continue
+
+                # Parse event times
+                try:
+                    event_start = datetime.fromisoformat(event.get("start").replace("Z", "+00:00"))
+                    event_end = datetime.fromisoformat(event.get("end").replace("Z", "+00:00"))
+
+                    # Convert to target timezone for consistent calculation
+                    if event_start.tzinfo:
+                        event_start = event_start.astimezone(tz)
+                    else:
+                        event_start = event_start.replace(tzinfo=tz)
+
+                    if event_end.tzinfo:
+                        event_end = event_end.astimezone(tz)
+                    else:
+                        event_end = event_end.replace(tzinfo=tz)
+
+                    # Apply buffer time to existing event
+                    # Buffer represents travel time or preparation time needed
+                    buffered_event_start = event_start - timedelta(minutes=buffer_minutes)
+                    buffered_event_end = event_end + timedelta(minutes=buffer_minutes)
+
+                    # Check for overlap considering flexibility
+                    # Flexibility allows for minor overlaps (e.g., ending 5 min late is acceptable)
+                    # An overlap occurs when: proposed_start < buffered_event_end AND proposed_end > buffered_event_start
+
+                    # Apply flexibility tolerance to proposed slot
+                    flexible_proposed_start = proposed_start + timedelta(minutes=flexibility_minutes)
+                    flexible_proposed_end = proposed_end - timedelta(minutes=flexibility_minutes)
+
+                    # Check for hard conflict (overlap even with flexibility)
+                    has_conflict = (
+                        flexible_proposed_start < buffered_event_end and
+                        flexible_proposed_end > buffered_event_start
+                    )
+
+                    # Calculate overlap amount
+                    overlap_start = max(proposed_start, buffered_event_start)
+                    overlap_end = min(proposed_end, buffered_event_end)
+                    overlap_minutes = max(0, (overlap_end - overlap_start).total_seconds() / 60)
+
+                    if has_conflict:
+                        # Calculate time until/since event
+                        minutes_until_event = (buffered_event_start - proposed_end).total_seconds() / 60
+                        minutes_since_event = (proposed_start - buffered_event_end).total_seconds() / 60
+
+                        conflict_info = {
+                            "event_id": event.get("id"),
+                            "event_summary": event.get("summary"),
+                            "event_start": event.get("start"),
+                            "event_end": event.get("end"),
+                            "event_start_with_buffer": buffered_event_start.isoformat(),
+                            "event_end_with_buffer": buffered_event_end.isoformat(),
+                            "event_status": event.get("status"),
+                            "event_location": event.get("location"),
+                            "overlap_minutes": round(overlap_minutes, 1),
+                            "conflict_type": self._determine_conflict_type(
+                                proposed_start, proposed_end,
+                                buffered_event_start, buffered_event_end
+                            ),
+                            "is_tentative": event.get("status") == "tentative",
+                        }
+                        conflicts.append(conflict_info)
+                    else:
+                        # Check if it's a near conflict (within 30 minutes before or after)
+                        minutes_until_event = (buffered_event_start - proposed_end).total_seconds() / 60
+                        minutes_since_event = (proposed_start - buffered_event_end).total_seconds() / 60
+
+                        if 0 <= minutes_until_event <= 30:
+                            near_conflicts.append({
+                                "event_summary": event.get("summary"),
+                                "event_start": event.get("start"),
+                                "minutes_until": round(minutes_until_event, 1),
+                                "direction": "after",
+                            })
+                        elif 0 <= minutes_since_event <= 30:
+                            near_conflicts.append({
+                                "event_summary": event.get("summary"),
+                                "event_end": event.get("end"),
+                                "minutes_since": round(minutes_since_event, 1),
+                                "direction": "before",
+                            })
+
+                except (ValueError, TypeError):
+                    # Skip events with invalid time data
+                    continue
+
+            # Determine overall conflict status
+            has_conflicts = len(conflicts) > 0
+            has_hard_conflicts = any(not c["is_tentative"] for c in conflicts)
+            has_tentative_conflicts = any(c["is_tentative"] for c in conflicts)
+
+            # Generate recommendation
+            if has_hard_conflicts:
+                recommendation = "NOT_AVAILABLE"
+                recommendation_reason = f"Conflicts with {len([c for c in conflicts if not c['is_tentative']])} confirmed event(s)"
+            elif has_tentative_conflicts:
+                recommendation = "TENTATIVE"
+                recommendation_reason = f"Conflicts with {len([c for c in conflicts if c['is_tentative']])} tentative event(s)"
+            elif near_conflicts:
+                recommendation = "AVAILABLE_WITH_WARNING"
+                recommendation_reason = f"Available but {len(near_conflicts)} event(s) nearby - may be tight"
+            else:
+                recommendation = "AVAILABLE"
+                recommendation_reason = "No conflicts detected"
+
+            return ToolResult.ok(
+                {
+                    "has_conflicts": has_conflicts,
+                    "is_available": not has_hard_conflicts,
+                    "recommendation": recommendation,
+                    "recommendation_reason": recommendation_reason,
+                    "proposed_slot": {
+                        "start": start_time_str,
+                        "end": end_time_str,
+                        "duration_minutes": round(proposed_duration_minutes, 1),
+                        "timezone": str(tz),
+                    },
+                    "conflicts": conflicts,
+                    "conflict_summary": {
+                        "total_conflicts": len(conflicts),
+                        "hard_conflicts": len([c for c in conflicts if not c["is_tentative"]]),
+                        "tentative_conflicts": len([c for c in conflicts if c["is_tentative"]]),
+                        "total_overlap_minutes": round(sum(c["overlap_minutes"] for c in conflicts), 1),
+                    },
+                    "near_conflicts": near_conflicts,
+                    "settings": {
+                        "buffer_minutes": buffer_minutes,
+                        "consider_tentative": consider_tentative,
+                        "flexibility_minutes": flexibility_minutes,
+                        "calendar_id": calendar_id,
+                    },
+                }
+            )
+
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+
+    def _determine_conflict_type(
+        self,
+        proposed_start: datetime,
+        proposed_end: datetime,
+        event_start: datetime,
+        event_end: datetime,
+    ) -> str:
+        """
+        Determine the type of conflict between proposed slot and existing event.
+
+        Args:
+            proposed_start: Proposed slot start time
+            proposed_end: Proposed slot end time
+            event_start: Event start time (with buffer applied)
+            event_end: Event end time (with buffer applied)
+
+        Returns:
+            String describing conflict type: COMPLETE_OVERLAP, PARTIAL_START, PARTIAL_END, ENCLOSED, or ENCLOSES
+        """
+        # Complete overlap - proposed slot completely overlaps with event
+        if proposed_start <= event_start and proposed_end >= event_end:
+            return "ENCLOSES"  # Proposed slot completely encloses the event
+
+        # Proposed slot is completely enclosed by event
+        if proposed_start >= event_start and proposed_end <= event_end:
+            return "ENCLOSED"  # Event completely encloses proposed slot
+
+        # Partial overlap at start
+        if proposed_start < event_start and proposed_end > event_start and proposed_end <= event_end:
+            return "PARTIAL_START"  # Proposed slot overlaps with event start
+
+        # Partial overlap at end
+        if proposed_start >= event_start and proposed_start < event_end and proposed_end > event_end:
+            return "PARTIAL_END"  # Proposed slot overlaps with event end
+
+        # Default case (shouldn't happen if conflict detection is correct)
+        return "OVERLAP"
 
     async def close(self):
         """
