@@ -25,6 +25,12 @@ try:
 except ImportError:
     HEALTH_TRACKER_AVAILABLE = False
 
+try:
+    from Tools.pattern_analyzer import PatternAnalyzer
+    PATTERN_ANALYZER_AVAILABLE = True
+except ImportError:
+    PATTERN_ANALYZER_AVAILABLE = False
+
 
 class BriefingEngine:
     """
@@ -68,6 +74,14 @@ class BriefingEngine:
             self.health_tracker = HealthStateTracker(state_dir=str(self.state_dir))
         else:
             self.health_tracker = None
+
+        # Initialize PatternAnalyzer if available and enabled in config
+        patterns_config = self.config.get("patterns", {})
+        patterns_enabled = patterns_config.get("enabled", False)
+        if PATTERN_ANALYZER_AVAILABLE and patterns_enabled:
+            self.pattern_analyzer = PatternAnalyzer(state_dir=str(self.state_dir))
+        else:
+            self.pattern_analyzer = None
 
         # Register built-in section providers
         self._section_providers = self._register_builtin_sections()
@@ -586,6 +600,12 @@ class BriefingEngine:
                 score += 10
                 reasons.append("Friday admin task")
 
+        # 6. Pattern-based adjustments (subtle influence from learned patterns)
+        pattern_boost, pattern_reasons = self._get_pattern_boost(item, day_of_week)
+        if pattern_boost > 0:
+            score += pattern_boost
+            reasons.extend(pattern_reasons)
+
         # Determine final urgency level based on score
         if score >= 90:
             urgency_level = "critical"
@@ -620,6 +640,177 @@ class BriefingEngine:
         """
         ranked_items = self.rank_priorities(context, energy_level)
         return ranked_items[:limit]
+
+    def _get_pattern_boost(
+        self,
+        item: Dict[str, Any],
+        day_of_week: str,
+        current_time_of_day: Optional[str] = None
+    ) -> Tuple[float, List[str]]:
+        """
+        Calculate pattern-based priority boost for an item.
+
+        Uses historical completion patterns to provide a subtle boost to tasks
+        that are typically completed on this day/time. Pattern influence is
+        subtle and does not override deadline urgency.
+
+        Args:
+            item: Task/commitment/priority item
+            day_of_week: Current day name (e.g., 'Monday')
+            current_time_of_day: Current time period (morning/afternoon/evening/night)
+
+        Returns:
+            Tuple of (boost_score, reasons)
+            - boost_score: Float boost to add to priority score (typically 0-15)
+            - reasons: List of human-readable explanations for the boost
+        """
+        # Return no boost if pattern analyzer not available or not initialized
+        if not self.pattern_analyzer:
+            return 0.0, []
+
+        boost = 0.0
+        reasons = []
+
+        # Get pattern influence level from config
+        patterns_config = self.config.get("patterns", {})
+        influence_level = patterns_config.get("influence_level", "medium")
+
+        # Map influence level to max boost
+        max_boost_map = {
+            "low": 5.0,
+            "medium": 10.0,
+            "high": 15.0
+        }
+        max_boost = max_boost_map.get(influence_level, 10.0)
+
+        # Get task category from item (needed for special cases even without patterns)
+        task_category = self._infer_task_category_from_item(item)
+
+        try:
+            # Get pattern recommendations for current context
+            if current_time_of_day is None:
+                current_hour = datetime.now().hour
+                current_time_of_day = self._classify_time_of_day_for_patterns(current_hour)
+
+            recommendations = self.pattern_analyzer.get_recommendations_for_context(
+                current_day=day_of_week,
+                current_time_of_day=current_time_of_day
+            )
+
+            # Check if we have sufficient pattern data
+            if recommendations.get("has_recommendations", False):
+                # Check day-based patterns
+                for rec in recommendations.get("recommendations", []):
+                    if rec["type"] == "day_pattern" and rec["category"] == task_category:
+                        # Scale boost by confidence (40-100% → 0.4-1.0 of max_boost)
+                        confidence_ratio = rec["confidence"] / 100.0
+                        day_boost = max_boost * confidence_ratio * 0.5  # 50% weight for day pattern
+                        boost += day_boost
+                        reasons.append(f"typically done on {day_of_week}s ({rec['confidence']:.0f}% pattern)")
+
+                    elif rec["type"] == "time_pattern" and rec["category"] == task_category:
+                        # Scale boost by confidence
+                        confidence_ratio = rec["confidence"] / 100.0
+                        time_boost = max_boost * confidence_ratio * 0.5  # 50% weight for time pattern
+                        boost += time_boost
+                        reasons.append(f"typically done in {current_time_of_day} ({rec['confidence']:.0f}% pattern)")
+
+                # Special case: Monday energy awareness (requires pattern data)
+                if day_of_week == "Monday":
+                    patterns = self.pattern_analyzer.identify_patterns()
+                    if patterns.get("has_sufficient_data", False):
+                        day_patterns = patterns.get("day_of_week_patterns", {})
+                        monday_data = day_patterns.get("Monday", {})
+
+                        # If admin tasks dominate Mondays, boost admin tasks slightly
+                        if monday_data.get("dominant_category") == "admin":
+                            if task_category == "admin":
+                                boost += max_boost * 0.2  # 20% of max boost
+                                reasons.append("Monday lighter tasks pattern")
+
+        except Exception as e:
+            # Gracefully handle any pattern analysis errors
+            print(f"Warning: Error calculating pattern boost: {e}")
+
+        # Special case: Friday admin tasks (always apply, even without pattern data)
+        # This is a well-known pattern that most people follow
+        if day_of_week == "Friday" and task_category == "admin":
+            if not any("Friday" in r for r in reasons):  # Don't double-boost
+                boost += max_boost * 0.3  # 30% of max boost
+                reasons.append("Friday admin pattern")
+
+        # Cap the boost to max_boost
+        boost = min(boost, max_boost)
+
+        return boost, reasons
+
+    def _classify_time_of_day_for_patterns(self, hour: int) -> str:
+        """
+        Classify hour into time period for pattern matching.
+
+        Args:
+            hour: Hour of day (0-23)
+
+        Returns:
+            Time period string: 'morning', 'afternoon', 'evening', or 'night'
+        """
+        if 5 <= hour < 12:
+            return "morning"
+        elif 12 <= hour < 17:
+            return "afternoon"
+        elif 17 <= hour < 22:
+            return "evening"
+        else:
+            return "night"
+
+    def _infer_task_category_from_item(self, item: Dict[str, Any]) -> str:
+        """
+        Infer pattern category from a task/commitment item.
+
+        Uses title and category to determine what type of task this is
+        for pattern matching purposes.
+
+        Args:
+            item: Task/commitment/priority item
+
+        Returns:
+            Category string (work, personal, admin, learning, health, household)
+        """
+        title = item.get("title", "").lower()
+        category = item.get("category", "").lower()
+
+        # Check for admin keywords first (most specific)
+        admin_keywords = ["admin", "email", "expense", "timesheet", "report", "paperwork",
+                         "invoice", "schedule", "calendar", "organize", "file"]
+        if any(keyword in title or keyword in category for keyword in admin_keywords):
+            return "admin"
+
+        # Check for health keywords before work (to avoid "workout" matching "work")
+        health_keywords = ["health", "exercise", "workout", "gym", "run", "walk", "doctor",
+                          "medical", "therapy", "meditation"]
+        if any(keyword in title or keyword in category for keyword in health_keywords):
+            return "health"
+
+        # Check for work keywords
+        work_keywords = ["work", "project", "meeting", "client", "team", "code", "design",
+                        "develop", "fix", "bug", "feature", "review"]
+        if any(keyword in title or keyword in category for keyword in work_keywords):
+            return "work"
+
+        # Check for learning keywords
+        learning_keywords = ["learn", "study", "read", "course", "tutorial", "research",
+                           "practice", "training"]
+        if any(keyword in title or keyword in category for keyword in learning_keywords):
+            return "learning"
+
+        # Check for household keywords
+        household_keywords = ["clean", "laundry", "groceries", "shopping", "cooking", "repair",
+                            "maintenance", "errand"]
+        if any(keyword in title or keyword in category for keyword in household_keywords):
+            return "household"
+
+        # Default to personal
+        return "personal"
 
     def _classify_task_type(self, item: Dict[str, Any]) -> str:
         """
@@ -1390,8 +1581,8 @@ class BriefingEngine:
             best_day = best_date.strftime('%A')
 
             return {
-                'avg_energy': averages['avg_energy'],
-                'avg_sleep': averages['avg_sleep'],
+                'avg_energy': averages['avg_energy_level'],
+                'avg_sleep': averages['avg_sleep_hours'],
                 'sample_size': averages['sample_size'],
                 'best_day': best_day,
                 'best_energy': best_entry['energy_level']
