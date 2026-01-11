@@ -15,7 +15,7 @@ import pytest
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from Tools.litellm_client import (
+from Tools.litellm import (
     LiteLLMClient,
     UsageTracker,
     ComplexityAnalyzer,
