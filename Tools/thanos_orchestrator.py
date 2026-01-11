@@ -16,14 +16,14 @@ Usage:
     response = thanos.route("What should I do today?")
 """
 
-import os
-import re
-import json
-import sys
-from pathlib import Path
-from typing import Optional, Dict, List, Any, TYPE_CHECKING
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
+import json
+from pathlib import Path
+import re
+import sys
+from typing import TYPE_CHECKING, Optional
+
 
 # Ensure Thanos project is in path for imports BEFORE importing from Tools
 _THANOS_DIR = Path(__file__).parent.parent
@@ -32,11 +32,13 @@ if str(_THANOS_DIR) not in sys.path:
 
 from Tools.error_logger import log_error
 
+
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
     from Tools.litellm_client import LiteLLMClient
 
 _api_client_module = None
+
 
 def _get_api_client_module():
     """Lazy load the LiteLLM client module (with fallback to direct Anthropic)."""
@@ -44,10 +46,12 @@ def _get_api_client_module():
     if _api_client_module is None:
         try:
             from Tools import litellm_client
+
             _api_client_module = litellm_client
         except ImportError:
             # Fallback to direct Anthropic client if LiteLLM unavailable
             from Tools import claude_api_client
+
             _api_client_module = claude_api_client
     return _api_client_module
 
@@ -55,77 +59,79 @@ def _get_api_client_module():
 @dataclass
 class Agent:
     """Represents a Thanos agent with personality and triggers."""
+
     name: str
     role: str
     voice: str
-    triggers: List[str]
+    triggers: list[str]
     content: str
     file_path: str
 
     @classmethod
-    def from_markdown(cls, file_path: Path) -> 'Agent':
+    def from_markdown(cls, file_path: Path) -> "Agent":
         """Parse an agent definition from markdown file."""
         content = file_path.read_text()
 
         # Extract frontmatter
         frontmatter = {}
-        if content.startswith('---'):
-            parts = content.split('---', 2)
+        if content.startswith("---"):
+            parts = content.split("---", 2)
             if len(parts) >= 3:
-                for line in parts[1].strip().split('\n'):
-                    if ':' in line:
-                        key, value = line.split(':', 1)
+                for line in parts[1].strip().split("\n"):
+                    if ":" in line:
+                        key, value = line.split(":", 1)
                         key = key.strip()
                         value = value.strip()
                         # Parse list values
-                        if value.startswith('['):
+                        if value.startswith("["):
                             value = json.loads(value.replace("'", '"'))
                         frontmatter[key] = value
                 content = parts[2]
 
         return cls(
-            name=frontmatter.get('name', file_path.stem),
-            role=frontmatter.get('role', 'Assistant'),
-            voice=frontmatter.get('voice', 'helpful'),
-            triggers=frontmatter.get('triggers', []),
+            name=frontmatter.get("name", file_path.stem),
+            role=frontmatter.get("role", "Assistant"),
+            voice=frontmatter.get("voice", "helpful"),
+            triggers=frontmatter.get("triggers", []),
             content=content.strip(),
-            file_path=str(file_path)
+            file_path=str(file_path),
         )
 
 
 @dataclass
 class Command:
     """Represents a Thanos command/skill."""
+
     name: str
     description: str
-    parameters: List[str]
+    parameters: list[str]
     workflow: str
     content: str
     file_path: str
 
     @classmethod
-    def from_markdown(cls, file_path: Path) -> 'Command':
+    def from_markdown(cls, file_path: Path) -> "Command":
         """Parse a command definition from markdown file."""
         content = file_path.read_text()
 
         # Extract command name from first heading
-        name_match = re.search(r'^#\s+(/\w+:\w+)', content, re.MULTILINE)
+        name_match = re.search(r"^#\s+(/\w+:\w+)", content, re.MULTILINE)
         name = name_match.group(1) if name_match else file_path.stem
 
         # Extract description (first paragraph after heading)
-        desc_match = re.search(r'^#[^\n]+\n+([^\n#]+)', content, re.MULTILINE)
+        desc_match = re.search(r"^#[^\n]+\n+([^\n#]+)", content, re.MULTILINE)
         description = desc_match.group(1).strip() if desc_match else ""
 
         # Extract parameters section
         params = []
-        params_match = re.search(r'## Parameters\n(.*?)(?=\n##|\Z)', content, re.DOTALL)
+        params_match = re.search(r"## Parameters\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
         if params_match:
-            for line in params_match.group(1).split('\n'):
-                if line.strip().startswith('-'):
+            for line in params_match.group(1).split("\n"):
+                if line.strip().startswith("-"):
                     params.append(line.strip()[1:].strip())
 
         # Extract workflow section
-        workflow_match = re.search(r'## Workflow\n(.*?)(?=\n##|\Z)', content, re.DOTALL)
+        workflow_match = re.search(r"## Workflow\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
         workflow = workflow_match.group(1).strip() if workflow_match else ""
 
         return cls(
@@ -134,7 +140,7 @@ class Command:
             parameters=params,
             workflow=workflow,
             content=content,
-            file_path=str(file_path)
+            file_path=str(file_path),
         )
 
 
@@ -146,9 +152,9 @@ class ThanosOrchestrator:
         self.api_client = api_client
 
         # Load components
-        self.agents: Dict[str, Agent] = {}
-        self.commands: Dict[str, Command] = {}
-        self.context: Dict[str, str] = {}
+        self.agents: dict[str, Agent] = {}
+        self.commands: dict[str, Command] = {}
+        self.context: dict[str, str] = {}
 
         self._load_agents()
         self._load_commands()
@@ -195,17 +201,22 @@ class ThanosOrchestrator:
                 except Exception as e:
                     print(f"Warning: Failed to load context {file}: {e}")
 
-    def _build_system_prompt(self, agent: Optional[Agent] = None,
-                             command: Optional[Command] = None,
-                             include_context: bool = True) -> str:
+    def _build_system_prompt(
+        self,
+        agent: Optional[Agent] = None,
+        command: Optional[Command] = None,
+        include_context: bool = True,
+    ) -> str:
         """Build system prompt for API call."""
         parts = []
 
         # Base identity
-        parts.append("""You are Thanos - Jeremy's personal AI assistant and external prefrontal cortex.
+        parts.append(
+            """You are Thanos - Jeremy's personal AI assistant and external prefrontal cortex.
 You manage his entire life: work, family, health, and goals.
 You are proactive, direct, and warm but honest.
-You track patterns and surface them.""")
+You track patterns and surface them."""
+        )
 
         # Add core context
         if include_context and "CORE" in self.context:
@@ -229,7 +240,7 @@ You track patterns and surface them.""")
             try:
                 today_state = state_file.read_text()
                 parts.append(f"\n## Today's State\n{today_state[:2000]}")  # Limit size
-            except (OSError, IOError) as e:
+            except OSError as e:
                 # File read errors are not critical for system prompt
                 log_error("thanos_orchestrator", e, "Failed to read Today.md for system prompt")
             except Exception as e:
@@ -260,34 +271,104 @@ You track patterns and surface them.""")
 
         # Extended keyword mappings for each agent type
         agent_keywords = {
-            'ops': {
-                'high': ['what should i do', 'whats on my plate', 'help me plan', 'overwhelmed',
-                         'what did i commit', 'process inbox', 'clear my inbox', 'prioritize'],
-                'medium': ['task', 'tasks', 'todo', 'to-do', 'schedule', 'plan', 'organize',
-                           'today', 'tomorrow', 'this week', 'deadline', 'due'],
-                'low': ['busy', 'work', 'productive', 'efficiency']
+            "ops": {
+                "high": [
+                    "what should i do",
+                    "whats on my plate",
+                    "help me plan",
+                    "overwhelmed",
+                    "what did i commit",
+                    "process inbox",
+                    "clear my inbox",
+                    "prioritize",
+                ],
+                "medium": [
+                    "task",
+                    "tasks",
+                    "todo",
+                    "to-do",
+                    "schedule",
+                    "plan",
+                    "organize",
+                    "today",
+                    "tomorrow",
+                    "this week",
+                    "deadline",
+                    "due",
+                ],
+                "low": ["busy", "work", "productive", "efficiency"],
             },
-            'coach': {
-                'high': ['i keep doing this', 'why cant i', 'im struggling', 'pattern',
-                         'be honest', 'accountability', 'avoiding', 'procrastinating'],
-                'medium': ['habit', 'stuck', 'motivation', 'discipline', 'consistent',
-                           'excuse', 'failing', 'trying', 'again'],
-                'low': ['feel', 'feeling', 'hard', 'difficult']
+            "coach": {
+                "high": [
+                    "i keep doing this",
+                    "why cant i",
+                    "im struggling",
+                    "pattern",
+                    "be honest",
+                    "accountability",
+                    "avoiding",
+                    "procrastinating",
+                ],
+                "medium": [
+                    "habit",
+                    "stuck",
+                    "motivation",
+                    "discipline",
+                    "consistent",
+                    "excuse",
+                    "failing",
+                    "trying",
+                    "again",
+                ],
+                "low": ["feel", "feeling", "hard", "difficult"],
             },
-            'strategy': {
-                'high': ['quarterly', 'long-term', 'strategy', 'goals', 'where am i headed',
-                         'big picture', 'priorities', 'direction'],
-                'medium': ['should i take this client', 'revenue', 'growth', 'future',
-                           'planning', 'decision', 'tradeoff', 'invest'],
-                'low': ['career', 'business', 'opportunity', 'risk']
+            "strategy": {
+                "high": [
+                    "quarterly",
+                    "long-term",
+                    "strategy",
+                    "goals",
+                    "where am i headed",
+                    "big picture",
+                    "priorities",
+                    "direction",
+                ],
+                "medium": [
+                    "should i take this client",
+                    "revenue",
+                    "growth",
+                    "future",
+                    "planning",
+                    "decision",
+                    "tradeoff",
+                    "invest",
+                ],
+                "low": ["career", "business", "opportunity", "risk"],
             },
-            'health': {
-                'high': ['im tired', 'should i take my vyvanse', 'i cant focus', 'supplements',
-                         'i crashed', 'energy', 'sleep', 'medication'],
-                'medium': ['exhausted', 'fatigue', 'focus', 'concentration', 'adhd',
-                           'stimulant', 'caffeine', 'workout', 'exercise'],
-                'low': ['rest', 'break', 'recovery', 'burnout']
-            }
+            "health": {
+                "high": [
+                    "im tired",
+                    "should i take my vyvanse",
+                    "i cant focus",
+                    "supplements",
+                    "i crashed",
+                    "energy",
+                    "sleep",
+                    "medication",
+                ],
+                "medium": [
+                    "exhausted",
+                    "fatigue",
+                    "focus",
+                    "concentration",
+                    "adhd",
+                    "stimulant",
+                    "caffeine",
+                    "workout",
+                    "exercise",
+                ],
+                "low": ["rest", "break", "recovery", "burnout"],
+            },
         }
 
         # First pass: Check direct triggers from agent definitions
@@ -304,13 +385,13 @@ You track patterns and surface them.""")
             if agent_key not in agent_scores:
                 agent_scores[agent_key] = 0
 
-            for kw in keywords.get('high', []):
+            for kw in keywords.get("high", []):
                 if kw in message_lower:
                     agent_scores[agent_key] += 5
-            for kw in keywords.get('medium', []):
+            for kw in keywords.get("medium", []):
                 if kw in message_lower:
                     agent_scores[agent_key] += 2
-            for kw in keywords.get('low', []):
+            for kw in keywords.get("low", []):
                 if kw in message_lower:
                     agent_scores[agent_key] += 1
 
@@ -321,14 +402,14 @@ You track patterns and surface them.""")
             return self.agents.get(best_agent[0])
 
         # Default behavior based on question type
-        if any(word in message_lower for word in ['what should', 'help me', 'need to', 'have to']):
-            return self.agents.get('ops')
+        if any(word in message_lower for word in ["what should", "help me", "need to", "have to"]):
+            return self.agents.get("ops")
 
-        if any(word in message_lower for word in ['should i', 'is it worth', 'best approach']):
-            return self.agents.get('strategy')
+        if any(word in message_lower for word in ["should i", "is it worth", "best approach"]):
+            return self.agents.get("strategy")
 
         # Final fallback: Ops is the default tactical agent
-        return self.agents.get('ops')
+        return self.agents.get("ops")
 
     def find_command(self, query: str) -> Optional[Command]:
         """Find a command by name or pattern."""
@@ -337,7 +418,7 @@ You track patterns and surface them.""")
             return self.commands[query]
 
         # Try with common prefixes
-        for prefix in ['pa', 'sc']:
+        for prefix in ["pa", "sc"]:
             key = f"{prefix}:{query}"
             if key in self.commands:
                 return self.commands[key]
@@ -350,8 +431,7 @@ You track patterns and surface them.""")
 
         return None
 
-    def run_command(self, command_name: str, args: str = "",
-                    stream: bool = False) -> str:
+    def run_command(self, command_name: str, args: str = "", stream: bool = False) -> str:
         """Execute a command and return the response."""
         self._ensure_client()
 
@@ -364,14 +444,14 @@ You track patterns and surface them.""")
         user_prompt = f"Execute the {command.name} command."
         if args:
             user_prompt += f"\nArguments: {args}"
-        user_prompt += "\n\nFollow the workflow exactly and provide the output in the specified format."
+        user_prompt += (
+            "\n\nFollow the workflow exactly and provide the output in the specified format."
+        )
 
         if stream:
             result = ""
             for chunk in self.api_client.chat_stream(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                operation=f"command:{command_name}"
+                prompt=user_prompt, system_prompt=system_prompt, operation=f"command:{command_name}"
             ):
                 print(chunk, end="", flush=True)
                 result += chunk
@@ -379,13 +459,10 @@ You track patterns and surface them.""")
             return result
         else:
             return self.api_client.chat(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                operation=f"command:{command_name}"
+                prompt=user_prompt, system_prompt=system_prompt, operation=f"command:{command_name}"
             )
 
-    def chat(self, message: str, agent: Optional[str] = None,
-             stream: bool = False) -> str:
+    def chat(self, message: str, agent: Optional[str] = None, stream: bool = False) -> str:
         """Chat with a specific agent or auto-detect."""
         self._ensure_client()
 
@@ -402,7 +479,7 @@ You track patterns and surface them.""")
             for chunk in self.api_client.chat_stream(
                 prompt=message,
                 system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
+                operation=f"chat:{agent_obj.name if agent_obj else 'default'}",
             ):
                 print(chunk, end="", flush=True)
                 result += chunk
@@ -412,7 +489,7 @@ You track patterns and surface them.""")
             return self.api_client.chat(
                 prompt=message,
                 system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
+                operation=f"chat:{agent_obj.name if agent_obj else 'default'}",
             )
 
     def route(self, message: str, stream: bool = False) -> str:
@@ -427,7 +504,7 @@ You track patterns and surface them.""")
         message_lower = message.lower().strip()
 
         # 1. Check for explicit command pattern
-        cmd_match = re.match(r'^/?(\w+:\w+)\s*(.*)?$', message)
+        cmd_match = re.match(r"^/?(\w+:\w+)\s*(.*)?$", message)
         if cmd_match:
             return self.run_command(cmd_match.group(1), cmd_match.group(2) or "", stream)
 
@@ -454,21 +531,21 @@ You track patterns and surface them.""")
         agent_name = agent.name if agent else None
         return self.chat(message, agent=agent_name, stream=stream)
 
-    def list_commands(self) -> List[str]:
+    def list_commands(self) -> list[str]:
         """List all available commands."""
         seen = set()
         result = []
-        for name, cmd in self.commands.items():
+        for _, cmd in self.commands.items():
             if cmd.name not in seen:
                 seen.add(cmd.name)
                 result.append(f"{cmd.name} - {cmd.description[:50]}...")
         return sorted(result)
 
-    def list_agents(self) -> List[str]:
+    def list_agents(self) -> list[str]:
         """List all available agents."""
         return [f"{a.name} ({a.role})" for a in self.agents.values()]
 
-    def get_usage(self, days: int = 30) -> Dict:
+    def get_usage(self, days: int = 30) -> dict:
         """Get API usage summary."""
         self._ensure_client()
         return self.api_client.get_usage_summary(days)
@@ -477,12 +554,14 @@ You track patterns and surface them.""")
 # Singleton instance
 _thanos_instance = None
 
+
 def get_thanos(base_dir: str = None) -> ThanosOrchestrator:
     """Get or create the singleton orchestrator instance."""
     global _thanos_instance
     if _thanos_instance is None:
         _thanos_instance = ThanosOrchestrator(base_dir)
     return _thanos_instance
+
 
 # Convenience alias
 thanos = None  # Will be initialized on first use
@@ -502,29 +581,27 @@ def _log_hook_error(error: str):
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / "hooks.log"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(log_file, 'a') as f:
+        with open(log_file, "a") as f:
             f.write(f"[{timestamp}] [thanos-orchestrator] {error}\n")
-    except (OSError, IOError) as e:
+    except OSError as e:
         # Can't write to log file - note to stderr but don't break hooks
         import sys
+
         print(f"[hooks] Cannot write to log file: {e}", file=sys.stderr)
     except Exception as e:
         # Truly unexpected errors - still don't break hooks
         # But at least try to write to stderr
         import sys
+
         print(f"[CRITICAL] Error logging hook error: {e}", file=sys.stderr)
 
 
 def _output_hook_response(context: str):
     """Output JSON in Claude hook format."""
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "additionalContext": context
-        }
-    }))
+    print(json.dumps({"hookSpecificOutput": {"additionalContext": context}}))
 
 
-def handle_hook(event: str, args: List[str], base_dir: Path):
+def handle_hook(event: str, args: list[str], base_dir: Path):
     """Handle hook events from Claude Code lifecycle.
 
     This function is designed to be fast and reliable:
@@ -542,6 +619,7 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
         if event == "morning-brief":
             # Fast path: read state files, no API calls
             from Tools.state_reader import StateReader
+
             reader = StateReader(base_dir / "State")
             ctx = reader.get_quick_context()
 
@@ -595,22 +673,25 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
             # Add quick context snapshot
             try:
                 from Tools.state_reader import StateReader
+
                 reader = StateReader(base_dir / "State")
                 ctx = reader.get_quick_context()
                 if ctx["focus"]:
                     session_log += f"- Focus: {ctx['focus']}\n"
                 if ctx["pending_commitments"] > 0:
                     session_log += f"- Pending commitments: {ctx['pending_commitments']}\n"
-            except (OSError, IOError) as e:
+            except OSError as e:
                 # State file read errors - note in log but continue
                 log_error("thanos_orchestrator", e, "Failed to read state for session log")
                 session_log += "- [Context unavailable]\n"
             except Exception as e:
                 # Unexpected errors
-                log_error("thanos_orchestrator", e, "Unexpected error reading context for session log")
+                log_error(
+                    "thanos_orchestrator", e, "Unexpected error reading context for session log"
+                )
                 session_log += "- [Context unavailable]\n"
 
-            session_log += f"""
+            session_log += """
 ## State Changes
 - Check git diff for file changes
 
@@ -620,7 +701,7 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
 
             log_path.write_text(session_log)
             # Output confirmation (not as hook context, just for logging)
-            print(f"Session logged: {log_path.name}", file=__import__('sys').stderr)
+            print(f"Session logged: {log_path.name}", file=__import__("sys").stderr)
 
         else:
             _log_hook_error(f"Unknown hook event: {event}")

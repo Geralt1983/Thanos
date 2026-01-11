@@ -2,15 +2,6 @@
 .credentials.json
 *.key
 *.pem
-.env
-
-# Python Cache
-__pycache__/
-*.pyc
-*.pyo
-
-# Auto-Claude Metadata (root level)
-.auto-claude-*
 
 # Caches & Temp
 stats-cache.json
@@ -74,3 +65,20 @@ mcp-servers/workos-mcp/.npmrc
 
 # Auto Claude data directory
 .auto-claude/
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Auto-claude framework files (at root level)
+.auto-claude-status
+.auto-claude-security.json
+.claude_settings.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/

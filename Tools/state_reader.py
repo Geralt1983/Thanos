@@ -13,10 +13,10 @@ Usage:
     context = reader.get_quick_context()
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional
 from datetime import datetime
+from pathlib import Path
 import re
+from typing import Optional
 
 
 class StateReader:
@@ -43,7 +43,7 @@ class StateReader:
         try:
             content = path.read_text()
             # Match **Primary focus**: value pattern
-            match = re.search(r'\*\*Primary focus\*\*:\s*(.+)', content)
+            match = re.search(r"\*\*Primary focus\*\*:\s*(.+)", content)
             return match.group(1).strip() if match else None
         except Exception:
             return None
@@ -64,7 +64,7 @@ class StateReader:
         except Exception:
             return 0
 
-    def get_todays_top3(self) -> List[str]:
+    def get_todays_top3(self) -> list[str]:
         """Extract today's top 3 priorities.
 
         Looks in Today.md first, then falls back to CurrentFocus.md.
@@ -84,24 +84,24 @@ class StateReader:
             items = []
             in_top3 = False
 
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 # Look for Top 3 or Priorities section
-                if 'Top 3' in line or 'Priorities' in line:
+                if "Top 3" in line or "Priorities" in line:
                     in_top3 = True
                     continue
                 if in_top3:
                     # Stop at next section header
-                    if line.startswith('#'):
+                    if line.startswith("#"):
                         break
                     # Match checkbox items with various formats:
                     # 1. [ ] item, - [ ] item, * [ ] item
                     # Also handles: 1. [x] item (completed)
-                    match = re.match(r'^[\d]+\.\s*\[[ x]\]\s*(.+)', line)
+                    match = re.match(r"^[\d]+\.\s*\[[ x]\]\s*(.+)", line)
                     if not match:
-                        match = re.match(r'^[\-\*]\s*\[[ x]\]\s*(.+)', line)
+                        match = re.match(r"^[\-\*]\s*\[[ x]\]\s*(.+)", line)
                     if match:
                         # Extract just the item text (before any | or deadline info)
-                        item_text = match.group(1).split('|')[0].strip()
+                        item_text = match.group(1).split("|")[0].strip()
                         items.append(item_text)
                         if len(items) >= 3:
                             break
@@ -123,11 +123,11 @@ class StateReader:
         try:
             content = path.read_text()
             # Look for energy rating
-            match = re.search(r'\*\*Current energy\*\*:\s*(.+)', content)
+            match = re.search(r"\*\*Current energy\*\*:\s*(.+)", content)
             if match:
                 value = match.group(1).strip()
                 # Skip placeholder values
-                if '[' not in value and value:
+                if "[" not in value and value:
                     return value
             return None
         except Exception:
@@ -149,17 +149,17 @@ class StateReader:
             content = path.read_text()
             # Look in Week's Theme section
             in_theme = False
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 if "Week's Theme" in line or "This Week" in line:
                     in_theme = True
                     continue
-                if in_theme and line.strip() and not line.startswith('#'):
+                if in_theme and line.strip() and not line.startswith("#"):
                     return line.strip()
             return None
         except Exception:
             return None
 
-    def get_blockers(self) -> List[str]:
+    def get_blockers(self) -> list[str]:
         """Extract any current blockers.
 
         Returns:
@@ -171,16 +171,16 @@ class StateReader:
 
         try:
             content = path.read_text()
-            match = re.search(r'\*\*Blockers\*\*:\s*(.+)', content)
+            match = re.search(r"\*\*Blockers\*\*:\s*(.+)", content)
             if match:
                 value = match.group(1).strip()
-                if value.lower() not in ['none', 'none currently', 'n/a', '']:
+                if value.lower() not in ["none", "none currently", "n/a", ""]:
                     return [value]
             return []
         except Exception:
             return []
 
-    def get_waiting_for(self) -> List[str]:
+    def get_waiting_for(self) -> list[str]:
         """Extract items waiting on others.
 
         Returns:
@@ -193,9 +193,9 @@ class StateReader:
         try:
             content = path.read_text()
             items = []
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 # Match checkbox items that are not completed
-                match = re.match(r'^[\-\*]\s*\[ \]\s*(.+)', line)
+                match = re.match(r"^[\-\*]\s*\[ \]\s*(.+)", line)
                 if match:
                     items.append(match.group(1).strip())
             return items[:5]  # Limit to 5
@@ -211,7 +211,7 @@ class StateReader:
         hour = datetime.now().hour
         return 5 <= hour < 12
 
-    def get_quick_context(self) -> Dict:
+    def get_quick_context(self) -> dict:
         """Get quick context summary for hooks.
 
         Returns a dictionary with all available context that can be
@@ -234,7 +234,7 @@ class StateReader:
             "energy": self.get_energy_state(),
             "week_theme": self.get_week_theme(),
             "blockers": self.get_blockers(),
-            "is_morning": self.is_morning()
+            "is_morning": self.is_morning(),
         }
 
     def format_for_hook(self) -> str:
