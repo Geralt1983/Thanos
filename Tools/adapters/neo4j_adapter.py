@@ -985,15 +985,19 @@ class Neo4jAdapter(BaseAdapter):
             conditions.append("p.domain = $domain")
             params["domain"] = args["domain"]
 
-        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        # Build query parts without f-string interpolation
+        query_parts = ["MATCH (p:Pattern)"]
 
-        query = f"""
-        MATCH (p:Pattern)
-        {where_clause}
-        RETURN p
-        ORDER BY p.strength DESC, p.last_observed DESC
-        LIMIT $limit
-        """
+        if conditions:
+            query_parts.append("WHERE " + " AND ".join(conditions))
+
+        query_parts.extend([
+            "RETURN p",
+            "ORDER BY p.strength DESC, p.last_observed DESC",
+            "LIMIT $limit"
+        ])
+
+        query = "\n".join(query_parts)
 
         if session is not None:
             # Use provided session/transaction (session reuse)
