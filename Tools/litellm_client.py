@@ -220,12 +220,11 @@ class AsyncUsageWriter:
 
         if self._worker.is_alive():
             # Thread didn't stop - attempt emergency flush
-            with self._buffer_lock:
-                if len(self._buffer) > 0:
-                    try:
-                        self._perform_flush()
-                    except Exception:
-                        pass  # Best effort
+            if len(self._buffer) > 0:
+                try:
+                    self._perform_flush()
+                except Exception:
+                    pass  # Best effort
 
             raise RuntimeError("Worker thread did not stop gracefully")
 
@@ -268,7 +267,7 @@ class AsyncUsageWriter:
                 # Batch dequeue: drain additional available records from queue
                 # to maximize batching efficiency (reduces I/O operations)
                 records_batch = [record]
-                while not self._queue.empty() and len(records_batch) < self._flush_threshold * 2:
+                while not self._queue.empty() and len(records_batch) < 100:
                     try:
                         records_batch.append(self._queue.get_nowait())
                     except Empty:
@@ -278,13 +277,14 @@ class AsyncUsageWriter:
                 with self._buffer_lock:
                     self._buffer.extend(records_batch)
 
-                # Check flush triggers
-                should_flush = (
-                    len(self._buffer) >= self._flush_threshold or
-                    time.time() - last_flush_time >= self._flush_interval or
-                    self._flush_event.is_set()
-                )
+                    # Check flush triggers
+                    should_flush = (
+                        len(self._buffer) >= self._flush_threshold or
+                        time.time() - last_flush_time >= self._flush_interval or
+                        self._flush_event.is_set()
+                    )
 
+                # Perform flush outside lock to avoid blocking during I/O
                 if should_flush:
                     self._perform_flush()
                     last_flush_time = time.time()
@@ -293,10 +293,9 @@ class AsyncUsageWriter:
             except Empty:
                 # Periodic check for time-based flush
                 if time.time() - last_flush_time >= self._flush_interval:
-                    with self._buffer_lock:
-                        if len(self._buffer) > 0:
-                            self._perform_flush()
-                            last_flush_time = time.time()
+                    if len(self._buffer) > 0:
+                        self._perform_flush()
+                        last_flush_time = time.time()
 
         # Final flush on shutdown - drain queue first
         # Drain remaining items from queue into buffer
@@ -309,12 +308,11 @@ class AsyncUsageWriter:
                 break
 
         # Flush all remaining buffered records
-        with self._buffer_lock:
-            if len(self._buffer) > 0:
-                try:
-                    self._perform_flush()
-                except Exception:
-                    pass  # Best effort during shutdown
+        if len(self._buffer) > 0:
+            try:
+                self._perform_flush()
+            except Exception:
+                pass  # Best effort during shutdown
 
     def _perform_flush(self):
         """
@@ -326,22 +324,26 @@ class AsyncUsageWriter:
         - Corruption recovery with validation
         - Comprehensive error logging
         """
-        # Get records to write (should be called with buffer_lock held)
-        if not self._buffer:
-            return
+        # Get records to write (acquire lock only for buffer copy/clear)
+        with self._buffer_lock:
+            if not self._buffer:
+                return
 
-        records_to_write = self._buffer.copy()
-        self._buffer.clear()
+            records_to_write = self._buffer.copy()
+            self._buffer.clear()
 
-        # Retry loop with exponential backoff
+        # Retry loop with exponential backoff (outside lock to avoid blocking)
         for attempt in range(self._max_retries):
             try:
                 # Read current data with corruption recovery
                 data = self._read_with_recovery()
 
-                # Merge all buffered records
-                for record in records_to_write:
-                    self._merge_record(data, record)
+                # Pre-aggregate records to minimize dictionary operations
+                # This is more efficient than merging each record individually
+                aggregated = self._aggregate_records(records_to_write)
+
+                # Merge aggregated data in single pass
+                self._merge_aggregated(data, aggregated)
 
                 # Atomic write with validation
                 self._atomic_write(data)
@@ -577,6 +579,117 @@ class AsyncUsageWriter:
                 )
                 with self._stats_lock:
                     self._stats["lost_records"] += len(records)
+
+    def _aggregate_records(self, records: list) -> Dict:
+        """
+        Pre-aggregate multiple records to minimize dictionary operations.
+
+        This optimization groups records by date/model/provider and sums their
+        metrics before merging into the main data structure, reducing redundant
+        dictionary lookups and updates when batching multiple records.
+
+        Args:
+            records: List of usage records to aggregate
+
+        Returns:
+            Dict with aggregated data:
+            {
+                'sessions': [...],  # All session records
+                'daily_totals': {date: {tokens, cost, calls}, ...},
+                'model_breakdown': {model: {tokens, cost, calls}, ...},
+                'provider_breakdown': {provider: {tokens, cost, calls}, ...}
+            }
+        """
+        aggregated = {
+            'sessions': [],
+            'daily_totals': {},
+            'model_breakdown': {},
+            'provider_breakdown': {}
+        }
+
+        # Get today's date once
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # Aggregate all records
+        for record in records:
+            # Collect all sessions
+            aggregated['sessions'].append(record)
+
+            # Aggregate by date
+            date = today  # All records are created at current time
+            if date not in aggregated['daily_totals']:
+                aggregated['daily_totals'][date] = {'tokens': 0, 'cost': 0.0, 'calls': 0}
+            aggregated['daily_totals'][date]['tokens'] += record['total_tokens']
+            aggregated['daily_totals'][date]['cost'] += record['cost_usd']
+            aggregated['daily_totals'][date]['calls'] += 1
+
+            # Aggregate by model
+            model = record['model']
+            if model not in aggregated['model_breakdown']:
+                aggregated['model_breakdown'][model] = {'tokens': 0, 'cost': 0.0, 'calls': 0}
+            aggregated['model_breakdown'][model]['tokens'] += record['total_tokens']
+            aggregated['model_breakdown'][model]['cost'] += record['cost_usd']
+            aggregated['model_breakdown'][model]['calls'] += 1
+
+            # Aggregate by provider
+            provider = record['provider']
+            if provider not in aggregated['provider_breakdown']:
+                aggregated['provider_breakdown'][provider] = {'tokens': 0, 'cost': 0.0, 'calls': 0}
+            aggregated['provider_breakdown'][provider]['tokens'] += record['total_tokens']
+            aggregated['provider_breakdown'][provider]['cost'] += record['cost_usd']
+            aggregated['provider_breakdown'][provider]['calls'] += 1
+
+        return aggregated
+
+    def _merge_aggregated(self, data: Dict, aggregated: Dict) -> None:
+        """
+        Merge pre-aggregated data into the main data structure.
+
+        This is more efficient than merging records individually because it
+        performs at most one dictionary update per unique date/model/provider,
+        regardless of how many records share those attributes.
+
+        Args:
+            data: Main data structure to update
+            aggregated: Pre-aggregated data from _aggregate_records()
+        """
+        # Append all sessions
+        data['sessions'].extend(aggregated['sessions'])
+
+        # Merge daily totals
+        for date, totals in aggregated['daily_totals'].items():
+            if date not in data['daily_totals']:
+                data['daily_totals'][date] = {'tokens': 0, 'cost': 0.0, 'calls': 0}
+            data['daily_totals'][date]['tokens'] += totals['tokens']
+            data['daily_totals'][date]['cost'] += totals['cost']
+            data['daily_totals'][date]['calls'] += totals['calls']
+
+        # Merge model breakdown
+        if 'model_breakdown' not in data:
+            data['model_breakdown'] = {}
+        for model, totals in aggregated['model_breakdown'].items():
+            if model not in data['model_breakdown']:
+                data['model_breakdown'][model] = {'tokens': 0, 'cost': 0.0, 'calls': 0}
+            data['model_breakdown'][model]['tokens'] += totals['tokens']
+            data['model_breakdown'][model]['cost'] += totals['cost']
+            data['model_breakdown'][model]['calls'] += totals['calls']
+
+        # Merge provider breakdown
+        if 'provider_breakdown' not in data:
+            data['provider_breakdown'] = {}
+        for provider, totals in aggregated['provider_breakdown'].items():
+            if provider not in data['provider_breakdown']:
+                data['provider_breakdown'][provider] = {'tokens': 0, 'cost': 0.0, 'calls': 0}
+            data['provider_breakdown'][provider]['tokens'] += totals['tokens']
+            data['provider_breakdown'][provider]['cost'] += totals['cost']
+            data['provider_breakdown'][provider]['calls'] += totals['calls']
+
+        # Keep only last 1000 session entries
+        if len(data['sessions']) > 1000:
+            data['sessions'] = data['sessions'][-1000:]
+
+        # Update timestamp
+        data['last_updated'] = datetime.now().isoformat()
 
     def _merge_record(self, data: Dict, record: Dict) -> None:
         """

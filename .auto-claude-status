@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "025-async-file-i-o-for-usage-tracking-to-prevent-main-",
+  "state": "building",
+  "subtasks": {
+    "completed": 0,
+    "total": 15,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "",
+    "id": 0,
+    "total": 0
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 7,
+    "started_at": "2026-01-10T21:11:00.692179"
+  },
+  "last_update": "2026-01-10T22:01:23.238636"
+}
