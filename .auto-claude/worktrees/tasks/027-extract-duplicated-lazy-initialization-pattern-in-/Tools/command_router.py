@@ -384,7 +384,37 @@ class LazyInitializer(Generic[T]):
 
 
 class CommandRouter:
-    """Routes and executes slash commands"""
+    """
+    Routes and executes slash commands for Thanos Interactive Mode.
+
+    This class provides the command-line interface for interactive sessions,
+    handling command parsing, routing, and execution. It supports various
+    commands for agent switching, session management, memory operations,
+    and state inspection.
+
+    **Lazy Initialization:**
+    The CommandRouter uses lazy initialization for optional adapters and
+    services (like MemOS) that may not be available or may require resources
+    that should only be allocated when needed. This approach provides:
+
+    - **Graceful Degradation**: System continues to function even if optional
+      components are unavailable or fail to initialize
+    - **Resource Efficiency**: Components are only initialized when first used
+    - **Idempotency**: Multiple calls return the same instance without
+      re-initialization
+    - **Error Handling**: All initialization failures are caught and handled
+      gracefully, never crashing the application
+
+    Lazy-initialized adapters are accessed through `_get_*()` methods that
+    encapsulate the initialization logic and return the instance or None.
+
+    **Key Responsibilities:**
+    - Parse and route slash commands (e.g., /agent, /state, /recall)
+    - Manage agent switching and model selection
+    - Provide access to session history and state
+    - Interface with memory systems (MemOS, sessions, swarm)
+    - Support conversation branching and pattern analysis
+    """
 
     def __init__(
         self,
@@ -446,28 +476,91 @@ class CommandRouter:
                 self._trigger_patterns[agent_name] = patterns
 
     def _get_memos(self) -> Optional["MemOS"]:
-        """Get MemOS instance, initializing if needed."""
+        """
+        Get MemOS instance with lazy initialization and graceful degradation.
+
+        This method implements the lazy initialization pattern for the MemOS
+        hybrid memory system (Neo4j graph + ChromaDB vectors). It provides
+        on-demand initialization with comprehensive error handling.
+
+        **Lazy Initialization Pattern:**
+        1. **Availability Check**: Returns None immediately if MemOS dependencies
+           are not installed (MEMOS_AVAILABLE flag)
+        2. **Idempotency**: Returns cached instance if already initialized,
+           avoiding redundant initialization attempts
+        3. **Get Existing Instance**: Tries to retrieve an existing MemOS
+           singleton via get_memos() (may exist from other components)
+        4. **Initialize New Instance**: If no existing instance, creates a new
+           one via async init_memos() using event loop handling
+        5. **Async Event Loop Handling**: Handles both running and non-running
+           event loops appropriately (returns None in running loops to avoid
+           blocking)
+        6. **Exception Handling**: Catches all exceptions during initialization
+           and gracefully returns None rather than crashing
+        7. **State Tracking**: Uses _memos_initialized flag to mark initialization
+           attempt, preventing retry loops on persistent failures
+
+        **Error Handling Philosophy:**
+        This method prioritizes application stability over feature completeness.
+        If MemOS cannot be initialized (missing dependencies, Neo4j connection
+        failure, ChromaDB issues), the method returns None and allows the
+        application to continue with degraded functionality. Commands that
+        require MemOS (/recall, /remember) will display friendly error messages
+        rather than crashing.
+
+        **Usage:**
+        ```python
+        memos = self._get_memos()
+        if memos:
+            result = await memos.recall(query="search term")
+            # Process results
+        else:
+            print("MemOS not available - check configuration")
+        ```
+
+        **Requirements:**
+        - Neo4j connection (NEO4J_URL, NEO4J_USER, NEO4J_PASSWORD environment vars)
+        - ChromaDB installation and path (CHROMADB_PATH environment var)
+        - Required Python packages: neo4j, chromadb
+
+        Returns:
+            MemOS instance if available and initialized successfully, None otherwise.
+            None indicates either missing dependencies, initialization failure, or
+            that initialization was attempted in an incompatible async context.
+
+        Note:
+            This method is called by /remember, /recall, and /memory commands.
+            Initialization happens on first command use, not at CommandRouter
+            construction time.
+        """
+        # Step 1: Check availability (dependencies installed)
         if not MEMOS_AVAILABLE:
             return None
 
+        # Step 2: Return cached instance if already initialized (idempotency)
         if not self._memos_initialized:
+            # Step 3: Try to get existing instance (singleton pattern)
             try:
-                # Try to get existing instance
                 self._memos = get_memos()
                 self._memos_initialized = True
             except Exception:
-                # Initialize new instance
+                # Step 4: Initialize new instance (async initialization)
                 try:
                     loop = asyncio.get_event_loop()
+                    # Step 5: Handle async event loop state
                     if loop.is_running():
-                        # Can't use asyncio.run in running loop
+                        # Can't use run_until_complete in running loop
+                        # Return None rather than crash or block
                         self._memos = None
                     else:
+                        # Create new MemOS instance via async initializer
                         self._memos = loop.run_until_complete(init_memos())
                         self._memos_initialized = True
                 except Exception:
+                    # Step 6: Graceful failure - never crash on initialization
                     self._memos = None
 
+        # Step 7: Return instance or None
         return self._memos
 
     def _run_async(self, coro):
