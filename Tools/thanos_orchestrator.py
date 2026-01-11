@@ -21,7 +21,7 @@ import re
 import json
 import sys
 from pathlib import Path
-from typing import Optional, Dict, List, Any, TYPE_CHECKING
+from typing import Optional, Dict, List, Any, TYPE_CHECKING, Union
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -31,7 +31,7 @@ if str(_THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(_THANOS_DIR))
 
 from Tools.error_logger import log_error
-from Tools.intent_matcher import KeywordMatcher
+from Tools.intent_matcher import KeywordMatcher, TrieKeywordMatcher
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -142,9 +142,21 @@ class Command:
 class ThanosOrchestrator:
     """Main orchestrator for Thanos personal assistant."""
 
-    def __init__(self, base_dir: str = None, api_client: "LiteLLMClient" = None):
+    def __init__(self, base_dir: str = None, api_client: "LiteLLMClient" = None,
+                 matcher_strategy: str = 'regex'):
+        """Initialize the Thanos orchestrator.
+
+        Args:
+            base_dir: Base directory for Thanos files (defaults to project root)
+            api_client: Optional LiteLLM client instance
+            matcher_strategy: Strategy for keyword matching ('regex' or 'trie').
+                            - 'regex': Uses regex-based KeywordMatcher (default, no dependencies)
+                            - 'trie': Uses Aho-Corasick TrieKeywordMatcher (requires pyahocorasick,
+                                     falls back to regex if not available)
+        """
         self.base_dir = Path(base_dir) if base_dir else Path(__file__).parent.parent
         self.api_client = api_client
+        self.matcher_strategy = matcher_strategy
 
         # Load components
         self.agents: Dict[str, Agent] = {}
@@ -156,7 +168,7 @@ class ThanosOrchestrator:
         self._load_context()
 
         # Initialize intent matcher with pre-compiled patterns (lazy initialization)
-        self._intent_matcher: Optional[KeywordMatcher] = None
+        self._intent_matcher: Optional[Union[KeywordMatcher, TrieKeywordMatcher]] = None
 
     def _load_agents(self):
         """Load all agent definitions."""
@@ -199,15 +211,20 @@ class ThanosOrchestrator:
                 except Exception as e:
                     print(f"Warning: Failed to load context {file}: {e}")
 
-    def _get_intent_matcher(self) -> KeywordMatcher:
+    def _get_intent_matcher(self) -> Union[KeywordMatcher, TrieKeywordMatcher]:
         """Get or create the cached intent matcher with pre-compiled patterns.
 
         Lazy initialization: patterns are compiled once on first use and cached
         for all subsequent intent detection calls. This converts the O(n*m)
-        keyword matching to O(m) using pre-compiled regex.
+        keyword matching to O(m) using pre-compiled patterns.
+
+        The matcher strategy is determined by the matcher_strategy parameter:
+        - 'regex': Uses KeywordMatcher with pre-compiled regex patterns
+        - 'trie': Uses TrieKeywordMatcher with Aho-Corasick automaton
+                 (falls back to regex if pyahocorasick not available)
 
         Returns:
-            KeywordMatcher instance with compiled patterns
+            KeywordMatcher or TrieKeywordMatcher instance with compiled patterns
         """
         if self._intent_matcher is None:
             # Extended keyword mappings for each agent type
@@ -248,8 +265,12 @@ class ThanosOrchestrator:
                 if agent.triggers:
                     agent_triggers[agent.name.lower()] = agent.triggers
 
-            # Create and cache the matcher
-            self._intent_matcher = KeywordMatcher(agent_keywords, agent_triggers)
+            # Create and cache the matcher based on strategy
+            if self.matcher_strategy == 'trie':
+                self._intent_matcher = TrieKeywordMatcher(agent_keywords, agent_triggers)
+            else:
+                # Default to regex matcher (backward compatible)
+                self._intent_matcher = KeywordMatcher(agent_keywords, agent_triggers)
 
         return self._intent_matcher
 
