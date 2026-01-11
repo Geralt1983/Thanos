@@ -22,6 +22,7 @@ import {
   getCacheStats,
 } from "./cache/cache.js";
 import { syncAll, syncSingleTask, removeCachedTask } from "./cache/sync.js";
+import { withCacheFirst } from "./cache/utils.js";
 
 // =============================================================================
 // DATABASE CONNECTION
@@ -598,77 +599,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "workos_get_tasks": {
         const { status, clientId, limit = 50 } = args as any;
 
-        // Try cache first
-        const cacheAvailable = await ensureCache();
-        if (cacheAvailable && !isCacheStale()) {
-          try {
-            let cachedTasks;
-            if (clientId) {
-              cachedTasks = getCachedTasksByClient(clientId, status, limit);
-            } else {
-              cachedTasks = getCachedTasks(status, limit);
-            }
+        return withCacheFirst(
+          // Cache reader function
+          () => {
+            // Get tasks from cache (with or without clientId filter)
+            const cachedTasks = clientId
+              ? getCachedTasksByClient(clientId, status, limit)
+              : getCachedTasks(status, limit);
 
-            // Get client names for cached tasks
+            // Enrich tasks with client names
             const cachedClients = getCachedClients();
             const clientMap = new Map(cachedClients.map(c => [c.id, c.name]));
 
-            const tasksWithClients = cachedTasks.map(t => ({
+            return cachedTasks.map(t => ({
               ...t,
               clientName: t.clientId ? clientMap.get(t.clientId) || null : null,
             }));
+          },
+          // Neon fallback function
+          async () => {
+            const conditions = [];
+            if (status) conditions.push(eq(schema.tasks.status, status));
+            if (clientId) conditions.push(eq(schema.tasks.clientId, clientId));
 
-            console.error(`[Cache] Served ${tasksWithClients.length} tasks from cache`);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(tasksWithClients, null, 2),
-                },
-              ],
-            };
-          } catch (cacheError) {
-            console.error("[Cache] Error reading from cache, falling back to Neon:", cacheError);
-          }
-        }
+            const query = db
+              .select({
+                id: schema.tasks.id,
+                title: schema.tasks.title,
+                description: schema.tasks.description,
+                status: schema.tasks.status,
+                valueTier: schema.tasks.valueTier,
+                drainType: schema.tasks.drainType,
+                pointsFinal: schema.tasks.pointsFinal,
+                pointsAiGuess: schema.tasks.pointsAiGuess,
+                clientId: schema.tasks.clientId,
+                clientName: schema.clients.name,
+                createdAt: schema.tasks.createdAt,
+                completedAt: schema.tasks.completedAt,
+              })
+              .from(schema.tasks)
+              .leftJoin(schema.clients, eq(schema.tasks.clientId, schema.clients.id))
+              .orderBy(asc(schema.tasks.sortOrder), desc(schema.tasks.createdAt))
+              .limit(limit);
 
-        // Fallback to Neon
-        const conditions = [];
-        if (status) conditions.push(eq(schema.tasks.status, status));
-        if (clientId) conditions.push(eq(schema.tasks.clientId, clientId));
-
-        const query = db
-          .select({
-            id: schema.tasks.id,
-            title: schema.tasks.title,
-            description: schema.tasks.description,
-            status: schema.tasks.status,
-            valueTier: schema.tasks.valueTier,
-            drainType: schema.tasks.drainType,
-            pointsFinal: schema.tasks.pointsFinal,
-            pointsAiGuess: schema.tasks.pointsAiGuess,
-            clientId: schema.tasks.clientId,
-            clientName: schema.clients.name,
-            createdAt: schema.tasks.createdAt,
-            completedAt: schema.tasks.completedAt,
-          })
-          .from(schema.tasks)
-          .leftJoin(schema.clients, eq(schema.tasks.clientId, schema.clients.id))
-          .orderBy(asc(schema.tasks.sortOrder), desc(schema.tasks.createdAt))
-          .limit(limit);
-
-        const tasks = conditions.length > 0
-          ? await query.where(and(...conditions))
-          : await query;
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(tasks, null, 2),
-            },
-          ],
-        };
+            return conditions.length > 0
+              ? await query.where(and(...conditions))
+              : await query;
+          },
+          "tasks"
+        );
       }
 
       // -----------------------------------------------------------------------
