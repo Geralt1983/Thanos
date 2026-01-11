@@ -61,7 +61,7 @@ class MockRecord(dict):
         try:
             return self[key]
         except KeyError:
-            raise AttributeError(key)
+            raise AttributeError(key) from None
 
 
 def create_mock_record(data: dict) -> MockRecord:

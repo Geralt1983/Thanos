@@ -7,7 +7,7 @@ bypassing the MCP server for better performance and control.
 
 from datetime import datetime
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 import asyncpg
@@ -47,7 +47,7 @@ class WorkOSAdapter(BaseAdapter):
             )
         return self._pool
 
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """Return list of available WorkOS tools."""
         return [
             {
@@ -154,7 +154,7 @@ class WorkOSAdapter(BaseAdapter):
             },
         ]
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
+    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a WorkOS tool."""
         try:
             pool = await self._get_pool()
@@ -301,7 +301,9 @@ class WorkOSAdapter(BaseAdapter):
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO tasks (title, description, status, client_id, effort_estimate, updated_at)
+                INSERT INTO tasks (
+                    title, description, status, client_id, effort_estimate, updated_at
+                )
                 VALUES ($1, $2, $3, $4, $5, NOW())
                 RETURNING *
                 """,
@@ -356,7 +358,8 @@ class WorkOSAdapter(BaseAdapter):
             rows = await conn.fetch(
                 """
                 SELECT h.*,
-                       (SELECT MAX(completed_at) FROM habit_completions WHERE habit_id = h.id) as last_completion
+                       (SELECT MAX(completed_at) FROM habit_completions
+                        WHERE habit_id = h.id) as last_completion
                 FROM habits h
                 WHERE h.is_active = true OR h.is_active = 1
                 ORDER BY h.sort_order ASC NULLS LAST
@@ -414,7 +417,8 @@ class WorkOSAdapter(BaseAdapter):
                 rows = await conn.fetch(
                     """
                     SELECT c.*,
-                           (SELECT COUNT(*) FROM tasks WHERE client_id = c.id AND status != 'done') as open_tasks
+                           (SELECT COUNT(*) FROM tasks
+                            WHERE client_id = c.id AND status != 'done') as open_tasks
                     FROM clients c
                     WHERE c.is_active = true OR c.is_active = 1
                     ORDER BY c.name
@@ -424,7 +428,8 @@ class WorkOSAdapter(BaseAdapter):
                 rows = await conn.fetch(
                     """
                     SELECT c.*,
-                           (SELECT COUNT(*) FROM tasks WHERE client_id = c.id AND status != 'done') as open_tasks
+                           (SELECT COUNT(*) FROM tasks
+                            WHERE client_id = c.id AND status != 'done') as open_tasks
                     FROM clients c
                     ORDER BY c.name
                     """
@@ -480,7 +485,7 @@ class WorkOSAdapter(BaseAdapter):
         midnight_est = now_est.replace(hour=0, minute=0, second=0, microsecond=0)
         return midnight_est.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
-    def _row_to_dict(self, row: asyncpg.Record) -> Dict[str, Any]:
+    def _row_to_dict(self, row: asyncpg.Record) -> dict[str, Any]:
         """Convert asyncpg Record to dict, handling datetime serialization."""
         result = dict(row)
         for key, value in result.items():

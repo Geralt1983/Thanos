@@ -16,7 +16,7 @@ Usage:
 from datetime import datetime
 from pathlib import Path
 import re
-from typing import Dict, List, Optional
+from typing import Optional
 
 
 class StateReader:
@@ -64,7 +64,7 @@ class StateReader:
         except Exception:
             return 0
 
-    def get_todays_top3(self) -> List[str]:
+    def get_todays_top3(self) -> list[str]:
         """Extract today's top 3 priorities.
 
         Looks in Today.md first, then falls back to CurrentFocus.md.
@@ -159,7 +159,7 @@ class StateReader:
         except Exception:
             return None
 
-    def get_blockers(self) -> List[str]:
+    def get_blockers(self) -> list[str]:
         """Extract any current blockers.
 
         Returns:
@@ -180,7 +180,7 @@ class StateReader:
         except Exception:
             return []
 
-    def get_waiting_for(self) -> List[str]:
+    def get_waiting_for(self) -> list[str]:
         """Extract items waiting on others.
 
         Returns:
@@ -211,7 +211,7 @@ class StateReader:
         hour = datetime.now().hour
         return 5 <= hour < 12
 
-    def get_quick_context(self) -> Dict:
+    def get_quick_context(self) -> dict:
         """Get quick context summary for hooks.
 
         Returns a dictionary with all available context that can be

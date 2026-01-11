@@ -46,8 +46,7 @@ def adapter_with_explicit_token():
 @pytest.fixture
 def mock_httpx_client():
     """Create a mock httpx AsyncClient"""
-    client = AsyncMock(spec=httpx.AsyncClient)
-    return client
+    return AsyncMock(spec=httpx.AsyncClient)
 
 
 # ========================================================================

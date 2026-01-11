@@ -77,7 +77,11 @@ select = [
 ignore = [
     # Docstring style rules - too strict for this codebase's pragmatic approach
     "D100",   # Missing docstring in public module - not all modules need docstrings
+    "D101",   # Missing docstring in public class - simple classes (e.g., constants) are self-explanatory
+    "D102",   # Missing docstring in public method - simple property methods are self-explanatory
     "D104",   # Missing docstring in public package - __init__.py files often don't need them
+    "D107",   # Missing docstring in __init__ - init signature is often self-documenting
+    "D202",   # No blank lines allowed after function docstring - overly prescriptive formatting
     "D203",   # 1 blank line required before class docstring - conflicts with D211 (no blank line)
     "D205",   # 1 blank line required between summary and description - overly prescriptive
     "D212",   # Multi-line docstring summary should start at the first line - prefer summary on first line
@@ -88,11 +92,14 @@ ignore = [
     # Code style preferences - readability over rigid rules
     "T201",   # print found - legitimate in CLI tools and scripts
     "B008",   # Do not perform function calls in argument defaults - needed for FastAPI/dependency injection
+    "B027",   # Empty method in ABC without abstract decorator - intentional for optional override methods
+    "SIM102", # Use single if statement instead of nested - nested can be clearer for complex conditions
     "SIM108", # Use ternary operator - sometimes if/else is clearer
     "SIM117", # Use single with statement - nested context managers can be clearer for complex cases
     "RET505", # Unnecessary else after return - explicit else can improve readability
 
     # Pathlib migration - legacy code uses os.path, migrate gradually
+    "PTH111", # os.path.expanduser() - Path.expanduser() preferred but not required for compatibility
     "PTH123", # builtin open() - pathlib.Path.open() preferred but not required for compatibility
 ]
 
@@ -138,6 +145,7 @@ unfixable = [
 # Tools/thanos_orchestrator.py: conditional imports after feature detection
 "Tools/thanos_orchestrator.py" = [
     "E402",   # Module import not at top - intentional: imports after checking MEMOS_AVAILABLE flag
+    "ARG001", # Unused function argument - handle_hook signature matches hook interface
 ]
 
 # Tools/command_router.py: command handler methods follow consistent interface

@@ -28,7 +28,7 @@ import json
 import os
 from pathlib import Path
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 
 # LiteLLM import with fallback
@@ -70,13 +70,13 @@ class ModelResponse:
     cost_usd: float
     latency_ms: float
     cached: bool = False
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class UsageTracker:
     """Track token usage and costs across all model providers."""
 
-    def __init__(self, storage_path: str, pricing: Dict[str, Dict[str, float]]):
+    def __init__(self, storage_path: str, pricing: dict[str, dict[str, float]]):
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self.pricing = pricing
@@ -131,8 +131,8 @@ class UsageTracker:
         cost_usd: float,
         latency_ms: float,
         operation: str = "chat",
-        metadata: Optional[Dict] = None,
-    ) -> Dict:
+        metadata: Optional[dict] = None,
+    ) -> dict:
         """Record a single API call's usage."""
         provider = self._get_provider(model)
 
@@ -188,7 +188,7 @@ class UsageTracker:
         self.storage_path.write_text(json.dumps(data, indent=2))
         return entry
 
-    def get_summary(self, days: int = 30) -> Dict:
+    def get_summary(self, days: int = 30) -> dict:
         """Get usage summary for the specified number of days."""
         data = json.loads(self.storage_path.read_text())
         cutoff = datetime.now() - timedelta(days=days)
@@ -219,7 +219,7 @@ class UsageTracker:
             "provider_breakdown": data.get("provider_breakdown", {}),
         }
 
-    def get_today(self) -> Dict:
+    def get_today(self) -> dict:
         """Get today's usage stats."""
         data = json.loads(self.storage_path.read_text())
         today = datetime.now().strftime("%Y-%m-%d")
@@ -229,14 +229,14 @@ class UsageTracker:
 class ComplexityAnalyzer:
     """Analyze prompt complexity for model routing."""
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         self.config = config
         self.factors = config.get(
             "complexity_factors",
             {"token_count_weight": 0.3, "keyword_weight": 0.4, "history_length_weight": 0.3},
         )
 
-    def analyze(self, prompt: str, history: Optional[List[Dict]] = None) -> Tuple[float, str]:
+    def analyze(self, prompt: str, history: Optional[list[dict]] = None) -> tuple[float, str]:
         """
         Analyze prompt complexity and return score with recommended tier.
 
@@ -318,7 +318,7 @@ class ResponseCache:
         self.ttl_seconds = ttl_seconds
         self.max_size_bytes = max_size_mb * 1024 * 1024
 
-    def _get_cache_key(self, prompt: str, model: str, params: Dict) -> str:
+    def _get_cache_key(self, prompt: str, model: str, params: dict) -> str:
         """Generate a cache key from prompt and parameters."""
         content = json.dumps(
             {
@@ -330,7 +330,7 @@ class ResponseCache:
         )
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
-    def get(self, prompt: str, model: str, params: Dict) -> Optional[str]:
+    def get(self, prompt: str, model: str, params: dict) -> Optional[str]:
         """Retrieve cached response if valid."""
         cache_key = self._get_cache_key(prompt, model, params)
         cache_file = self.cache_path / f"{cache_key}.json"
@@ -350,7 +350,7 @@ class ResponseCache:
 
         return None
 
-    def set(self, prompt: str, model: str, params: Dict, response: str):
+    def set(self, prompt: str, model: str, params: dict, response: str):
         """Cache a response."""
         cache_key = self._get_cache_key(prompt, model, params)
         cache_file = self.cache_path / f"{cache_key}.json"
@@ -402,7 +402,7 @@ class LiteLLMClient:
             litellm.drop_params = True  # Ignore unsupported params
             litellm.set_verbose = False
 
-    def _load_config(self, config_path: Path) -> Dict:
+    def _load_config(self, config_path: Path) -> dict:
         """Load configuration from JSON file."""
         if config_path.exists():
             return json.loads(config_path.read_text())
@@ -490,7 +490,7 @@ class LiteLLMClient:
     def _select_model(
         self,
         prompt: str,
-        history: Optional[List[Dict]] = None,
+        history: Optional[list[dict]] = None,
         model_override: Optional[str] = None,
     ) -> str:
         """Select appropriate model based on complexity analysis."""
@@ -508,7 +508,7 @@ class LiteLLMClient:
     def _call_with_fallback(
         self,
         model: str,
-        messages: List[Dict],
+        messages: list[dict],
         max_tokens: int,
         temperature: float,
         system: Optional[str] = None,
@@ -535,7 +535,7 @@ class LiteLLMClient:
     def _make_call(
         self,
         model: str,
-        messages: List[Dict],
+        messages: list[dict],
         max_tokens: int,
         temperature: float,
         system: Optional[str] = None,
@@ -592,10 +592,10 @@ class LiteLLMClient:
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         system_prompt: Optional[str] = None,
-        history: Optional[List[Dict]] = None,
+        history: Optional[list[dict]] = None,
         use_cache: bool = True,
         operation: str = "chat",
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
     ) -> str:
         """
         Send a chat message and get a response with intelligent model routing.
@@ -685,9 +685,9 @@ class LiteLLMClient:
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         system_prompt: Optional[str] = None,
-        history: Optional[List[Dict]] = None,
+        history: Optional[list[dict]] = None,
         operation: str = "chat_stream",
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
     ) -> Generator[str, None, None]:
         """
         Stream a chat response token by token.
@@ -776,19 +776,19 @@ class LiteLLMClient:
                 metadata=metadata,
             )
 
-    def get_usage_summary(self, days: int = 30) -> Dict:
+    def get_usage_summary(self, days: int = 30) -> dict:
         """Get usage summary for the specified period."""
         if self.usage_tracker:
             return self.usage_tracker.get_summary(days)
         return {}
 
-    def get_today_usage(self) -> Dict:
+    def get_today_usage(self) -> dict:
         """Get today's usage stats."""
         if self.usage_tracker:
             return self.usage_tracker.get_today()
         return {"tokens": 0, "cost": 0.0, "calls": 0}
 
-    def analyze_complexity(self, prompt: str, history: Optional[List[Dict]] = None) -> Dict:
+    def analyze_complexity(self, prompt: str, history: Optional[list[dict]] = None) -> dict:
         """Analyze prompt complexity and return routing info."""
         complexity, tier = self.complexity_analyzer.analyze(prompt, history)
         selected_model = self._select_model(prompt, history)
@@ -800,7 +800,7 @@ class LiteLLMClient:
             "routing_rules": self.routing_rules,
         }
 
-    def list_available_models(self) -> List[str]:
+    def list_available_models(self) -> list[str]:
         """List all configured models."""
         models = []
         providers = self.config.get("litellm", {}).get("providers", {})
@@ -846,7 +846,8 @@ if __name__ == "__main__":
             print(f"Simple query complexity: {analysis}")
 
             analysis = client.analyze_complexity(
-                "Analyze the architecture of this system and provide a comprehensive redesign strategy."
+                "Analyze the architecture of this system and provide "
+                "a comprehensive redesign strategy."
             )
             print(f"Complex query complexity: {analysis}")
 

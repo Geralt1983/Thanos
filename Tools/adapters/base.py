@@ -7,7 +7,7 @@ Provides abstract base class and standard result type for all adapters.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -17,14 +17,14 @@ class ToolResult:
     success: bool
     data: Any
     error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Add timestamp to metadata if not present."""
         if "timestamp" not in self.metadata:
             self.metadata["timestamp"] = datetime.utcnow().isoformat()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary for serialization."""
         return {
             "success": self.success,
@@ -54,7 +54,7 @@ class BaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """
         Return list of available tools with their schemas.
 
@@ -66,7 +66,7 @@ class BaseAdapter(ABC):
         pass
 
     @abstractmethod
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
+    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """
         Execute a tool and return the result.
 
@@ -79,13 +79,13 @@ class BaseAdapter(ABC):
         """
         pass
 
-    def get_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
+    def get_tool(self, tool_name: str) -> Optional[dict[str, Any]]:
         """Get a specific tool's schema by name."""
         tools = {t["name"]: t for t in self.list_tools()}
         return tools.get(tool_name)
 
     def validate_arguments(
-        self, tool_name: str, arguments: Dict[str, Any]
+        self, tool_name: str, arguments: dict[str, Any]
     ) -> tuple[bool, Optional[str]]:
         """
         Validate arguments against tool schema.
@@ -113,7 +113,7 @@ class BaseAdapter(ABC):
 
         return True, None
 
-    async def call_tool_validated(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
+    async def call_tool_validated(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """
         Validate arguments then execute tool.
 

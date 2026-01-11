@@ -22,7 +22,7 @@ import json
 from pathlib import Path
 import re
 import sys
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 
 # Ensure Thanos project is in path for imports BEFORE importing from Tools
@@ -63,7 +63,7 @@ class Agent:
     name: str
     role: str
     voice: str
-    triggers: List[str]
+    triggers: list[str]
     content: str
     file_path: str
 
@@ -104,7 +104,7 @@ class Command:
 
     name: str
     description: str
-    parameters: List[str]
+    parameters: list[str]
     workflow: str
     content: str
     file_path: str
@@ -152,9 +152,9 @@ class ThanosOrchestrator:
         self.api_client = api_client
 
         # Load components
-        self.agents: Dict[str, Agent] = {}
-        self.commands: Dict[str, Command] = {}
-        self.context: Dict[str, str] = {}
+        self.agents: dict[str, Agent] = {}
+        self.commands: dict[str, Command] = {}
+        self.context: dict[str, str] = {}
 
         self._load_agents()
         self._load_commands()
@@ -211,10 +211,12 @@ class ThanosOrchestrator:
         parts = []
 
         # Base identity
-        parts.append("""You are Thanos - Jeremy's personal AI assistant and external prefrontal cortex.
+        parts.append(
+            """You are Thanos - Jeremy's personal AI assistant and external prefrontal cortex.
 You manage his entire life: work, family, health, and goals.
 You are proactive, direct, and warm but honest.
-You track patterns and surface them.""")
+You track patterns and surface them."""
+        )
 
         # Add core context
         if include_context and "CORE" in self.context:
@@ -529,7 +531,7 @@ You track patterns and surface them.""")
         agent_name = agent.name if agent else None
         return self.chat(message, agent=agent_name, stream=stream)
 
-    def list_commands(self) -> List[str]:
+    def list_commands(self) -> list[str]:
         """List all available commands."""
         seen = set()
         result = []
@@ -539,11 +541,11 @@ You track patterns and surface them.""")
                 result.append(f"{cmd.name} - {cmd.description[:50]}...")
         return sorted(result)
 
-    def list_agents(self) -> List[str]:
+    def list_agents(self) -> list[str]:
         """List all available agents."""
         return [f"{a.name} ({a.role})" for a in self.agents.values()]
 
-    def get_usage(self, days: int = 30) -> Dict:
+    def get_usage(self, days: int = 30) -> dict:
         """Get API usage summary."""
         self._ensure_client()
         return self.api_client.get_usage_summary(days)
@@ -599,7 +601,7 @@ def _output_hook_response(context: str):
     print(json.dumps({"hookSpecificOutput": {"additionalContext": context}}))
 
 
-def handle_hook(event: str, args: List[str], base_dir: Path):
+def handle_hook(event: str, args: list[str], base_dir: Path):
     """Handle hook events from Claude Code lifecycle.
 
     This function is designed to be fast and reliable:

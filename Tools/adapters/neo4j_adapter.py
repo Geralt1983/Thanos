@@ -14,7 +14,7 @@ Uses async Neo4j driver for non-blocking operations.
 from dataclasses import dataclass
 from datetime import datetime
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .base import BaseAdapter, ToolResult
 
@@ -34,8 +34,8 @@ class GraphNode:
     """Represents a node in the knowledge graph."""
 
     id: str
-    labels: List[str]
-    properties: Dict[str, Any]
+    labels: list[str]
+    properties: dict[str, Any]
 
 
 @dataclass
@@ -45,7 +45,7 @@ class GraphRelationship:
     type: str
     from_id: str
     to_id: str
-    properties: Dict[str, Any]
+    properties: dict[str, Any]
 
 
 # =============================================================================
@@ -183,7 +183,7 @@ class Neo4jAdapter(BaseAdapter):
     def name(self) -> str:
         return "neo4j"
 
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """Return available graph operations."""
         return [
             # Commitment operations
@@ -322,7 +322,7 @@ class Neo4jAdapter(BaseAdapter):
             },
         ]
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
+    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """Route tool calls to appropriate handlers."""
         handlers = {
             "create_commitment": self._create_commitment,
@@ -354,7 +354,7 @@ class Neo4jAdapter(BaseAdapter):
     # Commitment Operations
     # =========================================================================
 
-    async def _create_commitment(self, args: Dict[str, Any]) -> ToolResult:
+    async def _create_commitment(self, args: dict[str, Any]) -> ToolResult:
         """Create a new commitment node."""
         import uuid
 
@@ -392,7 +392,7 @@ class Neo4jAdapter(BaseAdapter):
             {"id": commitment_id, "message": f"Created commitment: {args['content'][:50]}..."}
         )
 
-    async def _complete_commitment(self, args: Dict[str, Any]) -> ToolResult:
+    async def _complete_commitment(self, args: dict[str, Any]) -> ToolResult:
         """Mark a commitment as completed."""
         now = datetime.utcnow().isoformat()
 
@@ -417,7 +417,7 @@ class Neo4jAdapter(BaseAdapter):
             {"id": args["commitment_id"], "status": "completed", "completed_at": now}
         )
 
-    async def _get_commitments(self, args: Dict[str, Any]) -> ToolResult:
+    async def _get_commitments(self, args: dict[str, Any]) -> ToolResult:
         """Get commitments with optional filters."""
         conditions = []
         params = {"limit": args.get("limit", 20)}
@@ -455,7 +455,7 @@ class Neo4jAdapter(BaseAdapter):
     # Decision Operations
     # =========================================================================
 
-    async def _record_decision(self, args: Dict[str, Any]) -> ToolResult:
+    async def _record_decision(self, args: dict[str, Any]) -> ToolResult:
         """Record a decision with rationale."""
         import uuid
 
@@ -492,7 +492,7 @@ class Neo4jAdapter(BaseAdapter):
             {"id": decision_id, "message": f"Recorded decision: {args['content'][:50]}..."}
         )
 
-    async def _get_decisions(self, args: Dict[str, Any]) -> ToolResult:
+    async def _get_decisions(self, args: dict[str, Any]) -> ToolResult:
         """Get decisions with optional filters."""
         conditions = []
         params = {"limit": args.get("limit", 20)}
@@ -526,7 +526,7 @@ class Neo4jAdapter(BaseAdapter):
     # Pattern Operations
     # =========================================================================
 
-    async def _record_pattern(self, args: Dict[str, Any]) -> ToolResult:
+    async def _record_pattern(self, args: dict[str, Any]) -> ToolResult:
         """Record or update a behavioral pattern."""
         import uuid
 
@@ -603,7 +603,7 @@ class Neo4jAdapter(BaseAdapter):
             }
         )
 
-    async def _get_patterns(self, args: Dict[str, Any]) -> ToolResult:
+    async def _get_patterns(self, args: dict[str, Any]) -> ToolResult:
         """Get recorded patterns."""
         conditions = []
         params = {"limit": args.get("limit", 20)}
@@ -637,7 +637,7 @@ class Neo4jAdapter(BaseAdapter):
     # Session Operations
     # =========================================================================
 
-    async def _start_session(self, args: Dict[str, Any]) -> ToolResult:
+    async def _start_session(self, args: dict[str, Any]) -> ToolResult:
         """Record start of a conversation session."""
         import uuid
 
@@ -667,7 +667,7 @@ class Neo4jAdapter(BaseAdapter):
 
         return ToolResult.ok({"session_id": session_id, "started_at": now})
 
-    async def _end_session(self, args: Dict[str, Any]) -> ToolResult:
+    async def _end_session(self, args: dict[str, Any]) -> ToolResult:
         """Record end of session with summary."""
         now = datetime.utcnow().isoformat()
 
@@ -700,7 +700,7 @@ class Neo4jAdapter(BaseAdapter):
     # Relationship Operations
     # =========================================================================
 
-    async def _link_nodes(self, args: Dict[str, Any]) -> ToolResult:
+    async def _link_nodes(self, args: dict[str, Any]) -> ToolResult:
         """Create a relationship between two nodes."""
         rel_type = args["relationship"].upper().replace(" ", "_")
 
@@ -736,7 +736,7 @@ class Neo4jAdapter(BaseAdapter):
             {"from": args["from_id"], "relationship": rel_type, "to": args["to_id"]}
         )
 
-    async def _find_related(self, args: Dict[str, Any]) -> ToolResult:
+    async def _find_related(self, args: dict[str, Any]) -> ToolResult:
         """Find nodes related to a given node."""
         depth = args.get("depth", 2)
         rel_filter = f":{args['relationship_type']}" if args.get("relationship_type") else ""
@@ -755,7 +755,7 @@ class Neo4jAdapter(BaseAdapter):
 
         return ToolResult.ok({"related": related, "count": len(related)})
 
-    async def _query_graph(self, args: Dict[str, Any]) -> ToolResult:
+    async def _query_graph(self, args: dict[str, Any]) -> ToolResult:
         """Execute a custom Cypher query (read-only for safety)."""
         query = args["query"].strip()
 
@@ -776,7 +776,7 @@ class Neo4jAdapter(BaseAdapter):
     # Entity Operations
     # =========================================================================
 
-    async def _create_entity(self, args: Dict[str, Any]) -> ToolResult:
+    async def _create_entity(self, args: dict[str, Any]) -> ToolResult:
         """Create a person, client, or project entity."""
         import uuid
 
@@ -813,7 +813,7 @@ class Neo4jAdapter(BaseAdapter):
 
         return ToolResult.ok({"id": record["e"]["id"], "name": args["name"], "type": args["type"]})
 
-    async def _get_entity_context(self, args: Dict[str, Any]) -> ToolResult:
+    async def _get_entity_context(self, args: dict[str, Any]) -> ToolResult:
         """Get all context about an entity."""
         query = """
         MATCH (e:Entity {name: $name})

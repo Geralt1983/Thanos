@@ -25,7 +25,7 @@ Usage:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from .base import BaseAdapter, ToolResult
 from .oura import OuraAdapter
@@ -73,8 +73,8 @@ class AdapterManager:
     """
 
     def __init__(self):
-        self._adapters: Dict[str, BaseAdapter] = {}
-        self._tool_map: Dict[str, str] = {}  # tool_name -> adapter_name
+        self._adapters: dict[str, BaseAdapter] = {}
+        self._tool_map: dict[str, str] = {}  # tool_name -> adapter_name
         self._initialized = False
 
     def register(self, adapter: BaseAdapter) -> None:
@@ -108,7 +108,7 @@ class AdapterManager:
 
         logger.debug(f"Registered adapter '{adapter.name}' with {len(adapter.list_tools())} tools")
 
-    def list_adapters(self) -> List[str]:
+    def list_adapters(self) -> list[str]:
         """Return list of registered adapter names."""
         return list(self._adapters.keys())
 
@@ -116,7 +116,7 @@ class AdapterManager:
         """Get a specific adapter by name."""
         return self._adapters.get(name)
 
-    def list_all_tools(self) -> Dict[str, List[Dict[str, Any]]]:
+    def list_all_tools(self) -> dict[str, list[dict[str, Any]]]:
         """
         List all available tools grouped by adapter.
 
@@ -125,7 +125,7 @@ class AdapterManager:
         """
         return {name: adapter.list_tools() for name, adapter in self._adapters.items()}
 
-    def list_tools_flat(self) -> List[Dict[str, Any]]:
+    def list_tools_flat(self) -> list[dict[str, Any]]:
         """
         List all tools as a flat list with adapter prefixes.
 
@@ -142,7 +142,7 @@ class AdapterManager:
         return tools
 
     async def call_tool(
-        self, tool_name: str, arguments: Optional[Dict[str, Any]] = None
+        self, tool_name: str, arguments: Optional[dict[str, Any]] = None
     ) -> ToolResult:
         """
         Route a tool call to the appropriate adapter.
@@ -182,7 +182,7 @@ class AdapterManager:
             f"Available tools: {available_tools[:10]}... ({len(available_tools)} total)"
         )
 
-    async def call_multiple(self, calls: List[Dict[str, Any]]) -> List[ToolResult]:
+    async def call_multiple(self, calls: list[dict[str, Any]]) -> list[ToolResult]:
         """
         Execute multiple tool calls.
 
@@ -200,7 +200,7 @@ class AdapterManager:
             results.append(result)
         return results
 
-    async def health_check_all(self) -> Dict[str, ToolResult]:
+    async def health_check_all(self) -> dict[str, ToolResult]:
         """
         Run health checks on all adapters.
 

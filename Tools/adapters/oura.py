@@ -7,7 +7,7 @@ bypassing the MCP server for better control and async support.
 
 from datetime import datetime, timedelta
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -47,7 +47,7 @@ class OuraAdapter(BaseAdapter):
             )
         return self._client
 
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """Return list of available Oura tools."""
         return [
             {
@@ -134,7 +134,7 @@ class OuraAdapter(BaseAdapter):
             },
         ]
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
+    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute an Oura tool."""
         try:
             client = await self._get_client()
@@ -250,7 +250,7 @@ class OuraAdapter(BaseAdapter):
 
         return ToolResult.ok(snapshot)
 
-    def _get_latest(self, items: List[Dict], target_date: str) -> Optional[Dict]:
+    def _get_latest(self, items: list[dict], target_date: str) -> Optional[dict]:
         """Get the most recent item, preferring the target date."""
         if not items:
             return None
@@ -263,7 +263,7 @@ class OuraAdapter(BaseAdapter):
         # Fall back to most recent
         return items[-1] if items else None
 
-    def _calculate_summary(self, snapshot: Dict) -> Dict[str, Any]:
+    def _calculate_summary(self, snapshot: dict) -> dict[str, Any]:
         """Calculate summary metrics from snapshot data."""
         summary = {"overall_status": "unknown", "recommendations": []}
 

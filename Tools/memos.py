@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 # Conditional imports with graceful fallbacks
@@ -50,15 +50,15 @@ class MemoryResult:
     """Result from a MemOS query combining graph and vector results."""
 
     success: bool
-    graph_results: List[Dict[str, Any]] = field(default_factory=list)
-    vector_results: List[Dict[str, Any]] = field(default_factory=list)
-    combined: List[Dict[str, Any]] = field(default_factory=list)
+    graph_results: list[dict[str, Any]] = field(default_factory=list)
+    vector_results: list[dict[str, Any]] = field(default_factory=list)
+    combined: list[dict[str, Any]] = field(default_factory=list)
     error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def ok(
-        cls, graph_results: List[Dict] = None, vector_results: List[Dict] = None, **metadata
+        cls, graph_results: list[dict] = None, vector_results: list[dict] = None, **metadata
     ) -> "MemoryResult":
         """Create successful result."""
         graph = graph_results or []
@@ -156,7 +156,7 @@ class MemOS:
         return self._chroma is not None
 
     @property
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Get MemOS status."""
         return {
             "neo4j": "connected" if self._neo4j else "unavailable",
@@ -173,8 +173,8 @@ class MemOS:
         content: str,
         memory_type: str = "observation",
         domain: str = "general",
-        entities: List[str] = None,
-        metadata: Dict[str, Any] = None,
+        entities: list[str] = None,
+        metadata: dict[str, Any] = None,
     ) -> MemoryResult:
         """
         Store a memory in both graph and vector stores.
@@ -303,7 +303,7 @@ class MemOS:
     async def recall(
         self,
         query: str,
-        memory_types: List[str] = None,
+        memory_types: list[str] = None,
         domain: str = None,
         limit: int = 10,
         use_graph: bool = True,
@@ -406,7 +406,7 @@ class MemOS:
         )
 
     async def relate(
-        self, from_id: str, relationship: str, to_id: str, properties: Dict[str, Any] = None
+        self, from_id: str, relationship: str, to_id: str, properties: dict[str, Any] = None
     ) -> MemoryResult:
         """
         Create a relationship between two memories in the graph.
@@ -544,7 +544,7 @@ class MemOS:
         if self._neo4j:
             await self._neo4j.close()
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Check health of all storage backends."""
         status = {"healthy": True, "backends": {}}
 

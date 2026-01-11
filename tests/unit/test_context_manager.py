@@ -312,7 +312,7 @@ class TestUsageReporting:
 
         # Create large history
         history = []
-        for i in range(100):
+        for _i in range(100):
             history.append({"role": "user", "content": "A" * 1000})
 
         system_prompt = "System prompt"

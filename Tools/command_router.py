@@ -11,7 +11,7 @@ from enum import Enum
 import os
 from pathlib import Path
 import re
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Optional
 
 
 # MemOS integration (optional - graceful degradation if unavailable)
@@ -91,11 +91,11 @@ class CommandRouter:
         self._memos_initialized = False
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
-        self._commands: Dict[str, Tuple[Callable, str, List[str]]] = {}
+        self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
         self._register_commands()
 
         # Build trigger patterns for intelligent routing
-        self._trigger_patterns: Dict[str, List[re.Pattern]] = {}
+        self._trigger_patterns: dict[str, list[re.Pattern]] = {}
         self._build_trigger_patterns()
 
     def _build_trigger_patterns(self):
@@ -164,7 +164,7 @@ class CommandRouter:
             Agent name if a better match found, None if current agent is appropriate
         """
         message_lower = message.lower()
-        scores: Dict[str, int] = {}
+        scores: dict[str, int] = {}
 
         # Score each agent based on trigger matches
         for agent_name, patterns in self._trigger_patterns.items():
@@ -244,11 +244,12 @@ class CommandRouter:
             return handler(args)
         else:
             print(
-                f"{Colors.DIM}Unknown command: /{command}. Type /help for available commands.{Colors.RESET}"
+                f"{Colors.DIM}Unknown command: /{command}. "
+                f"Type /help for available commands.{Colors.RESET}"
             )
             return CommandResult(action=CommandAction.CONTINUE, success=False)
 
-    def get_available_commands(self) -> List[Tuple[str, str, List[str]]]:
+    def get_available_commands(self) -> list[tuple[str, str, list[str]]]:
         """Get list of available commands for help text"""
         # Return unique commands (filter out aliases for main list)
         unique_commands = []
@@ -466,7 +467,8 @@ class CommandRouter:
         print(f"\n{Colors.CYAN}Recent Sessions:{Colors.RESET}")
         for s in sessions:
             print(
-                f"  {s['id']}  {s['date']}  {s['agent']:8}  {s['messages']:3} msgs  {s['tokens']:,} tokens"
+                f"  {s['id']}  {s['date']}  {s['agent']:8}  "
+                f"{s['messages']:3} msgs  {s['tokens']:,} tokens"
             )
         print(f"\n{Colors.DIM}Use /resume <id> or /resume last to restore{Colors.RESET}\n")
         return CommandResult()
@@ -499,7 +501,8 @@ class CommandRouter:
                 f"  Previous tokens: {stats['total_input_tokens'] + stats['total_output_tokens']:,}"
             )
             print(
-                f"\n{Colors.DIM}Conversation history loaded. Continue where you left off.{Colors.RESET}\n"
+                f"\n{Colors.DIM}Conversation history loaded. "
+                f"Continue where you left off.{Colors.RESET}\n"
             )
             return CommandResult()
         else:
@@ -512,20 +515,24 @@ class CommandRouter:
         if not args:
             print(f"{Colors.DIM}Usage: /remember <content to store>{Colors.RESET}")
             print(
-                f"{Colors.DIM}Options: /remember decision: <text>  - Store as decision{Colors.RESET}"
+                f"{Colors.DIM}Options: /remember decision: <text>  - "
+                f"Store as decision{Colors.RESET}"
             )
             print(
-                f"{Colors.DIM}         /remember pattern: <text>  - Store as pattern{Colors.RESET}"
+                f"{Colors.DIM}         /remember pattern: <text>  - "
+                f"Store as pattern{Colors.RESET}"
             )
             print(
-                f"{Colors.DIM}         /remember <text>           - Store as observation{Colors.RESET}"
+                f"{Colors.DIM}         /remember <text>           - "
+                f"Store as observation{Colors.RESET}"
             )
             return CommandResult()
 
         memos = self._get_memos()
         if not memos:
             print(
-                f"{Colors.DIM}MemOS not available. Check Neo4j/ChromaDB configuration.{Colors.RESET}"
+                f"{Colors.DIM}MemOS not available. "
+                f"Check Neo4j/ChromaDB configuration.{Colors.RESET}"
             )
             return CommandResult(success=False)
 
@@ -652,7 +659,8 @@ class CommandRouter:
         # Display MemOS results
         if memos_results:
             print(
-                f"\n{Colors.CYAN}MemOS Knowledge Graph ({len(memos_results)} results):{Colors.RESET}\n"
+                f"\n{Colors.CYAN}MemOS Knowledge Graph "
+                f"({len(memos_results)} results):{Colors.RESET}\n"
             )
             for r in memos_results:
                 source_icon = "🔍" if r["source"] == "vector" else "🔗"
@@ -806,7 +814,8 @@ class CommandRouter:
         print(f"  Branched from: {branch_info['parent_id']}")
         print(f"  At message: {branch_info['branch_point']}")
         print(
-            f"\n{Colors.DIM}Continue conversation on this branch. Use /branches to list all.{Colors.RESET}\n"
+            f"\n{Colors.DIM}Continue conversation on this branch. "
+            f"Use /branches to list all.{Colors.RESET}\n"
         )
         return CommandResult()
 

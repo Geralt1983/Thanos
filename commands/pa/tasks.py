@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 import re
 import sys
-from typing import List, Optional, Tuple
+from typing import Optional
 
 
 # Add project root to path
@@ -105,7 +105,7 @@ def save_to_history(action: str, response: str):
         f.write(response)
 
 
-def find_matching_task(search_term: str) -> List[Tuple[Path, str, int]]:
+def find_matching_task(search_term: str) -> list[tuple[Path, str, int]]:
     """Find tasks matching the search term in state files.
 
     Searches Today.md, Commitments.md, and ThisWeek.md for incomplete
@@ -168,7 +168,10 @@ def complete_task(search_term: str) -> str:
     matches = find_matching_task(search_term)
 
     if not matches:
-        return f"❌ No incomplete task found matching: '{search_term}'\n\nTry `/pa:tasks list` to see available tasks."
+        return (
+            f"❌ No incomplete task found matching: '{search_term}'\n\n"
+            f"Try `/pa:tasks list` to see available tasks."
+        )
 
     if len(matches) > 1:
         # Multiple matches - show them and ask for more specific input
