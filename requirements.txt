@@ -9,5 +9,10 @@ neo4j>=5.0.0           # Neo4j graph database driver (AuraDB)
 chromadb>=0.5.0        # ChromaDB vector database
 openai>=1.0.0          # OpenAI embeddings for vector search
 
+# Google Calendar Integration
+google-auth>=2.0.0               # Google authentication library
+google-auth-oauthlib>=1.0.0      # OAuth 2.0 flow for Google APIs
+google-api-python-client>=2.0.0  # Google Calendar API client
+
 # Future: MCP SDK for full protocol support
 # mcp>=1.0.0
