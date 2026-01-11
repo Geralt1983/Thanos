@@ -16,6 +16,7 @@ Usage:
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
+import json
 import re
 
 
@@ -201,6 +202,29 @@ class StateReader:
             return items[:5]  # Limit to 5
         except Exception:
             return []
+
+    def get_last_interaction_time(self) -> Optional[datetime]:
+        """Get the timestamp of the last user interaction.
+
+        Reads the TimeState.json file and extracts the last interaction
+        timestamp for calculating elapsed time between interactions.
+
+        Returns:
+            datetime of last interaction, or None if not found/unavailable
+        """
+        path = self.state_dir / "TimeState.json"
+        if not path.exists():
+            return None
+
+        try:
+            content = path.read_text()
+            data = json.loads(content)
+            timestamp_str = data.get("last_interaction", {}).get("timestamp")
+            if timestamp_str:
+                return datetime.fromisoformat(timestamp_str)
+            return None
+        except Exception:
+            return None
 
     def is_morning(self) -> bool:
         """Check if current time is morning (5am-12pm).
