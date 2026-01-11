@@ -51,6 +51,18 @@
     "notification": {
       "enabled": false,
       "summary_only": true
+    },
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "use_tls": true,
+      "from_address": "",
+      "to_address": "",
+      "subject_pattern": "{type} Briefing - {date}",
+      "format": "html",
+      "service": "smtp",
+      "_comment": "Email delivery is not yet implemented. This is a placeholder for future integration with SMTP or email service APIs (SendGrid, Mailgun, AWS SES)."
     }
   },
 

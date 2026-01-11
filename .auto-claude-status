@@ -1,10 +1,10 @@
 {
   "active": true,
-  "spec": "026-split-massive-mcp-server-index-ts-into-domain-modu",
+  "spec": "011-exposed-api-keys-in-env-file-require-immediate-rot",
   "state": "building",
   "subtasks": {
-    "completed": 24,
-    "total": 28,
+    "completed": 0,
+    "total": 0,
     "in_progress": 1,
     "failed": 0
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 7,
-    "started_at": "2026-01-10T23:16:53.699801"
+    "number": 5,
+    "started_at": "2026-01-11T08:03:37.060406"
   },
-  "last_update": "2026-01-10T23:38:43.865809"
+  "last_update": "2026-01-11T08:20:37.273425"
 }
