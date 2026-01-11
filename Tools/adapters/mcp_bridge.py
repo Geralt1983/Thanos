@@ -12,6 +12,7 @@ the full MCP protocol lifecycle:
 import asyncio
 import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
@@ -21,6 +22,7 @@ from mcp.types import Implementation, InitializeResult
 from .base import BaseAdapter, ToolResult
 from .mcp_capabilities import CapabilityManager, create_capability_manager
 from .mcp_config import MCPServerConfig, SSEConfig, StdioConfig
+from .mcp_observability import MCPLogger, get_metrics
 from .transports import SSETransport, StdioTransport, Transport
 
 logger = logging.getLogger(__name__)
@@ -71,6 +73,10 @@ class MCPBridge(BaseAdapter):
         self._initialized = False
         self._transport: Optional[Transport] = None
 
+        # Observability infrastructure
+        self._mcp_logger = MCPLogger(server_config.name)
+        self._metrics = get_metrics(server_config.name)
+
     @property
     def name(self) -> str:
         """Return the adapter/server name."""
@@ -114,6 +120,15 @@ class MCPBridge(BaseAdapter):
         # Create transport instance
         transport = self._create_transport()
 
+        # Log connection attempt
+        transport_config = {
+            "command": getattr(self.config.transport, "command", None),
+            "transport": transport.transport_type,
+        }
+        self._mcp_logger.log_connection_attempt(transport_config)
+
+        start_time = time.time()
+
         logger.debug(
             f"Connecting to MCP server '{self.name}' via {transport.transport_type}"
         )
@@ -133,6 +148,22 @@ class MCPBridge(BaseAdapter):
                     # Store server capabilities for feature detection
                     self._capability_manager.set_server_capabilities(result.capabilities)
                     self._initialized = True
+
+                    # Calculate connection duration
+                    duration = time.time() - start_time
+
+                    # Record successful connection
+                    self._metrics.record_connection_attempt(success=True)
+
+                    # Count tools for logging
+                    try:
+                        tools_result = await session.list_tools()
+                        tools_count = len(tools_result.tools)
+                    except:
+                        tools_count = 0
+
+                    # Log successful connection
+                    self._mcp_logger.log_connection_success(duration, tools_count)
 
                     logger.info(
                         f"MCP session initialized for '{self.name}' - "
@@ -157,6 +188,12 @@ class MCPBridge(BaseAdapter):
                     yield session
 
         except Exception as e:
+            # Record failed connection
+            duration = time.time() - start_time
+            self._metrics.record_connection_attempt(success=False)
+            self._mcp_logger.log_connection_failure(str(e), duration)
+            self._metrics.record_error("server")
+
             logger.error(f"Failed to create MCP session for '{self.name}': {e}", exc_info=True)
             raise RuntimeError(f"MCP session creation failed: {e}") from e
 
@@ -263,9 +300,16 @@ class MCPBridge(BaseAdapter):
             Each tool call creates a new session. For better performance with
             multiple calls, consider implementing connection pooling.
         """
+        start_time = time.time()
+        success = False
+
         try:
             # Check if server supports tools
             if self._initialized and not self._capability_manager.supports_tools():
+                duration = time.time() - start_time
+                self._metrics.record_tool_call(tool_name, success=False, duration=duration)
+                self._mcp_logger.log_tool_call(tool_name, arguments, duration, success=False)
+
                 return ToolResult.fail(
                     f"Server '{self.name}' does not support tools capability",
                     server=self.name,
@@ -300,11 +344,21 @@ class MCPBridge(BaseAdapter):
 
                     # Check if result indicates an error
                     if result.isError:
+                        duration = time.time() - start_time
+                        self._metrics.record_tool_call(tool_name, success=False, duration=duration)
+                        self._mcp_logger.log_tool_call(tool_name, arguments, duration, success=False)
+
                         return ToolResult.fail(
                             str(data),
                             server=self.name,
                             tool=tool_name,
                         )
+
+                    # Success
+                    success = True
+                    duration = time.time() - start_time
+                    self._metrics.record_tool_call(tool_name, success=True, duration=duration)
+                    self._mcp_logger.log_tool_call(tool_name, arguments, duration, success=True)
 
                     return ToolResult.ok(
                         data,
@@ -313,12 +367,22 @@ class MCPBridge(BaseAdapter):
                     )
 
                 # No content returned
+                duration = time.time() - start_time
+
                 if result.isError:
+                    self._metrics.record_tool_call(tool_name, success=False, duration=duration)
+                    self._mcp_logger.log_tool_call(tool_name, arguments, duration, success=False)
+
                     return ToolResult.fail(
                         "Tool execution failed with no error message",
                         server=self.name,
                         tool=tool_name,
                     )
+
+                # Success with no content
+                success = True
+                self._metrics.record_tool_call(tool_name, success=True, duration=duration)
+                self._mcp_logger.log_tool_call(tool_name, arguments, duration, success=True)
 
                 return ToolResult.ok(
                     None,
@@ -327,6 +391,12 @@ class MCPBridge(BaseAdapter):
                 )
 
         except Exception as e:
+            duration = time.time() - start_time
+            self._metrics.record_tool_call(tool_name, success=False, duration=duration)
+            self._mcp_logger.log_tool_call(tool_name, arguments, duration, success=False)
+            self._mcp_logger.log_error("tool_execution", str(e), {"tool": tool_name, "arguments": arguments})
+            self._metrics.record_error("server")
+
             logger.error(
                 f"Error calling tool '{tool_name}' on MCP server '{self.name}': {e}",
                 exc_info=True,
@@ -397,6 +467,7 @@ class MCPBridge(BaseAdapter):
             so this method primarily clears the tool cache and logs shutdown.
         """
         logger.info(f"Closing MCP bridge adapter '{self.name}'")
+        self._metrics.record_connection_close()
         self._tools_cache = None
         self._initialized = False
 
@@ -405,10 +476,10 @@ class MCPBridge(BaseAdapter):
         Check adapter health by testing server connectivity.
 
         Creates a session and verifies that the MCP server responds to
-        a list_tools request. Also includes capability information.
+        a list_tools request. Also includes capability information and metrics.
 
         Returns:
-            ToolResult indicating health status
+            ToolResult indicating health status with performance metrics
         """
         try:
             # Try to fetch tools as a health check
@@ -416,22 +487,56 @@ class MCPBridge(BaseAdapter):
                 result = await session.list_tools()
                 tool_count = len(result.tools)
 
-                return ToolResult.ok(
-                    {
-                        "status": "ok",
-                        "adapter": self.name,
-                        "transport": self.config.transport.type,
-                        "tool_count": tool_count,
-                        "initialized": self._initialized,
-                        "capabilities": self._capability_manager.get_capability_summary(),
-                    }
+                # Get performance metrics
+                metrics_summary = self._metrics.get_summary()
+
+                # Determine health status based on metrics
+                error_rate = (
+                    metrics_summary["tool_calls"]["failed"] / metrics_summary["tool_calls"]["total"]
+                    if metrics_summary["tool_calls"]["total"] > 0
+                    else 0.0
                 )
 
+                status = "healthy"
+                if error_rate > 0.5:
+                    status = "unhealthy"
+                elif error_rate > 0.1:
+                    status = "degraded"
+
+                health_details = {
+                    "status": status,
+                    "adapter": self.name,
+                    "transport": self.config.transport.type,
+                    "tool_count": tool_count,
+                    "initialized": self._initialized,
+                    "capabilities": self._capability_manager.get_capability_summary(),
+                    "metrics": metrics_summary,
+                }
+
+                self._mcp_logger.log_health_check(status, health_details)
+
+                return ToolResult.ok(health_details)
+
         except Exception as e:
+            self._mcp_logger.log_health_check("unhealthy", {"error": str(e)})
             return ToolResult.fail(
                 f"Health check failed: {e}",
                 adapter=self.name,
             )
+
+    def get_performance_metrics(self) -> dict[str, Any]:
+        """
+        Get performance metrics for this MCP bridge.
+
+        Returns:
+            Dictionary with connection, tool call, and performance metrics
+
+        Example:
+            >>> metrics = bridge.get_performance_metrics()
+            >>> print(f"Success rate: {metrics['tool_calls']['success_rate']:.1%}")
+            >>> print(f"Avg call time: {metrics['performance']['avg_call_times']}")
+        """
+        return self._metrics.get_summary()
 
 
 def create_mcp_bridge_from_config(config: MCPServerConfig) -> MCPBridge:

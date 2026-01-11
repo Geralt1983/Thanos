@@ -76,3 +76,77 @@ def mock_api_config(temp_config_dir):
     config_file = temp_config_dir / "api.json"
     config_file.write_text(json.dumps(config, indent=2))
     return config_file
+
+
+# MCP-specific fixtures
+
+@pytest.fixture
+def mock_server_config():
+    """Create mock MCP server configuration."""
+    try:
+        from Tools.adapters.mcp_config import MCPServerConfig
+        return MCPServerConfig(
+            name="test-server",
+            command="python",
+            args=["-m", "test_server"],
+            env={"TEST_VAR": "test_value"},
+            transport="stdio",
+            description="Test MCP server"
+        )
+    except ImportError:
+        pytest.skip("MCP dependencies not available")
+
+
+@pytest.fixture
+def mock_mcp_client(mocker):
+    """Create mock MCP client."""
+    mock_client = mocker.AsyncMock()
+    mock_client.list_tools = mocker.AsyncMock(return_value=[
+        {
+            "name": "test_tool",
+            "description": "Test tool for unit testing",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "param1": {"type": "string"},
+                    "param2": {"type": "integer"}
+                },
+                "required": ["param1"]
+            }
+        }
+    ])
+
+    mock_client.call_tool = mocker.AsyncMock(return_value={
+        "content": [{"type": "text", "text": "Test result"}]
+    })
+
+    return mock_client
+
+
+@pytest.fixture
+def mock_mcp_discovery(tmp_path):
+    """Create mock MCP server configuration file."""
+    import json
+
+    config_file = tmp_path / "mcp_servers.json"
+    config_data = {
+        "mcpServers": {
+            "test-server-1": {
+                "command": "python",
+                "args": ["-m", "server1"],
+                "env": {},
+                "transport": "stdio",
+                "description": "Test server 1"
+            },
+            "test-server-2": {
+                "command": "node",
+                "args": ["server2.js"],
+                "env": {"NODE_ENV": "test"},
+                "transport": "stdio",
+                "description": "Test server 2"
+            }
+        }
+    }
+
+    config_file.write_text(json.dumps(config_data, indent=2))
+    return str(config_file)
