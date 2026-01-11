@@ -7,7 +7,7 @@ for calendar integration, event management, and scheduling intelligence.
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -432,6 +432,42 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                 },
             },
+            {
+                "name": "get_events",
+                "description": "Fetch events for a date range. Supports all-day vs timed events, recurring events, event status, attendees, and location.",
+                "parameters": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID to fetch events from. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "include_cancelled": {
+                        "type": "boolean",
+                        "description": "Include cancelled events in results. Defaults to False.",
+                        "required": False,
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of events to return. Defaults to 250.",
+                        "required": False,
+                    },
+                    "single_events": {
+                        "type": "boolean",
+                        "description": "Expand recurring events into individual instances. Defaults to True.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -456,6 +492,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_revoke_auth()
             elif tool_name == "list_calendars":
                 return await self._tool_list_calendars(arguments)
+            elif tool_name == "get_events":
+                return await self._tool_get_events(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -608,6 +646,197 @@ class GoogleCalendarAdapter(BaseAdapter):
                         "show_hidden": show_hidden,
                         "min_access_role": min_access_role,
                         "primary_only": primary_only,
+                    },
+                }
+            )
+
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+
+    async def _tool_get_events(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Fetch events for a date range.
+
+        Args:
+            arguments: Tool parameters including:
+                - start_date: Start date in ISO 8601 format (required)
+                - end_date: End date in ISO 8601 format (required)
+                - calendar_id: Calendar ID (default: 'primary')
+                - include_cancelled: Include cancelled events (default: False)
+                - max_results: Maximum number of events (default: 250)
+                - single_events: Expand recurring events (default: True)
+
+        Returns:
+            ToolResult containing list of events with detailed information
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract and validate required parameters
+            start_date_str = arguments.get("start_date")
+            end_date_str = arguments.get("end_date")
+
+            if not start_date_str:
+                return ToolResult.fail("Missing required parameter: start_date")
+            if not end_date_str:
+                return ToolResult.fail("Missing required parameter: end_date")
+
+            # Parse dates - support both date-only and datetime formats
+            try:
+                # Try parsing as datetime first
+                if "T" in start_date_str:
+                    start_datetime = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
+                else:
+                    # Date only - start of day
+                    start_datetime = datetime.fromisoformat(f"{start_date_str}T00:00:00")
+
+                if "T" in end_date_str:
+                    end_datetime = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                else:
+                    # Date only - end of day
+                    end_datetime = datetime.fromisoformat(f"{end_date_str}T23:59:59")
+
+            except ValueError as e:
+                return ToolResult.fail(f"Invalid date format: {str(e)}. Use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
+
+            # Validate date range
+            if end_datetime < start_datetime:
+                return ToolResult.fail("end_date must be after start_date")
+
+            # Extract optional parameters with defaults
+            calendar_id = arguments.get("calendar_id", "primary")
+            include_cancelled = arguments.get("include_cancelled", False)
+            max_results = arguments.get("max_results", 250)
+            single_events = arguments.get("single_events", True)
+
+            # Build API request parameters
+            # Convert to RFC3339 format required by Google Calendar API
+            time_min = start_datetime.isoformat() + "Z" if not start_datetime.tzinfo else start_datetime.isoformat()
+            time_max = end_datetime.isoformat() + "Z" if not end_datetime.tzinfo else end_datetime.isoformat()
+
+            request_params = {
+                "calendarId": calendar_id,
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "maxResults": max_results,
+                "singleEvents": single_events,
+                "orderBy": "startTime" if single_events else None,
+            }
+
+            # Remove None values
+            request_params = {k: v for k, v in request_params.items() if v is not None}
+
+            # Fetch events from Google Calendar API
+            events_result = service.events().list(**request_params).execute()
+            raw_events = events_result.get("items", [])
+
+            # Process and format events
+            formatted_events = []
+            for event in raw_events:
+                # Filter cancelled events if requested
+                event_status = event.get("status", "confirmed")
+                if not include_cancelled and event_status == "cancelled":
+                    continue
+
+                # Determine if event is all-day or timed
+                start = event.get("start", {})
+                end = event.get("end", {})
+
+                is_all_day = "date" in start and "dateTime" not in start
+
+                # Extract start and end times
+                if is_all_day:
+                    start_time = start.get("date")
+                    end_time = end.get("date")
+                else:
+                    start_time = start.get("dateTime")
+                    end_time = end.get("dateTime")
+
+                # Extract attendees information
+                attendees = []
+                for attendee in event.get("attendees", []):
+                    attendees.append({
+                        "email": attendee.get("email"),
+                        "display_name": attendee.get("displayName"),
+                        "response_status": attendee.get("responseStatus"),  # accepted, declined, tentative, needsAction
+                        "organizer": attendee.get("organizer", False),
+                        "optional": attendee.get("optional", False),
+                    })
+
+                # Check if event is recurring
+                is_recurring = "recurringEventId" in event or "recurrence" in event
+                recurring_event_id = event.get("recurringEventId")
+                recurrence_rules = event.get("recurrence", [])
+
+                # Build formatted event data
+                formatted_event = {
+                    "id": event.get("id"),
+                    "summary": event.get("summary", "(No title)"),
+                    "description": event.get("description"),
+                    "location": event.get("location"),
+                    "start": start_time,
+                    "end": end_time,
+                    "start_timezone": start.get("timeZone"),
+                    "end_timezone": end.get("timeZone"),
+                    "is_all_day": is_all_day,
+                    "status": event_status,  # confirmed, tentative, cancelled
+                    "attendees": attendees,
+                    "attendees_count": len(attendees),
+                    "organizer": {
+                        "email": event.get("organizer", {}).get("email"),
+                        "display_name": event.get("organizer", {}).get("displayName"),
+                        "is_self": event.get("organizer", {}).get("self", False),
+                    },
+                    "is_recurring": is_recurring,
+                    "recurring_event_id": recurring_event_id,
+                    "recurrence_rules": recurrence_rules,
+                    "html_link": event.get("htmlLink"),
+                    "created": event.get("created"),
+                    "updated": event.get("updated"),
+                    "creator": {
+                        "email": event.get("creator", {}).get("email"),
+                        "display_name": event.get("creator", {}).get("displayName"),
+                    },
+                    "visibility": event.get("visibility", "default"),  # default, public, private, confidential
+                    "transparency": event.get("transparency", "opaque"),  # opaque (busy), transparent (free)
+                    "color_id": event.get("colorId"),
+                    "reminders": event.get("reminders"),
+                    "conference_data": event.get("conferenceData"),
+                }
+
+                formatted_events.append(formatted_event)
+
+            # Sort events by start time (for non-single-event queries)
+            if not single_events:
+                formatted_events.sort(key=lambda e: e["start"] or "")
+
+            # Generate summary statistics
+            total_events = len(formatted_events)
+            all_day_count = sum(1 for e in formatted_events if e["is_all_day"])
+            timed_count = total_events - all_day_count
+            recurring_count = sum(1 for e in formatted_events if e["is_recurring"])
+
+            status_counts = {}
+            for event in formatted_events:
+                status = event["status"]
+                status_counts[status] = status_counts.get(status, 0) + 1
+
+            return ToolResult.ok(
+                {
+                    "events": formatted_events,
+                    "summary": {
+                        "total_count": total_events,
+                        "all_day_events": all_day_count,
+                        "timed_events": timed_count,
+                        "recurring_events": recurring_count,
+                        "status_breakdown": status_counts,
+                        "date_range": {
+                            "start": start_date_str,
+                            "end": end_date_str,
+                        },
+                        "calendar_id": calendar_id,
                     },
                 }
             )
