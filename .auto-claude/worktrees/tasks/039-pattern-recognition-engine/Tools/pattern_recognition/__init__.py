@@ -32,6 +32,19 @@ from .analyzers.task_patterns import (
     get_all_task_patterns,
 )
 
+from .insight_generator import (
+    generate_insight_from_task_pattern,
+    generate_insight_from_health_correlation,
+    generate_insight_from_habit_streak,
+    generate_insight_from_trend,
+    generate_insights_from_all_patterns,
+    rank_insights,
+    filter_insights_by_confidence,
+    filter_insights_by_category,
+    calculate_recency_score,
+    calculate_significance_score,
+)
+
 __all__ = [
     # Models
     "TaskCompletionPattern",
@@ -56,4 +69,15 @@ __all__ = [
     "analyze_task_type_patterns",
     "calculate_daily_completion_rate",
     "get_all_task_patterns",
+    # Insight Generation
+    "generate_insight_from_task_pattern",
+    "generate_insight_from_health_correlation",
+    "generate_insight_from_habit_streak",
+    "generate_insight_from_trend",
+    "generate_insights_from_all_patterns",
+    "rank_insights",
+    "filter_insights_by_confidence",
+    "filter_insights_by_category",
+    "calculate_recency_score",
+    "calculate_significance_score",
 ]
