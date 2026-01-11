@@ -83,7 +83,7 @@ def save_to_history(topic: str, response: str):
     safe_topic = safe_topic.strip().replace(" ", "_") or "brainstorm"
     filename = f"{timestamp.strftime('%Y-%m-%d')}_{safe_topic}.md"
 
-    with open(ideas_dir / filename, 'w') as f:
+    with open(ideas_dir / filename, "w") as f:
         f.write(f"# Brainstorm: {topic}\n")
         f.write(f"*{timestamp.strftime('%B %d, %Y %I:%M %p')}*\n\n")
         f.write(response)
@@ -142,7 +142,7 @@ Let's think together.
         prompt=prompt,
         model=model,
         system_prompt=SYSTEM_PROMPT,
-        temperature=0.9  # Higher for creativity
+        temperature=0.9,  # Higher for creativity
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)

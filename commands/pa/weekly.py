@@ -94,7 +94,9 @@ def build_context() -> str:
             except (ValueError, OSError):
                 pass
         if recent_briefings:
-            context_parts.append("## Daily Briefings (Past Week)\n" + "\n\n".join(recent_briefings[:3]))
+            context_parts.append(
+                "## Daily Briefings (Past Week)\n" + "\n\n".join(recent_briefings[:3])
+            )
 
     # Core context
     core_file = project_root / "Context" / "CORE.md"
@@ -123,7 +125,7 @@ def save_to_history(phase: str, response: str):
     week_num = timestamp.isocalendar()[1]
     filename = f"weekly_{timestamp.strftime('%Y')}_W{week_num:02d}_{phase}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Weekly {phase.title()} - Week {week_num}, {timestamp.strftime('%Y')}\n")
         f.write(f"*{timestamp.strftime('%B %d, %Y')}*\n\n")
         f.write(response)
@@ -311,10 +313,7 @@ Ask me uncomfortable questions if you see patterns I'm avoiding.
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)

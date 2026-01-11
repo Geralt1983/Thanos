@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 # Conditional imports with graceful fallbacks
 try:
     from .adapters.neo4j_adapter import GRAPH_SCHEMA, Neo4jAdapter
+
     NEO4J_AVAILABLE = True
 except ImportError:
     NEO4J_AVAILABLE = False
@@ -30,6 +31,7 @@ except ImportError:
 try:
     from chromadb import Client as ChromaClient
     from chromadb.config import Settings
+
     CHROMA_AVAILABLE = True
 except ImportError:
     CHROMA_AVAILABLE = False
@@ -37,6 +39,7 @@ except ImportError:
 
 try:
     import openai
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -45,6 +48,7 @@ except ImportError:
 @dataclass
 class MemoryResult:
     """Result from a MemOS query combining graph and vector results."""
+
     success: bool
     graph_results: List[Dict[str, Any]] = field(default_factory=list)
     vector_results: List[Dict[str, Any]] = field(default_factory=list)
@@ -54,11 +58,8 @@ class MemoryResult:
 
     @classmethod
     def ok(
-        cls,
-        graph_results: List[Dict] = None,
-        vector_results: List[Dict] = None,
-        **metadata
-    ) -> 'MemoryResult':
+        cls, graph_results: List[Dict] = None, vector_results: List[Dict] = None, **metadata
+    ) -> "MemoryResult":
         """Create successful result."""
         graph = graph_results or []
         vector = vector_results or []
@@ -68,7 +69,7 @@ class MemoryResult:
         combined = []
 
         for item in graph + vector:
-            item_id = item.get('id') or item.get('content', '')[:50]
+            item_id = item.get("id") or item.get("content", "")[:50]
             if item_id not in seen_ids:
                 seen_ids.add(item_id)
                 combined.append(item)
@@ -78,11 +79,11 @@ class MemoryResult:
             graph_results=graph,
             vector_results=vector,
             combined=combined,
-            metadata=metadata
+            metadata=metadata,
         )
 
     @classmethod
-    def fail(cls, error: str, **metadata) -> 'MemoryResult':
+    def fail(cls, error: str, **metadata) -> "MemoryResult":
         """Create failed result."""
         return cls(success=False, error=error, metadata=metadata)
 
@@ -104,7 +105,7 @@ class MemOS:
         neo4j_username: Optional[str] = None,
         neo4j_password: Optional[str] = None,
         chroma_path: Optional[str] = None,
-        openai_api_key: Optional[str] = None
+        openai_api_key: Optional[str] = None,
     ):
         """
         Initialize MemOS with both storage backends.
@@ -124,9 +125,7 @@ class MemOS:
         if NEO4J_AVAILABLE:
             try:
                 self._neo4j = Neo4jAdapter(
-                    uri=neo4j_uri,
-                    username=neo4j_username,
-                    password=neo4j_password
+                    uri=neo4j_uri, username=neo4j_username, password=neo4j_password
                 )
             except (ValueError, ImportError) as e:
                 print(f"[MemOS] Neo4j not configured: {e}")
@@ -136,10 +135,9 @@ class MemOS:
             chroma_path = chroma_path or os.path.expanduser("~/.claude/Memory/vectors")
             Path(chroma_path).mkdir(parents=True, exist_ok=True)
 
-            self._chroma = ChromaClient(Settings(
-                persist_directory=chroma_path,
-                anonymized_telemetry=False
-            ))
+            self._chroma = ChromaClient(
+                Settings(persist_directory=chroma_path, anonymized_telemetry=False)
+            )
 
         # Initialize OpenAI for embeddings
         if OPENAI_AVAILABLE:
@@ -163,7 +161,7 @@ class MemOS:
         return {
             "neo4j": "connected" if self._neo4j else "unavailable",
             "chromadb": "connected" if self._chroma else "unavailable",
-            "embeddings": "available" if self._openai_client else "unavailable"
+            "embeddings": "available" if self._openai_client else "unavailable",
         }
 
     # =========================================================================
@@ -176,7 +174,7 @@ class MemOS:
         memory_type: str = "observation",
         domain: str = "general",
         entities: List[str] = None,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
     ) -> MemoryResult:
         """
         Store a memory in both graph and vector stores.
@@ -200,51 +198,60 @@ class MemOS:
         if self._neo4j:
             try:
                 if memory_type == "commitment":
-                    result = await self._neo4j.call_tool("create_commitment", {
-                        "content": content,
-                        "domain": domain,
-                        "to_whom": metadata.get("to_whom", "self"),
-                        "deadline": metadata.get("deadline"),
-                        "priority": metadata.get("priority", 3)
-                    })
+                    result = await self._neo4j.call_tool(
+                        "create_commitment",
+                        {
+                            "content": content,
+                            "domain": domain,
+                            "to_whom": metadata.get("to_whom", "self"),
+                            "deadline": metadata.get("deadline"),
+                            "priority": metadata.get("priority", 3),
+                        },
+                    )
                 elif memory_type == "decision":
-                    result = await self._neo4j.call_tool("record_decision", {
-                        "content": content,
-                        "rationale": metadata.get("rationale", ""),
-                        "domain": domain,
-                        "alternatives": metadata.get("alternatives", []),
-                        "confidence": metadata.get("confidence", 0.7)
-                    })
+                    result = await self._neo4j.call_tool(
+                        "record_decision",
+                        {
+                            "content": content,
+                            "rationale": metadata.get("rationale", ""),
+                            "domain": domain,
+                            "alternatives": metadata.get("alternatives", []),
+                            "confidence": metadata.get("confidence", 0.7),
+                        },
+                    )
                 elif memory_type == "pattern":
-                    result = await self._neo4j.call_tool("record_pattern", {
-                        "description": content,
-                        "type": metadata.get("pattern_type", "behavior"),
-                        "domain": domain,
-                        "frequency": metadata.get("frequency", "situational")
-                    })
+                    result = await self._neo4j.call_tool(
+                        "record_pattern",
+                        {
+                            "description": content,
+                            "type": metadata.get("pattern_type", "behavior"),
+                            "domain": domain,
+                            "frequency": metadata.get("frequency", "situational"),
+                        },
+                    )
                 else:
                     # Generic observation - store as Session note
-                    result = await self._neo4j.call_tool("start_session", {
-                        "agent": "memos",
-                        "mood": metadata.get("mood")
-                    })
+                    result = await self._neo4j.call_tool(
+                        "start_session", {"agent": "memos", "mood": metadata.get("mood")}
+                    )
 
                 if result.success:
                     graph_results.append(result.data)
 
                     # Link to entities
                     for entity in entities:
-                        await self._neo4j.call_tool("create_entity", {
-                            "name": entity,
-                            "type": "auto",
-                            "domain": domain
-                        })
+                        await self._neo4j.call_tool(
+                            "create_entity", {"name": entity, "type": "auto", "domain": domain}
+                        )
                         if result.data.get("id"):
-                            await self._neo4j.call_tool("link_nodes", {
-                                "from_id": result.data["id"],
-                                "relationship": "INVOLVES",
-                                "to_id": f"entity_{entity}"
-                            })
+                            await self._neo4j.call_tool(
+                                "link_nodes",
+                                {
+                                    "from_id": result.data["id"],
+                                    "relationship": "INVOLVES",
+                                    "to_id": f"entity_{entity}",
+                                },
+                            )
 
             except Exception as e:
                 print(f"[MemOS] Graph storage error: {e}")
@@ -258,8 +265,7 @@ class MemOS:
 
                 # Generate embedding
                 embedding_response = self._openai_client.embeddings.create(
-                    model="text-embedding-3-small",
-                    input=content
+                    model="text-embedding-3-small", input=content
                 )
                 embedding = embedding_response.data[0].embedding
 
@@ -269,19 +275,18 @@ class MemOS:
                     ids=[doc_id],
                     embeddings=[embedding],
                     documents=[content],
-                    metadatas=[{
-                        "type": memory_type,
-                        "domain": domain,
-                        "entities": ",".join(entities),
-                        "timestamp": datetime.utcnow().isoformat(),
-                        **{k: str(v) for k, v in metadata.items() if v}
-                    }]
+                    metadatas=[
+                        {
+                            "type": memory_type,
+                            "domain": domain,
+                            "entities": ",".join(entities),
+                            "timestamp": datetime.utcnow().isoformat(),
+                            **{k: str(v) for k, v in metadata.items() if v},
+                        }
+                    ],
                 )
 
-                vector_results.append({
-                    "id": doc_id,
-                    "collection": memory_type + "s"
-                })
+                vector_results.append({"id": doc_id, "collection": memory_type + "s"})
 
             except Exception as e:
                 print(f"[MemOS] Vector storage error: {e}")
@@ -292,7 +297,7 @@ class MemOS:
         return MemoryResult.ok(
             graph_results=graph_results,
             vector_results=vector_results,
-            stored_in=["neo4j"] if graph_results else [] + ["chromadb"] if vector_results else []
+            stored_in=["neo4j"] if graph_results else [] + ["chromadb"] if vector_results else [],
         )
 
     async def recall(
@@ -302,7 +307,7 @@ class MemOS:
         domain: str = None,
         limit: int = 10,
         use_graph: bool = True,
-        use_vector: bool = True
+        use_vector: bool = True,
     ) -> MemoryResult:
         """
         Recall memories using both graph traversal and semantic search.
@@ -327,20 +332,17 @@ class MemOS:
             try:
                 for memory_type in memory_types:
                     if memory_type == "commitment":
-                        result = await self._neo4j.call_tool("get_commitments", {
-                            "domain": domain,
-                            "limit": limit
-                        })
+                        result = await self._neo4j.call_tool(
+                            "get_commitments", {"domain": domain, "limit": limit}
+                        )
                     elif memory_type == "decision":
-                        result = await self._neo4j.call_tool("get_decisions", {
-                            "domain": domain,
-                            "limit": limit
-                        })
+                        result = await self._neo4j.call_tool(
+                            "get_decisions", {"domain": domain, "limit": limit}
+                        )
                     elif memory_type == "pattern":
-                        result = await self._neo4j.call_tool("get_patterns", {
-                            "domain": domain,
-                            "limit": limit
-                        })
+                        result = await self._neo4j.call_tool(
+                            "get_patterns", {"domain": domain, "limit": limit}
+                        )
                     else:
                         continue
 
@@ -359,8 +361,7 @@ class MemOS:
             try:
                 # Generate query embedding
                 embedding_response = self._openai_client.embeddings.create(
-                    model="text-embedding-3-small",
-                    input=query
+                    model="text-embedding-3-small", input=query
                 )
                 query_embedding = embedding_response.data[0].embedding
 
@@ -371,17 +372,21 @@ class MemOS:
                         results = collection.query(
                             query_embeddings=[query_embedding],
                             n_results=limit,
-                            where={"domain": domain} if domain else None
+                            where={"domain": domain} if domain else None,
                         )
 
                         for i, doc in enumerate(results["documents"][0]):
-                            vector_results.append({
-                                "content": doc,
-                                "metadata": results["metadatas"][0][i],
-                                "distance": results["distances"][0][i] if results.get("distances") else 0,
-                                "_source": "vector",
-                                "_type": memory_type
-                            })
+                            vector_results.append(
+                                {
+                                    "content": doc,
+                                    "metadata": results["metadatas"][0][i],
+                                    "distance": results["distances"][0][i]
+                                    if results.get("distances")
+                                    else 0,
+                                    "_source": "vector",
+                                    "_type": memory_type,
+                                }
+                            )
 
                     except Exception:
                         # Collection might not exist yet
@@ -397,15 +402,11 @@ class MemOS:
             graph_results=graph_results[:limit],
             vector_results=vector_results[:limit],
             query=query,
-            filters={"types": memory_types, "domain": domain}
+            filters={"types": memory_types, "domain": domain},
         )
 
     async def relate(
-        self,
-        from_id: str,
-        relationship: str,
-        to_id: str,
-        properties: Dict[str, Any] = None
+        self, from_id: str, relationship: str, to_id: str, properties: Dict[str, Any] = None
     ) -> MemoryResult:
         """
         Create a relationship between two memories in the graph.
@@ -422,12 +423,15 @@ class MemOS:
         if not self._neo4j:
             return MemoryResult.fail("Neo4j not available for relationship creation")
 
-        result = await self._neo4j.call_tool("link_nodes", {
-            "from_id": from_id,
-            "relationship": relationship,
-            "to_id": to_id,
-            "properties": properties or {}
-        })
+        result = await self._neo4j.call_tool(
+            "link_nodes",
+            {
+                "from_id": from_id,
+                "relationship": relationship,
+                "to_id": to_id,
+                "properties": properties or {},
+            },
+        )
 
         if result.success:
             return MemoryResult.ok(graph_results=[result.data])
@@ -435,10 +439,7 @@ class MemOS:
             return MemoryResult.fail(result.error)
 
     async def reflect(
-        self,
-        topic: str,
-        timeframe_days: int = 30,
-        domain: str = None
+        self, topic: str, timeframe_days: int = 30, domain: str = None
     ) -> MemoryResult:
         """
         Find patterns and insights across memories for a topic.
@@ -461,10 +462,9 @@ class MemOS:
         # Find patterns in graph
         if self._neo4j:
             try:
-                result = await self._neo4j.call_tool("get_patterns", {
-                    "domain": domain,
-                    "limit": 20
-                })
+                result = await self._neo4j.call_tool(
+                    "get_patterns", {"domain": domain, "limit": 20}
+                )
 
                 if result.success:
                     patterns = result.data.get("patterns", [])
@@ -484,24 +484,23 @@ class MemOS:
             try:
                 embedding_response = self._openai_client.embeddings.create(
                     model="text-embedding-3-small",
-                    input=f"patterns and recurring themes about {topic}"
+                    input=f"patterns and recurring themes about {topic}",
                 )
                 query_embedding = embedding_response.data[0].embedding
 
                 try:
                     collection = self._chroma.get_collection(name="patterns")
-                    results = collection.query(
-                        query_embeddings=[query_embedding],
-                        n_results=10
-                    )
+                    results = collection.query(query_embeddings=[query_embedding], n_results=10)
 
                     for i, doc in enumerate(results["documents"][0]):
-                        vector_patterns.append({
-                            "description": doc,
-                            "metadata": results["metadatas"][0][i],
-                            "relevance": 1 - results["distances"][0][i],
-                            "_source": "vector"
-                        })
+                        vector_patterns.append(
+                            {
+                                "description": doc,
+                                "metadata": results["metadatas"][0][i],
+                                "relevance": 1 - results["distances"][0][i],
+                                "_source": "vector",
+                            }
+                        )
 
                 except Exception:
                     pass
@@ -513,7 +512,7 @@ class MemOS:
             graph_results=graph_patterns,
             vector_results=vector_patterns,
             topic=topic,
-            timeframe_days=timeframe_days
+            timeframe_days=timeframe_days,
         )
 
     # =========================================================================
@@ -529,9 +528,7 @@ class MemOS:
         if not self._neo4j:
             return MemoryResult.fail("Neo4j required for entity context")
 
-        result = await self._neo4j.call_tool("get_entity_context", {
-            "name": entity_name
-        })
+        result = await self._neo4j.call_tool("get_entity_context", {"name": entity_name})
 
         if result.success:
             return MemoryResult.ok(graph_results=[result.data])
@@ -555,7 +552,7 @@ class MemOS:
             result = await self._neo4j.health_check()
             status["backends"]["neo4j"] = {
                 "status": "ok" if result.success else "error",
-                "error": result.error
+                "error": result.error,
             }
             if not result.success:
                 status["healthy"] = False
@@ -566,15 +563,9 @@ class MemOS:
             try:
                 # Simple health check - list collections
                 collections = self._chroma.list_collections()
-                status["backends"]["chromadb"] = {
-                    "status": "ok",
-                    "collections": len(collections)
-                }
+                status["backends"]["chromadb"] = {"status": "ok", "collections": len(collections)}
             except Exception as e:
-                status["backends"]["chromadb"] = {
-                    "status": "error",
-                    "error": str(e)
-                }
+                status["backends"]["chromadb"] = {"status": "error", "error": str(e)}
                 status["healthy"] = False
         else:
             status["backends"]["chromadb"] = {"status": "not_configured"}

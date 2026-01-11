@@ -82,7 +82,7 @@ def save_to_history(action: str, response: str):
     timestamp = datetime.now()
     filename = f"email_{action}_{timestamp.strftime('%Y-%m-%d_%H%M')}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Email {action.title()} - {timestamp.strftime('%B %d, %Y %I:%M %p')}\n\n")
         f.write(response)
 
@@ -171,10 +171,7 @@ What would you like to do?
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)

@@ -13,4 +13,4 @@ Quick commands for daily productivity:
 from . import brainstorm, daily, email, schedule, tasks, weekly
 
 
-__all__ = ['daily', 'email', 'schedule', 'tasks', 'brainstorm', 'weekly']
+__all__ = ["daily", "email", "schedule", "tasks", "brainstorm", "weekly"]

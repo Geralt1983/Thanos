@@ -2,6 +2,7 @@
 Unit tests for the LiteLLM client module.
 Tests model routing, caching, usage tracking, and API integration.
 """
+
 import json
 import os
 from pathlib import Path
@@ -30,6 +31,7 @@ from Tools.litellm_client import (
 # Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def temp_dir(tmp_path):
     """Create a temporary directory for test files."""
@@ -47,43 +49,40 @@ def mock_config(temp_dir):
                     "models": {
                         "opus": "claude-opus-4-5-20251101",
                         "sonnet": "claude-sonnet-4-20250514",
-                        "haiku": "claude-3-5-haiku-20241022"
-                    }
+                        "haiku": "claude-3-5-haiku-20241022",
+                    },
                 }
             },
             "default_provider": "anthropic",
             "default_model": "claude-opus-4-5-20251101",
-            "fallback_chain": [
-                "claude-opus-4-5-20251101",
-                "claude-sonnet-4-20250514"
-            ],
+            "fallback_chain": ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514"],
             "timeout": 600,
             "max_retries": 3,
-            "retry_delay": 1.0
+            "retry_delay": 1.0,
         },
         "model_routing": {
             "rules": {
                 "complex": {
                     "model": "claude-opus-4-5-20251101",
                     "indicators": ["architecture", "analysis"],
-                    "min_complexity": 0.7
+                    "min_complexity": 0.7,
                 },
                 "standard": {
                     "model": "claude-sonnet-4-20250514",
                     "indicators": ["task", "summary"],
-                    "min_complexity": 0.3
+                    "min_complexity": 0.3,
                 },
                 "simple": {
                     "model": "claude-3-5-haiku-20241022",
                     "indicators": ["lookup", "simple"],
-                    "max_complexity": 0.3
-                }
+                    "max_complexity": 0.3,
+                },
             },
             "complexity_factors": {
                 "token_count_weight": 0.3,
                 "keyword_weight": 0.4,
-                "history_length_weight": 0.3
-            }
+                "history_length_weight": 0.3,
+            },
         },
         "usage_tracking": {
             "enabled": True,
@@ -91,19 +90,16 @@ def mock_config(temp_dir):
             "pricing": {
                 "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
                 "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-                "claude-3-5-haiku-20241022": {"input": 0.00025, "output": 0.00125}
-            }
+                "claude-3-5-haiku-20241022": {"input": 0.00025, "output": 0.00125},
+            },
         },
         "caching": {
             "enabled": True,
             "ttl_seconds": 3600,
             "storage_path": str(temp_dir / "cache"),
-            "max_cache_size_mb": 10
+            "max_cache_size_mb": 10,
         },
-        "defaults": {
-            "max_tokens": 4096,
-            "temperature": 1.0
-        }
+        "defaults": {"max_tokens": 4096, "temperature": 1.0},
     }
 
     config_path = temp_dir / "config" / "api.json"
@@ -141,6 +137,7 @@ def mock_anthropic_response():
 # UsageTracker Tests
 # ============================================================================
 
+
 class TestUsageTracker:
     """Tests for the UsageTracker class."""
 
@@ -159,9 +156,7 @@ class TestUsageTracker:
     def test_calculate_cost(self, temp_dir):
         """calculate_cost should compute correct costs based on pricing."""
         storage_path = temp_dir / "usage.json"
-        pricing = {
-            "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}
-        }
+        pricing = {"claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}}
         tracker = UsageTracker(str(storage_path), pricing)
 
         # 1000 input tokens = $0.015, 1000 output tokens = $0.075
@@ -180,7 +175,7 @@ class TestUsageTracker:
             output_tokens=200,
             cost_usd=0.0225,
             latency_ms=1500,
-            operation="test"
+            operation="test",
         )
 
         data = json.loads(storage_path.read_text())
@@ -231,6 +226,7 @@ class TestUsageTracker:
 # ComplexityAnalyzer Tests
 # ============================================================================
 
+
 class TestComplexityAnalyzer:
     """Tests for the ComplexityAnalyzer class."""
 
@@ -240,7 +236,7 @@ class TestComplexityAnalyzer:
             "complexity_factors": {
                 "token_count_weight": 0.3,
                 "keyword_weight": 0.4,
-                "history_length_weight": 0.3
+                "history_length_weight": 0.3,
             }
         }
         analyzer = ComplexityAnalyzer(config)
@@ -256,7 +252,7 @@ class TestComplexityAnalyzer:
             "complexity_factors": {
                 "token_count_weight": 0.3,
                 "keyword_weight": 0.4,
-                "history_length_weight": 0.3
+                "history_length_weight": 0.3,
             }
         }
         analyzer = ComplexityAnalyzer(config)
@@ -277,20 +273,22 @@ class TestComplexityAnalyzer:
             "complexity_factors": {
                 "token_count_weight": 0.3,
                 "keyword_weight": 0.4,
-                "history_length_weight": 0.3
+                "history_length_weight": 0.3,
             }
         }
         analyzer = ComplexityAnalyzer(config)
 
         # Short history
-        complexity_short, _ = analyzer.analyze("Continue", [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi"}
-        ])
+        complexity_short, _ = analyzer.analyze(
+            "Continue",
+            [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}],
+        )
 
         # Long history
-        history = [{"role": "user" if i % 2 == 0 else "assistant",
-                    "content": f"Message {i}"} for i in range(20)]
+        history = [
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"Message {i}"}
+            for i in range(20)
+        ]
         complexity_long, _ = analyzer.analyze("Continue", history)
 
         assert complexity_long > complexity_short
@@ -301,7 +299,7 @@ class TestComplexityAnalyzer:
             "complexity_factors": {
                 "token_count_weight": 0.3,
                 "keyword_weight": 0.4,
-                "history_length_weight": 0.3
+                "history_length_weight": 0.3,
             }
         }
         analyzer = ComplexityAnalyzer(config)
@@ -314,6 +312,7 @@ class TestComplexityAnalyzer:
 # ============================================================================
 # ResponseCache Tests
 # ============================================================================
+
 
 class TestResponseCache:
     """Tests for the ResponseCache class."""
@@ -343,6 +342,7 @@ class TestResponseCache:
 
         # Manually expire the cache
         import time
+
         time.sleep(1.1)
 
         result = cache.get("test", "model", {})
@@ -367,6 +367,7 @@ class TestResponseCache:
         cache.set("test2", "model", {}, "response2")
 
         import time
+
         time.sleep(1.1)
 
         cache.clear_expired()
@@ -379,6 +380,7 @@ class TestResponseCache:
 # ============================================================================
 # LiteLLMClient Tests
 # ============================================================================
+
 
 class TestLiteLLMClient:
     """Tests for the LiteLLMClient class."""
@@ -408,7 +410,7 @@ class TestLiteLLMClient:
                     assert model in [
                         "claude-opus-4-5-20251101",
                         "claude-sonnet-4-20250514",
-                        "claude-3-5-haiku-20241022"
+                        "claude-3-5-haiku-20241022",
                     ]
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
@@ -419,8 +421,7 @@ class TestLiteLLMClient:
                 with patch("Tools.litellm_client.anthropic"):
                     client = LiteLLMClient(str(mock_config))
                     model = client._select_model(
-                        "Simple question",
-                        model_override="claude-opus-4-5-20251101"
+                        "Simple question", model_override="claude-opus-4-5-20251101"
                     )
 
                     assert model == "claude-opus-4-5-20251101"
@@ -513,6 +514,7 @@ class TestLiteLLMClient:
 # Module Function Tests
 # ============================================================================
 
+
 class TestModuleFunctions:
     """Tests for module-level functions."""
 
@@ -524,6 +526,7 @@ class TestModuleFunctions:
                 with patch("Tools.litellm_client.anthropic"):
                     # Reset singleton
                     import Tools.litellm_client as llm_module
+
                     llm_module._client_instance = None
 
                     client1 = get_client(str(mock_config))
@@ -538,6 +541,7 @@ class TestModuleFunctions:
             with patch("Tools.litellm_client.ANTHROPIC_AVAILABLE", True):
                 with patch("Tools.litellm_client.anthropic"):
                     import Tools.litellm_client as llm_module
+
                     llm_module._client_instance = None
 
                     client1 = init_client(str(mock_config))
@@ -551,6 +555,7 @@ class TestModuleFunctions:
 # ============================================================================
 # ModelResponse Dataclass Tests
 # ============================================================================
+
 
 class TestModelResponse:
     """Tests for the ModelResponse dataclass."""
@@ -566,7 +571,7 @@ class TestModelResponse:
             total_tokens=150,
             cost_usd=0.05,
             latency_ms=1500.0,
-            cached=False
+            cached=False,
         )
 
         assert response.content == "Test content"
@@ -585,7 +590,7 @@ class TestModelResponse:
             total_tokens=15,
             cost_usd=0.01,
             latency_ms=100.0,
-            metadata={"operation": "test", "agent": "ops"}
+            metadata={"operation": "test", "agent": "ops"},
         )
 
         assert response.metadata["operation"] == "test"
@@ -595,6 +600,7 @@ class TestModelResponse:
 # ============================================================================
 # Integration-like Tests (with mocks)
 # ============================================================================
+
 
 class TestLiteLLMIntegration:
     """Integration-style tests with comprehensive mocking."""
@@ -612,10 +618,7 @@ class TestLiteLLMIntegration:
                     client = LiteLLMClient(str(mock_config))
 
                     # First request
-                    response = client.chat(
-                        "What is architecture analysis?",
-                        operation="test_chat"
-                    )
+                    response = client.chat("What is architecture analysis?", operation="test_chat")
 
                     assert response == "Test response from Anthropic"
 
@@ -646,7 +649,9 @@ class TestLiteLLMIntegration:
                         "Analyze this complex architecture and debug systematically"
                     )
 
-                    assert complex_analysis["complexity_score"] > simple_analysis["complexity_score"]
+                    assert (
+                        complex_analysis["complexity_score"] > simple_analysis["complexity_score"]
+                    )
 
 
 if __name__ == "__main__":

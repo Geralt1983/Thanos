@@ -23,6 +23,7 @@ from Tools.error_logger import (
 # Constants Tests
 # ========================================================================
 
+
 class TestErrorLoggerConstants:
     """Test module constants"""
 
@@ -40,6 +41,7 @@ class TestErrorLoggerConstants:
 # ========================================================================
 # Log Rotation Tests
 # ========================================================================
+
 
 class TestLogRotation:
     """Test _rotate_log_if_needed function"""
@@ -120,7 +122,7 @@ class TestLogRotation:
         """Test rotation handles exceptions gracefully"""
         log_file = tmp_path / "error.log"
 
-        with patch.object(Path, 'exists', side_effect=Exception("Test error")):
+        with patch.object(Path, "exists", side_effect=Exception("Test error")):
             # Should not raise
             _rotate_log_if_needed(log_file)
 
@@ -132,6 +134,7 @@ class TestLogRotation:
 # Log Error Tests
 # ========================================================================
 
+
 class TestLogError:
     """Test log_error function"""
 
@@ -139,8 +142,8 @@ class TestLogError:
         """Test log_error writes to stderr"""
         error = ValueError("Test error message")
 
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("test_module", error)
 
         captured = capsys.readouterr()
@@ -152,8 +155,8 @@ class TestLogError:
         """Test log_error includes context"""
         error = RuntimeError("Something broke")
 
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("my_module", error, context="While processing data")
 
         captured = capsys.readouterr()
@@ -163,8 +166,8 @@ class TestLogError:
         """Test log_error includes timestamp"""
         error = Exception("Test")
 
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("module", error)
 
         captured = capsys.readouterr()
@@ -173,13 +176,14 @@ class TestLogError:
         assert "]" in captured.err
         # Should include date-like pattern
         import re
-        assert re.search(r'\d{4}-\d{2}-\d{2}', captured.err)
+
+        assert re.search(r"\d{4}-\d{2}-\d{2}", captured.err)
 
     def test_log_error_writes_to_file(self, tmp_path):
         """Test log_error writes to log file"""
         error = ValueError("File test error")
 
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path):
             log_error("file_test", error)
 
         log_file = tmp_path / ".claude" / "logs" / "thanos-errors.log"
@@ -195,7 +199,7 @@ class TestLogError:
         log_dir = tmp_path / ".claude" / "logs"
         assert not log_dir.exists()
 
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path):
             log_error("test", error)
 
         assert log_dir.exists()
@@ -204,8 +208,8 @@ class TestLogError:
         """Test log_error does not reraise by default"""
         error = ValueError("Test")
 
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 # Should not raise
                 log_error("module", error, reraise=False)
 
@@ -213,8 +217,8 @@ class TestLogError:
         """Test log_error reraises when requested"""
         error = ValueError("Rethrow me")
 
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 with pytest.raises(ValueError, match="Rethrow me"):
                     log_error("module", error, reraise=True)
 
@@ -222,7 +226,7 @@ class TestLogError:
         """Test log_error handles file write failures"""
         error = Exception("Test")
 
-        with patch('pathlib.Path.home', return_value=Path("/nonexistent/path")):
+        with patch("pathlib.Path.home", return_value=Path("/nonexistent/path")):
             # Should not raise, just log to stderr
             log_error("test", error)
 
@@ -234,7 +238,7 @@ class TestLogError:
 
     def test_log_error_triggers_rotation(self, tmp_path):
         """Test log_error triggers rotation for large files"""
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path):
             # Create large log file
             log_dir = tmp_path / ".claude" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
@@ -259,8 +263,8 @@ class TestLogError:
             AttributeError("attribute error"),
         ]
 
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 for exc in exceptions:
                     log_error("test", exc)
 
@@ -276,6 +280,7 @@ class TestLogError:
 # ========================================================================
 # Log Warning Tests
 # ========================================================================
+
 
 class TestLogWarning:
     """Test log_warning function"""
@@ -297,7 +302,8 @@ class TestLogWarning:
         assert "[" in captured.err
         assert "]" in captured.err
         import re
-        assert re.search(r'\d{4}-\d{2}-\d{2}', captured.err)
+
+        assert re.search(r"\d{4}-\d{2}-\d{2}", captured.err)
 
     def test_log_warning_format(self, capsys):
         """Test log_warning message format"""
@@ -329,12 +335,13 @@ class TestLogWarning:
 # Integration Tests
 # ========================================================================
 
+
 class TestErrorLoggerIntegration:
     """Integration tests for error logging"""
 
     def test_multiple_errors_same_file(self, tmp_path):
         """Test multiple errors are appended to same log file"""
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path):
             log_error("module1", ValueError("Error 1"))
             log_error("module2", TypeError("Error 2"))
             log_error("module3", RuntimeError("Error 3"))
@@ -351,7 +358,7 @@ class TestErrorLoggerIntegration:
 
     def test_error_and_warning_mixed(self, capsys, tmp_path):
         """Test errors and warnings can be interleaved"""
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path):
             log_error("app", ValueError("Error occurred"))
             log_warning("app", "Warning about something")
             log_error("app", RuntimeError("Another error"))
@@ -365,14 +372,14 @@ class TestErrorLoggerIntegration:
     def test_concurrent_friendly(self, tmp_path):
         """Test logging doesn't fail under simulated concurrent access"""
         # This is a basic test - real concurrent testing would need threads
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path):
             for i in range(100):
                 log_error(f"module_{i}", Exception(f"Error {i}"))
 
         log_file = tmp_path / ".claude" / "logs" / "thanos-errors.log"
         assert log_file.exists()
         content = log_file.read_text()
-        lines = content.strip().split('\n')
+        lines = content.strip().split("\n")
         assert len(lines) == 100
 
 
@@ -380,13 +387,14 @@ class TestErrorLoggerIntegration:
 # Edge Cases
 # ========================================================================
 
+
 class TestErrorLoggerEdgeCases:
     """Test edge cases for error logging"""
 
     def test_unicode_in_error_message(self, capsys):
         """Test handling of unicode characters in error messages"""
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("unicode", Exception("Error with emoji 🔥 and unicode: 日本語"))
 
         captured = capsys.readouterr()
@@ -397,8 +405,8 @@ class TestErrorLoggerEdgeCases:
         """Test handling of very long error messages"""
         long_message = "x" * 10000
 
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("long", Exception(long_message))
 
         captured = capsys.readouterr()
@@ -406,8 +414,8 @@ class TestErrorLoggerEdgeCases:
 
     def test_error_message_with_newlines(self, capsys):
         """Test handling of error messages with newlines"""
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("newline", Exception("Line 1\nLine 2\nLine 3"))
 
         captured = capsys.readouterr()
@@ -415,8 +423,8 @@ class TestErrorLoggerEdgeCases:
 
     def test_none_context(self, capsys):
         """Test explicit None context"""
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("test", Exception("Test"), context=None)
 
         captured = capsys.readouterr()
@@ -424,8 +432,8 @@ class TestErrorLoggerEdgeCases:
 
     def test_empty_module_name(self, capsys):
         """Test empty module name"""
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("", Exception("Test"))
 
         captured = capsys.readouterr()
@@ -433,8 +441,8 @@ class TestErrorLoggerEdgeCases:
 
     def test_special_characters_in_module_name(self, capsys):
         """Test special characters in module name"""
-        with patch('pathlib.Path.mkdir'):
-            with patch('builtins.open', mock_open()):
+        with patch("pathlib.Path.mkdir"):
+            with patch("builtins.open", mock_open()):
                 log_error("module.submodule:function", Exception("Test"))
 
         captured = capsys.readouterr()
@@ -445,6 +453,7 @@ class TestErrorLoggerEdgeCases:
 # Performance Tests
 # ========================================================================
 
+
 class TestErrorLoggerPerformance:
     """Performance-related tests for error logging"""
 
@@ -454,7 +463,7 @@ class TestErrorLoggerPerformance:
 
         start = time.time()
 
-        with patch('pathlib.Path.home', side_effect=Exception("Slow error")):
+        with patch("pathlib.Path.home", side_effect=Exception("Slow error")):
             log_error("perf_test", Exception("Test"))
 
         elapsed = time.time() - start

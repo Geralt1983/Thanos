@@ -40,6 +40,7 @@ try:
         APIError as LiteLLMAPIError,
         RateLimitError as LiteLLMRateLimitError,
     )
+
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
@@ -50,6 +51,7 @@ except ImportError:
 # Fallback to direct Anthropic if LiteLLM unavailable
 try:
     import anthropic
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
@@ -58,6 +60,7 @@ except ImportError:
 @dataclass
 class ModelResponse:
     """Standardized response from any model provider."""
+
     content: str
     model: str
     provider: str
@@ -82,13 +85,18 @@ class UsageTracker:
     def _ensure_storage_exists(self):
         """Initialize storage file if it doesn't exist."""
         if not self.storage_path.exists():
-            self.storage_path.write_text(json.dumps({
-                "sessions": [],
-                "daily_totals": {},
-                "model_breakdown": {},
-                "provider_breakdown": {},
-                "last_updated": datetime.now().isoformat()
-            }, indent=2))
+            self.storage_path.write_text(
+                json.dumps(
+                    {
+                        "sessions": [],
+                        "daily_totals": {},
+                        "model_breakdown": {},
+                        "provider_breakdown": {},
+                        "last_updated": datetime.now().isoformat(),
+                    },
+                    indent=2,
+                )
+            )
 
     def _get_provider(self, model: str) -> str:
         """Determine provider from model name."""
@@ -115,9 +123,16 @@ class UsageTracker:
         output_cost = (output_tokens / 1000) * pricing["output"]
         return input_cost + output_cost
 
-    def record(self, model: str, input_tokens: int, output_tokens: int,
-               cost_usd: float, latency_ms: float, operation: str = "chat",
-               metadata: Optional[Dict] = None) -> Dict:
+    def record(
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        latency_ms: float,
+        operation: str = "chat",
+        metadata: Optional[Dict] = None,
+    ) -> Dict:
         """Record a single API call's usage."""
         provider = self._get_provider(model)
 
@@ -131,7 +146,7 @@ class UsageTracker:
             "cost_usd": cost_usd,
             "latency_ms": latency_ms,
             "operation": operation,
-            "metadata": metadata or {}
+            "metadata": metadata or {},
         }
 
         # Load, update, save
@@ -155,7 +170,11 @@ class UsageTracker:
 
         # Update provider breakdown
         if provider not in data.get("provider_breakdown", {}):
-            data.setdefault("provider_breakdown", {})[provider] = {"tokens": 0, "cost": 0.0, "calls": 0}
+            data.setdefault("provider_breakdown", {})[provider] = {
+                "tokens": 0,
+                "cost": 0.0,
+                "calls": 0,
+            }
         data["provider_breakdown"][provider]["tokens"] += input_tokens + output_tokens
         data["provider_breakdown"][provider]["cost"] += cost_usd
         data["provider_breakdown"][provider]["calls"] += 1
@@ -197,7 +216,7 @@ class UsageTracker:
             "avg_daily_cost": total_cost / max(days, 1),
             "projected_monthly_cost": (total_cost / max(days, 1)) * 30,
             "model_breakdown": data.get("model_breakdown", {}),
-            "provider_breakdown": data.get("provider_breakdown", {})
+            "provider_breakdown": data.get("provider_breakdown", {}),
         }
 
     def get_today(self) -> Dict:
@@ -212,11 +231,10 @@ class ComplexityAnalyzer:
 
     def __init__(self, config: Dict):
         self.config = config
-        self.factors = config.get("complexity_factors", {
-            "token_count_weight": 0.3,
-            "keyword_weight": 0.4,
-            "history_length_weight": 0.3
-        })
+        self.factors = config.get(
+            "complexity_factors",
+            {"token_count_weight": 0.3, "keyword_weight": 0.4, "history_length_weight": 0.3},
+        )
 
     def analyze(self, prompt: str, history: Optional[List[Dict]] = None) -> Tuple[float, str]:
         """
@@ -237,13 +255,30 @@ class ComplexityAnalyzer:
 
         # Keyword complexity factor
         complex_indicators = [
-            "analyze", "architecture", "strategy", "debug", "investigate",
-            "optimize", "refactor", "design", "explain", "comprehensive",
-            "detailed", "thoroughly", "step by step", "reasoning"
+            "analyze",
+            "architecture",
+            "strategy",
+            "debug",
+            "investigate",
+            "optimize",
+            "refactor",
+            "design",
+            "explain",
+            "comprehensive",
+            "detailed",
+            "thoroughly",
+            "step by step",
+            "reasoning",
         ]
         simple_indicators = [
-            "quick", "simple", "lookup", "translate", "format",
-            "summarize briefly", "one sentence", "yes or no"
+            "quick",
+            "simple",
+            "lookup",
+            "translate",
+            "format",
+            "summarize briefly",
+            "one sentence",
+            "yes or no",
         ]
 
         prompt_lower = prompt.lower()
@@ -285,11 +320,14 @@ class ResponseCache:
 
     def _get_cache_key(self, prompt: str, model: str, params: Dict) -> str:
         """Generate a cache key from prompt and parameters."""
-        content = json.dumps({
-            "prompt": prompt,
-            "model": model,
-            "params": {k: v for k, v in params.items() if k != "history"}
-        }, sort_keys=True)
+        content = json.dumps(
+            {
+                "prompt": prompt,
+                "model": model,
+                "params": {k: v for k, v in params.items() if k != "history"},
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     def get(self, prompt: str, model: str, params: Dict) -> Optional[str]:
@@ -317,11 +355,11 @@ class ResponseCache:
         cache_key = self._get_cache_key(prompt, model, params)
         cache_file = self.cache_path / f"{cache_key}.json"
 
-        cache_file.write_text(json.dumps({
-            "timestamp": datetime.now().isoformat(),
-            "model": model,
-            "response": response
-        }))
+        cache_file.write_text(
+            json.dumps(
+                {"timestamp": datetime.now().isoformat(), "model": model, "response": response}
+            )
+        )
 
     def clear_expired(self):
         """Remove expired cache entries."""
@@ -376,18 +414,18 @@ class LiteLLMClient:
                 "fallback_chain": ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514"],
                 "timeout": 600,
                 "max_retries": 3,
-                "retry_delay": 1.0
+                "retry_delay": 1.0,
             },
             "model_routing": {
                 "rules": {
                     "complex": {"model": "claude-opus-4-5-20251101", "min_complexity": 0.7},
                     "standard": {"model": "claude-sonnet-4-20250514", "min_complexity": 0.3},
-                    "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3}
+                    "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3},
                 }
             },
             "usage_tracking": {"enabled": True, "storage_path": "State/usage.json"},
             "caching": {"enabled": True, "ttl_seconds": 3600, "storage_path": "Memory/cache/"},
-            "defaults": {"max_tokens": 4096, "temperature": 1.0}
+            "defaults": {"max_tokens": 4096, "temperature": 1.0},
         }
 
     def _setup_api_keys(self):
@@ -427,7 +465,7 @@ class LiteLLMClient:
             self.cache = ResponseCache(
                 str(cache_path),
                 cache_config.get("ttl_seconds", 3600),
-                cache_config.get("max_cache_size_mb", 100)
+                cache_config.get("max_cache_size_mb", 100),
             )
         else:
             self.cache = None
@@ -449,8 +487,12 @@ class LiteLLMClient:
         else:
             self.fallback_client = None
 
-    def _select_model(self, prompt: str, history: Optional[List[Dict]] = None,
-                      model_override: Optional[str] = None) -> str:
+    def _select_model(
+        self,
+        prompt: str,
+        history: Optional[List[Dict]] = None,
+        model_override: Optional[str] = None,
+    ) -> str:
         """Select appropriate model based on complexity analysis."""
         if model_override:
             return model_override
@@ -459,12 +501,19 @@ class LiteLLMClient:
 
         # Get model from routing rules
         rule = self.routing_rules.get(tier, {})
-        return rule.get("model", self.config.get("litellm", {}).get("default_model", "claude-opus-4-5-20251101"))
+        return rule.get(
+            "model", self.config.get("litellm", {}).get("default_model", "claude-opus-4-5-20251101")
+        )
 
-    def _call_with_fallback(self, model: str, messages: List[Dict],
-                            max_tokens: int, temperature: float,
-                            system: Optional[str] = None,
-                            stream: bool = False) -> Any:
+    def _call_with_fallback(
+        self,
+        model: str,
+        messages: List[Dict],
+        max_tokens: int,
+        temperature: float,
+        system: Optional[str] = None,
+        stream: bool = False,
+    ) -> Any:
         """Make API call with fallback chain support."""
         fallback_chain = self.config.get("litellm", {}).get("fallback_chain", [model])
 
@@ -474,18 +523,24 @@ class LiteLLMClient:
         last_error = None
         for fallback_model in fallback_chain:
             try:
-                return self._make_call(fallback_model, messages, max_tokens,
-                                       temperature, system, stream)
+                return self._make_call(
+                    fallback_model, messages, max_tokens, temperature, system, stream
+                )
             except Exception as e:
                 last_error = e
                 continue
 
         raise last_error or Exception("All models in fallback chain failed")
 
-    def _make_call(self, model: str, messages: List[Dict],
-                   max_tokens: int, temperature: float,
-                   system: Optional[str] = None,
-                   stream: bool = False) -> Any:
+    def _make_call(
+        self,
+        model: str,
+        messages: List[Dict],
+        max_tokens: int,
+        temperature: float,
+        system: Optional[str] = None,
+        stream: bool = False,
+    ) -> Any:
         """Make actual API call via LiteLLM or fallback."""
 
         if LITELLM_AVAILABLE:
@@ -501,14 +556,14 @@ class LiteLLMClient:
                     messages=full_messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    stream=True
+                    stream=True,
                 )
             else:
                 return completion(
                     model=model,
                     messages=full_messages,
                     max_tokens=max_tokens,
-                    temperature=temperature
+                    temperature=temperature,
                 )
 
         elif self.fallback_client:
@@ -517,7 +572,7 @@ class LiteLLMClient:
                 "model": model,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "messages": messages
+                "messages": messages,
             }
             if system:
                 kwargs["system"] = system
@@ -530,11 +585,18 @@ class LiteLLMClient:
         else:
             raise RuntimeError("No API client available. Install litellm or anthropic.")
 
-    def chat(self, prompt: str, model: Optional[str] = None,
-             max_tokens: Optional[int] = None, temperature: Optional[float] = None,
-             system_prompt: Optional[str] = None, history: Optional[List[Dict]] = None,
-             use_cache: bool = True, operation: str = "chat",
-             metadata: Optional[Dict] = None) -> str:
+    def chat(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        system_prompt: Optional[str] = None,
+        history: Optional[List[Dict]] = None,
+        use_cache: bool = True,
+        operation: str = "chat",
+        metadata: Optional[Dict] = None,
+    ) -> str:
         """
         Send a chat message and get a response with intelligent model routing.
 
@@ -560,7 +622,11 @@ class LiteLLMClient:
         selected_model = self._select_model(prompt, history, model)
 
         # Check cache
-        cache_params = {"max_tokens": max_tokens, "temperature": temperature, "system": system_prompt}
+        cache_params = {
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system_prompt,
+        }
         if use_cache and self.cache:
             cached = self.cache.get(prompt, selected_model, cache_params)
             if cached:
@@ -578,7 +644,7 @@ class LiteLLMClient:
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            system=system_prompt
+            system=system_prompt,
         )
 
         latency_ms = (time.time() - start_time) * 1000
@@ -603,7 +669,7 @@ class LiteLLMClient:
                 cost_usd=cost,
                 latency_ms=latency_ms,
                 operation=operation,
-                metadata=metadata
+                metadata=metadata,
             )
 
         # Cache response
@@ -612,11 +678,17 @@ class LiteLLMClient:
 
         return response_text
 
-    def chat_stream(self, prompt: str, model: Optional[str] = None,
-                    max_tokens: Optional[int] = None, temperature: Optional[float] = None,
-                    system_prompt: Optional[str] = None, history: Optional[List[Dict]] = None,
-                    operation: str = "chat_stream",
-                    metadata: Optional[Dict] = None) -> Generator[str, None, None]:
+    def chat_stream(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        system_prompt: Optional[str] = None,
+        history: Optional[List[Dict]] = None,
+        operation: str = "chat_stream",
+        metadata: Optional[Dict] = None,
+    ) -> Generator[str, None, None]:
         """
         Stream a chat response token by token.
 
@@ -656,7 +728,7 @@ class LiteLLMClient:
                 max_tokens=max_tokens,
                 temperature=temperature,
                 system=system_prompt,
-                stream=True
+                stream=True,
             )
 
             for chunk in response:
@@ -668,7 +740,9 @@ class LiteLLMClient:
                 # Estimate tokens (LiteLLM streaming doesn't always provide usage)
                 output_tokens = len(full_response) // 4
 
-            input_tokens = len(prompt) // 4 + sum(len(m.get("content", "")) // 4 for m in messages[:-1])
+            input_tokens = len(prompt) // 4 + sum(
+                len(m.get("content", "")) // 4 for m in messages[:-1]
+            )
 
         elif self.fallback_client:
             with self._make_call(
@@ -677,7 +751,7 @@ class LiteLLMClient:
                 max_tokens=max_tokens,
                 temperature=temperature,
                 system=system_prompt,
-                stream=True
+                stream=True,
             ) as stream:
                 for text in stream.text_stream:
                     full_response += text
@@ -699,7 +773,7 @@ class LiteLLMClient:
                 cost_usd=cost,
                 latency_ms=latency_ms,
                 operation=operation,
-                metadata=metadata
+                metadata=metadata,
             )
 
     def get_usage_summary(self, days: int = 30) -> Dict:
@@ -723,7 +797,7 @@ class LiteLLMClient:
             "complexity_score": complexity,
             "tier": tier,
             "selected_model": selected_model,
-            "routing_rules": self.routing_rules
+            "routing_rules": self.routing_rules,
         }
 
     def list_available_models(self) -> List[str]:
@@ -784,6 +858,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error: {e}")
             import traceback
+
             traceback.print_exc()
             sys.exit(1)
 

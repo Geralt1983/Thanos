@@ -22,6 +22,7 @@ from .base import BaseAdapter, ToolResult
 # Neo4j driver import with graceful fallback
 try:
     from neo4j import AsyncGraphDatabase
+
     NEO4J_AVAILABLE = True
 except ImportError:
     NEO4J_AVAILABLE = False
@@ -31,6 +32,7 @@ except ImportError:
 @dataclass
 class GraphNode:
     """Represents a node in the knowledge graph."""
+
     id: str
     labels: List[str]
     properties: Dict[str, Any]
@@ -39,6 +41,7 @@ class GraphNode:
 @dataclass
 class GraphRelationship:
     """Represents a relationship between nodes."""
+
     type: str
     from_id: str
     to_id: str
@@ -62,8 +65,8 @@ GRAPH_SCHEMA = {
                 "domain": "string - work|personal|health|relationship",
                 "priority": "integer - 1-5 scale",
                 "created_at": "datetime",
-                "completed_at": "datetime (optional)"
-            }
+                "completed_at": "datetime (optional)",
+            },
         },
         "Decision": {
             "description": "A choice made with reasoning",
@@ -75,8 +78,8 @@ GRAPH_SCHEMA = {
                 "domain": "string - work|personal|health|relationship",
                 "confidence": "float - 0.0-1.0",
                 "created_at": "datetime",
-                "outcome": "string (optional) - how it turned out"
-            }
+                "outcome": "string (optional) - how it turned out",
+            },
         },
         "Pattern": {
             "description": "A recurring behavior or insight",
@@ -88,8 +91,8 @@ GRAPH_SCHEMA = {
                 "frequency": "string - daily|weekly|situational",
                 "first_observed": "datetime",
                 "last_observed": "datetime",
-                "strength": "float - 0.0-1.0 confidence"
-            }
+                "strength": "float - 0.0-1.0 confidence",
+            },
         },
         "Session": {
             "description": "A conversation or work session",
@@ -100,8 +103,8 @@ GRAPH_SCHEMA = {
                 "started_at": "datetime",
                 "ended_at": "datetime",
                 "tokens_used": "integer",
-                "mood": "string (optional) - user mood during session"
-            }
+                "mood": "string (optional) - user mood during session",
+            },
         },
         "Entity": {
             "description": "A person, project, or organization",
@@ -111,8 +114,8 @@ GRAPH_SCHEMA = {
                 "type": "string - person|client|project|organization",
                 "domain": "string (optional)",
                 "notes": "string (optional)",
-                "created_at": "datetime"
-            }
+                "created_at": "datetime",
+            },
         },
         "EnergyState": {
             "description": "Energy/mood snapshot",
@@ -122,9 +125,9 @@ GRAPH_SCHEMA = {
                 "timestamp": "datetime",
                 "context": "string (optional)",
                 "oura_readiness": "integer (optional)",
-                "oura_sleep": "integer (optional)"
-            }
-        }
+                "oura_sleep": "integer (optional)",
+            },
+        },
     },
     "relationships": {
         "LEADS_TO": "Commitment|Decision -> Commitment|Decision|Pattern",
@@ -133,8 +136,8 @@ GRAPH_SCHEMA = {
         "DURING": "Commitment|Decision -> Session",
         "IMPACTS": "Decision -> Commitment",
         "PRECEDED_BY": "Session -> Session",
-        "AT_ENERGY": "Session -> EnergyState"
-    }
+        "AT_ENERGY": "Session -> EnergyState",
+    },
 }
 
 
@@ -152,7 +155,7 @@ class Neo4jAdapter(BaseAdapter):
         self,
         uri: Optional[str] = None,
         username: Optional[str] = None,
-        password: Optional[str] = None
+        password: Optional[str] = None,
     ):
         """
         Initialize Neo4j connection.
@@ -163,9 +166,7 @@ class Neo4jAdapter(BaseAdapter):
             password: Neo4j password (defaults to NEO4J_PASSWORD env var)
         """
         if not NEO4J_AVAILABLE:
-            raise ImportError(
-                "neo4j package not installed. Install with: pip install neo4j"
-            )
+            raise ImportError("neo4j package not installed. Install with: pip install neo4j")
 
         self._uri = uri or os.getenv("NEO4J_URL")
         self._username = username or os.getenv("NEO4J_USERNAME", "neo4j")
@@ -176,10 +177,7 @@ class Neo4jAdapter(BaseAdapter):
         if not self._password:
             raise ValueError("Neo4j password not provided. Set NEO4J_PASSWORD env var.")
 
-        self._driver = AsyncGraphDatabase.driver(
-            self._uri,
-            auth=(self._username, self._password)
-        )
+        self._driver = AsyncGraphDatabase.driver(self._uri, auth=(self._username, self._password))
 
     @property
     def name(self) -> str:
@@ -197,16 +195,16 @@ class Neo4jAdapter(BaseAdapter):
                     "to_whom": {"type": "string", "required": False},
                     "deadline": {"type": "string", "required": False},
                     "domain": {"type": "string", "required": False},
-                    "priority": {"type": "integer", "required": False}
-                }
+                    "priority": {"type": "integer", "required": False},
+                },
             },
             {
                 "name": "complete_commitment",
                 "description": "Mark a commitment as completed",
                 "parameters": {
                     "commitment_id": {"type": "string", "required": True},
-                    "outcome": {"type": "string", "required": False}
-                }
+                    "outcome": {"type": "string", "required": False},
+                },
             },
             {
                 "name": "get_commitments",
@@ -215,8 +213,8 @@ class Neo4jAdapter(BaseAdapter):
                     "status": {"type": "string", "required": False},
                     "domain": {"type": "string", "required": False},
                     "to_whom": {"type": "string", "required": False},
-                    "limit": {"type": "integer", "required": False}
-                }
+                    "limit": {"type": "integer", "required": False},
+                },
             },
             # Decision operations
             {
@@ -227,8 +225,8 @@ class Neo4jAdapter(BaseAdapter):
                     "rationale": {"type": "string", "required": True},
                     "alternatives": {"type": "array", "required": False},
                     "domain": {"type": "string", "required": False},
-                    "confidence": {"type": "number", "required": False}
-                }
+                    "confidence": {"type": "number", "required": False},
+                },
             },
             {
                 "name": "get_decisions",
@@ -236,8 +234,8 @@ class Neo4jAdapter(BaseAdapter):
                 "parameters": {
                     "domain": {"type": "string", "required": False},
                     "days": {"type": "integer", "required": False},
-                    "limit": {"type": "integer", "required": False}
-                }
+                    "limit": {"type": "integer", "required": False},
+                },
             },
             # Pattern operations
             {
@@ -247,8 +245,8 @@ class Neo4jAdapter(BaseAdapter):
                     "description": {"type": "string", "required": True},
                     "type": {"type": "string", "required": True},
                     "domain": {"type": "string", "required": False},
-                    "frequency": {"type": "string", "required": False}
-                }
+                    "frequency": {"type": "string", "required": False},
+                },
             },
             {
                 "name": "get_patterns",
@@ -256,8 +254,8 @@ class Neo4jAdapter(BaseAdapter):
                 "parameters": {
                     "type": {"type": "string", "required": False},
                     "domain": {"type": "string", "required": False},
-                    "limit": {"type": "integer", "required": False}
-                }
+                    "limit": {"type": "integer", "required": False},
+                },
             },
             # Session operations
             {
@@ -265,8 +263,8 @@ class Neo4jAdapter(BaseAdapter):
                 "description": "Record start of a conversation session",
                 "parameters": {
                     "agent": {"type": "string", "required": True},
-                    "mood": {"type": "string", "required": False}
-                }
+                    "mood": {"type": "string", "required": False},
+                },
             },
             {
                 "name": "end_session",
@@ -274,8 +272,8 @@ class Neo4jAdapter(BaseAdapter):
                 "parameters": {
                     "session_id": {"type": "string", "required": True},
                     "summary": {"type": "string", "required": True},
-                    "tokens_used": {"type": "integer", "required": False}
-                }
+                    "tokens_used": {"type": "integer", "required": False},
+                },
             },
             # Relationship operations
             {
@@ -285,8 +283,8 @@ class Neo4jAdapter(BaseAdapter):
                     "from_id": {"type": "string", "required": True},
                     "relationship": {"type": "string", "required": True},
                     "to_id": {"type": "string", "required": True},
-                    "properties": {"type": "object", "required": False}
-                }
+                    "properties": {"type": "object", "required": False},
+                },
             },
             # Query operations
             {
@@ -295,16 +293,16 @@ class Neo4jAdapter(BaseAdapter):
                 "parameters": {
                     "node_id": {"type": "string", "required": True},
                     "relationship_type": {"type": "string", "required": False},
-                    "depth": {"type": "integer", "required": False}
-                }
+                    "depth": {"type": "integer", "required": False},
+                },
             },
             {
                 "name": "query_graph",
                 "description": "Execute a custom Cypher query (read-only)",
                 "parameters": {
                     "query": {"type": "string", "required": True},
-                    "parameters": {"type": "object", "required": False}
-                }
+                    "parameters": {"type": "object", "required": False},
+                },
             },
             # Entity operations
             {
@@ -314,16 +312,14 @@ class Neo4jAdapter(BaseAdapter):
                     "name": {"type": "string", "required": True},
                     "type": {"type": "string", "required": True},
                     "domain": {"type": "string", "required": False},
-                    "notes": {"type": "string", "required": False}
-                }
+                    "notes": {"type": "string", "required": False},
+                },
             },
             {
                 "name": "get_entity_context",
                 "description": "Get all context about an entity (commitments, decisions, etc)",
-                "parameters": {
-                    "name": {"type": "string", "required": True}
-                }
-            }
+                "parameters": {"name": {"type": "string", "required": True}},
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
@@ -342,7 +338,7 @@ class Neo4jAdapter(BaseAdapter):
             "find_related": self._find_related,
             "query_graph": self._query_graph,
             "create_entity": self._create_entity,
-            "get_entity_context": self._get_entity_context
+            "get_entity_context": self._get_entity_context,
         }
 
         handler = handlers.get(tool_name)
@@ -386,16 +382,15 @@ class Neo4jAdapter(BaseAdapter):
             "deadline": args.get("deadline"),
             "domain": args.get("domain", "work"),
             "priority": args.get("priority", 3),
-            "created_at": now
+            "created_at": now,
         }
 
         async with self._driver.session() as session:
             await session.run(query, params)
 
-        return ToolResult.ok({
-            "id": commitment_id,
-            "message": f"Created commitment: {args['content'][:50]}..."
-        })
+        return ToolResult.ok(
+            {"id": commitment_id, "message": f"Created commitment: {args['content'][:50]}..."}
+        )
 
     async def _complete_commitment(self, args: Dict[str, Any]) -> ToolResult:
         """Mark a commitment as completed."""
@@ -409,11 +404,7 @@ class Neo4jAdapter(BaseAdapter):
         RETURN c
         """
 
-        params = {
-            "id": args["commitment_id"],
-            "completed_at": now,
-            "outcome": args.get("outcome")
-        }
+        params = {"id": args["commitment_id"], "completed_at": now, "outcome": args.get("outcome")}
 
         async with self._driver.session() as session:
             result = await session.run(query, params)
@@ -422,11 +413,9 @@ class Neo4jAdapter(BaseAdapter):
             if not record:
                 return ToolResult.fail(f"Commitment not found: {args['commitment_id']}")
 
-        return ToolResult.ok({
-            "id": args["commitment_id"],
-            "status": "completed",
-            "completed_at": now
-        })
+        return ToolResult.ok(
+            {"id": args["commitment_id"], "status": "completed", "completed_at": now}
+        )
 
     async def _get_commitments(self, args: Dict[str, Any]) -> ToolResult:
         """Get commitments with optional filters."""
@@ -493,16 +482,15 @@ class Neo4jAdapter(BaseAdapter):
             "alternatives": args.get("alternatives", []),
             "domain": args.get("domain", "work"),
             "confidence": args.get("confidence", 0.7),
-            "created_at": now
+            "created_at": now,
         }
 
         async with self._driver.session() as session:
             await session.run(query, params)
 
-        return ToolResult.ok({
-            "id": decision_id,
-            "message": f"Recorded decision: {args['content'][:50]}..."
-        })
+        return ToolResult.ok(
+            {"id": decision_id, "message": f"Recorded decision: {args['content'][:50]}..."}
+        )
 
     async def _get_decisions(self, args: Dict[str, Any]) -> ToolResult:
         """Get decisions with optional filters."""
@@ -557,10 +545,9 @@ class Neo4jAdapter(BaseAdapter):
         keyword = args["description"].split()[0] if args["description"] else ""
 
         async with self._driver.session() as session:
-            result = await session.run(check_query, {
-                "keyword": keyword,
-                "domain": args.get("domain", "work")
-            })
+            result = await session.run(
+                check_query, {"keyword": keyword, "domain": args.get("domain", "work")}
+            )
             existing = await result.single()
 
             if existing:
@@ -571,15 +558,14 @@ class Neo4jAdapter(BaseAdapter):
                     p.strength = p.strength + 0.1
                 RETURN p
                 """
-                await session.run(update_query, {
-                    "id": existing["p"]["id"],
-                    "now": now
-                })
-                return ToolResult.ok({
-                    "id": existing["p"]["id"],
-                    "message": "Updated existing pattern strength",
-                    "new": False
-                })
+                await session.run(update_query, {"id": existing["p"]["id"], "now": now})
+                return ToolResult.ok(
+                    {
+                        "id": existing["p"]["id"],
+                        "message": "Updated existing pattern strength",
+                        "new": False,
+                    }
+                )
 
             # Create new pattern
             pattern_id = f"pattern_{uuid.uuid4().hex[:8]}"
@@ -597,20 +583,25 @@ class Neo4jAdapter(BaseAdapter):
             RETURN p
             """
 
-            await session.run(create_query, {
-                "id": pattern_id,
-                "description": args["description"],
-                "type": args.get("type", "behavioral"),
-                "domain": args.get("domain", "work"),
-                "frequency": args.get("frequency", "situational"),
-                "now": now
-            })
+            await session.run(
+                create_query,
+                {
+                    "id": pattern_id,
+                    "description": args["description"],
+                    "type": args.get("type", "behavioral"),
+                    "domain": args.get("domain", "work"),
+                    "frequency": args.get("frequency", "situational"),
+                    "now": now,
+                },
+            )
 
-        return ToolResult.ok({
-            "id": pattern_id,
-            "message": f"Created new pattern: {args['description'][:50]}...",
-            "new": True
-        })
+        return ToolResult.ok(
+            {
+                "id": pattern_id,
+                "message": f"Created new pattern: {args['description'][:50]}...",
+                "new": True,
+            }
+        )
 
     async def _get_patterns(self, args: Dict[str, Any]) -> ToolResult:
         """Get recorded patterns."""
@@ -664,12 +655,15 @@ class Neo4jAdapter(BaseAdapter):
         """
 
         async with self._driver.session() as session:
-            await session.run(query, {
-                "id": session_id,
-                "agent": args["agent"],
-                "mood": args.get("mood"),
-                "started_at": now
-            })
+            await session.run(
+                query,
+                {
+                    "id": session_id,
+                    "agent": args["agent"],
+                    "mood": args.get("mood"),
+                    "started_at": now,
+                },
+            )
 
         return ToolResult.ok({"session_id": session_id, "started_at": now})
 
@@ -686,21 +680,21 @@ class Neo4jAdapter(BaseAdapter):
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "id": args["session_id"],
-                "ended_at": now,
-                "summary": args["summary"],
-                "tokens_used": args.get("tokens_used", 0)
-            })
+            result = await session.run(
+                query,
+                {
+                    "id": args["session_id"],
+                    "ended_at": now,
+                    "summary": args["summary"],
+                    "tokens_used": args.get("tokens_used", 0),
+                },
+            )
             record = await result.single()
 
             if not record:
                 return ToolResult.fail(f"Session not found: {args['session_id']}")
 
-        return ToolResult.ok({
-            "session_id": args["session_id"],
-            "ended_at": now
-        })
+        return ToolResult.ok({"session_id": args["session_id"], "ended_at": now})
 
     # =========================================================================
     # Relationship Operations
@@ -725,21 +719,22 @@ class Neo4jAdapter(BaseAdapter):
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "from_id": args["from_id"],
-                "to_id": args["to_id"],
-                "props": args.get("properties", {})
-            })
+            result = await session.run(
+                query,
+                {
+                    "from_id": args["from_id"],
+                    "to_id": args["to_id"],
+                    "props": args.get("properties", {}),
+                },
+            )
             record = await result.single()
 
             if not record:
                 return ToolResult.fail("One or both nodes not found")
 
-        return ToolResult.ok({
-            "from": args["from_id"],
-            "relationship": rel_type,
-            "to": args["to_id"]
-        })
+        return ToolResult.ok(
+            {"from": args["from_id"], "relationship": rel_type, "to": args["to_id"]}
+        )
 
     async def _find_related(self, args: Dict[str, Any]) -> ToolResult:
         """Find nodes related to a given node."""
@@ -756,10 +751,7 @@ class Neo4jAdapter(BaseAdapter):
             result = await session.run(query, {"node_id": args["node_id"]})
             records = await result.data()
 
-        related = [
-            {"node": dict(r["related"]), "relationship": r["relationship"]}
-            for r in records
-        ]
+        related = [{"node": dict(r["related"]), "relationship": r["relationship"]} for r in records]
 
         return ToolResult.ok({"related": related, "count": len(related)})
 
@@ -772,9 +764,7 @@ class Neo4jAdapter(BaseAdapter):
         query_upper = query.upper()
 
         if any(kw in query_upper for kw in dangerous_keywords):
-            return ToolResult.fail(
-                "Only read-only queries allowed. Use specific tools for writes."
-            )
+            return ToolResult.fail("Only read-only queries allowed. Use specific tools for writes.")
 
         async with self._driver.session() as session:
             result = await session.run(query, args.get("parameters", {}))
@@ -808,21 +798,20 @@ class Neo4jAdapter(BaseAdapter):
         """
 
         async with self._driver.session() as session:
-            result = await session.run(query, {
-                "id": entity_id,
-                "name": args["name"],
-                "type": args["type"],
-                "domain": args.get("domain"),
-                "notes": args.get("notes"),
-                "created_at": now
-            })
+            result = await session.run(
+                query,
+                {
+                    "id": entity_id,
+                    "name": args["name"],
+                    "type": args["type"],
+                    "domain": args.get("domain"),
+                    "notes": args.get("notes"),
+                    "created_at": now,
+                },
+            )
             record = await result.single()
 
-        return ToolResult.ok({
-            "id": record["e"]["id"],
-            "name": args["name"],
-            "type": args["type"]
-        })
+        return ToolResult.ok({"id": record["e"]["id"], "name": args["name"], "type": args["type"]})
 
     async def _get_entity_context(self, args: Dict[str, Any]) -> ToolResult:
         """Get all context about an entity."""
@@ -844,12 +833,14 @@ class Neo4jAdapter(BaseAdapter):
             if not record:
                 return ToolResult.fail(f"Entity not found: {args['name']}")
 
-        return ToolResult.ok({
-            "entity": dict(record["e"]),
-            "commitments": [dict(c) for c in record["commitments"] if c],
-            "decisions": [dict(d) for d in record["decisions"] if d],
-            "sessions": [dict(s) for s in record["sessions"] if s]
-        })
+        return ToolResult.ok(
+            {
+                "entity": dict(record["e"]),
+                "commitments": [dict(c) for c in record["commitments"] if c],
+                "decisions": [dict(d) for d in record["decisions"] if d],
+                "sessions": [dict(s) for s in record["sessions"] if s],
+            }
+        )
 
     # =========================================================================
     # Lifecycle
@@ -867,11 +858,9 @@ class Neo4jAdapter(BaseAdapter):
                 record = await result.single()
 
                 if record and record["n"] == 1:
-                    return ToolResult.ok({
-                        "status": "ok",
-                        "adapter": self.name,
-                        "database": "Neo4j AuraDB"
-                    })
+                    return ToolResult.ok(
+                        {"status": "ok", "adapter": self.name, "database": "Neo4j AuraDB"}
+                    )
         except Exception as e:
             return ToolResult.fail(f"Neo4j connection failed: {str(e)}")
 

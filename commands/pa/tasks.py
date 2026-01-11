@@ -100,7 +100,7 @@ def save_to_history(action: str, response: str):
     timestamp = datetime.now()
     filename = f"tasks_{action}_{timestamp.strftime('%Y-%m-%d_%H%M')}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Tasks {action.title()} - {timestamp.strftime('%B %d, %Y %I:%M %p')}\n\n")
         f.write(response)
 
@@ -133,12 +133,12 @@ def find_matching_task(search_term: str) -> List[Tuple[Path, str, int]]:
 
         try:
             content = state_file.read_text()
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             for line_num, line in enumerate(lines):
                 # Match incomplete checkbox items:
                 # - [ ] task, * [ ] task, 1. [ ] task
-                checkbox_match = re.match(r'^(\s*)([\-\*]|\d+\.)\s*\[ \]\s*(.+)', line)
+                checkbox_match = re.match(r"^(\s*)([\-\*]|\d+\.)\s*\[ \]\s*(.+)", line)
                 if checkbox_match:
                     task_text = checkbox_match.group(3)
                     # Case-insensitive partial match
@@ -176,7 +176,7 @@ def complete_task(search_term: str) -> str:
         for file_path, line, _ in matches:
             file_name = file_path.name
             # Clean up the line for display
-            task_text = re.sub(r'^[\s\-\*\d\.]*\[ \]\s*', '', line)
+            task_text = re.sub(r"^[\s\-\*\d\.]*\[ \]\s*", "", line)
             result += f"  • [{file_name}] {task_text.strip()}\n"
         return result
 
@@ -185,20 +185,20 @@ def complete_task(search_term: str) -> str:
 
     try:
         content = file_path.read_text()
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Replace the checkbox with completed version
         # Handle various formats: - [ ], * [ ], 1. [ ]
         original_line = lines[line_num]
-        completed_line = re.sub(r'(\s*)([\-\*]|\d+\.)\s*\[ \]', r'\1\2 [x]', original_line)
+        completed_line = re.sub(r"(\s*)([\-\*]|\d+\.)\s*\[ \]", r"\1\2 [x]", original_line)
 
         lines[line_num] = completed_line
 
         # Write back to file
-        file_path.write_text('\n'.join(lines))
+        file_path.write_text("\n".join(lines))
 
         # Extract task name for confirmation
-        task_text = re.sub(r'^[\s\-\*\d\.]*\[[ x]\]\s*', '', completed_line)
+        task_text = re.sub(r"^[\s\-\*\d\.]*\[[ x]\]\s*", "", completed_line)
 
         return f"✅ Task completed!\n\n**{task_text.strip()}**\n\nUpdated: {file_path.name}"
 
@@ -328,10 +328,7 @@ What would you like to do?
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)

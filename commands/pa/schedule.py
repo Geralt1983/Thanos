@@ -61,6 +61,7 @@ def build_context() -> str:
     calendar_file = project_root / "State" / "calendar_today.json"
     if calendar_file.exists():
         import json
+
         with open(calendar_file) as f:
             try:
                 events = json.load(f)
@@ -72,6 +73,7 @@ def build_context() -> str:
     week_file = project_root / "State" / "calendar_week.json"
     if week_file.exists():
         import json
+
         with open(week_file) as f:
             try:
                 events = json.load(f)
@@ -97,7 +99,7 @@ def save_to_history(action: str, response: str):
     timestamp = datetime.now()
     filename = f"schedule_{action}_{timestamp.strftime('%Y-%m-%d_%H%M')}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Schedule {action.title()} - {timestamp.strftime('%B %d, %Y %I:%M %p')}\n\n")
         f.write(response)
 
@@ -206,10 +208,7 @@ What would you like to do?
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)

@@ -27,8 +27,7 @@ class WorkOSAdapter(BaseAdapter):
                          WORKOS_DATABASE_URL or DATABASE_URL env vars.
         """
         self.database_url = database_url or os.environ.get(
-            'WORKOS_DATABASE_URL',
-            os.environ.get('DATABASE_URL')
+            "WORKOS_DATABASE_URL", os.environ.get("DATABASE_URL")
         )
         self._pool: Optional[asyncpg.Pool] = None
 
@@ -44,10 +43,7 @@ class WorkOSAdapter(BaseAdapter):
                     "No database URL configured. Set WORKOS_DATABASE_URL or DATABASE_URL."
                 )
             self._pool = await asyncpg.create_pool(
-                self.database_url,
-                min_size=1,
-                max_size=5,
-                command_timeout=30
+                self.database_url, min_size=1, max_size=5, command_timeout=30
             )
         return self._pool
 
@@ -61,19 +57,19 @@ class WorkOSAdapter(BaseAdapter):
                     "status": {
                         "type": "string",
                         "enum": ["active", "queued", "backlog", "done"],
-                        "description": "Filter by task status"
+                        "description": "Filter by task status",
                     },
                     "limit": {
                         "type": "integer",
                         "default": 50,
-                        "description": "Maximum number of tasks to return"
-                    }
-                }
+                        "description": "Maximum number of tasks to return",
+                    },
+                },
             },
             {
                 "name": "get_today_metrics",
                 "description": "Get today's work progress metrics (points earned, streak, etc.)",
-                "parameters": {}
+                "parameters": {},
             },
             {
                 "name": "complete_task",
@@ -82,38 +78,28 @@ class WorkOSAdapter(BaseAdapter):
                     "task_id": {
                         "type": "integer",
                         "required": True,
-                        "description": "ID of the task to complete"
+                        "description": "ID of the task to complete",
                     }
-                }
+                },
             },
             {
                 "name": "create_task",
                 "description": "Create a new task",
                 "parameters": {
-                    "title": {
-                        "type": "string",
-                        "required": True,
-                        "description": "Task title"
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Task description"
-                    },
+                    "title": {"type": "string", "required": True, "description": "Task title"},
+                    "description": {"type": "string", "description": "Task description"},
                     "status": {
                         "type": "string",
                         "default": "backlog",
                         "enum": ["active", "queued", "backlog"],
-                        "description": "Initial task status"
+                        "description": "Initial task status",
                     },
-                    "client_id": {
-                        "type": "integer",
-                        "description": "Associated client ID"
-                    },
+                    "client_id": {"type": "integer", "description": "Associated client ID"},
                     "effort_estimate": {
                         "type": "integer",
-                        "description": "Estimated effort points (1-5)"
-                    }
-                }
+                        "description": "Estimated effort points (1-5)",
+                    },
+                },
             },
             {
                 "name": "update_task",
@@ -122,19 +108,15 @@ class WorkOSAdapter(BaseAdapter):
                     "task_id": {
                         "type": "integer",
                         "required": True,
-                        "description": "ID of the task to update"
+                        "description": "ID of the task to update",
                     },
                     "title": {"type": "string"},
                     "description": {"type": "string"},
                     "status": {"type": "string", "enum": ["active", "queued", "backlog", "done"]},
-                    "sort_order": {"type": "integer"}
-                }
+                    "sort_order": {"type": "integer"},
+                },
             },
-            {
-                "name": "get_habits",
-                "description": "Get all active habits",
-                "parameters": {}
-            },
+            {"name": "get_habits", "description": "Get all active habits", "parameters": {}},
             {
                 "name": "complete_habit",
                 "description": "Mark a habit as complete for today",
@@ -142,9 +124,9 @@ class WorkOSAdapter(BaseAdapter):
                     "habit_id": {
                         "type": "integer",
                         "required": True,
-                        "description": "ID of the habit to complete"
+                        "description": "ID of the habit to complete",
                     }
-                }
+                },
             },
             {
                 "name": "get_clients",
@@ -153,30 +135,23 @@ class WorkOSAdapter(BaseAdapter):
                     "active_only": {
                         "type": "boolean",
                         "default": True,
-                        "description": "Only return active clients"
+                        "description": "Only return active clients",
                     }
-                }
+                },
             },
             {
                 "name": "daily_summary",
                 "description": "Get comprehensive daily summary with tasks, habits, and metrics",
-                "parameters": {}
+                "parameters": {},
             },
             {
                 "name": "search_tasks",
                 "description": "Search tasks by title or description",
                 "parameters": {
-                    "query": {
-                        "type": "string",
-                        "required": True,
-                        "description": "Search query"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "default": 20
-                    }
-                }
-            }
+                    "query": {"type": "string", "required": True, "description": "Search query"},
+                    "limit": {"type": "integer", "default": 20},
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
@@ -208,10 +183,7 @@ class WorkOSAdapter(BaseAdapter):
             return ToolResult.fail(f"Error: {e}")
 
     async def _get_tasks(
-        self,
-        pool: asyncpg.Pool,
-        status: Optional[str] = None,
-        limit: int = 50
+        self, pool: asyncpg.Pool, status: Optional[str] = None, limit: int = 50
     ) -> ToolResult:
         """Get tasks, optionally filtered by status."""
         async with pool.acquire() as conn:
@@ -225,7 +197,8 @@ class WorkOSAdapter(BaseAdapter):
                     ORDER BY t.sort_order ASC NULLS LAST, t.created_at DESC
                     LIMIT $2
                     """,
-                    status, limit
+                    status,
+                    limit,
                 )
             else:
                 rows = await conn.fetch(
@@ -244,7 +217,7 @@ class WorkOSAdapter(BaseAdapter):
                         t.created_at DESC
                     LIMIT $1
                     """,
-                    limit
+                    limit,
                 )
             return ToolResult.ok([self._row_to_dict(r) for r in rows])
 
@@ -259,22 +232,18 @@ class WorkOSAdapter(BaseAdapter):
                 SELECT * FROM tasks
                 WHERE status = 'done' AND completed_at >= $1
                 """,
-                today_start
+                today_start,
             )
 
             # Calculate earned points
             earned_points = sum(
-                r.get('points_final') or r.get('points_ai_guess') or r.get('effort_estimate') or 2
+                r.get("points_final") or r.get("points_ai_guess") or r.get("effort_estimate") or 2
                 for r in completed
             )
 
             # Get active and queued counts
-            active_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM tasks WHERE status = 'active'"
-            )
-            queued_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM tasks WHERE status = 'queued'"
-            )
+            active_count = await conn.fetchval("SELECT COUNT(*) FROM tasks WHERE status = 'active'")
+            queued_count = await conn.fetchval("SELECT COUNT(*) FROM tasks WHERE status = 'queued'")
 
             # Get streak from daily_goals
             streak_row = await conn.fetchrow(
@@ -286,18 +255,20 @@ class WorkOSAdapter(BaseAdapter):
             minimum_points = 12
             progress_pct = min(100, round((earned_points / target_points) * 100))
 
-            return ToolResult.ok({
-                "completed_count": len(completed),
-                "earned_points": earned_points,
-                "target_points": target_points,
-                "minimum_points": minimum_points,
-                "progress_percentage": progress_pct,
-                "streak": streak_row['current_streak'] if streak_row else 0,
-                "active_count": active_count,
-                "queued_count": queued_count,
-                "goal_met": earned_points >= minimum_points,
-                "target_met": earned_points >= target_points
-            })
+            return ToolResult.ok(
+                {
+                    "completed_count": len(completed),
+                    "earned_points": earned_points,
+                    "target_points": target_points,
+                    "minimum_points": minimum_points,
+                    "progress_percentage": progress_pct,
+                    "streak": streak_row["current_streak"] if streak_row else 0,
+                    "active_count": active_count,
+                    "queued_count": queued_count,
+                    "goal_met": earned_points >= minimum_points,
+                    "target_met": earned_points >= target_points,
+                }
+            )
 
     async def _complete_task(self, pool: asyncpg.Pool, task_id: int) -> ToolResult:
         """Mark a task as complete."""
@@ -311,7 +282,7 @@ class WorkOSAdapter(BaseAdapter):
                 WHERE id = $1
                 RETURNING *
                 """,
-                task_id
+                task_id,
             )
             if row:
                 return ToolResult.ok(self._row_to_dict(row))
@@ -324,7 +295,7 @@ class WorkOSAdapter(BaseAdapter):
         description: Optional[str] = None,
         status: str = "backlog",
         client_id: Optional[int] = None,
-        effort_estimate: Optional[int] = None
+        effort_estimate: Optional[int] = None,
     ) -> ToolResult:
         """Create a new task."""
         async with pool.acquire() as conn:
@@ -334,35 +305,41 @@ class WorkOSAdapter(BaseAdapter):
                 VALUES ($1, $2, $3, $4, $5, NOW())
                 RETURNING *
                 """,
-                title, description, status, client_id, effort_estimate
+                title,
+                description,
+                status,
+                client_id,
+                effort_estimate,
             )
             return ToolResult.ok(self._row_to_dict(row))
 
-    async def _update_task(
-        self,
-        pool: asyncpg.Pool,
-        task_id: int,
-        **updates
-    ) -> ToolResult:
+    async def _update_task(self, pool: asyncpg.Pool, task_id: int, **updates) -> ToolResult:
         """Update an existing task."""
         # Build dynamic update query
-        allowed_fields = {'title', 'description', 'status', 'sort_order', 'effort_estimate', 'client_id'}
+        allowed_fields = {
+            "title",
+            "description",
+            "status",
+            "sort_order",
+            "effort_estimate",
+            "client_id",
+        }
         update_fields = {k: v for k, v in updates.items() if k in allowed_fields and v is not None}
 
         if not update_fields:
             return ToolResult.fail("No valid fields to update")
 
         # Build SET clause
-        set_parts = [f"{field} = ${i+2}" for i, field in enumerate(update_fields.keys())]
+        set_parts = [f"{field} = ${i + 2}" for i, field in enumerate(update_fields.keys())]
         set_parts.append("updated_at = NOW()")
 
         # Handle status change to 'done'
-        if update_fields.get('status') == 'done':
+        if update_fields.get("status") == "done":
             set_parts.append("completed_at = NOW()")
 
         query = f"""
             UPDATE tasks
-            SET {', '.join(set_parts)}
+            SET {", ".join(set_parts)}
             WHERE id = $1
             RETURNING *
         """
@@ -389,7 +366,7 @@ class WorkOSAdapter(BaseAdapter):
 
     async def _complete_habit(self, pool: asyncpg.Pool, habit_id: int) -> ToolResult:
         """Mark a habit as complete for today."""
-        today_str = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+        today_str = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
 
         async with pool.acquire() as conn:
             # Check if already completed today
@@ -398,7 +375,8 @@ class WorkOSAdapter(BaseAdapter):
                 SELECT * FROM habit_completions
                 WHERE habit_id = $1 AND DATE(completed_at) = $2
                 """,
-                habit_id, today_str
+                habit_id,
+                today_str,
             )
 
             if existing:
@@ -407,7 +385,7 @@ class WorkOSAdapter(BaseAdapter):
             # Insert completion
             await conn.execute(
                 "INSERT INTO habit_completions (habit_id, completed_at) VALUES ($1, NOW())",
-                habit_id
+                habit_id,
             )
 
             # Update habit streak
@@ -421,18 +399,15 @@ class WorkOSAdapter(BaseAdapter):
                 WHERE id = $2
                 RETURNING *
                 """,
-                today_str, habit_id
+                today_str,
+                habit_id,
             )
 
             if row:
                 return ToolResult.ok(self._row_to_dict(row))
             return ToolResult.fail(f"Habit {habit_id} not found")
 
-    async def _get_clients(
-        self,
-        pool: asyncpg.Pool,
-        active_only: bool = True
-    ) -> ToolResult:
+    async def _get_clients(self, pool: asyncpg.Pool, active_only: bool = True) -> ToolResult:
         """Get all clients."""
         async with pool.acquire() as conn:
             if active_only:
@@ -463,20 +438,17 @@ class WorkOSAdapter(BaseAdapter):
         queued = await self._get_tasks(pool, status="queued", limit=5)
         habits = await self._get_habits(pool)
 
-        return ToolResult.ok({
-            "progress": metrics.data if metrics.success else None,
-            "active_tasks": active.data if active.success else [],
-            "queued_tasks": queued.data if queued.success else [],
-            "habits": habits.data if habits.success else [],
-            "generated_at": datetime.now(ZoneInfo('America/New_York')).isoformat()
-        })
+        return ToolResult.ok(
+            {
+                "progress": metrics.data if metrics.success else None,
+                "active_tasks": active.data if active.success else [],
+                "queued_tasks": queued.data if queued.success else [],
+                "habits": habits.data if habits.success else [],
+                "generated_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
+            }
+        )
 
-    async def _search_tasks(
-        self,
-        pool: asyncpg.Pool,
-        query: str,
-        limit: int = 20
-    ) -> ToolResult:
+    async def _search_tasks(self, pool: asyncpg.Pool, query: str, limit: int = 20) -> ToolResult:
         """Search tasks by title or description."""
         search_pattern = f"%{query}%"
         async with pool.acquire() as conn:
@@ -496,16 +468,17 @@ class WorkOSAdapter(BaseAdapter):
                     t.updated_at DESC
                 LIMIT $2
                 """,
-                search_pattern, limit
+                search_pattern,
+                limit,
             )
             return ToolResult.ok([self._row_to_dict(r) for r in rows])
 
     def _get_est_today_start(self) -> datetime:
         """Get UTC timestamp for midnight EST today."""
-        est = ZoneInfo('America/New_York')
+        est = ZoneInfo("America/New_York")
         now_est = datetime.now(est)
         midnight_est = now_est.replace(hour=0, minute=0, second=0, microsecond=0)
-        return midnight_est.astimezone(ZoneInfo('UTC')).replace(tzinfo=None)
+        return midnight_est.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
     def _row_to_dict(self, row: asyncpg.Record) -> Dict[str, Any]:
         """Convert asyncpg Record to dict, handling datetime serialization."""
@@ -527,11 +500,13 @@ class WorkOSAdapter(BaseAdapter):
             pool = await self._get_pool()
             async with pool.acquire() as conn:
                 version = await conn.fetchval("SELECT version()")
-                return ToolResult.ok({
-                    'status': 'ok',
-                    'adapter': self.name,
-                    'database': 'connected',
-                    'version': version[:50] if version else None
-                })
+                return ToolResult.ok(
+                    {
+                        "status": "ok",
+                        "adapter": self.name,
+                        "database": "connected",
+                        "version": version[:50] if version else None,
+                    }
+                )
         except Exception as e:
             return ToolResult.fail(f"Health check failed: {e}")

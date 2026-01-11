@@ -6,4 +6,4 @@ Commands are organized by namespace:
 - sc/  : Software Commands (analyze, design, implement, etc.)
 """
 
-__all__ = ['pa', 'sc']
+__all__ = ["pa", "sc"]

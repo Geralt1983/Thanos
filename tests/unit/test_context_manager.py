@@ -9,6 +9,7 @@ Tests cover:
 - Context window limits
 - Usage reporting
 """
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -45,7 +46,7 @@ class TestContextManagerInitialization:
         assert cm.available_tokens == cm.max_tokens - cm.OUTPUT_RESERVE
         assert cm.OUTPUT_RESERVE == 8000
 
-    @patch('tiktoken.get_encoding')
+    @patch("tiktoken.get_encoding")
     def test_tiktoken_initialization_success(self, mock_get_encoding):
         """Test successful tiktoken initialization."""
         mock_encoder = Mock()
@@ -55,7 +56,7 @@ class TestContextManagerInitialization:
         assert cm.encoding is not None
         mock_get_encoding.assert_called_once_with("cl100k_base")
 
-    @patch('tiktoken.get_encoding')
+    @patch("tiktoken.get_encoding")
     def test_tiktoken_initialization_failure(self, mock_get_encoding):
         """Test graceful fallback when tiktoken fails."""
         mock_get_encoding.side_effect = Exception("tiktoken error")
@@ -78,7 +79,7 @@ class TestTokenEstimation:
         cm = ContextManager()
         assert cm.estimate_tokens(None) == 0
 
-    @patch('tiktoken.get_encoding')
+    @patch("tiktoken.get_encoding")
     def test_estimate_tokens_with_tiktoken(self, mock_get_encoding):
         """Test token estimation using tiktoken."""
         mock_encoder = Mock()
@@ -93,13 +94,13 @@ class TestTokenEstimation:
 
     def test_estimate_tokens_fallback(self):
         """Test token estimation using fallback method."""
-        with patch('tiktoken.get_encoding', side_effect=Exception("fail")):
+        with patch("tiktoken.get_encoding", side_effect=Exception("fail")):
             cm = ContextManager()
             # Fallback: len(text) / 3.5
             tokens = cm.estimate_tokens("Hello world")  # 11 chars / 3.5 ≈ 3
             assert tokens == 3
 
-    @patch('tiktoken.get_encoding')
+    @patch("tiktoken.get_encoding")
     def test_estimate_tokens_tiktoken_encoding_failure(self, mock_get_encoding):
         """Test fallback when tiktoken encoding fails."""
         mock_encoder = Mock()
@@ -132,7 +133,7 @@ class TestTokenEstimation:
         messages = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there!"},
-            {"role": "user", "content": "How are you?"}
+            {"role": "user", "content": "How are you?"},
         ]
 
         tokens = cm.estimate_messages_tokens(messages)
@@ -162,9 +163,7 @@ class TestHistoryTrimming:
     def test_trim_history_no_trimming_needed(self):
         """Test that history is not trimmed when within limits."""
         cm = ContextManager()
-        history = [
-            {"role": "user", "content": "Short message"}
-        ]
+        history = [{"role": "user", "content": "Short message"}]
         system_prompt = "You are a helpful assistant."
         new_message = "Another short message"
 
@@ -241,8 +240,8 @@ class TestHistoryTrimming:
         cm.available_tokens = 100
 
         # Create large system prompt and message that together exceed the tiny limit
-        system_prompt = "A" * 500   # Well over 100 tokens
-        new_message = "B" * 500     # Well over 100 tokens combined
+        system_prompt = "A" * 500  # Well over 100 tokens
+        new_message = "B" * 500  # Well over 100 tokens combined
         history = [{"role": "user", "content": "Normal message"}]
 
         trimmed, was_trimmed = cm.trim_history(history, system_prompt, new_message)
@@ -259,7 +258,7 @@ class TestHistoryTrimming:
             {"role": "user", "content": "Short 1"},
             {"role": "assistant", "content": "Short 2"},
             {"role": "user", "content": "A" * 50000},  # Large message
-            {"role": "assistant", "content": "Recent"}
+            {"role": "assistant", "content": "Recent"},
         ]
 
         system_prompt = "System"
@@ -295,7 +294,7 @@ class TestUsageReporting:
         cm = ContextManager()
         history = [
             {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"}
+            {"role": "assistant", "content": "Hi there!"},
         ]
         system_prompt = "You are a helpful assistant."
 
@@ -347,7 +346,7 @@ class TestModelLimits:
             "claude-opus-4-5-20251101",
             "claude-opus-4.5",
             "claude-sonnet-4-20250514",
-            "claude-3-5-sonnet-20241022"
+            "claude-3-5-sonnet-20241022",
         ]
 
         for model in expected_models:
@@ -402,7 +401,7 @@ class TestEdgeCases:
         messages = [
             {"role": "user", "content": "Normal text"},
             {"role": "assistant", "content": "Response with\nnewlines\n"},
-            {"role": "user", "content": "Code: print('hello')"}
+            {"role": "user", "content": "Code: print('hello')"},
         ]
 
         tokens = cm.estimate_messages_tokens(messages)

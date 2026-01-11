@@ -16,24 +16,31 @@ import pytest
 THANOS_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(THANOS_DIR))
 
+
 # Create mock exception classes that behave like Anthropic exceptions
 # The real Anthropic exceptions require response and body parameters
 class MockRateLimitError(Exception):
     """Mock RateLimitError for testing."""
+
     def __init__(self, message="Rate limited"):
         super().__init__(message)
         self.status_code = 429
 
+
 class MockAPIConnectionError(Exception):
     """Mock APIConnectionError for testing."""
+
     def __init__(self, message="Connection error"):
         super().__init__(message)
 
+
 class MockAPIStatusError(Exception):
     """Mock APIStatusError for testing."""
+
     def __init__(self, message="API error", status_code=500):
         super().__init__(message)
         self.status_code = status_code
+
 
 # Patch the anthropic imports in message_handler module
 import Tools.message_handler as handler_module
@@ -54,6 +61,7 @@ from Tools.message_handler import MessageHandler
 @dataclass
 class MockUsage:
     """Mock usage stats from API"""
+
     input_tokens: int
     output_tokens: int
 
@@ -61,11 +69,13 @@ class MockUsage:
 @dataclass
 class MockMessage:
     """Mock API message response"""
+
     usage: MockUsage
 
 
 class MockStream:
     """Mock streaming response from API"""
+
     def __init__(self, chunks, final_message):
         self.text_stream = chunks
         self._final_message = final_message
@@ -109,18 +119,14 @@ class TestMessageHandler:
 
     @pytest.fixture
     def message_handler(
-        self,
-        mock_client_factory,
-        mock_session_manager,
-        mock_context_manager,
-        mock_retry_middleware
+        self, mock_client_factory, mock_session_manager, mock_context_manager, mock_retry_middleware
     ):
         """Create MessageHandler instance with mocked dependencies"""
         return MessageHandler(
             client_factory=mock_client_factory,
             session_manager=mock_session_manager,
             context_manager=mock_context_manager,
-            retry_middleware=mock_retry_middleware
+            retry_middleware=mock_retry_middleware,
         )
 
     def test_successful_message_streaming(self, message_handler, mock_client_factory):
@@ -133,13 +139,13 @@ class TestMessageHandler:
         client.chat_stream.return_value = mock_stream
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify
@@ -155,13 +161,13 @@ class TestMessageHandler:
         mock_retry_middleware.execute_with_retry.side_effect = RateLimitError("Rate limit")
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify
@@ -174,16 +180,18 @@ class TestMessageHandler:
     def test_connection_error(self, message_handler, mock_retry_middleware):
         """Test connection error handling"""
         # Setup retry middleware to raise APIConnectionError
-        mock_retry_middleware.execute_with_retry.side_effect = APIConnectionError("Connection failed")
+        mock_retry_middleware.execute_with_retry.side_effect = APIConnectionError(
+            "Connection failed"
+        )
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify
@@ -200,13 +208,13 @@ class TestMessageHandler:
         mock_retry_middleware.execute_with_retry.side_effect = error
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify
@@ -221,13 +229,13 @@ class TestMessageHandler:
         mock_retry_middleware.execute_with_retry.side_effect = error
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify
@@ -241,13 +249,13 @@ class TestMessageHandler:
         mock_retry_middleware.execute_with_retry.side_effect = ValueError("Unexpected error")
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify
@@ -255,7 +263,9 @@ class TestMessageHandler:
         assert result.response == ""
         assert "Unexpected" in result.error
 
-    def test_retry_callback_invoked(self, message_handler, mock_retry_middleware, mock_client_factory):
+    def test_retry_callback_invoked(
+        self, message_handler, mock_retry_middleware, mock_client_factory
+    ):
         """Test that retry callback is passed to middleware"""
         # Setup mock client to succeed
         client = mock_client_factory()
@@ -265,21 +275,21 @@ class TestMessageHandler:
         client.chat_stream.return_value = mock_stream
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify retry middleware was called with callback
         mock_retry_middleware.execute_with_retry.assert_called_once()
         call_kwargs = mock_retry_middleware.execute_with_retry.call_args.kwargs
-        assert 'on_retry' in call_kwargs
-        assert callable(call_kwargs['on_retry'])
-        assert 'retriable_errors' in call_kwargs
+        assert "on_retry" in call_kwargs
+        assert callable(call_kwargs["on_retry"])
+        assert "retriable_errors" in call_kwargs
 
     def test_lazy_client_initialization(self, message_handler, mock_client_factory):
         """Test that client is lazily initialized"""
@@ -294,13 +304,13 @@ class TestMessageHandler:
         client.chat_stream.return_value = mock_stream
 
         # Handle message (should initialize client)
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Client should now be initialized
@@ -317,13 +327,13 @@ class TestMessageHandler:
         client.chat_stream.return_value = mock_stream
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify
@@ -342,13 +352,13 @@ class TestMessageHandler:
         client.chat_stream.return_value = mock_stream
 
         # Test
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             result = message_handler.handle_message(
                 message="Test message",
                 system_prompt="Test prompt",
                 history=[],
                 operation="test:op",
-                agent_name="TestAgent"
+                agent_name="TestAgent",
             )
 
         # Verify

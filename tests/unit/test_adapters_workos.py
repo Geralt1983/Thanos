@@ -15,10 +15,10 @@ import pytest
 # Mock asyncpg before importing adapters
 # Create a proper mock with PostgresError class
 mock_asyncpg = Mock()
-mock_asyncpg.PostgresError = type('PostgresError', (Exception,), {})
+mock_asyncpg.PostgresError = type("PostgresError", (Exception,), {})
 mock_asyncpg.Pool = Mock
 mock_asyncpg.Record = dict
-sys.modules['asyncpg'] = mock_asyncpg
+sys.modules["asyncpg"] = mock_asyncpg
 
 # Import the mocked asyncpg for test use
 
@@ -29,6 +29,7 @@ from Tools.adapters.workos import WorkOSAdapter
 # ========================================================================
 # Fixtures
 # ========================================================================
+
 
 @pytest.fixture
 def mock_env_db_url(monkeypatch):
@@ -52,8 +53,10 @@ def adapter_with_explicit_url():
 # Mock Record Helper
 # ========================================================================
 
+
 class MockRecord(dict):
     """Mock asyncpg Record that supports both dict and attribute access"""
+
     def __getattr__(self, key):
         try:
             return self[key]
@@ -68,6 +71,7 @@ def create_mock_record(data: dict) -> MockRecord:
 
 class AsyncContextManagerMock:
     """Helper to create async context manager mocks for pool.acquire()"""
+
     def __init__(self, conn):
         self.conn = conn
 
@@ -89,6 +93,7 @@ def create_mock_pool(conn):
 # ========================================================================
 # Initialization Tests
 # ========================================================================
+
 
 class TestWorkOSAdapterInit:
     """Test WorkOSAdapter initialization"""
@@ -135,6 +140,7 @@ class TestWorkOSAdapterInit:
 # Tool Listing Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterListTools:
     """Test list_tools method"""
 
@@ -159,7 +165,7 @@ class TestWorkOSAdapterListTools:
             "complete_habit",
             "get_clients",
             "daily_summary",
-            "search_tasks"
+            "search_tasks",
         ]
 
         for expected in expected_tools:
@@ -177,6 +183,7 @@ class TestWorkOSAdapterListTools:
 # ========================================================================
 # Pool Management Tests
 # ========================================================================
+
 
 class TestWorkOSAdapterPool:
     """Test connection pool management"""
@@ -215,6 +222,7 @@ class TestWorkOSAdapterPool:
 # Tool Execution Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterCallTool:
     """Test call_tool method"""
 
@@ -224,7 +232,7 @@ class TestWorkOSAdapterCallTool:
         mock_conn = AsyncMock()
         mock_pool = create_mock_pool(mock_conn)
 
-        with patch.object(adapter, '_get_pool', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_pool", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_pool
             result = await adapter.call_tool("unknown_tool", {})
             assert result.success is False
@@ -240,6 +248,7 @@ class TestWorkOSAdapterCallTool:
 # Task Operations Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterTasks:
     """Test task-related operations"""
 
@@ -247,14 +256,24 @@ class TestWorkOSAdapterTasks:
     async def test_get_tasks_with_status(self, adapter):
         """Test getting tasks filtered by status"""
         mock_rows = [
-            create_mock_record({
-                "id": 1, "title": "Task 1", "status": "active",
-                "client_name": "Client A", "created_at": datetime.now()
-            }),
-            create_mock_record({
-                "id": 2, "title": "Task 2", "status": "active",
-                "client_name": "Client B", "created_at": datetime.now()
-            })
+            create_mock_record(
+                {
+                    "id": 1,
+                    "title": "Task 1",
+                    "status": "active",
+                    "client_name": "Client A",
+                    "created_at": datetime.now(),
+                }
+            ),
+            create_mock_record(
+                {
+                    "id": 2,
+                    "title": "Task 2",
+                    "status": "active",
+                    "client_name": "Client B",
+                    "created_at": datetime.now(),
+                }
+            ),
         ]
 
         mock_conn = AsyncMock()
@@ -271,7 +290,9 @@ class TestWorkOSAdapterTasks:
     async def test_get_tasks_no_status(self, adapter):
         """Test getting all tasks without status filter"""
         mock_rows = [
-            create_mock_record({"id": 1, "title": "Task 1", "status": "active", "created_at": datetime.now()}),
+            create_mock_record(
+                {"id": 1, "title": "Task 1", "status": "active", "created_at": datetime.now()}
+            ),
         ]
 
         mock_conn = AsyncMock()
@@ -285,10 +306,9 @@ class TestWorkOSAdapterTasks:
     @pytest.mark.asyncio
     async def test_complete_task_success(self, adapter):
         """Test completing a task"""
-        mock_row = create_mock_record({
-            "id": 1, "title": "Task 1", "status": "done",
-            "completed_at": datetime.now()
-        })
+        mock_row = create_mock_record(
+            {"id": 1, "title": "Task 1", "status": "done", "completed_at": datetime.now()}
+        )
 
         mock_conn = AsyncMock()
         mock_conn.fetchrow.return_value = mock_row
@@ -314,20 +334,22 @@ class TestWorkOSAdapterTasks:
     @pytest.mark.asyncio
     async def test_create_task(self, adapter):
         """Test creating a new task"""
-        mock_row = create_mock_record({
-            "id": 10, "title": "New Task", "status": "backlog",
-            "description": "Test description", "created_at": datetime.now()
-        })
+        mock_row = create_mock_record(
+            {
+                "id": 10,
+                "title": "New Task",
+                "status": "backlog",
+                "description": "Test description",
+                "created_at": datetime.now(),
+            }
+        )
 
         mock_conn = AsyncMock()
         mock_conn.fetchrow.return_value = mock_row
         mock_pool = create_mock_pool(mock_conn)
 
         result = await adapter._create_task(
-            mock_pool,
-            title="New Task",
-            description="Test description",
-            status="backlog"
+            mock_pool, title="New Task", description="Test description", status="backlog"
         )
 
         assert result.success is True
@@ -337,9 +359,7 @@ class TestWorkOSAdapterTasks:
     @pytest.mark.asyncio
     async def test_update_task_success(self, adapter):
         """Test updating a task"""
-        mock_row = create_mock_record({
-            "id": 1, "title": "Updated Task", "status": "active"
-        })
+        mock_row = create_mock_record({"id": 1, "title": "Updated Task", "status": "active"})
 
         mock_conn = AsyncMock()
         mock_conn.fetchrow.return_value = mock_row
@@ -377,10 +397,14 @@ class TestWorkOSAdapterTasks:
     async def test_search_tasks(self, adapter):
         """Test searching tasks"""
         mock_rows = [
-            create_mock_record({
-                "id": 1, "title": "Fix login bug",
-                "description": "Login not working", "status": "active"
-            })
+            create_mock_record(
+                {
+                    "id": 1,
+                    "title": "Fix login bug",
+                    "description": "Login not working",
+                    "status": "active",
+                }
+            )
         ]
 
         mock_conn = AsyncMock()
@@ -397,6 +421,7 @@ class TestWorkOSAdapterTasks:
 # ========================================================================
 # Metrics Tests
 # ========================================================================
+
 
 class TestWorkOSAdapterMetrics:
     """Test metrics operations"""
@@ -430,6 +455,7 @@ class TestWorkOSAdapterMetrics:
 # Habit Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterHabits:
     """Test habit-related operations"""
 
@@ -437,10 +463,15 @@ class TestWorkOSAdapterHabits:
     async def test_get_habits(self, adapter):
         """Test getting habits"""
         mock_rows = [
-            create_mock_record({
-                "id": 1, "name": "Exercise", "is_active": True,
-                "current_streak": 5, "last_completion": datetime.now()
-            })
+            create_mock_record(
+                {
+                    "id": 1,
+                    "name": "Exercise",
+                    "is_active": True,
+                    "current_streak": 5,
+                    "last_completion": datetime.now(),
+                }
+            )
         ]
 
         mock_conn = AsyncMock()
@@ -456,9 +487,7 @@ class TestWorkOSAdapterHabits:
     @pytest.mark.asyncio
     async def test_complete_habit_success(self, adapter):
         """Test completing a habit"""
-        mock_row = create_mock_record({
-            "id": 1, "name": "Exercise", "current_streak": 6
-        })
+        mock_row = create_mock_record({"id": 1, "name": "Exercise", "current_streak": 6})
 
         mock_conn = AsyncMock()
         mock_conn.fetchrow.side_effect = [None, mock_row]  # No existing, then updated
@@ -489,6 +518,7 @@ class TestWorkOSAdapterHabits:
 # Client Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterClients:
     """Test client-related operations"""
 
@@ -496,9 +526,7 @@ class TestWorkOSAdapterClients:
     async def test_get_clients_active_only(self, adapter):
         """Test getting active clients"""
         mock_rows = [
-            create_mock_record({
-                "id": 1, "name": "Client A", "is_active": True, "open_tasks": 5
-            })
+            create_mock_record({"id": 1, "name": "Client A", "is_active": True, "open_tasks": 5})
         ]
 
         mock_conn = AsyncMock()
@@ -515,7 +543,7 @@ class TestWorkOSAdapterClients:
         """Test getting all clients"""
         mock_rows = [
             create_mock_record({"id": 1, "name": "Client A", "is_active": True}),
-            create_mock_record({"id": 2, "name": "Client B", "is_active": False})
+            create_mock_record({"id": 2, "name": "Client B", "is_active": False}),
         ]
 
         mock_conn = AsyncMock()
@@ -532,15 +560,16 @@ class TestWorkOSAdapterClients:
 # Daily Summary Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterDailySummary:
     """Test daily summary operation"""
 
     @pytest.mark.asyncio
     async def test_daily_summary(self, adapter):
         """Test getting comprehensive daily summary"""
-        with patch.object(adapter, '_get_today_metrics', new_callable=AsyncMock) as mock_metrics:
-            with patch.object(adapter, '_get_tasks', new_callable=AsyncMock) as mock_tasks:
-                with patch.object(adapter, '_get_habits', new_callable=AsyncMock) as mock_habits:
+        with patch.object(adapter, "_get_today_metrics", new_callable=AsyncMock) as mock_metrics:
+            with patch.object(adapter, "_get_tasks", new_callable=AsyncMock) as mock_tasks:
+                with patch.object(adapter, "_get_habits", new_callable=AsyncMock) as mock_habits:
                     mock_metrics.return_value = ToolResult.ok({"earned_points": 10})
                     mock_tasks.return_value = ToolResult.ok([{"id": 1, "title": "Task"}])
                     mock_habits.return_value = ToolResult.ok([{"id": 1, "name": "Habit"}])
@@ -559,6 +588,7 @@ class TestWorkOSAdapterDailySummary:
 # Helper Method Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterHelpers:
     """Test helper methods"""
 
@@ -574,11 +604,7 @@ class TestWorkOSAdapterHelpers:
 
     def test_row_to_dict_simple(self, adapter):
         """Test _row_to_dict with simple types"""
-        record = create_mock_record({
-            "id": 1,
-            "name": "Test",
-            "count": 10
-        })
+        record = create_mock_record({"id": 1, "name": "Test", "count": 10})
 
         result = adapter._row_to_dict(record)
 
@@ -589,11 +615,7 @@ class TestWorkOSAdapterHelpers:
     def test_row_to_dict_datetime(self, adapter):
         """Test _row_to_dict serializes datetime to ISO format"""
         now = datetime.now()
-        record = create_mock_record({
-            "id": 1,
-            "created_at": now,
-            "updated_at": now
-        })
+        record = create_mock_record({"id": 1, "created_at": now, "updated_at": now})
 
         result = adapter._row_to_dict(record)
 
@@ -606,6 +628,7 @@ class TestWorkOSAdapterHelpers:
 # Health Check Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterHealthCheck:
     """Test health_check method"""
 
@@ -616,7 +639,7 @@ class TestWorkOSAdapterHealthCheck:
         mock_conn.fetchval.return_value = "PostgreSQL 15.1 on x86_64-pc-linux"
         mock_pool = create_mock_pool(mock_conn)
 
-        with patch.object(adapter, '_get_pool', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_pool", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_pool
 
             result = await adapter.health_check()
@@ -630,7 +653,7 @@ class TestWorkOSAdapterHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_failure(self, adapter):
         """Test health check on database failure"""
-        with patch.object(adapter, '_get_pool', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_pool", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Connection refused")
 
             result = await adapter.health_check()
@@ -643,6 +666,7 @@ class TestWorkOSAdapterHealthCheck:
 # Tool Routing Tests
 # ========================================================================
 
+
 class TestWorkOSAdapterToolRouting:
     """Test tool routing through call_tool"""
 
@@ -652,16 +676,22 @@ class TestWorkOSAdapterToolRouting:
         tools = adapter.list_tools()
         tool_names = [t["name"] for t in tools]
 
-        with patch.object(adapter, '_get_pool', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_pool", new_callable=AsyncMock) as mock_get:
             mock_pool = AsyncMock()
             mock_get.return_value = mock_pool
 
             # Patch all internal methods to avoid actual execution
             for method_name in [
-                '_get_tasks', '_get_today_metrics', '_complete_task',
-                '_create_task', '_update_task', '_get_habits',
-                '_complete_habit', '_get_clients', '_daily_summary',
-                '_search_tasks'
+                "_get_tasks",
+                "_get_today_metrics",
+                "_complete_task",
+                "_create_task",
+                "_update_task",
+                "_get_habits",
+                "_complete_habit",
+                "_get_clients",
+                "_daily_summary",
+                "_search_tasks",
             ]:
                 setattr(adapter, method_name, AsyncMock(return_value=ToolResult.ok({})))
 

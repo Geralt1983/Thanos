@@ -1,6 +1,7 @@
 """
 Pytest configuration and shared fixtures for Thanos tests.
 """
+
 from pathlib import Path
 import sys
 

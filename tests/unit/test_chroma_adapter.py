@@ -22,11 +22,12 @@ class TestChromaAdapterImports:
 
     def test_chromadb_available_flag_exists(self):
         """Test CHROMADB_AVAILABLE flag is defined."""
-        with patch.dict(sys.modules, {'chromadb': mock_chromadb, 'chromadb.config': MagicMock()}):
+        with patch.dict(sys.modules, {"chromadb": mock_chromadb, "chromadb.config": MagicMock()}):
             # Force reimport
-            if 'Tools.adapters.chroma_adapter' in sys.modules:
-                del sys.modules['Tools.adapters.chroma_adapter']
+            if "Tools.adapters.chroma_adapter" in sys.modules:
+                del sys.modules["Tools.adapters.chroma_adapter"]
             from Tools.adapters.chroma_adapter import CHROMADB_AVAILABLE
+
             # The actual value depends on whether chromadb is installed
             assert isinstance(CHROMADB_AVAILABLE, bool)
 
@@ -48,7 +49,7 @@ class TestChromaAdapterImports:
 class TestChromaAdapterInitialization:
     """Test ChromaAdapter initialization."""
 
-    @patch('Tools.adapters.chroma_adapter.CHROMADB_AVAILABLE', False)
+    @patch("Tools.adapters.chroma_adapter.CHROMADB_AVAILABLE", False)
     def test_init_raises_without_chromadb(self):
         """Test initialization fails when chromadb not available."""
         from Tools.adapters.chroma_adapter import ChromaAdapter
@@ -91,7 +92,7 @@ class TestChromaAdapterListTools:
             "delete_memory",
             "clear_collection",
             "get_memory",
-            "update_metadata"
+            "update_metadata",
         ]
 
         for expected in expected_tools:
@@ -186,11 +187,13 @@ class TestChromaAdapterStoreMemory:
         mock_collection = MagicMock()
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._store_memory({
-            "content": "This is a test memory",
-            "collection": "observations",
-            "metadata": {"domain": "test"}
-        })
+        result = await adapter._store_memory(
+            {
+                "content": "This is a test memory",
+                "collection": "observations",
+                "metadata": {"domain": "test"},
+            }
+        )
 
         assert result.success is True
         assert "id" in result.data
@@ -223,16 +226,18 @@ class TestChromaAdapterStoreMemory:
         mock_collection = MagicMock()
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._store_memory({
-            "content": "test",
-            "metadata": {
-                "string": "value",
-                "number": 123,
-                "bool": True,
-                "none": None,  # Should be filtered
-                "list": [1, 2, 3]  # Should be converted to string
+        result = await adapter._store_memory(
+            {
+                "content": "test",
+                "metadata": {
+                    "string": "value",
+                    "number": 123,
+                    "bool": True,
+                    "none": None,  # Should be filtered
+                    "list": [1, 2, 3],  # Should be converted to string
+                },
             }
-        })
+        )
 
         assert result.success is True
         # Verify metadata was passed correctly
@@ -267,9 +272,7 @@ class TestChromaAdapterStoreBatch:
         adapter = object.__new__(ChromaAdapter)
         adapter._generate_embedding = MagicMock(return_value=None)
 
-        result = await adapter._store_batch({
-            "items": [{"content": "item1"}, {"content": "item2"}]
-        })
+        result = await adapter._store_batch({"items": [{"content": "item1"}, {"content": "item2"}]})
 
         assert result.success is False
         assert "Could not generate embeddings" in result.error
@@ -285,13 +288,15 @@ class TestChromaAdapterStoreBatch:
         mock_collection = MagicMock()
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._store_batch({
-            "items": [
-                {"content": "item1", "metadata": {"key": "val1"}},
-                {"content": "item2", "metadata": {"key": "val2"}}
-            ],
-            "collection": "decisions"
-        })
+        result = await adapter._store_batch(
+            {
+                "items": [
+                    {"content": "item1", "metadata": {"key": "val1"}},
+                    {"content": "item2", "metadata": {"key": "val2"}},
+                ],
+                "collection": "decisions",
+            }
+        )
 
         assert result.success is True
         assert result.data["stored"] == 2
@@ -309,13 +314,9 @@ class TestChromaAdapterStoreBatch:
         mock_collection = MagicMock()
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._store_batch({
-            "items": [
-                {"content": "item1"},
-                {"content": "item2"},
-                {"content": "item3"}
-            ]
-        })
+        result = await adapter._store_batch(
+            {"items": [{"content": "item1"}, {"content": "item2"}, {"content": "item3"}]}
+        )
 
         assert result.success is True
         assert result.data["stored"] == 2  # Only 2 succeeded
@@ -350,15 +351,13 @@ class TestChromaAdapterSemanticSearch:
             "ids": [["id1", "id2"]],
             "documents": [["content1", "content2"]],
             "metadatas": [[{"domain": "work"}, {"domain": "personal"}]],
-            "distances": [[0.1, 0.2]]
+            "distances": [[0.1, 0.2]],
         }
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._semantic_search({
-            "query": "test query",
-            "collection": "observations",
-            "limit": 10
-        })
+        result = await adapter._semantic_search(
+            {"query": "test query", "collection": "observations", "limit": 10}
+        )
 
         assert result.success is True
         assert result.data["count"] == 2
@@ -374,13 +373,15 @@ class TestChromaAdapterSemanticSearch:
         adapter._generate_embedding = MagicMock(return_value=[0.1] * 1536)
 
         mock_collection = MagicMock()
-        mock_collection.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+        mock_collection.query.return_value = {
+            "ids": [[]],
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]],
+        }
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        await adapter._semantic_search({
-            "query": "test",
-            "where": {"domain": "work"}
-        })
+        await adapter._semantic_search({"query": "test", "where": {"domain": "work"}})
 
         call_args = mock_collection.query.call_args
         assert call_args.kwargs.get("where") == {"domain": "work"}
@@ -398,7 +399,7 @@ class TestChromaAdapterSemanticSearch:
             "ids": [[]],
             "documents": [[]],
             "metadatas": [[]],
-            "distances": [[]]
+            "distances": [[]],
         }
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
@@ -438,7 +439,7 @@ class TestChromaAdapterSearchAllCollections:
             "ids": [["id1"]],
             "documents": [["doc1"]],
             "metadatas": [[{}]],
-            "distances": [[0.1]]
+            "distances": [[0.1]],
         }
 
         mock_coll2 = MagicMock()
@@ -447,7 +448,7 @@ class TestChromaAdapterSearchAllCollections:
             "ids": [["id2"]],
             "documents": [["doc2"]],
             "metadatas": [[{}]],
-            "distances": [[0.2]]
+            "distances": [[0.2]],
         }
 
         adapter._client = MagicMock()
@@ -541,10 +542,7 @@ class TestChromaAdapterDeleteMemory:
         mock_collection = MagicMock()
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._delete_memory({
-            "memory_id": "mem123",
-            "collection": "decisions"
-        })
+        result = await adapter._delete_memory({"memory_id": "mem123", "collection": "decisions"})
 
         assert result.success is True
         assert result.data["deleted"] == "mem123"
@@ -561,10 +559,7 @@ class TestChromaAdapterClearCollection:
 
         adapter = object.__new__(ChromaAdapter)
 
-        result = await adapter._clear_collection({
-            "collection": "decisions",
-            "confirm": False
-        })
+        result = await adapter._clear_collection({"collection": "decisions", "confirm": False})
 
         assert result.success is False
         assert "confirm=true" in result.error
@@ -578,10 +573,7 @@ class TestChromaAdapterClearCollection:
         adapter._client = MagicMock()
         adapter._collections = {"decisions": MagicMock()}
 
-        result = await adapter._clear_collection({
-            "collection": "decisions",
-            "confirm": True
-        })
+        result = await adapter._clear_collection({"collection": "decisions", "confirm": True})
 
         assert result.success is True
         assert result.data["cleared"] == "decisions"
@@ -600,13 +592,15 @@ class TestChromaAdapterGetMemory:
         adapter = object.__new__(ChromaAdapter)
 
         mock_collection = MagicMock()
-        mock_collection.get.return_value = {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+        mock_collection.get.return_value = {
+            "ids": [],
+            "documents": [],
+            "metadatas": [],
+            "embeddings": [],
+        }
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._get_memory({
-            "memory_id": "nonexistent",
-            "collection": "decisions"
-        })
+        result = await adapter._get_memory({"memory_id": "nonexistent", "collection": "decisions"})
 
         assert result.success is False
         assert "Memory not found" in result.error
@@ -623,14 +617,11 @@ class TestChromaAdapterGetMemory:
             "ids": ["mem123"],
             "documents": ["Test content"],
             "metadatas": [{"domain": "work"}],
-            "embeddings": [[0.1] * 1536]
+            "embeddings": [[0.1] * 1536],
         }
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._get_memory({
-            "memory_id": "mem123",
-            "collection": "decisions"
-        })
+        result = await adapter._get_memory({"memory_id": "mem123", "collection": "decisions"})
 
         assert result.success is True
         assert result.data["id"] == "mem123"
@@ -652,11 +643,9 @@ class TestChromaAdapterUpdateMetadata:
         mock_collection.get.return_value = {"ids": [], "metadatas": []}
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._update_metadata({
-            "memory_id": "nonexistent",
-            "collection": "decisions",
-            "metadata": {"key": "value"}
-        })
+        result = await adapter._update_metadata(
+            {"memory_id": "nonexistent", "collection": "decisions", "metadata": {"key": "value"}}
+        )
 
         assert result.success is False
         assert "Memory not found" in result.error
@@ -671,15 +660,17 @@ class TestChromaAdapterUpdateMetadata:
         mock_collection = MagicMock()
         mock_collection.get.return_value = {
             "ids": ["mem123"],
-            "metadatas": [{"existing": "value", "domain": "work"}]
+            "metadatas": [{"existing": "value", "domain": "work"}],
         }
         adapter._get_collection = MagicMock(return_value=mock_collection)
 
-        result = await adapter._update_metadata({
-            "memory_id": "mem123",
-            "collection": "decisions",
-            "metadata": {"new_key": "new_value", "domain": "personal"}
-        })
+        result = await adapter._update_metadata(
+            {
+                "memory_id": "mem123",
+                "collection": "decisions",
+                "metadata": {"new_key": "new_value", "domain": "personal"},
+            }
+        )
 
         assert result.success is True
         assert result.data["metadata"]["existing"] == "value"
