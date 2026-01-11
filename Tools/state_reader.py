@@ -252,6 +252,52 @@ class StateReader:
         except Exception:
             return timedelta(0)
 
+    def format_elapsed_time(self, elapsed: timedelta) -> str:
+        """Format a timedelta as human-readable elapsed time string.
+
+        Converts a timedelta to a natural language string showing the most
+        significant time units (up to two), with " ago" suffix.
+
+        Args:
+            elapsed: The timedelta to format
+
+        Returns:
+            Human-readable string like "5 minutes ago", "2 hours and 30 minutes ago",
+            or "1 day and 3 hours ago"
+        """
+        total_seconds = int(elapsed.total_seconds())
+
+        if total_seconds < 60:
+            return "just now"
+
+        # Calculate time components
+        days = total_seconds // 86400
+        remaining = total_seconds % 86400
+        hours = remaining // 3600
+        remaining = remaining % 3600
+        minutes = remaining // 60
+
+        # Build human-readable parts
+        parts = []
+
+        if days > 0:
+            parts.append(f"{days} day" + ("s" if days != 1 else ""))
+        if hours > 0:
+            parts.append(f"{hours} hour" + ("s" if hours != 1 else ""))
+        if minutes > 0 and days == 0:  # Only show minutes if no days
+            parts.append(f"{minutes} minute" + ("s" if minutes != 1 else ""))
+
+        # Take up to 2 most significant parts
+        parts = parts[:2]
+
+        if not parts:
+            return "just now"
+
+        if len(parts) == 1:
+            return f"{parts[0]} ago"
+        else:
+            return f"{parts[0]} and {parts[1]} ago"
+
     def update_last_interaction(self, interaction_type: str = "chat",
                                  agent: Optional[str] = None) -> bool:
         """Update the last interaction timestamp in TimeState.json.
