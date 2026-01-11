@@ -94,13 +94,12 @@ class KeywordMatcher:
         """Compile all keywords into a single optimized regex pattern.
 
         Creates a pattern like:
-        \\b(overwhelmed|task|schedule|...)\\b
+        (overwhelmed|task|schedule|...)
 
-        Uses word boundaries (\\b) for proper matching that prevents false positives
-        like matching 'task' in 'multitask' or 'focus' in 'refocus'.
+        Uses simple substring matching to match the legacy behavior which uses
+        Python's 'in' operator for substring matching (no word boundaries).
 
-        For multi-word phrases like 'what should i do', the word boundaries apply
-        to the first and last words, while internal spaces are literal matches.
+        For multi-word phrases like 'what should i do', spaces are literal matches.
 
         With a mapping from each keyword back to (agent, weight) for scoring.
         """
@@ -140,26 +139,24 @@ class KeywordMatcher:
         # This prevents "what should" from matching before "what should i do"
         pattern_parts.sort(key=len, reverse=True)
 
-        # Build alternation pattern with word boundaries
-        # The \b ensures we don't match keywords in the middle of other words
-        # For example: \b(task)\b won't match 'multitask', only standalone 'task'
-        # For multi-word phrases: \b(what\ should\ i\ do)\b ensures both
-        # 'what' and 'do' are at word boundaries (spaces are literal in the middle)
+        # Build alternation pattern without word boundaries to match legacy 'in' operator behavior
+        # This allows substring matching like 'task' matching in 'tasks' or 'multitask'
         alternation = '|'.join(pattern_parts)
 
-        # Build the final pattern with word boundaries
-        # \b is a zero-width assertion that matches:
-        # - Between a \w (word char: alphanumeric or _) and \W (non-word char)
-        # - At the start/end of string if it borders a word character
-        pattern_str = fr'\b({alternation})\b'
+        # Build the final pattern WITHOUT word boundaries
+        # This matches the legacy behavior where keywords are substring matches
+        pattern_str = f'({alternation})'
 
         self._pattern = re.compile(pattern_str, re.IGNORECASE)
 
     def match(self, message: str) -> Dict[str, int]:
         """Match keywords in message and return agent scores.
 
-        Performs a single regex scan over the message and accumulates scores
-        for each agent based on matched keywords.
+        Uses substring matching (like Python's 'in' operator) to exactly match
+        legacy behavior, including counting overlapping keywords.
+
+        For example, if both "task" and "tasks" are keywords, and the message
+        contains "tasks", both keywords will be counted (matching legacy behavior).
 
         Args:
             message: The message text to analyze
@@ -167,26 +164,30 @@ class KeywordMatcher:
         Returns:
             Dictionary mapping agent names to total scores
             Example: {'ops': 7, 'health': 2}
+            Returns all agents initialized to 0 even if no matches (legacy behavior)
         """
-        if not message or not self._pattern:
-            return {}
+        message_lower = message.lower() if message else ""
 
-        message_lower = message.lower()
+        # Initialize all agents to 0 (matches legacy behavior)
+        # This ensures consistent behavior when no keywords match
+        # Preserve agent order from keywords dict for consistent max() behavior
         agent_scores: Dict[str, int] = {}
 
-        # Single pass through message
-        for match in self._pattern.finditer(message_lower):
-            matched_text = match.group(1)
+        # Initialize agents from keywords (in order)
+        for agent in self.keywords.keys():
+            agent_scores[agent] = 0
 
-            # Look up the agent and weight for this keyword
-            if matched_text in self._keyword_map:
-                agent, weight = self._keyword_map[matched_text]
+        # Add agents from triggers if not already present (in order)
+        for agent in self.triggers.keys():
+            if agent not in agent_scores:
+                agent_scores[agent] = 0
 
-                # Initialize agent score if needed
-                if agent not in agent_scores:
-                    agent_scores[agent] = 0
-
-                # Accumulate score
+        # Check each keyword using 'in' operator to match legacy behavior
+        # This preserves the overlapping match behavior where "task" and "tasks"
+        # both match in "I have tasks to do"
+        for keyword, (agent, weight) in self._keyword_map.items():
+            if keyword in message_lower:
+                # Accumulate score (matches even if overlapping)
                 agent_scores[agent] += weight
 
         return agent_scores
@@ -196,6 +197,8 @@ class KeywordMatcher:
 
         Useful for debugging and understanding why a particular agent was selected.
 
+        Uses substring matching to match legacy behavior, including overlapping keywords.
+
         Args:
             message: The message text to analyze
 
@@ -204,30 +207,36 @@ class KeywordMatcher:
             - scores_dict: Same as match() return value
             - match_details_list: List of MatchResult objects with full metadata
         """
-        if not message or not self._pattern:
-            return {}, []
+        message_lower = message.lower() if message else ""
 
-        message_lower = message.lower()
+        # Initialize all agents to 0 (matches legacy behavior)
+        # Preserve agent order from keywords dict for consistent max() behavior
         agent_scores: Dict[str, int] = {}
+
+        # Initialize agents from keywords (in order)
+        for agent in self.keywords.keys():
+            agent_scores[agent] = 0
+
+        # Add agents from triggers if not already present (in order)
+        for agent in self.triggers.keys():
+            if agent not in agent_scores:
+                agent_scores[agent] = 0
+
         matches: List[MatchResult] = []
 
-        for match in self._pattern.finditer(message_lower):
-            matched_text = match.group(1)
-
-            if matched_text in self._keyword_map:
-                agent, weight = self._keyword_map[matched_text]
-
-                if agent not in agent_scores:
-                    agent_scores[agent] = 0
-
+        # Check each keyword using 'in' operator to match legacy behavior
+        for keyword, (agent, weight) in self._keyword_map.items():
+            if keyword in message_lower:
                 agent_scores[agent] += weight
 
+                # Find first occurrence for match details
+                start_pos = message_lower.find(keyword)
                 matches.append(MatchResult(
                     agent=agent,
-                    keyword=matched_text,
+                    keyword=keyword,
                     weight=weight,
-                    start=match.start(1),
-                    end=match.end(1)
+                    start=start_pos,
+                    end=start_pos + len(keyword)
                 ))
 
         return agent_scores, matches
