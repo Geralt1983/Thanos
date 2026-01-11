@@ -1,0 +1,343 @@
+{
+  "feature": "Implement connection pooling for Neo4j async sessions",
+  "description": "The Neo4j adapter creates a new session for each operation via `async with self._driver.session()`. While the driver has built-in pooling, session creation overhead can be reduced by reusing sessions for related operations within a request context.",
+  "created_at": "2026-01-11T00:03:37.687Z",
+  "updated_at": "2026-01-11T00:16:32.944Z",
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "phases": [
+    {
+      "phase_id": 1,
+      "phase_name": "Research & Design",
+      "description": "Analyze current usage patterns and design the session pooling strategy",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "1.1",
+          "title": "Analyze current session usage patterns",
+          "description": "Review all Neo4j adapter methods to document current session creation patterns and identify opportunities for session reuse",
+          "status": "completed",
+          "estimated_effort": "small",
+          "dependencies": [],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ],
+          "completed_at": "2026-01-11T00:15:00.000Z",
+          "notes": "Completed comprehensive analysis of all 15 Neo4j adapter methods. Documented session creation patterns, identified session reuse opportunities (high impact: memory storage workflow with 75% reduction potential), and discovered _record_pattern as existing good example. Key findings: all methods create one session per operation, multiple opportunities for session reuse in multi-operation workflows, backward compatibility is critical. Analysis documented in build-progress.txt."
+        },
+        {
+          "subtask_id": "1.2",
+          "title": "Research Neo4j async session best practices",
+          "description": "Review Neo4j Python driver documentation for async session management, pooling patterns, and transaction handling recommendations",
+          "status": "completed",
+          "estimated_effort": "small",
+          "dependencies": [],
+          "files_involved": [],
+          "completed_at": "2026-01-11T00:30:00.000Z",
+          "notes": "Completed comprehensive research of Neo4j Python driver async session best practices. Key findings: (1) Driver has built-in connection pooling at driver level, we're optimizing session reuse; (2) Sessions are lightweight but not concurrency-safe - can reuse for sequential operations only; (3) Three transaction types available (auto-commit, managed, explicit) with different trade-offs; (4) Sessions provide automatic causal consistency via bookmarking; (5) Always specify database parameter to avoid extra round-trip; (6) Recommended hybrid approach: optional session parameter + context manager + batch methods. Research documented in detail in build-progress.txt with patterns, constraints, and design recommendations."
+        },
+        {
+          "subtask_id": "1.3",
+          "title": "Design session pooling strategy",
+          "description": "Choose between context-based session reuse, transaction batching, or async context manager pattern. Document the approach with rationale in .auto-claude/specs/023-implement-connection-pooling-for-neo4j-async-sessi/build-progress.txt",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "1.1",
+            "1.2"
+          ],
+          "files_involved": [
+            ".auto-claude/specs/023-implement-connection-pooling-for-neo4j-async-sessi/build-progress.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": 2,
+      "phase_name": "Core Session Pool Implementation",
+      "description": "Implement the session pooling/batching mechanism",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "2.1",
+          "title": "Create Neo4jSessionContext class",
+          "description": "Implement an async context manager class that manages session lifecycle, supports nested operations, and handles session cleanup on exit",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "1.3"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "2.2",
+          "title": "Add session pooling to Neo4jAdapter",
+          "description": "Add session pool management to Neo4jAdapter class, including methods to get/release sessions and context manager support",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "2.1"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "2.3",
+          "title": "Implement transaction batching support",
+          "description": "Add support for batching multiple operations within a single transaction when using the session context",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "2.2"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": 3,
+      "phase_name": "Adapter Method Refactoring",
+      "description": "Update Neo4j adapter methods to support session reuse",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "3.1",
+          "title": "Refactor commitment operations",
+          "description": "Update _create_commitment, _complete_commitment, and _get_commitments to accept optional session parameter while maintaining backward compatibility",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "2.3"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "3.2",
+          "title": "Refactor decision operations",
+          "description": "Update _record_decision and _get_decisions to accept optional session parameter",
+          "status": "pending",
+          "estimated_effort": "small",
+          "dependencies": [
+            "2.3"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "3.3",
+          "title": "Refactor pattern and session operations",
+          "description": "Update _record_pattern, _get_patterns, _start_session, and _end_session to accept optional session parameter",
+          "status": "pending",
+          "estimated_effort": "small",
+          "dependencies": [
+            "2.3"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "3.4",
+          "title": "Refactor relationship and entity operations",
+          "description": "Update _link_nodes, _find_related, _query_graph, _create_entity, and _get_entity_context to accept optional session parameter",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "2.3"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "3.5",
+          "title": "Add batch operation methods",
+          "description": "Create new methods for common batch operations (e.g., store_memory_batch) that execute multiple operations within a single session context",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "3.1",
+            "3.2",
+            "3.3",
+            "3.4"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": 4,
+      "phase_name": "Testing & Validation",
+      "description": "Comprehensive testing of session pooling implementation",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "4.1",
+          "title": "Create unit tests for Neo4jSessionContext",
+          "description": "Write tests for session context manager lifecycle, error handling, nested contexts, and cleanup",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "2.1"
+          ],
+          "files_involved": [
+            "tests/unit/test_neo4j_session_pool.py"
+          ]
+        },
+        {
+          "subtask_id": "4.2",
+          "title": "Create integration tests for batch operations",
+          "description": "Write tests that verify multiple operations share a session and that session pooling reduces overhead",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "3.5"
+          ],
+          "files_involved": [
+            "tests/integration/test_neo4j_batch_operations.py"
+          ]
+        },
+        {
+          "subtask_id": "4.3",
+          "title": "Add tests for backward compatibility",
+          "description": "Verify all existing adapter methods still work without passing a session parameter",
+          "status": "pending",
+          "estimated_effort": "small",
+          "dependencies": [
+            "3.1",
+            "3.2",
+            "3.3",
+            "3.4"
+          ],
+          "files_involved": [
+            "tests/unit/test_neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "4.4",
+          "title": "Create performance benchmarks",
+          "description": "Benchmark session creation overhead before and after pooling implementation, measure improvement for multi-operation scenarios",
+          "status": "pending",
+          "estimated_effort": "medium",
+          "dependencies": [
+            "4.2"
+          ],
+          "files_involved": [
+            "tests/benchmarks/test_neo4j_session_performance.py"
+          ]
+        },
+        {
+          "subtask_id": "4.5",
+          "title": "Test error handling and cleanup",
+          "description": "Verify sessions are properly cleaned up on errors, context manager handles exceptions correctly, and no sessions are leaked",
+          "status": "pending",
+          "estimated_effort": "small",
+          "dependencies": [
+            "4.1",
+            "4.2"
+          ],
+          "files_involved": [
+            "tests/unit/test_neo4j_session_pool.py"
+          ]
+        }
+      ]
+    },
+    {
+      "phase_id": 5,
+      "phase_name": "Documentation & Examples",
+      "description": "Document the session pooling implementation and usage patterns",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "5.1",
+          "title": "Update Neo4jAdapter docstrings",
+          "description": "Add documentation for session pooling, context manager usage, and batch operation patterns to class and method docstrings",
+          "status": "pending",
+          "estimated_effort": "small",
+          "dependencies": [
+            "3.5"
+          ],
+          "files_involved": [
+            "Tools/adapters/neo4j_adapter.py"
+          ]
+        },
+        {
+          "subtask_id": "5.2",
+          "title": "Create usage examples",
+          "description": "Add code examples demonstrating session context usage, batch operations, and performance benefits",
+          "status": "pending",
+          "estimated_effort": "small",
+          "dependencies": [
+            "5.1"
+          ],
+          "files_involved": [
+            "docs/examples/neo4j_session_pooling.py"
+          ]
+        },
+        {
+          "subtask_id": "5.3",
+          "title": "Update architecture documentation",
+          "description": "Document the session pooling architecture, design decisions, and implementation details in build-progress.txt",
+          "status": "pending",
+          "estimated_effort": "small",
+          "dependencies": [
+            "5.2"
+          ],
+          "files_involved": [
+            ".auto-claude/specs/023-implement-connection-pooling-for-neo4j-async-sessi/build-progress.txt"
+          ]
+        }
+      ]
+    }
+  ],
+  "workflow_type": "development",
+  "services_involved": [
+    "Neo4j",
+    "Neo4jAdapter"
+  ],
+  "final_acceptance": [
+    "All Neo4j adapter methods support optional session parameter for session reuse",
+    "Session context manager properly handles nested operations and cleanup",
+    "Batch operations reduce session creation overhead (measured via benchmarks)",
+    "All existing tests pass with backward compatibility maintained",
+    "New tests cover session pooling, error handling, and cleanup scenarios",
+    "Documentation clearly explains usage patterns and performance benefits",
+    "No session leaks under error conditions"
+  ],
+  "spec_file": "spec.md",
+  "risks_and_mitigations": [
+    {
+      "risk": "Session leaks if cleanup fails",
+      "mitigation": "Use async context managers with proper __aexit__ error handling and comprehensive cleanup tests"
+    },
+    {
+      "risk": "Breaking existing code that relies on current session behavior",
+      "mitigation": "Maintain backward compatibility by making session parameter optional and defaulting to current behavior"
+    },
+    {
+      "risk": "Complexity in handling nested session contexts",
+      "mitigation": "Use thread-local or context variable storage to track session nesting levels"
+    },
+    {
+      "risk": "Transaction conflicts in batch operations",
+      "mitigation": "Carefully design transaction boundaries and document when batching is safe vs when separate transactions are needed"
+    }
+  ],
+  "estimated_total_effort": "large",
+  "notes": [
+    "The Neo4j driver already has connection pooling at the driver level, so this task focuses on session reuse within operation contexts",
+    "memory_integration.py doesn't exist yet in the codebase but is mentioned in the spec - this implementation will prepare for its future use",
+    "Performance benchmarks should measure both single-operation and multi-operation scenarios",
+    "Consider using Python's contextvars for tracking session context in async environments"
+  ]
+}

@@ -1,0 +1,665 @@
+=============================================================================
+NEO4J SESSION POOLING - BUILD PROGRESS
+=============================================================================
+
+PHASE 1: RESEARCH & DESIGN
+=============================================================================
+
+Subtask 1.1: Analyze current session usage patterns
+Status: COMPLETED
+Date: 2026-01-11
+
+=============================================================================
+CURRENT SESSION CREATION PATTERNS ANALYSIS
+=============================================================================
+
+OVERVIEW
+--------
+The Neo4j adapter currently creates a new session for EVERY operation using
+the pattern: `async with self._driver.session() as session:`
+
+Each method creates exactly one session that is automatically closed when
+the context manager exits. While the Neo4j driver has connection pooling
+at the driver level, session creation still has overhead that could be
+reduced through session reuse.
+
+DETAILED METHOD ANALYSIS
+-------------------------
+
+1. COMMITMENT OPERATIONS (3 methods, 3 sessions)
+   - _create_commitment (line 360-398)
+     * Creates 1 session
+     * Executes 1 query: CREATE commitment node
+     * Pattern: async with self._driver.session()
+
+   - _complete_commitment (line 400-429)
+     * Creates 1 session
+     * Executes 1 query: MATCH + SET status to completed
+     * Pattern: async with self._driver.session()
+
+   - _get_commitments (line 431-463)
+     * Creates 1 session
+     * Executes 1 query: MATCH with filters + RETURN
+     * Pattern: async with self._driver.session()
+
+2. DECISION OPERATIONS (2 methods, 2 sessions)
+   - _record_decision (line 469-505)
+     * Creates 1 session
+     * Executes 1 query: CREATE decision node
+     * Pattern: async with self._driver.session()
+
+   - _get_decisions (line 507-535)
+     * Creates 1 session
+     * Executes 1 query: MATCH with filters + RETURN
+     * Pattern: async with self._driver.session()
+
+3. PATTERN OPERATIONS (2 methods, 2 sessions)
+   - _record_pattern (line 541-613) ⭐ GOOD PATTERN
+     * Creates 1 session but REUSES it for multiple queries
+     * Executes 2-3 queries within same session:
+       1. check_query: MATCH existing pattern
+       2a. update_query: SET if exists (OR)
+       2b. create_query: CREATE if new
+     * Pattern: async with self._driver.session() wrapping multiple await session.run()
+     * THIS IS THE PATTERN WE WANT TO REPLICATE!
+
+   - _get_patterns (line 615-643)
+     * Creates 1 session
+     * Executes 1 query: MATCH with filters + RETURN
+     * Pattern: async with self._driver.session()
+
+4. SESSION OPERATIONS (2 methods, 2 sessions)
+   - _start_session (line 649-674)
+     * Creates 1 session
+     * Executes 1 query: CREATE session node
+     * Pattern: async with self._driver.session()
+
+   - _end_session (line 676-703)
+     * Creates 1 session
+     * Executes 1 query: MATCH + SET end data
+     * Pattern: async with self._driver.session()
+
+5. RELATIONSHIP OPERATIONS (3 methods, 3 sessions)
+   - _link_nodes (line 709-742)
+     * Creates 1 session
+     * Executes 1 query: MATCH + MATCH + CREATE relationship
+     * Pattern: async with self._driver.session()
+
+   - _find_related (line 744-764)
+     * Creates 1 session
+     * Executes 1 query: MATCH with variable depth traversal
+     * Pattern: async with self._driver.session()
+
+   - _query_graph (line 766-783)
+     * Creates 1 session
+     * Executes 1 query: User-provided Cypher (read-only)
+     * Pattern: async with self._driver.session()
+
+6. ENTITY OPERATIONS (2 methods, 2 sessions)
+   - _create_entity (line 789-825)
+     * Creates 1 session
+     * Executes 1 query: MERGE entity (create or update)
+     * Pattern: async with self._driver.session()
+
+   - _get_entity_context (line 827-852)
+     * Creates 1 session
+     * Executes 1 query: Complex MATCH with OPTIONAL MATCHes
+     * Pattern: async with self._driver.session()
+
+7. UTILITY OPERATIONS (1 method, 1 session)
+   - health_check (line 862-878)
+     * Creates 1 session
+     * Executes 1 query: RETURN 1 (connectivity test)
+     * Pattern: async with self._driver.session()
+
+TOTAL: 15 methods, 15 sessions created (one per operation)
+
+=============================================================================
+SESSION REUSE OPPORTUNITIES
+=============================================================================
+
+HIGH IMPACT - Multi-operation workflows:
+------------------------------------------
+1. Memory Storage Workflow (mentioned in spec)
+   * As described in spec: memory_integration.py's store_memory creates:
+     - Vector storage operation
+     - Decision recording
+     - Entity creation
+     - Relationship linking
+   * Current: 4 separate sessions
+   * Opportunity: 1 shared session = 75% reduction
+
+2. Entity Context Building
+   * _create_entity + multiple _link_nodes calls
+   * Common pattern when adding related entities
+   * Current: N+1 sessions (1 for entity + N for relationships)
+   * Opportunity: 1 shared session
+
+3. Commitment Tracking Workflow
+   * _create_commitment + _link_nodes (to session/entity)
+   * Current: 2 sessions
+   * Opportunity: 1 shared session = 50% reduction
+
+4. Session Recording Workflow
+   * _start_session + multiple operations + _end_session
+   * Current: 2+ sessions
+   * Opportunity: 1 shared session
+
+MEDIUM IMPACT - Batch operations:
+-----------------------------------
+5. Bulk Entity Creation
+   * Multiple _create_entity calls
+   * Current: N sessions
+   * Opportunity: 1 shared session
+
+6. Relationship Creation Batches
+   * Multiple _link_nodes calls
+   * Current: N sessions
+   * Opportunity: 1 shared session
+
+LOW IMPACT - Already optimal:
+-------------------------------
+7. _record_pattern (already reuses session for check + update/create)
+   * No change needed - this is the pattern to follow!
+
+8. Single query operations
+   * _get_commitments, _get_decisions, _get_patterns
+   * These are already optimal when called individually
+   * Benefit only comes if called as part of batch
+
+=============================================================================
+PATTERN ANALYSIS
+=============================================================================
+
+CURRENT PATTERN (used by 14/15 methods):
+-----------------------------------------
+```python
+async def _operation(self, args: Dict[str, Any]) -> ToolResult:
+    query = "..."
+    params = {...}
+
+    async with self._driver.session() as session:
+        result = await session.run(query, params)
+        # process result
+
+    return ToolResult.ok(...)
+```
+
+EXISTING GOOD PATTERN (_record_pattern shows the way):
+-------------------------------------------------------
+```python
+async def _record_pattern(self, args: Dict[str, Any]) -> ToolResult:
+    # Prepare queries
+    check_query = "..."
+    update_query = "..."
+    create_query = "..."
+
+    async with self._driver.session() as session:
+        # Query 1: Check
+        result = await session.run(check_query, {...})
+        existing = await result.single()
+
+        if existing:
+            # Query 2a: Update
+            await session.run(update_query, {...})
+        else:
+            # Query 2b: Create
+            await session.run(create_query, {...})
+
+    return ToolResult.ok(...)
+```
+
+This demonstrates session reuse within a single method - we need to extend
+this pattern to work ACROSS methods.
+
+=============================================================================
+KEY INSIGHTS FOR DESIGN
+=============================================================================
+
+1. SESSION LIFECYCLE
+   * Sessions are lightweight but not free
+   * Neo4j driver already pools connections (not sessions)
+   * Session reuse reduces overhead in multi-operation workflows
+
+2. TRANSACTION BOUNDARIES
+   * Current: Each operation is implicitly a separate transaction
+   * Consideration: When batching, decide transaction scope
+   * Some operations need atomicity, others don't
+
+3. BACKWARD COMPATIBILITY CRITICAL
+   * All 15 methods are public API (via call_tool routing)
+   * Must maintain current behavior when called individually
+   * Session parameter must be OPTIONAL
+
+4. ERROR HANDLING
+   * Sessions must be cleaned up even on errors
+   * Context managers handle this automatically
+   * Need to preserve this behavior in pooled approach
+
+5. ASYNC CONTEXT
+   * Python's contextvars module can track session per async context
+   * Allows implicit session reuse without passing parameters everywhere
+   * Alternative: Explicit session parameter (simpler but more invasive)
+
+=============================================================================
+NEXT STEPS
+=============================================================================
+
+Subtask 1.2: Research Neo4j async session best practices
+  - Review Neo4j Python driver docs
+  - Understand session vs transaction lifecycle
+  - Identify recommended patterns for async session management
+  - Document transaction isolation considerations
+
+Subtask 1.3: Design session pooling strategy
+  - Choose between:
+    a) Context-based session reuse (contextvars)
+    b) Explicit session parameter pattern
+    c) Transaction batching with session manager
+  - Define backward compatibility approach
+  - Design error handling strategy
+  - Document chosen approach with rationale
+
+=============================================================================
+
+Subtask 1.2: Research Neo4j async session best practices
+Status: COMPLETED
+Date: 2026-01-11
+
+=============================================================================
+NEO4J PYTHON DRIVER - ASYNC SESSION BEST PRACTICES RESEARCH
+=============================================================================
+
+DOCUMENTATION SOURCES
+---------------------
+- Neo4j Python Driver Manual - Concurrency Guide
+- Neo4j Python Driver Manual - Performance Recommendations
+- Neo4j Python Driver Manual - Transaction Handling
+- Neo4j Python Driver 6.0 Async API Documentation
+
+=============================================================================
+CONNECTION POOLING ARCHITECTURE
+=============================================================================
+
+DRIVER-LEVEL CONNECTION POOLING (BUILT-IN)
+-------------------------------------------
+✅ The Neo4j driver ALREADY handles connection pooling automatically:
+   - Driver objects open connections and pool them as needed
+   - Connections are drawn from the AsyncDriver connection pool as required
+   - When a session is CLOSED, connections return to the pool for reuse
+   - Connection pooling is at the DRIVER level, not the SESSION level
+
+KEY INSIGHT:
+------------
+"Driver objects only open connections and pool them as needed. Connections
+are drawn from the neo4j.AsyncDriver connection pool as required. When a
+session is closed, it is returned to the connection pool to be later reused."
+
+IMPLICATION FOR OUR TASK:
+-------------------------
+We're NOT pooling connections (driver does this). We're optimizing SESSION
+reuse to reduce the overhead of creating/closing sessions for multiple
+operations within the same logical workflow.
+
+=============================================================================
+ASYNC SESSION MANAGEMENT PATTERNS
+=============================================================================
+
+RECOMMENDED PATTERN - Context Manager:
+--------------------------------------
+```python
+async with driver.session(database="<database-name>") as session:
+    # Session operations here
+    records = await session.execute_read(transaction_function)
+```
+
+✅ Benefits:
+   - Automatic resource cleanup
+   - Exception-safe session closure
+   - Ensures connection returns to pool
+
+SESSION LIFECYCLE:
+------------------
+1. Session creation is LIGHTWEIGHT (per docs)
+2. Sessions are NOT thread-safe (not concurrent-safe for async)
+3. Sessions should NOT be shared across multiple async tasks
+4. A session can chain multiple transactions
+5. Only ONE transaction can be active per session at a time
+
+CRITICAL CONSTRAINT:
+--------------------
+"AsyncSession objects are not concurrency-safe, meaning they should not be
+used concurrently from multiple tasks."
+
+This means we CANNOT share a session across concurrent operations, but we
+CAN reuse a session for SEQUENTIAL operations within the same async context.
+
+=============================================================================
+TRANSACTION HANDLING RECOMMENDATIONS
+=============================================================================
+
+TRANSACTION TYPES (in order of sophistication):
+------------------------------------------------
+
+1. AUTO-COMMIT TRANSACTIONS (Highest throughput, no retry)
+   Pattern: session.run(query, params)
+   Use case: Simple queries, maximum speed
+   Limitations:
+   - Only one statement per transaction
+   - NOT automatically retried on failure
+   - Still isolated from other concurrent queries
+
+   ⚠️  "Auto-commit transactions support only one statement per transaction
+       and are not automatically retried on failure"
+
+2. MANAGED TRANSACTIONS (Recommended, automatic retry)
+   Pattern: session.execute_read(callback) / session.execute_write(callback)
+   Use case: Production code requiring reliability
+   Benefits:
+   - Automatic retry on transient server failures
+   - Driver manages transaction lifecycle
+   - Callback pattern ensures proper resource handling
+
+   ✅ "The driver automatically re-executes the callback in case of server
+      failure"
+
+3. EXPLICIT TRANSACTIONS (Full control, manual retry)
+   Pattern: tx = session.begin_transaction() / tx.commit() / tx.rollback()
+   Use case: Complex workflows, manual control needed
+   Benefits:
+   - Full manual control over commit/rollback
+   - Useful for distributing queries across multiple functions
+   - Can integrate with external systems
+
+   Requirements:
+   - Must manually handle retry logic
+   - Must check Neo4jError.is_retryable() for retry decisions
+
+TRANSACTION FUNCTION REQUIREMENTS:
+----------------------------------
+Transaction functions MUST be IDEMPOTENT:
+- Must produce identical results if executed multiple times
+- Process results within the function (never return raw Result objects)
+- Cast results to lists or use .single(), .fetch(n), .value()
+- Don't rely on global state modifications
+- Can include client-side logic between queries
+
+EXAMPLE PATTERN:
+```python
+async def transaction_callback(tx):
+    result1 = await tx.run(query1, params1)
+    data1 = await result1.single()
+
+    # Client-side logic
+    processed = process(data1)
+
+    result2 = await tx.run(query2, processed)
+    return await result2.values()
+
+# Use it
+records = await session.execute_write(transaction_callback)
+```
+
+=============================================================================
+SESSION REUSE PATTERNS
+=============================================================================
+
+PATTERN 1: Single Session, Multiple Transactions
+-------------------------------------------------
+✅ RECOMMENDED for sequential operations:
+
+```python
+async with driver.session(database="neo4j") as session:
+    # Transaction 1
+    await session.execute_write(create_entity_tx)
+
+    # Transaction 2
+    await session.execute_write(link_nodes_tx)
+
+    # Transaction 3
+    await session.execute_read(get_context_tx)
+```
+
+Benefits:
+- Session created once
+- Multiple transactions in sequence
+- Each transaction retried independently
+- Automatic cleanup on exit
+
+PATTERN 2: Single Transaction, Multiple Queries
+------------------------------------------------
+✅ RECOMMENDED for atomic batch operations:
+
+```python
+async def batch_operation_tx(tx, data):
+    # Query 1
+    result1 = await tx.run(query1, data[0])
+
+    # Query 2
+    result2 = await tx.run(query2, data[1])
+
+    # Query 3
+    result3 = await tx.run(query3, data[2])
+
+    return await result3.values()
+
+async with driver.session() as session:
+    result = await session.execute_write(batch_operation_tx, batch_data)
+```
+
+Benefits:
+- All queries in single transaction (atomic)
+- Automatic retry of entire transaction
+- Best for related operations that should succeed/fail together
+
+PATTERN 3: Auto-Commit for Maximum Throughput
+----------------------------------------------
+✅ Use when retry not needed:
+
+```python
+async with driver.session() as session:
+    await session.run(query1, params1)
+    await session.run(query2, params2)
+    await session.run(query3, params3)
+```
+
+Benefits:
+- Highest throughput
+- Still uses single session
+- Each query is separate transaction
+- No automatic retry
+
+⚠️  Trade-off: No automatic retry, queries not atomic
+
+=============================================================================
+CAUSAL CONSISTENCY
+=============================================================================
+
+BOOKMARKING FOR SEQUENTIAL CONSISTENCY:
+---------------------------------------
+✅ Sessions automatically chain bookmarks from each query
+
+"If doing a sequence of operations where later operations need to be
+guaranteed to read writes from earlier operations, simply reuse the same
+session object - sessions automatically chain bookmarks from each query."
+
+IMPLICATION:
+------------
+When we reuse a session for multiple operations, we get causal consistency
+for free! Later operations will see the results of earlier ones.
+
+=============================================================================
+PERFORMANCE RECOMMENDATIONS
+=============================================================================
+
+1. DATABASE SPECIFICATION
+   ⚠️  ALWAYS specify database parameter on sessions:
+
+   "If no database is provided, the driver has to send an extra request to
+   the server to figure out what the default database is."
+
+   Impact: Adds network round-trip per session creation
+   Fix: async with driver.session(database="neo4j") as session:
+
+2. TRANSACTION BATCHING
+   ✅ "Group queries into one transaction (higher throughput)"
+
+   Instead of:
+   ```python
+   async with driver.session() as s1:
+       await s1.run(q1)
+   async with driver.session() as s2:
+       await s2.run(q2)
+   ```
+
+   Do:
+   ```python
+   async with driver.session() as session:
+       await session.run(q1)
+       await session.run(q2)
+   ```
+
+3. TRANSACTION OVERHEAD AWARENESS
+   "Creating a safe execution context around a query yields an overhead that
+   is small, but that adds up as the number of transactions increases."
+
+   Strategy: Batch related operations to minimize transaction count
+
+4. READ/WRITE ROUTING
+   - Use default_access_mode=READ_ACCESS for read-only sessions
+   - Optimizes routing in clustered environments
+   - Allows better load distribution
+
+5. FETCH SIZE CONFIGURATION
+   - Large values for queries returning many records
+   - Smaller values for interactive applications
+   - Affects memory usage and network efficiency
+
+=============================================================================
+ERROR HANDLING & CLEANUP
+=============================================================================
+
+AUTOMATIC ROLLBACK:
+-------------------
+- Returning from transaction function = COMMIT
+- Raising exception = ROLLBACK
+- Context manager ensures cleanup even on errors
+
+RETRY LOGIC:
+------------
+For managed transactions (execute_read/write):
+✅ Automatic retry on transient errors
+
+For explicit transactions:
+⚠️  Manual retry required
+   Check: Neo4jError.is_retryable()
+
+TIMEOUT CONFIGURATION:
+----------------------
+Use @unit_of_work() decorator for transaction timeouts:
+- Minimum: 0.001 seconds
+- Can attach metadata for monitoring
+
+RESOURCE CLEANUP:
+-----------------
+✅ ALWAYS use async with context managers:
+   - Ensures session closure
+   - Returns connection to pool
+   - Exception-safe cleanup
+
+⚠️  "The driver object is concurrency-safe, but close is not - ensure you're
+    not using the driver or any spawned resources (sessions or transactions)
+    while calling close"
+
+=============================================================================
+KEY INSIGHTS FOR OUR DESIGN
+=============================================================================
+
+1. SESSION REUSE IS VALUABLE
+   ✅ Reduces overhead of session creation/cleanup
+   ✅ Provides causal consistency via automatic bookmarking
+   ✅ Allows batching operations to reduce transaction count
+
+2. SESSION REUSE CONSTRAINTS
+   ⚠️  Sessions are NOT concurrency-safe (can't share across async tasks)
+   ✅ Sessions CAN be reused for sequential operations
+   ✅ Only one transaction active per session at a time
+
+3. TRANSACTION STRATEGY CHOICES
+   Option A: Multiple managed transactions in one session
+   - Each transaction retried independently
+   - Not atomic across transactions
+   - Good for: Independent operations in sequence
+
+   Option B: Single transaction with multiple queries
+   - All queries atomic
+   - Entire transaction retried as unit
+   - Good for: Related operations that must succeed/fail together
+
+   Option C: Auto-commit queries in one session
+   - Highest throughput
+   - No retry
+   - Good for: Maximum performance, retry handled at higher level
+
+4. BACKWARD COMPATIBILITY APPROACH
+   ✅ Make session parameter optional
+   ✅ Default behavior: create session per operation (current)
+   ✅ New behavior: accept session parameter for reuse
+   ✅ Maintains all existing call patterns
+
+5. ERROR HANDLING REQUIREMENTS
+   ✅ Use async context managers for automatic cleanup
+   ✅ Preserve exception propagation
+   ✅ Ensure sessions always returned to pool
+   ✅ Don't break existing error handling patterns
+
+6. PYTHON VERSION CONSIDERATION
+   ⚠️  "Known issue with Python 3.8 and async driver where it gradually
+       slows down"
+   Recommendation: Document minimum Python 3.9+ for optimal performance
+
+=============================================================================
+RECOMMENDED DESIGN DIRECTION
+=============================================================================
+
+Based on research, recommend HYBRID APPROACH:
+
+1. ADD OPTIONAL SESSION PARAMETER
+   - All adapter methods accept optional `session: AsyncSession = None`
+   - If None: create session (current behavior)
+   - If provided: reuse session (new optimization)
+
+2. CREATE SESSION CONTEXT MANAGER
+   - Provide helper for common batch patterns
+   - Example: Neo4jAdapter.batch_context()
+   - Yields session for multiple operations
+   - Handles cleanup automatically
+
+3. ADD BATCH OPERATION METHODS
+   - High-level methods for common workflows
+   - Example: store_memory_batch()
+   - Uses session context internally
+   - Simplifies caller code
+
+4. TRANSACTION STRATEGY
+   - Use managed transactions (execute_read/write) for reliability
+   - Support both:
+     a) Multiple transactions per session (independent retry)
+     b) Single transaction batching (atomic operations)
+   - Let caller choose based on atomicity needs
+
+5. ALWAYS SPECIFY DATABASE
+   - Add database parameter to session creation
+   - Eliminates extra network round-trip
+   - Improves performance baseline
+
+NEXT STEP:
+----------
+Subtask 1.3: Design detailed session pooling strategy with:
+- Class/method signatures
+- Interaction patterns
+- Error handling flows
+- Migration path for existing code
+- Performance expectations
+
+=============================================================================
