@@ -25,6 +25,10 @@ import json
 import hashlib
 import time
 import re
+import atexit
+import signal
+from queue import Queue, Empty
+from threading import Thread, Event, Lock
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Generator, Any, List, Tuple
@@ -68,6 +72,346 @@ class ModelResponse:
     latency_ms: float
     cached: bool = False
     metadata: Dict = field(default_factory=dict)
+
+
+class AsyncUsageWriter:
+    """
+    Thread-based asynchronous writer for usage records.
+
+    Queues usage records in memory and writes them to disk in batches
+    via a background thread, eliminating main thread blocking.
+
+    This class manages a background thread that processes queued usage records,
+    accumulating them in a buffer and flushing to disk periodically based on
+    time intervals or buffer size thresholds.
+    """
+
+    def __init__(self, storage_path: Path, flush_interval: float = 5.0,
+                 flush_threshold: int = 10):
+        """
+        Initialize the async writer.
+
+        Args:
+            storage_path: Path to JSON storage file
+            flush_interval: Time in seconds between automatic flushes (default: 5.0)
+            flush_threshold: Number of records to trigger auto-flush (default: 10)
+        """
+        self._storage_path = storage_path
+        self._flush_interval = flush_interval
+        self._flush_threshold = flush_threshold
+
+        # Thread-safe queue for incoming records
+        self._queue = Queue()
+
+        # In-memory buffer with lock protection
+        self._buffer = []
+        self._buffer_lock = Lock()
+
+        # Thread synchronization
+        self._shutdown_event = Event()
+        self._flush_event = Event()
+
+        # Statistics tracking
+        self._stats = {
+            "total_flushes": 0,
+            "total_records": 0,
+            "last_flush_time": time.time(),
+            "error_count": 0,
+            "fallback_writes": 0,
+            "lost_records": 0
+        }
+        self._stats_lock = Lock()
+        self._last_error = None
+
+        # Start background worker thread
+        self._worker = Thread(target=self._worker_thread, daemon=True, name="UsageWriter")
+        self._worker.start()
+
+        # Register shutdown handlers
+        atexit.register(self._atexit_handler)
+
+    def queue_write(self, record: Dict) -> None:
+        """
+        Queue a usage record for writing (non-blocking).
+
+        Args:
+            record: Usage record dictionary to write
+
+        Returns immediately after queuing. The record will be written
+        asynchronously by the background thread.
+        """
+        if self._shutdown_event.is_set():
+            return
+
+        try:
+            self._queue.put(record, block=False)
+            with self._stats_lock:
+                self._stats["total_records"] += 1
+        except Exception:
+            # Queue full (should never happen with unlimited queue)
+            # Trigger immediate flush and retry
+            self._flush_event.set()
+            try:
+                self._queue.put(record, timeout=1.0)
+                with self._stats_lock:
+                    self._stats["total_records"] += 1
+            except Exception:
+                # Complete failure - record will be lost
+                with self._stats_lock:
+                    self._stats["lost_records"] += 1
+
+    def flush(self, timeout: float = 5.0) -> bool:
+        """
+        Force immediate flush of pending records.
+
+        Args:
+            timeout: Maximum time to wait for flush completion
+
+        Returns:
+            True if flush completed successfully, False on timeout
+        """
+        if self._shutdown_event.is_set():
+            return False
+
+        # Signal flush request
+        self._flush_event.set()
+
+        # Wait for buffer to be empty or timeout
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            with self._buffer_lock:
+                if len(self._buffer) == 0 and self._queue.empty():
+                    return True
+            time.sleep(0.1)
+
+        return False
+
+    def shutdown(self, timeout: float = 10.0) -> None:
+        """
+        Gracefully shutdown the writer thread.
+
+        Flushes all pending records and stops the background thread.
+
+        Args:
+            timeout: Maximum time to wait for shutdown
+
+        Raises:
+            RuntimeError: If shutdown fails or times out
+        """
+        if self._shutdown_event.is_set():
+            return  # Already shut down
+
+        # Signal shutdown
+        self._shutdown_event.set()
+
+        # Wait for worker thread to finish
+        self._worker.join(timeout=timeout)
+
+        if self._worker.is_alive():
+            # Thread didn't stop - attempt emergency flush
+            with self._buffer_lock:
+                if len(self._buffer) > 0:
+                    try:
+                        self._perform_flush()
+                    except Exception:
+                        pass  # Best effort
+
+            raise RuntimeError("Worker thread did not stop gracefully")
+
+    def get_stats(self) -> Dict:
+        """
+        Get runtime statistics.
+
+        Returns:
+            Dict with queued_records, total_writes, last_flush_time, etc.
+        """
+        with self._stats_lock:
+            with self._buffer_lock:
+                return {
+                    **self._stats.copy(),
+                    "buffer_size": len(self._buffer),
+                    "queue_size": self._queue.qsize(),
+                    "last_error": self._last_error
+                }
+
+    def _worker_thread(self):
+        """
+        Background thread that processes queued records.
+
+        This method runs continuously until shutdown, checking for:
+        - New records in the queue
+        - Time-based flush triggers
+        - Size-based flush triggers
+        - Manual flush requests
+        """
+        last_flush_time = time.time()
+
+        while not self._shutdown_event.is_set():
+            try:
+                # Wait for record with timeout (for periodic checks)
+                record = self._queue.get(timeout=0.1)
+
+                with self._buffer_lock:
+                    self._buffer.append(record)
+
+                # Check flush triggers
+                should_flush = (
+                    len(self._buffer) >= self._flush_threshold or
+                    time.time() - last_flush_time >= self._flush_interval or
+                    self._flush_event.is_set()
+                )
+
+                if should_flush:
+                    self._perform_flush()
+                    last_flush_time = time.time()
+                    self._flush_event.clear()
+
+            except Empty:
+                # Periodic check for time-based flush
+                if time.time() - last_flush_time >= self._flush_interval:
+                    with self._buffer_lock:
+                        if len(self._buffer) > 0:
+                            self._perform_flush()
+                            last_flush_time = time.time()
+
+        # Final flush on shutdown
+        with self._buffer_lock:
+            if len(self._buffer) > 0:
+                try:
+                    self._perform_flush()
+                except Exception:
+                    pass  # Best effort during shutdown
+
+    def _perform_flush(self):
+        """
+        Aggregate buffered records and write to disk atomically.
+
+        This method runs in the background thread and should only be
+        called while holding the buffer lock.
+
+        Note: Actual buffering and aggregation logic will be implemented
+        in subtask 2.2. For now, this is a basic implementation.
+        """
+        # Get records to write (should be called with buffer_lock held)
+        if not self._buffer:
+            return
+
+        records_to_write = self._buffer.copy()
+        self._buffer.clear()
+
+        try:
+            # Read current data
+            if self._storage_path.exists():
+                data = json.loads(self._storage_path.read_text())
+            else:
+                data = self._get_empty_structure()
+
+            # Merge all buffered records
+            for record in records_to_write:
+                self._merge_record(data, record)
+
+            # Atomic write
+            self._atomic_write(data)
+
+            # Update stats
+            with self._stats_lock:
+                self._stats["total_flushes"] += 1
+                self._stats["last_flush_time"] = time.time()
+
+        except Exception as e:
+            # Basic error handling - detailed handling in subtask 2.3
+            with self._stats_lock:
+                self._stats["error_count"] += 1
+                self._last_error = str(e)
+            # Re-queue records for retry (simple approach for now)
+            with self._buffer_lock:
+                self._buffer.extend(records_to_write)
+
+    def _get_empty_structure(self) -> Dict:
+        """Get empty data structure for new storage file."""
+        return {
+            "sessions": [],
+            "daily_totals": {},
+            "model_breakdown": {},
+            "provider_breakdown": {},
+            "last_updated": datetime.now().isoformat()
+        }
+
+    def _merge_record(self, data: Dict, record: Dict) -> None:
+        """
+        Merge a single record into the data structure.
+
+        Updates:
+        - sessions list (append)
+        - daily_totals (accumulate)
+        - model_breakdown (accumulate)
+        - provider_breakdown (accumulate)
+        """
+        # Append to sessions
+        data["sessions"].append(record)
+
+        # Update daily totals
+        today = datetime.now().strftime("%Y-%m-%d")
+        if today not in data["daily_totals"]:
+            data["daily_totals"][today] = {"tokens": 0, "cost": 0.0, "calls": 0}
+        data["daily_totals"][today]["tokens"] += record["total_tokens"]
+        data["daily_totals"][today]["cost"] += record["cost_usd"]
+        data["daily_totals"][today]["calls"] += 1
+
+        # Update model breakdown
+        model = record["model"]
+        if model not in data.setdefault("model_breakdown", {}):
+            data["model_breakdown"][model] = {"tokens": 0, "cost": 0.0, "calls": 0}
+        data["model_breakdown"][model]["tokens"] += record["total_tokens"]
+        data["model_breakdown"][model]["cost"] += record["cost_usd"]
+        data["model_breakdown"][model]["calls"] += 1
+
+        # Update provider breakdown
+        provider = record["provider"]
+        if provider not in data.setdefault("provider_breakdown", {}):
+            data["provider_breakdown"][provider] = {"tokens": 0, "cost": 0.0, "calls": 0}
+        data["provider_breakdown"][provider]["tokens"] += record["total_tokens"]
+        data["provider_breakdown"][provider]["cost"] += record["cost_usd"]
+        data["provider_breakdown"][provider]["calls"] += 1
+
+        # Keep only last 1000 session entries
+        if len(data["sessions"]) > 1000:
+            data["sessions"] = data["sessions"][-1000:]
+
+        # Update timestamp
+        data["last_updated"] = datetime.now().isoformat()
+
+    def _atomic_write(self, data: Dict) -> None:
+        """
+        Write data atomically using temp file + rename.
+
+        Prevents data corruption if write is interrupted.
+        """
+        temp_path = self._storage_path.with_suffix('.tmp')
+
+        try:
+            # Write to temp file
+            temp_path.write_text(json.dumps(data, indent=2))
+
+            # Atomic rename (POSIX guarantees atomicity)
+            temp_path.replace(self._storage_path)
+
+        except Exception as e:
+            # Clean up temp file on error
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
+            raise
+
+    def _atexit_handler(self):
+        """Called on normal process exit."""
+        if not self._shutdown_event.is_set():
+            try:
+                self.shutdown(timeout=10.0)
+            except Exception:
+                pass  # Best effort during exit
 
 
 class UsageTracker:
