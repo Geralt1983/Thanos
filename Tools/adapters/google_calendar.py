@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -468,6 +469,22 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                 },
             },
+            {
+                "name": "get_today_events",
+                "description": "Convenience tool to fetch today's events with intelligent filtering. Excludes declined events, handles timezone correctly, sorts by start time, and calculates free/busy status.",
+                "parameters": {
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID to fetch events from. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone for 'today' calculation (e.g., 'America/New_York', 'UTC'). Defaults to system timezone.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -494,6 +511,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_list_calendars(arguments)
             elif tool_name == "get_events":
                 return await self._tool_get_events(arguments)
+            elif tool_name == "get_today_events":
+                return await self._tool_get_today_events(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -837,6 +856,258 @@ class GoogleCalendarAdapter(BaseAdapter):
                             "end": end_date_str,
                         },
                         "calendar_id": calendar_id,
+                    },
+                }
+            )
+
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+
+    async def _tool_get_today_events(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Fetch today's events with intelligent filtering and free/busy calculation.
+
+        This convenience tool:
+        - Fetches all events for today (midnight to midnight in specified timezone)
+        - Excludes events the user has declined
+        - Sorts events by start time
+        - Calculates free/busy status with time breakdown
+        - Handles all-day events appropriately
+
+        Args:
+            arguments: Tool parameters including:
+                - calendar_id: Calendar ID (default: 'primary')
+                - timezone: Timezone name for 'today' calculation (default: system timezone)
+
+        Returns:
+            ToolResult containing filtered events and free/busy analysis
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract parameters
+            calendar_id = arguments.get("calendar_id", "primary")
+            timezone_str = arguments.get("timezone")
+
+            # Determine timezone for "today" calculation
+            if timezone_str:
+                try:
+                    tz = ZoneInfo(timezone_str)
+                except Exception:
+                    return ToolResult.fail(
+                        f"Invalid timezone: {timezone_str}. Use IANA timezone names like 'America/New_York' or 'UTC'."
+                    )
+            else:
+                # Use system local timezone
+                try:
+                    tz = ZoneInfo("localtime")
+                except Exception:
+                    # Fallback to UTC if local timezone cannot be determined
+                    tz = ZoneInfo("UTC")
+
+            # Calculate today's date range in the specified timezone
+            now = datetime.now(tz)
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            # Convert to RFC3339 format required by Google Calendar API
+            time_min = today_start.isoformat()
+            time_max = today_end.isoformat()
+
+            # Fetch events from Google Calendar API
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                maxResults=250,
+                singleEvents=True,
+                orderBy="startTime",
+            ).execute()
+
+            raw_events = events_result.get("items", [])
+
+            # Filter and format events
+            filtered_events = []
+            for event in raw_events:
+                # Skip cancelled events
+                if event.get("status") == "cancelled":
+                    continue
+
+                # Check if user has declined this event
+                user_declined = False
+
+                # Check if user is organizer (can't decline own events)
+                if not event.get("organizer", {}).get("self", False):
+                    # User is not organizer - check if they declined as attendee
+                    for attendee in event.get("attendees", []):
+                        # Check if this attendee is the current user and has declined
+                        if attendee.get("self", False) and attendee.get("responseStatus") == "declined":
+                            user_declined = True
+                            break
+
+                # Skip declined events
+                if user_declined:
+                    continue
+
+                # Format event (similar to _tool_get_events)
+                start = event.get("start", {})
+                end = event.get("end", {})
+                is_all_day = "date" in start and "dateTime" not in start
+
+                if is_all_day:
+                    start_time = start.get("date")
+                    end_time = end.get("date")
+                else:
+                    start_time = start.get("dateTime")
+                    end_time = end.get("dateTime")
+
+                # Format attendees
+                attendees = []
+                for attendee in event.get("attendees", []):
+                    attendees.append({
+                        "email": attendee.get("email"),
+                        "display_name": attendee.get("displayName"),
+                        "response_status": attendee.get("responseStatus"),
+                        "organizer": attendee.get("organizer", False),
+                        "optional": attendee.get("optional", False),
+                    })
+
+                formatted_event = {
+                    "id": event.get("id"),
+                    "summary": event.get("summary", "(No title)"),
+                    "description": event.get("description"),
+                    "location": event.get("location"),
+                    "start": start_time,
+                    "end": end_time,
+                    "start_timezone": start.get("timeZone"),
+                    "end_timezone": end.get("timeZone"),
+                    "is_all_day": is_all_day,
+                    "status": event.get("status", "confirmed"),
+                    "attendees": attendees,
+                    "attendees_count": len(attendees),
+                    "organizer": {
+                        "email": event.get("organizer", {}).get("email"),
+                        "display_name": event.get("organizer", {}).get("displayName"),
+                        "is_self": event.get("organizer", {}).get("self", False),
+                    },
+                    "transparency": event.get("transparency", "opaque"),
+                    "html_link": event.get("htmlLink"),
+                    "created": event.get("created"),
+                    "updated": event.get("updated"),
+                }
+
+                filtered_events.append(formatted_event)
+
+            # Sort events by start time (should already be sorted by API, but ensure it)
+            filtered_events.sort(key=lambda e: e.get("start", ""))
+
+            # Calculate free/busy status
+            # Track busy time (events that block time)
+            busy_minutes = 0
+            free_slots = []
+            last_event_end = today_start
+
+            for event in filtered_events:
+                # Skip all-day events for busy time calculation
+                if event.get("is_all_day"):
+                    continue
+
+                # Parse event times
+                start_str = event.get("start")
+                end_str = event.get("end")
+
+                if not start_str or not end_str:
+                    continue
+
+                try:
+                    # Parse ISO 8601 datetime strings
+                    event_start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                    event_end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+
+                    # Convert to the target timezone for consistent calculation
+                    if event_start.tzinfo:
+                        event_start = event_start.astimezone(tz)
+                    if event_end.tzinfo:
+                        event_end = event_end.astimezone(tz)
+
+                    # Only count events that fall within today
+                    if event_end <= today_start or event_start >= today_end:
+                        continue
+
+                    # Clip event times to today's boundaries
+                    clipped_start = max(event_start, today_start)
+                    clipped_end = min(event_end, today_end)
+
+                    # Check transparency - skip "transparent" (free) events
+                    if event.get("transparency") == "transparent":
+                        continue
+
+                    # Add to busy time
+                    duration = (clipped_end - clipped_start).total_seconds() / 60
+                    busy_minutes += duration
+
+                    # Track free slot before this event
+                    if last_event_end < clipped_start:
+                        free_slot_duration = (clipped_start - last_event_end).total_seconds() / 60
+                        if free_slot_duration > 0:
+                            free_slots.append({
+                                "start": last_event_end.isoformat(),
+                                "end": clipped_start.isoformat(),
+                                "duration_minutes": int(free_slot_duration),
+                            })
+
+                    # Update last event end time
+                    last_event_end = max(last_event_end, clipped_end)
+
+                except (ValueError, TypeError):
+                    # Skip events with invalid time data
+                    continue
+
+            # Add final free slot (from last event to end of day)
+            if last_event_end < today_end:
+                free_slot_duration = (today_end - last_event_end).total_seconds() / 60
+                if free_slot_duration > 0:
+                    free_slots.append({
+                        "start": last_event_end.isoformat(),
+                        "end": today_end.isoformat(),
+                        "duration_minutes": int(free_slot_duration),
+                    })
+
+            # Calculate total time in a day (in minutes)
+            total_minutes = 24 * 60
+            free_minutes = total_minutes - busy_minutes
+
+            # Calculate percentages
+            busy_percentage = (busy_minutes / total_minutes) * 100 if total_minutes > 0 else 0
+            free_percentage = (free_minutes / total_minutes) * 100 if total_minutes > 0 else 0
+
+            # Count event types
+            all_day_events = [e for e in filtered_events if e.get("is_all_day")]
+            timed_events = [e for e in filtered_events if not e.get("is_all_day")]
+
+            # Build result
+            return ToolResult.ok(
+                {
+                    "events": filtered_events,
+                    "summary": {
+                        "date": today_start.date().isoformat(),
+                        "timezone": str(tz),
+                        "total_events": len(filtered_events),
+                        "all_day_events": len(all_day_events),
+                        "timed_events": len(timed_events),
+                        "calendar_id": calendar_id,
+                    },
+                    "free_busy": {
+                        "busy_minutes": int(busy_minutes),
+                        "busy_hours": round(busy_minutes / 60, 2),
+                        "busy_percentage": round(busy_percentage, 1),
+                        "free_minutes": int(free_minutes),
+                        "free_hours": round(free_minutes / 60, 2),
+                        "free_percentage": round(free_percentage, 1),
+                        "free_slots": free_slots,
+                        "free_slots_count": len(free_slots),
                     },
                 }
             )
