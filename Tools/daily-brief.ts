@@ -306,7 +306,7 @@ async function main() {
     // Generate calendar schedule section
     let calendarSection = '';
     if (data.calendar.success && data.calendar.events.length > 0) {
-      calendarSection = '\n## Calendar Events\n';
+      calendarSection = '\n## Today\'s Calendar\n\n';
 
       const timedEvents = data.calendar.events.filter(e => !e.is_all_day);
       const allDayEvents = data.calendar.events.filter(e => e.is_all_day);
@@ -314,23 +314,101 @@ async function main() {
       // Sort timed events by start time
       timedEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-      if (timedEvents.length > 0) {
-        timedEvents.forEach(event => {
-          const start = formatTime(event.start);
-          const end = formatTime(event.end);
-          calendarSection += `- ${start} - ${end}: ${event.summary}`;
-          if (event.location) {
-            calendarSection += ` (${event.location})`;
-          }
-          calendarSection += '\n';
+      // Show all-day events first if any
+      if (allDayEvents.length > 0) {
+        calendarSection += '**All-Day:**\n';
+        allDayEvents.forEach(event => {
+          calendarSection += `- 🗓️  ${event.summary}\n`;
         });
+        calendarSection += '\n';
       }
 
-      if (allDayEvents.length > 0) {
-        calendarSection += '\n**All-day:**\n';
-        allDayEvents.forEach(event => {
-          calendarSection += `- ${event.summary}\n`;
+      // Group timed events by time of day for better readability
+      if (timedEvents.length > 0) {
+        calendarSection += '**Schedule:**\n';
+
+        // Group events by morning (before 12pm), afternoon (12pm-5pm), evening (after 5pm)
+        const morning = timedEvents.filter(e => new Date(e.start).getHours() < 12);
+        const afternoon = timedEvents.filter(e => {
+          const hour = new Date(e.start).getHours();
+          return hour >= 12 && hour < 17;
         });
+        const evening = timedEvents.filter(e => new Date(e.start).getHours() >= 17);
+
+        const formatEventBlock = (event: CalendarEvent) => {
+          const start = formatTime(event.start);
+          const end = formatTime(event.end);
+          const duration = Math.round((new Date(event.end).getTime() - new Date(event.start).getTime()) / (1000 * 60));
+
+          let line = `- **${start} - ${end}** (${duration}m): ${event.summary}`;
+
+          if (event.location) {
+            line += ` 📍 ${event.location}`;
+          }
+
+          if (event.attendees_count > 1) {
+            line += ` 👥 ${event.attendees_count} attendees`;
+          }
+
+          return line + '\n';
+        };
+
+        if (morning.length > 0) {
+          calendarSection += '\n*Morning:*\n';
+          morning.forEach(event => {
+            calendarSection += formatEventBlock(event);
+          });
+        }
+
+        if (afternoon.length > 0) {
+          calendarSection += '\n*Afternoon:*\n';
+          afternoon.forEach(event => {
+            calendarSection += formatEventBlock(event);
+          });
+        }
+
+        if (evening.length > 0) {
+          calendarSection += '\n*Evening:*\n';
+          evening.forEach(event => {
+            calendarSection += formatEventBlock(event);
+          });
+        }
+
+        // Add prep reminders for significant meetings
+        const upcomingSignificant = timedEvents.filter(e => {
+          const eventTime = new Date(e.start);
+          const now = new Date();
+          const hoursUntil = (eventTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+          // Include events in next 8 hours that have multiple attendees or are longer than 30 min
+          const duration = (new Date(e.end).getTime() - new Date(e.start).getTime()) / (1000 * 60);
+          return hoursUntil > 0 && hoursUntil <= 8 && (e.attendees_count > 2 || duration > 30);
+        });
+
+        if (upcomingSignificant.length > 0) {
+          calendarSection += '\n**⏰ Prep Reminders:**\n';
+          upcomingSignificant.forEach(event => {
+            const startTime = formatTime(event.start);
+            calendarSection += `- [ ] Prepare for "${event.summary}" (${startTime})`;
+            if (event.location) {
+              calendarSection += ` - Check ${event.location} access`;
+            }
+            calendarSection += '\n';
+          });
+        }
+      }
+
+      // Add daily summary if available
+      if (data.calendar.summary) {
+        const { total_events, meeting_minutes, free_minutes } = data.calendar.summary;
+        if (total_events !== undefined && meeting_minutes !== undefined && free_minutes !== undefined) {
+          const meetingHours = Math.floor(meeting_minutes / 60);
+          const meetingMins = meeting_minutes % 60;
+          const freeHours = Math.floor(free_minutes / 60);
+
+          calendarSection += `\n**Summary:** ${total_events} event${total_events !== 1 ? 's' : ''} • `;
+          calendarSection += `${meetingHours}h ${meetingMins}m in meetings • `;
+          calendarSection += `${freeHours}h free time\n`;
+        }
       }
     }
 
