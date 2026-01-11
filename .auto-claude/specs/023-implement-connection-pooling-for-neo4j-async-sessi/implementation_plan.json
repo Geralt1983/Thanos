@@ -2,7 +2,7 @@
   "feature": "Implement connection pooling for Neo4j async sessions",
   "description": "The Neo4j adapter creates a new session for each operation via `async with self._driver.session()`. While the driver has built-in pooling, session creation overhead can be reduced by reusing sessions for related operations within a request context.",
   "created_at": "2026-01-11T00:03:37.687Z",
-  "updated_at": "2026-01-11T07:09:23.070Z",
+  "updated_at": "2026-01-11T07:12:45.007Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "phases": [
@@ -289,14 +289,15 @@
           "subtask_id": "5.2",
           "title": "Create usage examples",
           "description": "Add code examples demonstrating session context usage, batch operations, and performance benefits",
-          "status": "pending",
+          "status": "completed",
           "estimated_effort": "small",
           "dependencies": [
             "5.1"
           ],
           "files_involved": [
             "docs/examples/neo4j_session_pooling.py"
-          ]
+          ],
+          "completion_notes": "Created comprehensive usage examples file (869 lines, 29KB) demonstrating all session pooling features. Includes: (1) Three basic session patterns - A: Individual operations (backward compatible), B: Session reuse (75% reduction), C: Atomic batching (all-or-nothing), (2) Examples for all five batch operation methods - create_entities_batch, link_nodes_batch, record_patterns_batch, create_commitments_batch, store_memory_batch, (3) Real-world workflow examples - complete memory storage, sprint planning, daily standup capture, (4) Performance comparison section with timing measurements demonstrating 75-95% session reduction, (5) Error handling patterns - atomic rollback on failure, non-atomic partial success, cleanup guarantees, (6) Quick reference guide with best practices, decision matrix, performance guidelines, and code snippets. All examples include detailed documentation, performance metrics, and usage scenarios. Syntax validated with py_compile. Committed with descriptive message."
         },
         {
           "subtask_id": "5.3",
