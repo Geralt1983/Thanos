@@ -410,9 +410,8 @@ class CommitmentTracker:
         commitment.completion_history.append(record)
         commitment.status = CommitmentStatus.COMPLETED
 
-        # Update streak if recurring
-        if commitment.is_recurring():
-            self._update_streak(commitment)
+        # Update streak and completion rate
+        self._update_streak(commitment)
 
         self._save()
         return commitment
@@ -451,41 +450,266 @@ class CommitmentTracker:
         commitment.completion_history.append(record)
         commitment.status = CommitmentStatus.MISSED
 
-        # Break streak if recurring
+        # Update streak (will reset to 0 for recurring, update rate for all)
         if commitment.is_recurring():
             commitment.streak_count = 0
+        self._update_streak(commitment)
 
         self._save()
         return commitment
+
+    def _get_expected_dates(
+        self,
+        commitment: Commitment,
+        start_date: datetime,
+        end_date: datetime
+    ) -> List[datetime]:
+        """
+        Get list of expected completion dates based on recurrence pattern.
+
+        Args:
+            commitment: Commitment with recurrence pattern
+            start_date: Start date for calculation
+            end_date: End date for calculation
+
+        Returns:
+            List of expected dates
+        """
+        expected_dates = []
+        current_date = start_date.date()
+        end = end_date.date()
+
+        while current_date <= end:
+            should_include = False
+
+            if commitment.recurrence_pattern == RecurrencePattern.DAILY:
+                should_include = True
+            elif commitment.recurrence_pattern == RecurrencePattern.WEEKLY:
+                # Weekly on the same day as start date
+                if current_date.weekday() == start_date.date().weekday():
+                    should_include = True
+            elif commitment.recurrence_pattern == RecurrencePattern.WEEKDAYS:
+                # Monday (0) to Friday (4)
+                if current_date.weekday() < 5:
+                    should_include = True
+            elif commitment.recurrence_pattern == RecurrencePattern.WEEKENDS:
+                # Saturday (5) and Sunday (6)
+                if current_date.weekday() >= 5:
+                    should_include = True
+
+            if should_include:
+                expected_dates.append(datetime.combine(current_date, datetime.min.time()))
+
+            current_date += timedelta(days=1)
+
+        return expected_dates
+
+    def _calculate_current_streak(self, commitment: Commitment) -> int:
+        """
+        Calculate current streak based on consecutive completions.
+
+        For recurring commitments, checks if expected dates were completed
+        consecutively up to today.
+
+        Args:
+            commitment: Commitment to calculate streak for
+
+        Returns:
+            Current streak count
+        """
+        if not commitment.completion_history:
+            return 0
+
+        # Get completion dates (only successful completions)
+        completion_dates = []
+        for record in commitment.completion_history:
+            if record.status == "completed":
+                try:
+                    dt = datetime.fromisoformat(record.timestamp).date()
+                    completion_dates.append(dt)
+                except (ValueError, TypeError):
+                    continue
+
+        if not completion_dates:
+            return 0
+
+        # Sort dates (most recent first)
+        completion_dates.sort(reverse=True)
+
+        # Get expected dates from created date to today
+        try:
+            created = datetime.fromisoformat(commitment.created_date)
+        except (ValueError, TypeError):
+            return 0
+
+        today = datetime.now()
+        expected_dates = self._get_expected_dates(commitment, created, today)
+
+        if not expected_dates:
+            return 0
+
+        # Count consecutive completions from most recent expected date backwards
+        streak = 0
+        completion_set = set(completion_dates)
+        today_date = today.date()
+
+        # Start from most recent expected date and work backwards
+        for expected_date in reversed(expected_dates):
+            expected_date_only = expected_date.date()
+            if expected_date_only in completion_set:
+                streak += 1
+            else:
+                # Check if this date is in the future (skip it)
+                if expected_date_only > today_date:
+                    continue
+                # Give grace period for today - don't break streak if today not completed yet
+                if expected_date_only == today_date and streak == 0:
+                    # Today not completed yet, but check if we have previous completions
+                    continue
+                # Streak is broken
+                break
+
+        return streak
+
+    def _calculate_longest_streak(self, commitment: Commitment) -> int:
+        """
+        Calculate longest streak from entire completion history.
+
+        Args:
+            commitment: Commitment to calculate streak for
+
+        Returns:
+            Longest streak achieved
+        """
+        if not commitment.completion_history:
+            return 0
+
+        # Get completion dates (only successful completions)
+        completion_dates = []
+        for record in commitment.completion_history:
+            if record.status == "completed":
+                try:
+                    dt = datetime.fromisoformat(record.timestamp).date()
+                    completion_dates.append(dt)
+                except (ValueError, TypeError):
+                    continue
+
+        if not completion_dates:
+            return 0
+
+        # Sort dates chronologically
+        completion_dates.sort()
+
+        # Get expected dates from created date to today
+        try:
+            created = datetime.fromisoformat(commitment.created_date)
+        except (ValueError, TypeError):
+            return 0
+
+        today = datetime.now()
+        expected_dates = self._get_expected_dates(commitment, created, today)
+
+        if not expected_dates:
+            return 0
+
+        # Find longest consecutive streak
+        completion_set = set(completion_dates)
+        max_streak = 0
+        current_streak = 0
+
+        for expected_date in expected_dates:
+            expected_date_only = expected_date.date()
+            if expected_date_only in completion_set:
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 0
+
+        return max_streak
+
+    def _calculate_completion_rate(self, commitment: Commitment) -> float:
+        """
+        Calculate completion rate as percentage of expected completions.
+
+        For recurring commitments, calculates based on expected occurrences
+        since creation date. For non-recurring, returns 100% if completed,
+        0% otherwise.
+
+        Args:
+            commitment: Commitment to calculate rate for
+
+        Returns:
+            Completion rate as percentage (0-100)
+        """
+        if not commitment.is_recurring():
+            # For non-recurring commitments
+            return 100.0 if commitment.status == CommitmentStatus.COMPLETED else 0.0
+
+        # Get expected dates from created date to today
+        try:
+            created = datetime.fromisoformat(commitment.created_date)
+        except (ValueError, TypeError):
+            return 0.0
+
+        today = datetime.now()
+        expected_dates = self._get_expected_dates(commitment, created, today)
+
+        if not expected_dates:
+            return 0.0
+
+        # Count actual completions
+        completion_dates = set()
+        for record in commitment.completion_history:
+            if record.status == "completed":
+                try:
+                    dt = datetime.fromisoformat(record.timestamp).date()
+                    completion_dates.add(dt)
+                except (ValueError, TypeError):
+                    continue
+
+        # Count how many expected dates were completed
+        completed_count = 0
+        for expected_date in expected_dates:
+            expected_date_only = expected_date.date()
+            # Only count dates up to today (don't penalize for future dates)
+            if expected_date_only > today.date():
+                continue
+            if expected_date_only in completion_dates:
+                completed_count += 1
+
+        # Calculate rate based on expected dates up to today
+        expected_count = sum(1 for d in expected_dates if d.date() <= today.date())
+        if expected_count == 0:
+            return 0.0
+
+        return (completed_count / expected_count) * 100.0
 
     def _update_streak(self, commitment: Commitment) -> None:
         """
         Update streak count for a recurring commitment.
 
+        This method recalculates:
+        - Current streak (consecutive recent completions)
+        - Longest streak (best streak achieved)
+        - Completion rate (percentage of expected completions)
+
         Args:
             commitment: Commitment to update
         """
-        if not commitment.completion_history:
+        if not commitment.is_recurring():
+            # For non-recurring commitments, just update completion rate
+            commitment.completion_rate = self._calculate_completion_rate(commitment)
             return
 
-        # Count consecutive completions from most recent
-        streak = 0
-        for record in reversed(commitment.completion_history):
-            if record.status == "completed":
-                streak += 1
-            else:
-                break
+        # Calculate current streak
+        commitment.streak_count = self._calculate_current_streak(commitment)
 
-        commitment.streak_count = streak
-
-        # Update longest streak
-        if streak > commitment.longest_streak:
-            commitment.longest_streak = streak
+        # Calculate longest streak
+        longest = self._calculate_longest_streak(commitment)
+        commitment.longest_streak = max(commitment.longest_streak, longest)
 
         # Calculate completion rate
-        total = len(commitment.completion_history)
-        completed = sum(1 for r in commitment.completion_history if r.status == "completed")
-        commitment.completion_rate = (completed / total * 100) if total > 0 else 0.0
+        commitment.completion_rate = self._calculate_completion_rate(commitment)
 
     def get_all_commitments(
         self,
@@ -536,6 +760,46 @@ class CommitmentTracker:
             c for c in self.commitments.values()
             if c.is_recurring() and c.streak_count > 0
         ]
+
+    def recalculate_streak(self, commitment_id: str) -> Optional[Commitment]:
+        """
+        Recalculate streak data for a specific commitment.
+
+        Useful for fixing streak data or updating after manual history edits.
+
+        Args:
+            commitment_id: Commitment ID
+
+        Returns:
+            Updated Commitment if found, None otherwise
+        """
+        commitment = self.commitments.get(commitment_id)
+        if not commitment:
+            return None
+
+        self._update_streak(commitment)
+        self._save()
+        return commitment
+
+    def recalculate_all_streaks(self) -> int:
+        """
+        Recalculate streak data for all recurring commitments.
+
+        Useful for maintenance or after algorithm updates.
+
+        Returns:
+            Number of commitments updated
+        """
+        count = 0
+        for commitment in self.commitments.values():
+            if commitment.is_recurring():
+                self._update_streak(commitment)
+                count += 1
+
+        if count > 0:
+            self._save()
+
+        return count
 
     def delete_commitment(self, commitment_id: str) -> bool:
         """
