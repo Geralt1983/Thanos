@@ -32,7 +32,7 @@ if str(_THANOS_DIR) not in sys.path:
 
 from Tools.error_logger import log_error
 from Tools.intent_matcher import KeywordMatcher, TrieKeywordMatcher
-from Tools.spinner import command_spinner
+from Tools.spinner import command_spinner, chat_spinner
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -547,23 +547,43 @@ You track patterns and surface them.""")
 
         system_prompt = self._build_system_prompt(agent=agent_obj)
 
+        # Get agent name for spinner message
+        agent_name = agent_obj.name if agent_obj else None
+
         if stream:
+            # Streaming mode: Manual spinner control
+            # Start spinner before API call, stop before first chunk
             result = ""
-            for chunk in self.api_client.chat_stream(
-                prompt=message,
-                system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
-            ):
-                print(chunk, end="", flush=True)
-                result += chunk
-            print()
-            return result
+            spinner = chat_spinner(agent_name)
+            spinner.start()
+
+            try:
+                first_chunk = True
+                for chunk in self.api_client.chat_stream(
+                    prompt=message,
+                    system_prompt=system_prompt,
+                    operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
+                ):
+                    if first_chunk:
+                        # CRITICAL: Stop spinner before first output
+                        spinner.stop()
+                        first_chunk = False
+                    print(chunk, end="", flush=True)
+                    result += chunk
+                print()
+                return result
+            except Exception:
+                # Show failure symbol before re-raising
+                spinner.fail()
+                raise
         else:
-            return self.api_client.chat(
-                prompt=message,
-                system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
-            )
+            # Non-streaming mode: Context manager automatically handles lifecycle
+            with chat_spinner(agent_name):
+                return self.api_client.chat(
+                    prompt=message,
+                    system_prompt=system_prompt,
+                    operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
+                )
 
     def route(self, message: str, stream: bool = False) -> str:
         """Auto-route a message to the appropriate handler using natural language understanding.
