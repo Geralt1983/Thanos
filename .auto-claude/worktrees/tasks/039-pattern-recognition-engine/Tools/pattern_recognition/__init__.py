@@ -24,6 +24,14 @@ from .time_series import (
     merge_time_series,
 )
 
+from .analyzers.task_patterns import (
+    analyze_hourly_patterns,
+    analyze_daily_patterns,
+    analyze_task_type_patterns,
+    calculate_daily_completion_rate,
+    get_all_task_patterns,
+)
+
 __all__ = [
     # Models
     "TaskCompletionPattern",
@@ -42,4 +50,10 @@ __all__ = [
     "TimeSeriesAggregator",
     "create_time_series_from_dict",
     "merge_time_series",
+    # Analyzers
+    "analyze_hourly_patterns",
+    "analyze_daily_patterns",
+    "analyze_task_type_patterns",
+    "calculate_daily_completion_rate",
+    "get_all_task_patterns",
 ]
