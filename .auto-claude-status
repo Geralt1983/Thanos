@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "029-extract-litellm-client-py-classes-into-separate-mo",
+  "state": "building",
+  "subtasks": {
+    "completed": 0,
+    "total": 0,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "",
+    "id": 0,
+    "total": 0
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 478,
+    "started_at": "2026-01-10T23:46:57.209349"
+  },
+  "last_update": "2026-01-11T02:13:07.700734"
+}
