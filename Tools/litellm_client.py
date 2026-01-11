@@ -687,6 +687,16 @@ class UsageTracker:
         self.pricing = pricing
         self._ensure_storage_exists()
 
+        # Initialize async writer for non-blocking I/O
+        self._async_writer = AsyncUsageWriter(
+            storage_path=self.storage_path,
+            flush_interval=5.0,
+            flush_threshold=10
+        )
+
+        # Register shutdown handler to flush pending writes
+        atexit.register(self._shutdown)
+
     def _ensure_storage_exists(self):
         """Initialize storage file if it doesn't exist."""
         if not self.storage_path.exists():
@@ -726,7 +736,12 @@ class UsageTracker:
     def record(self, model: str, input_tokens: int, output_tokens: int,
                cost_usd: float, latency_ms: float, operation: str = "chat",
                metadata: Optional[Dict] = None) -> Dict:
-        """Record a single API call's usage."""
+        """
+        Record a single API call's usage (non-blocking).
+
+        This method now uses async I/O via AsyncUsageWriter, returning
+        immediately after queuing the record without blocking the main thread.
+        """
         provider = self._get_provider(model)
 
         entry = {
@@ -742,43 +757,16 @@ class UsageTracker:
             "metadata": metadata or {}
         }
 
-        # Load, update, save
-        data = json.loads(self.storage_path.read_text())
-        data["sessions"].append(entry)
+        # Queue for async write (returns immediately, non-blocking)
+        self._async_writer.queue_write(entry)
 
-        # Update daily totals
-        today = datetime.now().strftime("%Y-%m-%d")
-        if today not in data["daily_totals"]:
-            data["daily_totals"][today] = {"tokens": 0, "cost": 0.0, "calls": 0}
-        data["daily_totals"][today]["tokens"] += input_tokens + output_tokens
-        data["daily_totals"][today]["cost"] += cost_usd
-        data["daily_totals"][today]["calls"] += 1
-
-        # Update model breakdown
-        if model not in data.get("model_breakdown", {}):
-            data.setdefault("model_breakdown", {})[model] = {"tokens": 0, "cost": 0.0, "calls": 0}
-        data["model_breakdown"][model]["tokens"] += input_tokens + output_tokens
-        data["model_breakdown"][model]["cost"] += cost_usd
-        data["model_breakdown"][model]["calls"] += 1
-
-        # Update provider breakdown
-        if provider not in data.get("provider_breakdown", {}):
-            data.setdefault("provider_breakdown", {})[provider] = {"tokens": 0, "cost": 0.0, "calls": 0}
-        data["provider_breakdown"][provider]["tokens"] += input_tokens + output_tokens
-        data["provider_breakdown"][provider]["cost"] += cost_usd
-        data["provider_breakdown"][provider]["calls"] += 1
-
-        data["last_updated"] = datetime.now().isoformat()
-
-        # Keep only last 1000 session entries
-        if len(data["sessions"]) > 1000:
-            data["sessions"] = data["sessions"][-1000:]
-
-        self.storage_path.write_text(json.dumps(data, indent=2))
         return entry
 
     def get_summary(self, days: int = 30) -> Dict:
         """Get usage summary for the specified number of days."""
+        # Flush pending writes to ensure latest data
+        self.flush(timeout=2.0)
+
         data = json.loads(self.storage_path.read_text())
         cutoff = datetime.now() - timedelta(days=days)
 
@@ -810,9 +798,50 @@ class UsageTracker:
 
     def get_today(self) -> Dict:
         """Get today's usage stats."""
+        # Flush pending writes to ensure latest data
+        self.flush(timeout=2.0)
+
         data = json.loads(self.storage_path.read_text())
         today = datetime.now().strftime("%Y-%m-%d")
         return data.get("daily_totals", {}).get(today, {"tokens": 0, "cost": 0.0, "calls": 0})
+
+    def _shutdown(self):
+        """
+        Gracefully shutdown the async writer, flushing all pending records.
+
+        Called automatically on process exit via atexit handler.
+        """
+        if hasattr(self, '_async_writer'):
+            try:
+                self._async_writer.shutdown(timeout=10.0)
+            except Exception:
+                # Best effort during shutdown
+                pass
+
+    def flush(self, timeout: float = 5.0) -> bool:
+        """
+        Force immediate flush of pending records.
+
+        Args:
+            timeout: Maximum time to wait for flush completion
+
+        Returns:
+            True if flush completed successfully, False on timeout
+        """
+        if hasattr(self, '_async_writer'):
+            return self._async_writer.flush(timeout)
+        return True
+
+    def get_writer_stats(self) -> Dict:
+        """
+        Get async writer statistics.
+
+        Returns:
+            Dict with buffer_size, queue_size, total_flushes, etc.
+        """
+        if hasattr(self, '_async_writer'):
+            return self._async_writer.get_stats()
+        return {}
 
 
 class ComplexityAnalyzer:
