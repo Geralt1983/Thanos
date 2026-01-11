@@ -1,0 +1,68 @@
+{
+  "benchmark_type": "intent_detection",
+  "implementation": "optimized_keyword_matcher",
+  "implementation_details": {
+    "algorithm": "pre-compiled regex with alternation groups",
+    "complexity": "O(m) where m = message length",
+    "matcher_class": "KeywordMatcher"
+  },
+  "timestamp": "2026-01-10 23:22:21",
+  "iterations": 1000,
+  "results": [
+    {
+      "label": "Short messages (1-5 words)",
+      "iterations": 10000,
+      "mean_us": 3.9538097005106465,
+      "median_us": 3.791999915847555,
+      "min_us": 3.332999995109276,
+      "max_us": 77.29100002507039,
+      "stddev_us": 2.130166942970449,
+      "p95_us": 4.208000063954387,
+      "p99_us": 6.499999926745659
+    },
+    {
+      "label": "Medium messages (10-20 words)",
+      "iterations": 10000,
+      "mean_us": 5.474075400843503,
+      "median_us": 5.291999968903838,
+      "min_us": 4.541999942375696,
+      "max_us": 136.54100007443049,
+      "stddev_us": 2.5261042669508065,
+      "p95_us": 5.999999984851456,
+      "p99_us": 8.83300003806653
+    },
+    {
+      "label": "Long messages (40+ words)",
+      "iterations": 4000,
+      "mean_us": 17.876780001984116,
+      "median_us": 16.791999996712548,
+      "min_us": 14.207999811333138,
+      "max_us": 162.3749999453139,
+      "stddev_us": 5.487881006051295,
+      "p95_us": 21.832999891557847,
+      "p99_us": 30.416999834415037
+    },
+    {
+      "label": "Keyword density variations",
+      "iterations": 4000,
+      "mean_us": 7.471465251114751,
+      "median_us": 7.749999895168003,
+      "min_us": 4.79199979963596,
+      "max_us": 124.83399996199296,
+      "stddev_us": 3.8471838736917974,
+      "p95_us": 8.792000016910606,
+      "p99_us": 12.917000049128546
+    },
+    {
+      "label": "Edge cases",
+      "iterations": 4000,
+      "mean_us": 27.467833497439642,
+      "median_us": 45.415999920805916,
+      "min_us": 3.375000005689799,
+      "max_us": 255.16699997751857,
+      "stddev_us": 24.821340833281663,
+      "p95_us": 55.41600012293202,
+      "p99_us": 67.54199989700282
+    }
+  ]
+}

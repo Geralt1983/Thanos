@@ -15,10 +15,11 @@ Phases:
 Model: claude-opus-4.5 (strategic task - deep reasoning)
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
+import sys
 from typing import Optional
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -62,19 +63,19 @@ def build_context() -> str:
     # Week summary (if exists)
     week_file = project_root / "History" / "week_summary.md"
     if week_file.exists():
-        with open(week_file, 'r') as f:
+        with open(week_file) as f:
             context_parts.append(f"## Week Summary\n{f.read()}")
 
     # Goals and targets
     goals_file = project_root / "State" / "Goals.md"
     if goals_file.exists():
-        with open(goals_file, 'r') as f:
+        with open(goals_file) as f:
             context_parts.append(f"## Goals\n{f.read()}")
 
     # Commitments
     commitments_file = project_root / "State" / "Commitments.md"
     if commitments_file.exists():
-        with open(commitments_file, 'r') as f:
+        with open(commitments_file) as f:
             context_parts.append(f"## Commitments\n{f.read()}")
 
     # Recent daily briefings
@@ -88,17 +89,19 @@ def build_context() -> str:
                 date_str = bf.stem.replace("daily_", "")
                 bf_date = datetime.strptime(date_str, "%Y-%m-%d")
                 if bf_date >= week_ago:
-                    with open(bf, 'r') as f:
+                    with open(bf) as f:
                         recent_briefings.append(f"### {date_str}\n{f.read()[:500]}")
             except (ValueError, OSError):
                 pass
         if recent_briefings:
-            context_parts.append(f"## Daily Briefings (Past Week)\n" + "\n\n".join(recent_briefings[:3]))
+            context_parts.append(
+                "## Daily Briefings (Past Week)\n" + "\n\n".join(recent_briefings[:3])
+            )
 
     # Core context
     core_file = project_root / "Context" / "CORE.md"
     if core_file.exists():
-        with open(core_file, 'r') as f:
+        with open(core_file) as f:
             context_parts.append(f"## Core Values & Goals\n{f.read()[:800]}")
 
     # Client work summary
@@ -107,7 +110,7 @@ def build_context() -> str:
         client_files = list(clients_dir.glob("*.md"))
         if client_files:
             client_list = [f"- {cf.stem}" for cf in client_files]
-            context_parts.append(f"## Active Clients\n" + "\n".join(client_list))
+            context_parts.append("## Active Clients\n" + "\n".join(client_list))
 
     return "\n\n".join(context_parts) if context_parts else "No historical data available yet."
 
@@ -122,7 +125,7 @@ def save_to_history(phase: str, response: str):
     week_num = timestamp.isocalendar()[1]
     filename = f"weekly_{timestamp.strftime('%Y')}_W{week_num:02d}_{phase}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Weekly {phase.title()} - Week {week_num}, {timestamp.strftime('%Y')}\n")
         f.write(f"*{timestamp.strftime('%B %d, %Y')}*\n\n")
         f.write(response)
@@ -304,16 +307,13 @@ Ask me uncomfortable questions if you see patterns I'm avoiding.
 
     print(f"📊 Weekly {phase.title()} - Week {week_num}")
     print(f"📡 Using {model}")
-    print(f"⏱️  This may take 30-60 seconds for comprehensive analysis...\n")
+    print("⏱️  This may take 30-60 seconds for comprehensive analysis...\n")
     print("-" * 60)
 
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)
@@ -324,7 +324,7 @@ Ask me uncomfortable questions if you see patterns I'm avoiding.
 
     # Save to history
     save_to_history(phase, response)
-    print(f"\n✅ Saved to History/WeeklyReviews/")
+    print("\n✅ Saved to History/WeeklyReviews/")
 
     return response
 

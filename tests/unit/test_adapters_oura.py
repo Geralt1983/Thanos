@@ -5,24 +5,25 @@ Unit tests for Tools/adapters/oura.py
 Tests the OuraAdapter class for Oura Ring API integration.
 """
 
-import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
-from datetime import datetime, timedelta
-import os
 import sys
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 
 # Mock asyncpg before importing adapters (it may not be installed in test env)
-sys.modules['asyncpg'] = Mock()
+sys.modules["asyncpg"] = Mock()
 
 import httpx
 
-from Tools.adapters.oura import OuraAdapter
 from Tools.adapters.base import ToolResult
+from Tools.adapters.oura import OuraAdapter
 
 
 # ========================================================================
 # Fixtures
 # ========================================================================
+
 
 @pytest.fixture
 def mock_env_token(monkeypatch):
@@ -45,13 +46,13 @@ def adapter_with_explicit_token():
 @pytest.fixture
 def mock_httpx_client():
     """Create a mock httpx AsyncClient"""
-    client = AsyncMock(spec=httpx.AsyncClient)
-    return client
+    return AsyncMock(spec=httpx.AsyncClient)
 
 
 # ========================================================================
 # Initialization Tests
 # ========================================================================
+
 
 class TestOuraAdapterInit:
     """Test OuraAdapter initialization"""
@@ -94,6 +95,7 @@ class TestOuraAdapterInit:
 # Tool Listing Tests
 # ========================================================================
 
+
 class TestOuraAdapterListTools:
     """Test list_tools method"""
 
@@ -118,7 +120,7 @@ class TestOuraAdapterListTools:
             "get_heart_rate",
             "get_personal_info",
             "get_daily_summary",
-            "get_today_health"
+            "get_today_health",
         ]
 
         for expected in expected_tools:
@@ -149,6 +151,7 @@ class TestOuraAdapterListTools:
 # ========================================================================
 # Client Management Tests
 # ========================================================================
+
 
 class TestOuraAdapterClient:
     """Test HTTP client management"""
@@ -192,13 +195,14 @@ class TestOuraAdapterClient:
 # Tool Execution Tests
 # ========================================================================
 
+
 class TestOuraAdapterCallTool:
     """Test call_tool method"""
 
     @pytest.mark.asyncio
     async def test_call_unknown_tool(self, adapter):
         """Test calling unknown tool returns failure"""
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_client:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_client:
             mock_client.return_value = AsyncMock()
             result = await adapter.call_tool("unknown_tool", {})
             assert result.success is False
@@ -211,13 +215,9 @@ class TestOuraAdapterCallTool:
         mock_response.status_code = 401
         mock_response.text = "Unauthorized"
 
-        error = httpx.HTTPStatusError(
-            "401 Unauthorized",
-            request=Mock(),
-            response=mock_response
-        )
+        error = httpx.HTTPStatusError("401 Unauthorized", request=Mock(), response=mock_response)
 
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=error)
             mock_get.return_value = mock_client
@@ -231,7 +231,7 @@ class TestOuraAdapterCallTool:
         """Test request error handling"""
         error = httpx.RequestError("Connection failed")
 
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(side_effect=error)
             mock_get.return_value = mock_client
@@ -243,7 +243,7 @@ class TestOuraAdapterCallTool:
     @pytest.mark.asyncio
     async def test_call_tool_generic_exception(self, adapter):
         """Test generic exception handling"""
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Unexpected error")
 
             result = await adapter.call_tool("get_daily_readiness", {})
@@ -254,6 +254,7 @@ class TestOuraAdapterCallTool:
 # ========================================================================
 # Endpoint Fetching Tests
 # ========================================================================
+
 
 class TestOuraAdapterFetchEndpoint:
     """Test _fetch_endpoint method"""
@@ -269,10 +270,7 @@ class TestOuraAdapterFetchEndpoint:
         mock_client.get.return_value = mock_response
 
         result = await adapter._fetch_endpoint(
-            mock_client,
-            "/usercollection/daily_readiness",
-            "2024-01-01",
-            "2024-01-01"
+            mock_client, "/usercollection/daily_readiness", "2024-01-01", "2024-01-01"
         )
 
         assert result.success is True
@@ -288,22 +286,17 @@ class TestOuraAdapterFetchEndpoint:
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
 
-        await adapter._fetch_endpoint(
-            mock_client,
-            "/test/endpoint",
-            "2024-01-01",
-            "2024-01-15"
-        )
+        await adapter._fetch_endpoint(mock_client, "/test/endpoint", "2024-01-01", "2024-01-15")
 
         mock_client.get.assert_called_once_with(
-            "/test/endpoint",
-            params={"start_date": "2024-01-01", "end_date": "2024-01-15"}
+            "/test/endpoint", params={"start_date": "2024-01-01", "end_date": "2024-01-15"}
         )
 
 
 # ========================================================================
 # Special Tool Tests
 # ========================================================================
+
 
 class TestOuraAdapterPersonalInfo:
     """Test get_personal_info tool"""
@@ -348,6 +341,7 @@ class TestOuraAdapterDailySummary:
     @pytest.mark.asyncio
     async def test_get_daily_summary_partial_failure(self, adapter):
         """Test daily summary handles partial endpoint failures"""
+
         def mock_get(endpoint, **kwargs):
             response = AsyncMock()
             if "readiness" in endpoint:
@@ -379,13 +373,15 @@ class TestOuraAdapterTodayHealth:
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
 
-        with patch.object(adapter, '_get_daily_summary', new_callable=AsyncMock) as mock_summary:
-            mock_summary.return_value = ToolResult.ok({
-                "readiness": [{"score": 85, "day": "2024-01-01"}],
-                "sleep": [{"score": 80, "day": "2024-01-01"}],
-                "activity": [{"score": 75, "day": "2024-01-01"}],
-                "stress": []
-            })
+        with patch.object(adapter, "_get_daily_summary", new_callable=AsyncMock) as mock_summary:
+            mock_summary.return_value = ToolResult.ok(
+                {
+                    "readiness": [{"score": 85, "day": "2024-01-01"}],
+                    "sleep": [{"score": 80, "day": "2024-01-01"}],
+                    "activity": [{"score": 75, "day": "2024-01-01"}],
+                    "stress": [],
+                }
+            )
 
             result = await adapter._get_today_health(mock_client)
 
@@ -398,6 +394,7 @@ class TestOuraAdapterTodayHealth:
 # Helper Method Tests
 # ========================================================================
 
+
 class TestOuraAdapterGetLatest:
     """Test _get_latest helper method"""
 
@@ -406,17 +403,14 @@ class TestOuraAdapterGetLatest:
         items = [
             {"day": "2024-01-01", "score": 80},
             {"day": "2024-01-02", "score": 85},
-            {"day": "2024-01-03", "score": 90}
+            {"day": "2024-01-03", "score": 90},
         ]
         result = adapter._get_latest(items, "2024-01-02")
         assert result["score"] == 85
 
     def test_get_latest_fallback(self, adapter):
         """Test _get_latest falls back to most recent"""
-        items = [
-            {"day": "2024-01-01", "score": 80},
-            {"day": "2024-01-02", "score": 85}
-        ]
+        items = [{"day": "2024-01-01", "score": 80}, {"day": "2024-01-02", "score": 85}]
         result = adapter._get_latest(items, "2024-01-05")
         assert result["score"] == 85  # Last item
 
@@ -436,11 +430,7 @@ class TestOuraAdapterCalculateSummary:
 
     def test_calculate_summary_excellent(self, adapter):
         """Test summary calculation for excellent scores"""
-        snapshot = {
-            "readiness": {"score": 90},
-            "sleep": {"score": 88},
-            "activity": {"score": 85}
-        }
+        snapshot = {"readiness": {"score": 90}, "sleep": {"score": 88}, "activity": {"score": 85}}
         summary = adapter._calculate_summary(snapshot)
         assert summary["overall_status"] == "excellent"
         assert summary["readiness_score"] == 90
@@ -448,41 +438,25 @@ class TestOuraAdapterCalculateSummary:
 
     def test_calculate_summary_good(self, adapter):
         """Test summary calculation for good scores"""
-        snapshot = {
-            "readiness": {"score": 75},
-            "sleep": {"score": 72},
-            "activity": {"score": 70}
-        }
+        snapshot = {"readiness": {"score": 75}, "sleep": {"score": 72}, "activity": {"score": 70}}
         summary = adapter._calculate_summary(snapshot)
         assert summary["overall_status"] == "good"
 
     def test_calculate_summary_fair(self, adapter):
         """Test summary calculation for fair scores"""
-        snapshot = {
-            "readiness": {"score": 60},
-            "sleep": {"score": 58},
-            "activity": {"score": 55}
-        }
+        snapshot = {"readiness": {"score": 60}, "sleep": {"score": 58}, "activity": {"score": 55}}
         summary = adapter._calculate_summary(snapshot)
         assert summary["overall_status"] == "fair"
 
     def test_calculate_summary_poor(self, adapter):
         """Test summary calculation for poor scores"""
-        snapshot = {
-            "readiness": {"score": 40},
-            "sleep": {"score": 45},
-            "activity": {"score": 50}
-        }
+        snapshot = {"readiness": {"score": 40}, "sleep": {"score": 45}, "activity": {"score": 50}}
         summary = adapter._calculate_summary(snapshot)
         assert summary["overall_status"] == "poor"
 
     def test_calculate_summary_recommendations(self, adapter):
         """Test summary adds recommendations for low scores"""
-        snapshot = {
-            "readiness": {"score": 60},
-            "sleep": {"score": 55},
-            "activity": {"score": 70}
-        }
+        snapshot = {"readiness": {"score": 60}, "sleep": {"score": 55}, "activity": {"score": 70}}
         summary = adapter._calculate_summary(snapshot)
         assert len(summary["recommendations"]) > 0
         assert any("recovery" in r.lower() for r in summary["recommendations"])
@@ -490,11 +464,7 @@ class TestOuraAdapterCalculateSummary:
 
     def test_calculate_summary_no_data(self, adapter):
         """Test summary handles missing data"""
-        snapshot = {
-            "readiness": None,
-            "sleep": None,
-            "activity": None
-        }
+        snapshot = {"readiness": None, "sleep": None, "activity": None}
         summary = adapter._calculate_summary(snapshot)
         assert summary["overall_status"] == "unknown"
         assert summary["recommendations"] == []
@@ -503,6 +473,7 @@ class TestOuraAdapterCalculateSummary:
 # ========================================================================
 # Health Check Tests
 # ========================================================================
+
 
 class TestOuraAdapterHealthCheck:
     """Test health_check method"""
@@ -513,7 +484,7 @@ class TestOuraAdapterHealthCheck:
         mock_response = AsyncMock()
         mock_response.status_code = 200
 
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_get.return_value = mock_client
@@ -531,7 +502,7 @@ class TestOuraAdapterHealthCheck:
         mock_response = AsyncMock()
         mock_response.status_code = 503
 
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_get.return_value = mock_client
@@ -544,7 +515,7 @@ class TestOuraAdapterHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_exception(self, adapter):
         """Test health check handles exceptions"""
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Connection failed")
 
             result = await adapter.health_check()
@@ -557,14 +528,17 @@ class TestOuraAdapterHealthCheck:
 # Integration-like Tests
 # ========================================================================
 
+
 class TestOuraAdapterToolRouting:
     """Test tool routing through call_tool"""
 
     @pytest.mark.asyncio
     async def test_routing_to_personal_info(self, adapter):
         """Test personal_info tool is routed correctly"""
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
-            with patch.object(adapter, '_get_personal_info', new_callable=AsyncMock) as mock_personal:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
+            with patch.object(
+                adapter, "_get_personal_info", new_callable=AsyncMock
+            ) as mock_personal:
                 mock_personal.return_value = ToolResult.ok({"email": "test@test.com"})
                 mock_client = AsyncMock()
                 mock_get.return_value = mock_client
@@ -577,8 +551,8 @@ class TestOuraAdapterToolRouting:
     @pytest.mark.asyncio
     async def test_routing_to_today_health(self, adapter):
         """Test today_health tool is routed correctly"""
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
-            with patch.object(adapter, '_get_today_health', new_callable=AsyncMock) as mock_today:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
+            with patch.object(adapter, "_get_today_health", new_callable=AsyncMock) as mock_today:
                 mock_today.return_value = ToolResult.ok({"date": "2024-01-01"})
                 mock_client = AsyncMock()
                 mock_get.return_value = mock_client
@@ -591,16 +565,17 @@ class TestOuraAdapterToolRouting:
     @pytest.mark.asyncio
     async def test_routing_to_daily_summary(self, adapter):
         """Test daily_summary tool is routed correctly"""
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
-            with patch.object(adapter, '_get_daily_summary', new_callable=AsyncMock) as mock_summary:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
+            with patch.object(
+                adapter, "_get_daily_summary", new_callable=AsyncMock
+            ) as mock_summary:
                 mock_summary.return_value = ToolResult.ok({"readiness": []})
                 mock_client = AsyncMock()
                 mock_get.return_value = mock_client
 
-                result = await adapter.call_tool("get_daily_summary", {
-                    "start_date": "2024-01-01",
-                    "end_date": "2024-01-01"
-                })
+                result = await adapter.call_tool(
+                    "get_daily_summary", {"start_date": "2024-01-01", "end_date": "2024-01-01"}
+                )
 
                 mock_summary.assert_called_once()
                 assert result.success is True
@@ -608,8 +583,8 @@ class TestOuraAdapterToolRouting:
     @pytest.mark.asyncio
     async def test_routing_to_endpoint_tools(self, adapter):
         """Test endpoint-based tools are routed correctly"""
-        with patch.object(adapter, '_get_client', new_callable=AsyncMock) as mock_get:
-            with patch.object(adapter, '_fetch_endpoint', new_callable=AsyncMock) as mock_fetch:
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock) as mock_get:
+            with patch.object(adapter, "_fetch_endpoint", new_callable=AsyncMock) as mock_fetch:
                 mock_fetch.return_value = ToolResult.ok([{"score": 85}])
                 mock_client = AsyncMock()
                 mock_get.return_value = mock_client
@@ -621,7 +596,7 @@ class TestOuraAdapterToolRouting:
                     "get_daily_activity",
                     "get_daily_stress",
                     "get_workout",
-                    "get_heart_rate"
+                    "get_heart_rate",
                 ]
 
                 for tool_name in endpoint_tools:

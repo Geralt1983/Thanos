@@ -66,12 +66,19 @@ mcp-servers/workos-mcp/.npmrc
 # Auto Claude data directory
 .auto-claude/
 
-# Environment files (contains secrets)
+# Environment variables and secrets
 .env
 .env.local
 .env.*.local
 
-# Auto Claude framework files (worktree-specific)
-.auto-claude-security.json
+# Auto-claude framework files (at root level)
 .auto-claude-status
+.auto-claude-security.json
 .claude_settings.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
