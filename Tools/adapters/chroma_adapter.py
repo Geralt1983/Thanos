@@ -14,10 +14,13 @@ Uses ChromaDB for vector storage and OpenAI for embeddings.
 
 import os
 import uuid
+import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 from .base import BaseAdapter, ToolResult
+
+logger = logging.getLogger(__name__)
 
 # ChromaDB import with graceful fallback
 try:
@@ -622,9 +625,15 @@ class ChromaAdapter(BaseAdapter):
         - 10 items: ~2000ms (sequential) -> ~300ms (batch) = 85% reduction
         - Reduces API calls from n to 1 per batch
 
+        Batch size handling:
+        - OpenAI API limit: 2048 items per request
+        - Recommended batch size: 100-500 items for optimal performance
+        - Large batches (>1000): Automatically chunked into multiple API calls
+        - Very large batches (>5000): Warning logged for performance monitoring
+
         Args:
             texts: List of text strings to generate embeddings for.
-                   Maximum 2048 items per OpenAI API limits.
+                   Automatically chunks if exceeds 2048 items.
 
         Returns:
             List of embedding vectors in same order as input texts,
@@ -638,14 +647,46 @@ class ChromaAdapter(BaseAdapter):
         if not self._openai_client:
             return None
 
-        # Validate batch size
-        if len(texts) > 2048:
-            # OpenAI API limit is 2048 inputs per request
-            return None
-
         # Handle empty batch
         if not texts:
             return []
+
+        # OpenAI API limit is 2048 inputs per request
+        OPENAI_BATCH_LIMIT = 2048
+
+        # Log warning for very large batches (performance monitoring)
+        if len(texts) > 5000:
+            logger.warning(
+                f"Processing very large batch of {len(texts)} embeddings. "
+                f"This will be chunked into {(len(texts) + OPENAI_BATCH_LIMIT - 1) // OPENAI_BATCH_LIMIT} API calls. "
+                f"Consider processing in smaller batches for better error handling."
+            )
+
+        # Handle batches larger than API limit by chunking
+        if len(texts) > OPENAI_BATCH_LIMIT:
+            logger.info(
+                f"Chunking batch of {len(texts)} texts into chunks of {OPENAI_BATCH_LIMIT} "
+                f"to comply with OpenAI API limits"
+            )
+
+            all_embeddings = []
+
+            # Process in chunks
+            for i in range(0, len(texts), OPENAI_BATCH_LIMIT):
+                chunk = texts[i:i + OPENAI_BATCH_LIMIT]
+                chunk_embeddings = self._generate_embeddings_batch(chunk)
+
+                # If any chunk fails, entire batch fails
+                if chunk_embeddings is None:
+                    logger.error(
+                        f"Failed to generate embeddings for chunk {i // OPENAI_BATCH_LIMIT + 1} "
+                        f"(items {i} to {i + len(chunk)})"
+                    )
+                    return None
+
+                all_embeddings.extend(chunk_embeddings)
+
+            return all_embeddings
 
         try:
             # Call OpenAI batch embeddings API
@@ -664,6 +705,8 @@ class ChromaAdapter(BaseAdapter):
             return embeddings
 
         except Exception as e:
+            # Log error for debugging
+            logger.error(f"Failed to generate embeddings batch: {str(e)}")
             # Return None on any API failure
             return None
 
