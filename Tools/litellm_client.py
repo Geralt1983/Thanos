@@ -1001,6 +1001,11 @@ class LiteLLMClient:
             litellm.drop_params = True  # Ignore unsupported params
             litellm.set_verbose = False
 
+        # Register shutdown handlers
+        self._shutdown_called = False
+        atexit.register(self._atexit_handler)
+        self._register_signal_handlers()
+
     def _load_config(self, config_path: Path) -> Dict:
         """Load configuration from JSON file."""
         if config_path.exists():
@@ -1371,6 +1376,81 @@ class LiteLLMClient:
             for alias, model in pconfig.get("models", {}).items():
                 models.append(model)
         return models
+
+    def shutdown(self, timeout: float = 10.0) -> None:
+        """
+        Gracefully shutdown the client and flush all pending writes.
+
+        This method ensures all pending usage records are written to disk
+        before the client is destroyed. It should be called before program exit.
+
+        Args:
+            timeout: Maximum time in seconds to wait for shutdown (default: 10.0)
+
+        This method is idempotent - calling it multiple times is safe.
+        """
+        if self._shutdown_called:
+            return
+
+        self._shutdown_called = True
+
+        # Flush usage tracker to ensure all records are written
+        if self.usage_tracker:
+            try:
+                # First flush pending records
+                self.usage_tracker.flush(timeout=timeout / 2)
+                # Then shutdown the async writer
+                self.usage_tracker._shutdown()
+            except Exception as e:
+                logger.error(f"Error during usage tracker shutdown: {e}")
+
+        # Clear cache of expired entries
+        if self.cache:
+            try:
+                self.cache.clear_expired()
+            except Exception as e:
+                logger.error(f"Error during cache cleanup: {e}")
+
+    def __del__(self):
+        """Destructor to ensure cleanup when object is garbage collected."""
+        if not self._shutdown_called:
+            try:
+                self.shutdown(timeout=5.0)
+            except Exception:
+                pass  # Best effort during destruction
+
+    def _atexit_handler(self):
+        """Called on normal process exit via atexit."""
+        if not self._shutdown_called:
+            try:
+                self.shutdown(timeout=10.0)
+            except Exception as e:
+                logger.error(f"Error during atexit shutdown: {e}")
+
+    def _register_signal_handlers(self):
+        """Register handlers for SIGTERM and SIGINT to ensure graceful shutdown."""
+        def signal_handler(signum, frame):
+            """Handle termination signals by flushing pending writes."""
+            signal_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+            logger.info(f"Received {signal_name}, shutting down gracefully...")
+
+            if not self._shutdown_called:
+                try:
+                    self.shutdown(timeout=5.0)
+                except Exception as e:
+                    logger.error(f"Error during signal handler shutdown: {e}")
+
+            # Re-raise the signal to allow default behavior
+            signal.signal(signum, signal.SIG_DFL)
+            signal.raise_signal(signum)
+
+        try:
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
+        except (ValueError, OSError) as e:
+            # Signal handlers can only be registered in main thread
+            # or may fail on some platforms - log but don't fail
+            logger.debug(f"Could not register signal handlers: {e}")
 
 
 # Singleton instance management
