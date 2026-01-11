@@ -500,8 +500,21 @@ You track patterns and surface them.""")
         user_prompt += "\n\nFollow the workflow exactly and provide the output in the specified format."
 
         if stream:
-            # Streaming mode: Manual spinner control
-            # Start spinner before API call, stop before first chunk
+            # ================================================================
+            # STREAMING MODE: Manual spinner control
+            # ================================================================
+            # WHY MANUAL CONTROL:
+            # - Spinner must stop BEFORE first chunk prints
+            # - Streaming output happens chunk-by-chunk
+            # - Context manager would stop AFTER all chunks (too late)
+            #
+            # LIFECYCLE:
+            # 1. Create spinner with command_spinner() factory (cyan, "Executing...")
+            # 2. Start spinner manually before API call
+            # 3. API call begins streaming chunks
+            # 4. Stop spinner BEFORE printing first chunk (CRITICAL!)
+            # 5. Print all subsequent chunks normally
+            # 6. On error: Show failure symbol (✗) before re-raising
             result = ""
             spinner = command_spinner(command_name)
             spinner.start()
@@ -515,6 +528,7 @@ You track patterns and surface them.""")
                 ):
                     if first_chunk:
                         # CRITICAL: Stop spinner before first output
+                        # This prevents spinner animation from interfering with streamed text
                         spinner.stop()
                         first_chunk = False
                     print(chunk, end="", flush=True)
@@ -523,10 +537,23 @@ You track patterns and surface them.""")
                 return result
             except Exception:
                 # Show failure symbol before re-raising
+                # This provides visual feedback that the command failed
                 spinner.fail()
                 raise
         else:
-            # Non-streaming mode: Context manager automatically handles lifecycle
+            # ================================================================
+            # NON-STREAMING MODE: Context manager handles lifecycle
+            # ================================================================
+            # WHY CONTEXT MANAGER:
+            # - Spinner runs entire duration of API call
+            # - __enter__ starts spinner automatically
+            # - __exit__ stops with success (✓) or failure (✗) symbol
+            # - Cleaner code: no manual start/stop calls needed
+            #
+            # LIFECYCLE:
+            # 1. __enter__: Starts spinner (cyan, "Executing...")
+            # 2. API call executes completely
+            # 3. __exit__: Automatically shows ✓ (success) or ✗ (error)
             with command_spinner(command_name):
                 return self.api_client.chat(
                     prompt=user_prompt,
@@ -548,11 +575,25 @@ You track patterns and surface them.""")
         system_prompt = self._build_system_prompt(agent=agent_obj)
 
         # Get agent name for spinner message
+        # This personalizes the spinner: "Thinking as Ops..." vs "Thinking..."
         agent_name = agent_obj.name if agent_obj else None
 
         if stream:
-            # Streaming mode: Manual spinner control
-            # Start spinner before API call, stop before first chunk
+            # ================================================================
+            # STREAMING MODE: Manual spinner control
+            # ================================================================
+            # WHY MANUAL CONTROL:
+            # - Spinner must stop BEFORE first chunk prints
+            # - Streaming output happens chunk-by-chunk
+            # - Context manager would stop AFTER all chunks (too late)
+            #
+            # LIFECYCLE:
+            # 1. Create spinner with chat_spinner() factory (magenta, "Thinking...")
+            # 2. Start spinner manually before API call
+            # 3. API call begins streaming chunks
+            # 4. Stop spinner BEFORE printing first chunk (CRITICAL!)
+            # 5. Print all subsequent chunks normally
+            # 6. On error: Show failure symbol (✗) before re-raising
             result = ""
             spinner = chat_spinner(agent_name)
             spinner.start()
@@ -566,6 +607,7 @@ You track patterns and surface them.""")
                 ):
                     if first_chunk:
                         # CRITICAL: Stop spinner before first output
+                        # This prevents spinner animation from interfering with streamed text
                         spinner.stop()
                         first_chunk = False
                     print(chunk, end="", flush=True)
@@ -574,10 +616,23 @@ You track patterns and surface them.""")
                 return result
             except Exception:
                 # Show failure symbol before re-raising
+                # This provides visual feedback that the chat failed
                 spinner.fail()
                 raise
         else:
-            # Non-streaming mode: Context manager automatically handles lifecycle
+            # ================================================================
+            # NON-STREAMING MODE: Context manager handles lifecycle
+            # ================================================================
+            # WHY CONTEXT MANAGER:
+            # - Spinner runs entire duration of API call
+            # - __enter__ starts spinner automatically
+            # - __exit__ stops with success (✓) or failure (✗) symbol
+            # - Cleaner code: no manual start/stop calls needed
+            #
+            # LIFECYCLE:
+            # 1. __enter__: Starts spinner (magenta, "Thinking..." or "Thinking as {agent}...")
+            # 2. API call executes completely
+            # 3. __exit__: Automatically shows ✓ (success) or ✗ (error)
             with chat_spinner(agent_name):
                 return self.api_client.chat(
                     prompt=message,
