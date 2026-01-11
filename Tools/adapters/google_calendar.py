@@ -1080,6 +1080,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_get_availability(arguments)
             elif tool_name == "create_event":
                 return await self._tool_create_event(arguments)
+            elif tool_name == "block_time_for_task":
+                return await self._tool_block_time_for_task(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -3170,6 +3172,281 @@ class GoogleCalendarAdapter(BaseAdapter):
             return ToolResult.fail(str(e))
         except Exception as e:
             return ToolResult.fail(f"Error creating event: {e}")
+
+    async def _tool_block_time_for_task(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Create a calendar time block for a task with Thanos metadata.
+
+        This high-level tool creates a calendar block optimized for task time-blocking.
+        It intelligently formats the event description with task details, applies color
+        coding based on priority, and embeds Thanos metadata in extended properties for
+        future synchronization and tracking.
+
+        Features:
+        - Auto-populates event description with task details (project, priority, tags, URL)
+        - Applies color scheme based on task priority
+        - Adds Thanos metadata to extended properties for tracking
+        - Can automatically find a free slot if no time is specified
+        - Sets appropriate transparency (marks calendar as busy)
+        - Formats event title with task prefix for easy identification
+
+        Args:
+            arguments: Tool parameters including:
+                - task_id: Unique task identifier (required)
+                - task_title: Task title/summary (required)
+                - start_time: Start time in ISO format (optional - uses find_free_slots if not provided)
+                - end_time: End time in ISO format (optional - calculated from duration if not provided)
+                - estimated_duration_minutes: Task duration in minutes (default: 60)
+                - calendar_id: Target calendar ID (default: 'primary')
+                - task_description: Detailed task description (optional)
+                - project: Project name (optional)
+                - priority: Priority level: 'high', 'medium', 'low' (optional, default: 'medium')
+                - tags: List of task tags (optional)
+                - url: URL to task details (optional)
+                - location: Event location (optional)
+                - timezone: Timezone for the event (optional)
+                - auto_schedule: If true and no start_time provided, automatically find free slot (default: false)
+
+        Returns:
+            ToolResult containing created event details including:
+            - Event ID and HTML link
+            - Scheduled start/end times
+            - Applied color scheme
+            - Thanos metadata confirmation
+        """
+        try:
+            # Extract and validate required parameters
+            task_id = arguments.get("task_id")
+            task_title = arguments.get("task_title")
+
+            if not task_id:
+                return ToolResult.fail("Missing required parameter: task_id")
+            if not task_title:
+                return ToolResult.fail("Missing required parameter: task_title")
+
+            # Extract optional parameters with defaults
+            start_time_str = arguments.get("start_time")
+            end_time_str = arguments.get("end_time")
+            estimated_duration_minutes = arguments.get("estimated_duration_minutes", 60)
+            calendar_id = arguments.get("calendar_id", "primary")
+            task_description = arguments.get("task_description", "")
+            project = arguments.get("project", "")
+            priority = arguments.get("priority", "medium")
+            tags = arguments.get("tags", [])
+            task_url = arguments.get("url", "")
+            location = arguments.get("location", "")
+            timezone_str = arguments.get("timezone")
+            auto_schedule = arguments.get("auto_schedule", False)
+
+            # Validate priority
+            if priority not in ["high", "medium", "low"]:
+                return ToolResult.fail(
+                    "Invalid priority value. Must be 'high', 'medium', or 'low'."
+                )
+
+            # If no start_time provided and auto_schedule is enabled, find a free slot
+            if not start_time_str and auto_schedule:
+                # Use find_free_slots to find an available time
+                free_slots_result = await self._tool_find_free_slots({
+                    "duration_minutes": estimated_duration_minutes,
+                    "calendar_id": calendar_id,
+                    "max_results": 1,
+                })
+
+                if not free_slots_result.success:
+                    return ToolResult.fail(
+                        f"Could not auto-schedule: {free_slots_result.error}"
+                    )
+
+                free_slots = free_slots_result.data.get("free_slots", [])
+                if not free_slots:
+                    return ToolResult.fail(
+                        "No free slots available for auto-scheduling. Please specify start_time manually."
+                    )
+
+                # Use the first available slot
+                first_slot = free_slots[0]
+                start_time_str = first_slot.get("start")
+                end_time_str = first_slot.get("end")
+
+            # If still no start_time, return error
+            if not start_time_str:
+                return ToolResult.fail(
+                    "Missing required parameter: start_time. Either provide start_time or set auto_schedule=true."
+                )
+
+            # Calculate end_time if not provided
+            if not end_time_str:
+                try:
+                    from datetime import timedelta
+                    start_dt = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                    end_dt = start_dt + timedelta(minutes=estimated_duration_minutes)
+                    end_time_str = end_dt.isoformat()
+                except ValueError as e:
+                    return ToolResult.fail(
+                        f"Invalid start_time format: {e}. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"
+                    )
+
+            # Build event summary with task prefix
+            event_summary = f"🎯 {task_title}"
+
+            # Build rich event description with task details
+            description_parts = []
+
+            # Add task description
+            if task_description:
+                description_parts.append(task_description)
+                description_parts.append("")  # Blank line
+
+            # Add task metadata section
+            description_parts.append("📋 Task Details")
+            description_parts.append("─" * 40)
+
+            if project:
+                description_parts.append(f"Project: {project}")
+
+            description_parts.append(f"Priority: {priority.upper()}")
+
+            if tags:
+                description_parts.append(f"Tags: {', '.join(tags)}")
+
+            description_parts.append(f"Estimated Duration: {estimated_duration_minutes} minutes")
+
+            if task_url:
+                description_parts.append("")
+                description_parts.append(f"🔗 Task Link: {task_url}")
+
+            description_parts.append("")
+            description_parts.append("─" * 40)
+            description_parts.append("⚡ Created by Thanos - Task Time Blocking")
+
+            event_description = "\n".join(description_parts)
+
+            # Determine color based on priority
+            # Google Calendar color IDs:
+            # 1 = Lavender, 2 = Sage, 3 = Grape, 4 = Flamingo, 5 = Banana
+            # 6 = Tangerine, 7 = Peacock, 8 = Graphite, 9 = Blueberry, 10 = Basil, 11 = Tomato
+            color_map = {
+                "high": "11",      # Tomato (red) for high priority
+                "medium": "9",     # Blueberry (blue) for medium priority
+                "low": "2",        # Sage (green) for low priority
+            }
+            color_id = color_map.get(priority, "9")
+
+            # Build extended properties with Thanos metadata
+            # Extended properties allow us to embed custom metadata in events
+            # This enables future syncing, tracking, and identification of Thanos-created events
+            extended_properties = {
+                "private": {
+                    "thanos_created": "true",
+                    "thanos_version": "1.0",
+                    "task_id": str(task_id),
+                    "task_priority": priority,
+                    "created_at": datetime.now().isoformat(),
+                }
+            }
+
+            # Add optional metadata
+            if project:
+                extended_properties["private"]["task_project"] = project
+
+            if tags:
+                extended_properties["private"]["task_tags"] = ",".join(tags)
+
+            # Get authenticated service
+            service = self._get_service()
+
+            # Determine timezone
+            if timezone_str:
+                try:
+                    tz = ZoneInfo(timezone_str)
+                except Exception:
+                    return ToolResult.fail(
+                        f"Invalid timezone: {timezone_str}. Use IANA timezone names like 'America/New_York' or 'UTC'."
+                    )
+            else:
+                # Use system local timezone
+                try:
+                    tz = ZoneInfo("localtime")
+                except Exception:
+                    tz = ZoneInfo("UTC")
+
+            # Build the event body
+            event_body = {
+                "summary": event_summary,
+                "description": event_description,
+                "start": {
+                    "dateTime": start_time_str,
+                    "timeZone": str(tz),
+                },
+                "end": {
+                    "dateTime": end_time_str,
+                    "timeZone": str(tz),
+                },
+                "colorId": color_id,
+                "transparency": "opaque",  # Mark as busy
+                "extendedProperties": extended_properties,
+            }
+
+            # Add location if provided
+            if location:
+                event_body["location"] = location
+
+            # Create the event using Google Calendar API
+            created_event = (
+                service.events()
+                .insert(calendarId=calendar_id, body=event_body, sendUpdates="none")
+                .execute()
+            )
+
+            # Format the response with all relevant event details
+            event_data = {
+                "event_id": created_event.get("id"),
+                "html_link": created_event.get("htmlLink"),
+                "summary": created_event.get("summary"),
+                "description": event_description,
+                "start_time": created_event.get("start", {}).get("dateTime"),
+                "end_time": created_event.get("end", {}).get("dateTime"),
+                "timezone": created_event.get("start", {}).get("timeZone"),
+                "color_id": color_id,
+                "calendar_id": calendar_id,
+                "task_metadata": {
+                    "task_id": task_id,
+                    "task_title": task_title,
+                    "project": project,
+                    "priority": priority,
+                    "tags": tags,
+                    "estimated_duration_minutes": estimated_duration_minutes,
+                    "task_url": task_url,
+                },
+                "thanos_metadata": extended_properties["private"],
+            }
+
+            # Add location if provided
+            if location:
+                event_data["location"] = location
+
+            message = f"Successfully created time block for task: {task_title}"
+            if auto_schedule:
+                message += f" (auto-scheduled at {start_time_str})"
+
+            return ToolResult.ok(event_data, message=message)
+
+        except HttpError as e:
+            # Handle specific Google Calendar API errors
+            if e.resp.status == 404:
+                return ToolResult.fail(f"Calendar not found: {calendar_id}")
+            elif e.resp.status == 403:
+                return ToolResult.fail(
+                    f"Permission denied. Check that you have write access to calendar: {calendar_id}"
+                )
+            else:
+                return ToolResult.fail(f"Google Calendar API error: {e}")
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+        except Exception as e:
+            return ToolResult.fail(f"Error creating time block: {e}")
 
     def _calculate_day_quality(
         self, busy_percentage: float, fragmentation_score: float, longest_block_minutes: float
