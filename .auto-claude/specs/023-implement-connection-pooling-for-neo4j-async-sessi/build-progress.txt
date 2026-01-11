@@ -4,7 +4,7 @@ BUILD PROGRESS - Neo4j Session Pooling Implementation
 
 Task: Implement connection pooling for Neo4j async sessions
 Started: 2026-01-11T00:03:37.687Z
-Last Updated: 2026-01-11 (Subtask 3.3 completed - Pattern and session operations refactored)
+Last Updated: 2026-01-11 (Subtask 3.4 completed - Relationship and entity operations refactored)
 
 =============================================================================
 PHASE 1: RESEARCH & DESIGN
@@ -518,7 +518,21 @@ PHASE 3: ADAPTER METHOD REFACTORING
     - Syntax validated with py_compile
     - Committed with descriptive message
 
-[ ] Subtask 3.4: Refactor relationship and entity operations (PENDING)
+[✅] Subtask 3.4: Refactor relationship and entity operations (COMPLETED)
+    Date: 2026-01-11
+    - _link_nodes: lines 975-1024 ✅
+    - _find_related: lines 1026-1059 ✅
+    - _query_graph: lines 1061-1091 ✅
+    - _create_entity: lines 1097-1146 ✅
+    - _get_entity_context: lines 1148-1189 ✅
+    - All five methods now have session=None parameter with proper dual-mode implementation
+    - Updated docstrings with Args sections documenting session parameter
+    - Backward compatibility maintained (session=None defaults to current behavior)
+    - Session reuse supported for batch operations
+    - Follows established pattern from previous subtasks
+    - Syntax validated with py_compile
+    - Committed with descriptive message
+
 [ ] Subtask 3.5: Add batch operation methods
 
 =============================================================================
