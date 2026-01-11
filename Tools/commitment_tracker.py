@@ -801,6 +801,284 @@ class CommitmentTracker:
 
         return count
 
+    def get_consecutive_miss_count(self, commitment_id: str) -> int:
+        """
+        Get the count of consecutive misses for a commitment.
+
+        For recurring commitments, counts consecutive missed expected dates.
+        For one-time commitments, returns 1 if missed, 0 otherwise.
+
+        Args:
+            commitment_id: Commitment ID
+
+        Returns:
+            Number of consecutive misses (0 if no misses or completed)
+        """
+        commitment = self.commitments.get(commitment_id)
+        if not commitment:
+            return 0
+
+        # For one-time commitments
+        if not commitment.is_recurring():
+            # Check if status is missed and it's overdue
+            if commitment.status == CommitmentStatus.MISSED or commitment.is_overdue():
+                return 1
+            return 0
+
+        # For recurring commitments, analyze completion history
+        if not commitment.completion_history:
+            # No history yet - check if overdue
+            if commitment.is_overdue():
+                return 1
+            return 0
+
+        # Get expected dates from creation to today
+        today = datetime.now()
+        created = datetime.fromisoformat(commitment.created_date)
+        expected_dates = self._get_expected_dates(commitment, created, today)
+
+        if not expected_dates:
+            return 0
+
+        # Get completion dates
+        completion_dates = {
+            datetime.fromisoformat(record.timestamp).date()
+            for record in commitment.completion_history
+            if record.status == "completed"
+        }
+
+        # Count consecutive misses from most recent expected date backwards
+        consecutive_misses = 0
+        for expected_date in reversed(expected_dates):
+            expected_day = expected_date.date()
+            # Don't count today yet if it's not past the deadline
+            if expected_day == today.date():
+                continue
+
+            if expected_day not in completion_dates:
+                consecutive_misses += 1
+            else:
+                # Found a completion, stop counting
+                break
+
+        return consecutive_misses
+
+    def should_trigger_coach(self, commitment_id: str) -> Dict[str, Any]:
+        """
+        Determine if Coach should be triggered based on miss patterns.
+
+        Follows Coach escalation patterns:
+        - First miss (1-2 consecutive): Gentle curiosity
+        - Second miss (3-4 consecutive): Pattern acknowledgment
+        - Third miss (5-7 consecutive): Direct confrontation
+        - Chronic pattern (8+ consecutive): Values alignment check
+
+        Args:
+            commitment_id: Commitment ID
+
+        Returns:
+            Dict with 'should_trigger' (bool), 'escalation_level' (str),
+            'reason' (str), and 'consecutive_misses' (int)
+        """
+        commitment = self.commitments.get(commitment_id)
+        if not commitment:
+            return {
+                "should_trigger": False,
+                "escalation_level": "none",
+                "reason": "Commitment not found",
+                "consecutive_misses": 0
+            }
+
+        consecutive_misses = self.get_consecutive_miss_count(commitment_id)
+
+        # No misses - no trigger needed
+        if consecutive_misses == 0:
+            return {
+                "should_trigger": False,
+                "escalation_level": "none",
+                "reason": "No consecutive misses",
+                "consecutive_misses": 0
+            }
+
+        # Determine escalation level based on Coach protocols
+        if consecutive_misses <= 2:
+            escalation_level = "first_miss"
+            reason = "Gentle check-in - first miss detected"
+        elif consecutive_misses <= 4:
+            escalation_level = "second_miss"
+            reason = "Pattern emerging - multiple misses detected"
+        elif consecutive_misses <= 7:
+            escalation_level = "third_miss"
+            reason = "Significant pattern - week of misses"
+        else:
+            escalation_level = "chronic_pattern"
+            reason = "Chronic pattern - commitment may need redesign"
+
+        return {
+            "should_trigger": True,
+            "escalation_level": escalation_level,
+            "reason": reason,
+            "consecutive_misses": consecutive_misses
+        }
+
+    def get_miss_pattern_analysis(self, commitment_id: str) -> Dict[str, Any]:
+        """
+        Analyze patterns in missed commitments.
+
+        Identifies temporal patterns (days of week, times of day) and
+        contextual patterns to help Coach provide targeted support.
+
+        Args:
+            commitment_id: Commitment ID
+
+        Returns:
+            Dict with pattern analysis including:
+            - miss_by_weekday: Dict of weekday -> miss count
+            - completion_by_weekday: Dict of weekday -> completion count
+            - total_misses: Total number of misses
+            - total_completions: Total number of completions
+            - miss_rate: Percentage of expected completions that were missed
+        """
+        commitment = self.commitments.get(commitment_id)
+        if not commitment:
+            return {
+                "total_misses": 0,
+                "total_completions": 0,
+                "miss_rate": 0.0,
+                "miss_by_weekday": {},
+                "completion_by_weekday": {}
+            }
+
+        # Analyze completion history
+        miss_by_weekday = {i: 0 for i in range(7)}  # 0=Monday, 6=Sunday
+        completion_by_weekday = {i: 0 for i in range(7)}
+
+        total_misses = 0
+        total_completions = 0
+
+        for record in commitment.completion_history:
+            timestamp = datetime.fromisoformat(record.timestamp)
+            weekday = timestamp.weekday()
+
+            if record.status == "missed":
+                miss_by_weekday[weekday] += 1
+                total_misses += 1
+            elif record.status == "completed":
+                completion_by_weekday[weekday] += 1
+                total_completions += 1
+
+        # Calculate miss rate for recurring commitments
+        miss_rate = 0.0
+        if commitment.is_recurring():
+            created = datetime.fromisoformat(commitment.created_date)
+            today = datetime.now()
+            expected_dates = self._get_expected_dates(commitment, created, today)
+            expected_count = len([d for d in expected_dates if d.date() < today.date()])
+
+            if expected_count > 0:
+                actual_count = total_completions + total_misses
+                missed_count = expected_count - total_completions
+                miss_rate = (missed_count / expected_count) * 100.0
+
+        # Convert weekday numbers to names for readability
+        weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        miss_by_weekday_named = {
+            weekday_names[k]: v for k, v in miss_by_weekday.items() if v > 0
+        }
+        completion_by_weekday_named = {
+            weekday_names[k]: v for k, v in completion_by_weekday.items() if v > 0
+        }
+
+        return {
+            "total_misses": total_misses,
+            "total_completions": total_completions,
+            "miss_rate": round(miss_rate, 1),
+            "miss_by_weekday": miss_by_weekday_named,
+            "completion_by_weekday": completion_by_weekday_named
+        }
+
+    def get_coach_context(self, commitment_id: str) -> Dict[str, Any]:
+        """
+        Generate comprehensive context for Coach interaction.
+
+        Provides all the information Coach needs for empathetic and
+        data-driven accountability check-ins.
+
+        Args:
+            commitment_id: Commitment ID
+
+        Returns:
+            Dict with comprehensive context including:
+            - commitment: Full commitment details
+            - consecutive_misses: Count of consecutive misses
+            - escalation_level: Current escalation level for Coach
+            - pattern_analysis: Miss pattern analysis
+            - streak_history: Current and longest streaks
+            - completion_rate: Percentage completion rate
+            - is_recurring: Boolean indicating if commitment recurs
+            - coach_suggestion: Suggested Coach response approach
+        """
+        commitment = self.commitments.get(commitment_id)
+        if not commitment:
+            return {"error": "Commitment not found"}
+
+        # Get miss detection info
+        trigger_info = self.should_trigger_coach(commitment_id)
+        pattern_analysis = self.get_miss_pattern_analysis(commitment_id)
+
+        # Determine Coach suggestion based on context
+        consecutive_misses = trigger_info["consecutive_misses"]
+        completion_rate = commitment.completion_rate
+
+        if consecutive_misses == 0:
+            coach_suggestion = "celebrate_or_encourage"
+        elif consecutive_misses <= 2:
+            coach_suggestion = "gentle_curiosity"
+        elif consecutive_misses <= 4:
+            coach_suggestion = "pattern_acknowledgment"
+        elif consecutive_misses <= 7:
+            coach_suggestion = "direct_confrontation"
+        elif completion_rate < 30:
+            coach_suggestion = "commitment_redesign"
+        else:
+            coach_suggestion = "values_alignment_check"
+
+        # Build comprehensive context
+        context = {
+            "commitment": {
+                "id": commitment.id,
+                "title": commitment.title,
+                "type": commitment.type,
+                "status": commitment.status,
+                "recurrence_pattern": commitment.recurrence_pattern,
+                "domain": commitment.domain,
+                "priority": commitment.priority,
+                "notes": commitment.notes,
+                "tags": commitment.tags,
+                "created_date": commitment.created_date,
+                "due_date": commitment.due_date
+            },
+            "consecutive_misses": consecutive_misses,
+            "should_trigger_coach": trigger_info["should_trigger"],
+            "escalation_level": trigger_info["escalation_level"],
+            "escalation_reason": trigger_info["reason"],
+            "is_recurring": commitment.is_recurring(),
+            "streak_history": {
+                "current_streak": commitment.streak_count,
+                "longest_streak": commitment.longest_streak,
+                "completion_rate": commitment.completion_rate
+            },
+            "pattern_analysis": pattern_analysis,
+            "coach_suggestion": coach_suggestion,
+            "follow_up_info": {
+                "enabled": commitment.follow_up_schedule.enabled,
+                "escalation_count": commitment.follow_up_schedule.escalation_count,
+                "last_reminded": commitment.follow_up_schedule.last_reminded
+            }
+        }
+
+        return context
+
     def delete_commitment(self, commitment_id: str) -> bool:
         """
         Delete a commitment.
@@ -868,11 +1146,11 @@ class CommitmentTracker:
 
 
 def main():
-    """Test the commitment tracker."""
+    """Test the commitment tracker and miss detection functionality."""
     tracker = CommitmentTracker()
 
-    print("Commitment Tracker Test")
-    print("=" * 60)
+    print("Commitment Tracker Test - Miss Detection & Coach Integration")
+    print("=" * 80)
 
     # Create test commitment
     commitment = tracker.create_commitment(
@@ -889,19 +1167,78 @@ def main():
     print(f"Type: {commitment.type}")
     print(f"Recurrence: {commitment.recurrence_pattern}")
 
-    # Mark as completed
+    # Test completion
     tracker.mark_completed(commitment.id, notes="Completed 10-minute session")
     print(f"\nMarked as completed. Streak: {commitment.streak_count}")
 
+    # Test miss detection
+    print("\n--- Testing Miss Detection ---")
+
+    # Simulate a few missed days
+    yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+    two_days_ago = (datetime.now() - timedelta(days=2)).isoformat()
+    three_days_ago = (datetime.now() - timedelta(days=3)).isoformat()
+
+    tracker.mark_missed(commitment.id, notes="Forgot - overslept", timestamp=yesterday)
+    tracker.mark_missed(commitment.id, notes="Too busy", timestamp=two_days_ago)
+    tracker.mark_missed(commitment.id, notes="Low energy", timestamp=three_days_ago)
+
+    consecutive_misses = tracker.get_consecutive_miss_count(commitment.id)
+    print(f"Consecutive misses: {consecutive_misses}")
+
+    # Test Coach trigger
+    print("\n--- Testing Coach Trigger Detection ---")
+    trigger_info = tracker.should_trigger_coach(commitment.id)
+    print(f"Should trigger Coach: {trigger_info['should_trigger']}")
+    print(f"Escalation level: {trigger_info['escalation_level']}")
+    print(f"Reason: {trigger_info['reason']}")
+
+    # Test pattern analysis
+    print("\n--- Testing Pattern Analysis ---")
+    pattern = tracker.get_miss_pattern_analysis(commitment.id)
+    print(f"Total completions: {pattern['total_completions']}")
+    print(f"Total misses: {pattern['total_misses']}")
+    print(f"Miss rate: {pattern['miss_rate']}%")
+    if pattern['miss_by_weekday']:
+        print(f"Misses by weekday: {pattern['miss_by_weekday']}")
+
+    # Test comprehensive Coach context
+    print("\n--- Testing Coach Context Generation ---")
+    coach_context = tracker.get_coach_context(commitment.id)
+    print(f"Coach suggestion: {coach_context['coach_suggestion']}")
+    print(f"Escalation level: {coach_context['escalation_level']}")
+    print(f"Is recurring: {coach_context['is_recurring']}")
+    print(f"Current streak: {coach_context['streak_history']['current_streak']}")
+    print(f"Completion rate: {coach_context['streak_history']['completion_rate']}%")
+
+    # Test one-time commitment
+    print("\n--- Testing One-Time Commitment ---")
+    task = tracker.create_commitment(
+        title="Submit report",
+        commitment_type=CommitmentType.TASK,
+        due_date=(datetime.now() - timedelta(days=1)).isoformat(),
+        domain="work",
+        priority=1
+    )
+
+    tracker.mark_missed(task.id, notes="Missed deadline")
+    task_misses = tracker.get_consecutive_miss_count(task.id)
+    print(f"Task consecutive misses: {task_misses}")
+
+    task_trigger = tracker.should_trigger_coach(task.id)
+    print(f"Should trigger for task: {task_trigger['should_trigger']}")
+    print(f"Task escalation: {task_trigger['escalation_level']}")
+
     # Get all habits
     habits = tracker.get_all_commitments(commitment_type=CommitmentType.HABIT)
-    print(f"\nTotal habits: {len(habits)}")
+    print(f"\n--- Summary ---")
+    print(f"Total habits: {len(habits)}")
 
     # Export
     json_output = tracker.export_to_json()
-    print(f"\nExported {len(tracker.commitments)} commitments")
+    print(f"Exported {len(tracker.commitments)} commitments")
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 80)
     print("Test completed successfully!")
 
 
