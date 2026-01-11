@@ -164,6 +164,167 @@ wave_operations:
 - **Thresholds**: Default 0.7, customizable via `--wave-threshold`, enterprise strategy lowers file thresholds
 - **Decision Logic**: Sum all indicators, trigger waves when total ≥ threshold
 
+### Health-Aware Routing
+
+**NEW: Biometric Intelligence Integration** 🏃‍♂️
+
+Thanos integrates real-time health metrics from Oura Ring to optimize task scheduling and command execution. This is a **key competitive differentiator** - no other AI productivity system combines calendar management, task prioritization, AND real-time biometric data.
+
+#### Health Check Integration
+
+**Automatic health checks for:**
+- Morning planning sessions (`/plan`, `/task prioritize`)
+- Complex implementation requests (`/implement`, `/build`)
+- Major architectural decisions (`/design`)
+- "Should I..." decision questions
+
+**Health Metrics Considered:**
+- **Readiness Score (0-100)**: Overall recovery and capacity
+- **Sleep Quality**: Cognitive function indicator
+- **HRV (Heart Rate Variability)**: Stress resilience
+- **Activity Level**: Overtraining detection
+- **Trend Analysis**: 7-day patterns
+
+#### Capacity-Based Routing Rules
+
+```yaml
+health_routing:
+  excellent_readiness: # 85-100
+    suitable_operations:
+      - complex: [architecture, design, algorithm, security]
+      - cognitive_load: high
+      - decision_making: strategic
+    recommended_commands: [/implement, /design, /analyze --deep, /build]
+    capacity_multiplier: 1.0
+    focus_duration: extended  # 2-3 hour blocks
+
+  good_readiness: # 70-84
+    suitable_operations:
+      - moderate: [feature_implementation, refactoring, testing]
+      - cognitive_load: medium
+      - decision_making: tactical
+    recommended_commands: [/implement, /refactor, /test, /review]
+    capacity_multiplier: 0.85
+    focus_duration: standard  # 1-2 hour blocks
+
+  fair_readiness: # 60-69
+    suitable_operations:
+      - routine: [documentation, code_review, admin]
+      - cognitive_load: low-medium
+      - decision_making: operational
+    recommended_commands: [/document, /review, /organize, /update]
+    capacity_multiplier: 0.65
+    focus_duration: short  # 45-90 minute blocks
+    warnings: [defer_complex_decisions, increase_breaks]
+
+  low_readiness: # <60
+    suitable_operations:
+      - minimal: [planning, research, organization]
+      - cognitive_load: low
+      - decision_making: defer
+    recommended_commands: [/plan, /read, /organize]
+    capacity_multiplier: 0.50
+    focus_duration: brief  # 30-45 minute blocks
+    warnings: [defer_implementation, focus_on_recovery]
+    recovery_suggestions: [early_stop, lighter_workload, tomorrow_planning]
+```
+
+#### Health-Aware Command Modifications
+
+**Routing decision tree with health context:**
+
+```
+1. Parse user request (normal detection)
+2. IF planning/scheduling/implementation request:
+   a. Query oura_get_today_readiness
+   b. Evaluate task complexity
+   c. Match capacity to requirement
+3. Apply health-adjusted routing:
+   - High complexity + Low readiness → Warning + defer suggestion
+   - Moderate task + Good readiness → Proceed normally
+   - Complex task + Excellent readiness → Optimal day flag
+4. Adjust execution parameters:
+   - Token budget (lower for low readiness)
+   - Validation depth (increase for low readiness)
+   - Break frequency (increase for fair/low readiness)
+5. Provide health context in response
+```
+
+#### Task-Energy Matching Matrix
+
+| Task Type | Min Readiness | Optimal Window | Auto-Defer If | Alternative Actions |
+|-----------|---------------|----------------|---------------|---------------------|
+| Architecture Design | 80 | Morning (peak) | <75 | Plan/research instead |
+| Algorithm Implementation | 75 | Mid-morning | <70 | Prototype/pseudocode |
+| Feature Development | 70 | Morning-afternoon | <60 | Break into smaller tasks |
+| Code Review | 65 | Anytime | <55 | Focus on obvious issues |
+| Documentation | 60 | Afternoon | Never | Good low-energy task |
+| Planning/Organization | 50 | Anytime | Never | Recovery activity |
+
+#### Enhanced Routing Patterns
+
+**Health-aware patterns added to Master Routing Table:**
+
+| Pattern | Health Check | Routing Decision | Confidence |
+|---------|--------------|------------------|------------|
+| "plan my day" | ALWAYS | Check readiness → Adjust capacity → Health persona | 95% |
+| "implement [complex]" | IF complexity>0.7 | Readiness<75 → Warn + suggest defer | 90% |
+| "what should I work on" | ALWAYS | Match tasks to current readiness level | 95% |
+| "schedule task" | ALWAYS | Find optimal readiness day for task type | 88% |
+| "should I [action]" | ALWAYS | Health persona + decision framework | 92% |
+
+#### Implementation Example
+
+```python
+async def route_with_health_context(request, routing_context):
+    """Enhanced routing with health awareness."""
+
+    # Standard routing detection
+    base_routing = detect_intent_and_complexity(request)
+
+    # Check if health context needed
+    if should_check_health(base_routing):
+        health = await get_oura_readiness()
+
+        # Adjust routing based on health
+        if base_routing.complexity == 'high' and health.readiness < 75:
+            return {
+                'warning': 'Low readiness for high-complexity task',
+                'original_plan': base_routing,
+                'recommendation': 'defer_or_simplify',
+                'alternatives': suggest_appropriate_tasks(health.readiness),
+                'health_context': health,
+                'persona': 'health'
+            }
+
+        # Add health context to routing
+        base_routing['health_context'] = health
+        base_routing['capacity_adjustment'] = calculate_capacity(health)
+
+    return base_routing
+```
+
+#### User Control & Privacy
+
+**Configuration options:**
+```yaml
+health_integration:
+  enabled: true  # Master switch
+  auto_check_on_planning: true
+  warnings_enabled: true
+  allow_override: true  # User can proceed despite warnings
+
+privacy:
+  data_stays_local: true  # All Oura data cached locally
+  no_external_sharing: true
+  user_controlled_access: true
+```
+
+**Opt-out:** Users can disable health integration while keeping other features:
+```bash
+thanos config set health_integration.enabled false
+```
+
 ## 🚦 Routing Intelligence
 
 Dynamic decision trees that map detected patterns to optimal tool combinations, persona activation, and orchestration strategies.
@@ -527,7 +688,25 @@ orchestrator_config:
     max_waves_per_operation: 5
     adaptive_wave_sizing: true
     wave_validation_required: true
+
+  # Health Integration Settings
+  health_integration:
+    enabled: true
+    auto_check_on_planning: true
+    warnings_enabled: true
+    allow_override: true
+    min_readiness_for_complex: 75
+    min_readiness_for_moderate: 70
+    defer_threshold: 65
+    cache_ttl: 3600  # 1 hour
 ```
 
 ### Custom Routing Rules
 Users can add custom routing patterns via YAML configuration files.
+
+### Health Integration Documentation
+
+For comprehensive documentation on health-aware task prioritization, see:
+- **[Task Prioritization Health Integration](./mcp-servers/oura-mcp/TASK_PRIORITIZATION_HEALTH_INTEGRATION.md)** - Complete guide to health-aware scheduling
+- **[Health Persona Oura Integration](./mcp-servers/oura-mcp/HEALTH_PERSONA_OURA_INTEGRATION.md)** - Health persona capabilities with Oura data
+- **[Oura MCP Server](./mcp-servers/oura-mcp/README.md)** - MCP server setup and tool documentation
