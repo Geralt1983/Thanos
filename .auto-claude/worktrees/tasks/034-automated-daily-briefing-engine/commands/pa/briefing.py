@@ -158,6 +158,8 @@ def generate_briefing(
 
     # Prompt for health state if morning briefing and prompts not disabled
     health_state = None
+    reflection_data = None
+
     if briefing_type == "morning" and not no_prompts:
         try:
             health_state = engine.prompt_for_health_state(
@@ -170,6 +172,16 @@ def generate_briefing(
         except Exception as e:
             logger.warning(f"Failed to prompt for health state: {e}")
             print(f"\n⚠️  Warning: Health check failed: {e}")
+
+    # Prompt for evening reflection if evening briefing and prompts not disabled
+    elif briefing_type == "evening" and not no_prompts:
+        try:
+            reflection_data = engine.prompt_for_evening_reflection(
+                skip_prompts=no_prompts
+            )
+        except Exception as e:
+            logger.warning(f"Failed to prompt for evening reflection: {e}")
+            print(f"\n⚠️  Warning: Evening reflection failed: {e}")
 
     if energy_level is not None:
         print(f"⚡ Energy level: {energy_level}/10\n")
@@ -192,7 +204,8 @@ def generate_briefing(
             briefing_type=briefing_type,
             context=context,
             energy_level=energy_level,
-            health_state=health_state
+            health_state=health_state,
+            reflection_data=reflection_data
         )
     except Exception as e:
         logger.error(f"Failed to render briefing: {e}")
