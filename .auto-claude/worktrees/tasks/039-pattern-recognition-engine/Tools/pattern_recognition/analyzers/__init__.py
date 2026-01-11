@@ -14,6 +14,12 @@ from .health_correlation import (
     correlate_sleep_timing_with_morning_energy,
     get_all_health_correlations,
 )
+from .habit_streaks import (
+    identify_recurring_habits,
+    analyze_habit_streak,
+    analyze_streak_breaks,
+    get_all_habit_streaks,
+)
 
 __all__ = [
     "analyze_hourly_patterns",
@@ -26,4 +32,8 @@ __all__ = [
     "correlate_deep_sleep_with_focus",
     "correlate_sleep_timing_with_morning_energy",
     "get_all_health_correlations",
+    "identify_recurring_habits",
+    "analyze_habit_streak",
+    "analyze_streak_breaks",
+    "get_all_habit_streaks",
 ]
