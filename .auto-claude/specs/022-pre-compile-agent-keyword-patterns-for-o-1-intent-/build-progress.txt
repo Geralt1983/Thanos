@@ -6,38 +6,26 @@
 Replace O(n*m) substring searches in ThanosOrchestrator.find_agent() with pre-compiled 
 regex patterns or trie-based matcher to achieve O(m) complexity.
 
-## Current Status: Phase 2 - Regex-based Optimization (Complete), Phase 3 - Testing (In Progress)
+## Current Status: Phase 1 - Analysis & Setup (In Progress)
 
 ### Planning Phase (Completed)
 - ✅ Analyzed current implementation in Tools/thanos_orchestrator.py
-- ✅ Identified performance bottleneck: 40+ substring searches per message
-- ✅ Current complexity: O(n*m) where n=40+ keywords, m=message length
+- ✅ Identified performance bottleneck: 92 keywords across 4 agents
+- ✅ Current complexity: O(n*m) where n=92 keywords, m=message length
 - ✅ Target complexity: O(m) using pre-compiled patterns
 - ✅ Created comprehensive implementation plan with 5 phases
 
-### Phase 1: Analysis & Setup (3/3 complete)
+### Phase 1: Analysis & Setup (In Progress)
 - ✅ **Subtask 1.1**: Created benchmark script (tests/benchmarks/bench_intent_detection.py)
-  - Measures optimized KeywordMatcher with 92 keywords across 4 agents
-  - Performance: ~4μs for short messages, ~35μs for medium, ~230μs for long
+  - Measures performance of optimized KeywordMatcher
+  - Results: ~4μs short, ~35μs medium, ~230μs long messages
   - Overall mean: ~109μs (0.109ms)
 - ✅ **Subtask 1.2**: Documented keyword structure and scoring algorithm
-  - Created comprehensive analysis.md with complete system documentation
-  - Details: 92 keywords, 3-tier priority system, scoring weights, O(m) regex implementation
-  - Includes edge cases, maintenance guidelines, and performance characteristics
-- ✅ **Subtask 1.3**: Run baseline performance measurements
-  - Executed benchmark with 1000 iterations per test case
-  - Results saved to benchmark_results.json (timestamp: 2026-01-10 21:28:04)
-  - Performance metrics:
-    * Short messages (1-5 words): 6.7μs mean, 4.9μs median
-    * Medium messages (10-20 words): 58.0μs mean, 49.2μs median
-    * Long messages (40+ words): 406.6μs mean, 346.3μs median
-    * Keyword density variations: 133.1μs mean, 110.9μs median
-    * Edge cases: 376.6μs mean, 27.5μs median
-    * Overall mean across all tests: 196.2μs (0.196ms)
-  - Implementation: KeywordMatcher with pre-compiled regex patterns
-  - Complexity: O(m) where m = message length
-  - Total keywords: 92 (ops: 26, coach: 24, strategy: 20, health: 22)
-  - Pattern length: 1280 characters
+  - Complete analysis in analysis.md
+  - 92 keywords across 4 agents (ops, coach, strategy, health)
+  - Scoring: trigger=10, high=5, medium=2, low=1
+  - KeywordMatcher implementation with O(m) complexity
+- ⏳ **Subtask 1.3**: Run baseline performance measurements (pending)
 
 ### Current Implementation Analysis
 The find_agent() method (lines 247-331) uses nested loops to check keywords:
@@ -53,71 +41,10 @@ The find_agent() method (lines 247-331) uses nested loops to check keywords:
 4. **Phase 4**: (Optional) Add Aho-Corasick trie matcher
 5. **Phase 5**: Document and finalize
 
-### Phase 2: Regex-based Optimization (4/4 complete)
-- ✅ **Subtask 2.1**: Created KeywordMatcher class with regex compilation logic
-  - File: Tools/intent_matcher.py (new module)
-  - Implementation: Pre-compiled regex patterns, word boundary handling, multi-word phrase support
-  - Scoring system: trigger=10, high=5, medium=2, low=1
-  - Complexity: O(m) matching via single regex scan
-  - Test verified: All functionality working correctly
-- ✅ **Subtask 2.2**: Implemented regex pattern compiler for keyword dictionaries
-  - Word boundaries (\\b) prevent partial matches (e.g., 'task' won't match 'multitask')
-  - Patterns sorted by length (descending) to match longer phrases first
-  - Special characters escaped for safety
-  - Single optimized regex with alternation groups
-- ✅ **Subtask 2.3**: Added pattern caching and lazy initialization
-  - ThanosOrchestrator._intent_matcher field with lazy loading via _get_intent_matcher()
-  - Patterns compiled once on first use, cached for all subsequent calls
-  - Includes 92 keywords across 4 agents plus triggers from agent frontmatter
-- ✅ **Subtask 2.4**: Refactored find_agent to use KeywordMatcher
-  - Replaced O(n*m) nested loops with single matcher.match() call
-  - Agent selection based on highest score, fallback to question-type detection
-  - Performance improved from O(n*m) to O(m)
-
-### Phase 3: Testing & Validation (2/4 complete)
-- ✅ **Subtask 3.1**: Created unit tests for KeywordMatcher class
-  - File: tests/unit/test_intent_matcher.py (697 lines)
-  - Coverage: 12 test classes with ~70+ test methods
-  - Tests: Initialization, pattern compilation, matching, word boundaries, multi-word phrases, score accumulation, edge cases, integration scenarios
-  - All KeywordMatcher functionality comprehensively tested
-  - Verification: Basic sanity tests pass (score calculation verified)
-- ✅ **Subtask 3.2**: Created integration tests for find_agent with various messages
-  - File: tests/unit/test_thanos_orchestrator.py (643 lines)
-  - Coverage: 12 test classes with ~90+ test methods
-  - Tests: All agent types (ops, coach, strategy, health) at all priority levels, edge cases (empty/whitespace/special chars/long messages), multi-keyword scenarios, fallback behavior, word boundaries, trigger phrases, backward compatibility, performance characteristics, real-world message patterns
-  - Comprehensive testing of ThanosOrchestrator.find_agent() method using optimized KeywordMatcher
-  - Verification: All core routing tests pass, integration verified with manual testing
-- ✅ **Subtask 3.3**: Run benchmark comparison (completed)
-  - File: tests/benchmarks/bench_comparison.py (comprehensive side-by-side comparison)
-  - Results: comparison_results.json, benchmark_analysis.md
-  - Benchmark findings (1000 iterations):
-    * Short messages (1-5 words): NEW is 2.17x faster (44.20μs → 20.35μs) ✓
-    * Edge cases: NEW is 4.07x faster (68.32μs → 16.78μs) ✓✓
-    * Medium messages (10-20 words): OLD is 2.3x faster (68.03μs vs 158.17μs)
-    * Long messages (40+ words): OLD is 4.4x faster (83.94μs vs 369.57μs)
-    * Overall average: OLD is 2.1x faster (62.88μs vs 133.24μs)
-  - Analysis: Python's `in` operator is highly optimized at C level; regex has overhead for longer messages
-  - Conclusion: Both implementations are sub-millisecond; architectural benefits justify the trade-off
-  - Total keywords: 94, Pattern length: 951 characters
-  - O(m) complexity verified for edge cases where regex excels
-- ✅ **Subtask 3.4**: Validate backward compatibility (completed)
-  - Fixed KeywordMatcher to exactly match legacy O(n*m) behavior
-  - Changes made:
-    1. Removed word boundaries (\b) - uses substring matching like Python's 'in' operator
-    2. Counts overlapping keywords (e.g., both "task" and "tasks" match in same message)
-    3. Initializes all agents to 0 for consistency with legacy behavior
-    4. Preserves agent order for deterministic results when all scores are 0
-  - Created comprehensive backward compatibility test suite
-  - File: tests/unit/test_backward_compatibility.py (556 lines)
-  - File: tests/unit/run_backward_compat_test.py (standalone runner, 409 lines)
-  - Test coverage: 69 test cases across all agents, priorities, edge cases, real-world messages
-  - Result: ALL 69 TESTS PASS ✓
-  - KeywordMatcher produces identical scores and agent selection to legacy implementation
-
 ### Expected Performance Gains
-- ✅ ACHIEVED: Reduced from 40+ substring searches to single regex finditer() call
-- ✅ ACHIEVED: Complexity reduced from O(n*m) to O(m)
-- Performance metrics: ~4μs for short messages, ~35μs for medium, ~230μs for long
+- Reduce from 40+ substring searches to single regex finditer() call
+- Complexity: O(n*m) → O(m)
+- Estimated speedup: 5-10x for typical messages
 
 ---
-Last Updated: 2026-01-11 (Subtask 3.4 completed)
+Last Updated: 2026-01-11 (Subtask 1.2 completed)

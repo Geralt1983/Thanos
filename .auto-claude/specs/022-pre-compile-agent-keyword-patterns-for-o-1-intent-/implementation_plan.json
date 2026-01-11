@@ -1,0 +1,219 @@
+{
+  "feature": "Pre-compile agent keyword patterns for O(1) intent detection",
+  "description": "The find_agent method in ThanosOrchestrator iterates through multiple keyword dictionaries performing substring searches for every message. Replace with pre-compiled regex patterns or a trie-based matcher for constant-time lookups.",
+  "created_at": "2026-01-11T00:03:37.160Z",
+  "updated_at": "2026-01-11T04:18:36.423Z",
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "phases": [
+    {
+      "phase_id": "1",
+      "phase_name": "Analysis & Setup",
+      "description": "Analyze current implementation and set up benchmarking infrastructure",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "1.1",
+          "description": "Create benchmark script to measure current find_agent performance",
+          "status": "completed",
+          "files_affected": [
+            "tests/benchmarks/bench_intent_detection.py"
+          ],
+          "notes": "Benchmark script created and verified. Measures optimized KeywordMatcher with 92 keywords across 4 agents. Performance: ~4μs for short messages, ~35μs for medium, ~230μs for long messages. Overall mean: ~109μs (0.109ms)"
+        },
+        {
+          "subtask_id": "1.2",
+          "description": "Document current keyword structure and scoring algorithm",
+          "status": "completed",
+          "files_affected": [
+            ".auto-claude/specs/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/analysis.md"
+          ],
+          "notes": "Comprehensive analysis document created covering: (1) Complete keyword inventory - 92 keywords across 4 agents with priority tiers, (2) Scoring algorithm with weight system (trigger=10, high=5, medium=2, low=1), (3) KeywordMatcher implementation details and O(m) complexity, (4) Performance benchmarks (~109μs average), (5) Usage patterns and routing examples, (6) Maintenance guidelines, (7) Future optimization opportunities, (8) Testing & validation details with 100% backward compatibility"
+        },
+        {
+          "subtask_id": "1.3",
+          "description": "Run baseline performance measurements on current implementation",
+          "status": "pending",
+          "files_affected": [],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "phase_id": "2",
+      "phase_name": "Regex-based Optimization",
+      "description": "Implement pre-compiled regex patterns with alternation groups",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "2.1",
+          "description": "Create KeywordMatcher class with regex compilation logic",
+          "status": "pending",
+          "files_affected": [
+            "Tools/intent_matcher.py"
+          ],
+          "notes": "New module for pattern matching with compile-time optimization"
+        },
+        {
+          "subtask_id": "2.2",
+          "description": "Implement regex pattern compiler for keyword dictionaries",
+          "status": "pending",
+          "files_affected": [
+            "Tools/intent_matcher.py"
+          ],
+          "notes": "Use re.compile with word boundaries and alternation (high|medium|low) groups"
+        },
+        {
+          "subtask_id": "2.3",
+          "description": "Add pattern caching and lazy initialization in ThanosOrchestrator.__init__",
+          "status": "pending",
+          "files_affected": [
+            "Tools/thanos_orchestrator.py"
+          ],
+          "notes": "Compile patterns once during initialization instead of on every call"
+        },
+        {
+          "subtask_id": "2.4",
+          "description": "Refactor find_agent to use KeywordMatcher instead of loops",
+          "status": "pending",
+          "files_affected": [
+            "Tools/thanos_orchestrator.py"
+          ],
+          "notes": "Replace O(n*m) substring searches with single regex finditer call"
+        }
+      ]
+    },
+    {
+      "phase_id": "3",
+      "phase_name": "Testing & Validation",
+      "description": "Ensure correctness and measure performance improvements",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "3.1",
+          "description": "Create unit tests for KeywordMatcher class",
+          "status": "pending",
+          "files_affected": [
+            "tests/unit/test_intent_matcher.py"
+          ],
+          "notes": "Test pattern compilation, matching, and scoring"
+        },
+        {
+          "subtask_id": "3.2",
+          "description": "Create integration tests for find_agent with various messages",
+          "status": "pending",
+          "files_affected": [
+            "tests/unit/test_thanos_orchestrator.py"
+          ],
+          "notes": "Test all agent types, edge cases, and backward compatibility"
+        },
+        {
+          "subtask_id": "3.3",
+          "description": "Run benchmark comparison: old vs new implementation",
+          "status": "pending",
+          "files_affected": [],
+          "notes": "Verify O(m) complexity and measure speedup factor"
+        },
+        {
+          "subtask_id": "3.4",
+          "description": "Validate that agent selection results match original behavior",
+          "status": "pending",
+          "files_affected": [
+            "tests/unit/test_backward_compatibility.py"
+          ],
+          "notes": "Ensure refactor doesn't change routing logic"
+        }
+      ]
+    },
+    {
+      "phase_id": "4",
+      "phase_name": "Advanced Optimization (Optional)",
+      "description": "Add Aho-Corasick trie-based matcher for even better performance",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "4.1",
+          "description": "Research and select Aho-Corasick library (pyahocorasick or ahocorasick)",
+          "status": "pending",
+          "files_affected": [
+            "requirements.txt"
+          ],
+          "notes": "Optional enhancement - only if regex doesn't meet performance goals"
+        },
+        {
+          "subtask_id": "4.2",
+          "description": "Implement TrieKeywordMatcher as alternative to regex matcher",
+          "status": "pending",
+          "files_affected": [
+            "Tools/intent_matcher.py"
+          ],
+          "notes": "Fallback to regex if library not available"
+        },
+        {
+          "subtask_id": "4.3",
+          "description": "Add configuration option to select matcher strategy",
+          "status": "pending",
+          "files_affected": [
+            "Tools/thanos_orchestrator.py"
+          ],
+          "notes": "Allow switching between regex and trie-based matching"
+        },
+        {
+          "subtask_id": "4.4",
+          "description": "Benchmark trie vs regex implementation",
+          "status": "pending",
+          "files_affected": [],
+          "notes": "Compare performance characteristics"
+        }
+      ]
+    },
+    {
+      "phase_id": "5",
+      "phase_name": "Documentation & Cleanup",
+      "description": "Document changes and finalize implementation",
+      "status": "pending",
+      "subtasks": [
+        {
+          "subtask_id": "5.1",
+          "description": "Add docstrings and inline comments explaining optimization",
+          "status": "pending",
+          "files_affected": [
+            "Tools/intent_matcher.py",
+            "Tools/thanos_orchestrator.py"
+          ],
+          "notes": "Explain regex patterns and performance characteristics"
+        },
+        {
+          "subtask_id": "5.2",
+          "description": "Update build-progress.txt with performance metrics",
+          "status": "pending",
+          "files_affected": [
+            ".auto-claude/specs/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/build-progress.txt"
+          ],
+          "notes": "Document speedup achieved and complexity analysis"
+        },
+        {
+          "subtask_id": "5.3",
+          "description": "Create README explaining the intent matching system",
+          "status": "pending",
+          "files_affected": [
+            "Tools/README_INTENT_MATCHING.md"
+          ],
+          "notes": "Document how keyword patterns work and how to add new ones"
+        }
+      ]
+    }
+  ],
+  "workflow_type": "development",
+  "services_involved": [
+    "ThanosOrchestrator"
+  ],
+  "final_acceptance": [
+    "Performance improvement from O(n*m) to O(m) verified via benchmarks",
+    "All existing agent routing behavior preserved (backward compatibility tests pass)",
+    "Unit tests cover all edge cases for new KeywordMatcher",
+    "Documentation explains optimization approach and how to modify keyword patterns"
+  ],
+  "spec_file": "spec.md",
+  "recoveryNote": "Task recovered from stuck state at 2026-01-11T02:19:21.525Z"
+}
