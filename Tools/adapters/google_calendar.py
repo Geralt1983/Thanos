@@ -411,6 +411,27 @@ class GoogleCalendarAdapter(BaseAdapter):
                 "description": "Revoke and clear Google Calendar credentials. Requires re-authentication to use calendar features again.",
                 "parameters": {},
             },
+            {
+                "name": "list_calendars",
+                "description": "List all user's calendars with metadata (name, ID, primary status, access role)",
+                "parameters": {
+                    "show_hidden": {
+                        "type": "boolean",
+                        "description": "Include hidden calendars in results. Defaults to False.",
+                        "required": False,
+                    },
+                    "min_access_role": {
+                        "type": "string",
+                        "description": "Filter by minimum access role: 'freeBusyReader', 'reader', 'writer', 'owner'. Defaults to None (all roles).",
+                        "required": False,
+                    },
+                    "primary_only": {
+                        "type": "boolean",
+                        "description": "Return only the primary calendar. Defaults to False.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -433,6 +454,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_check_auth()
             elif tool_name == "revoke_auth":
                 return await self._tool_revoke_auth()
+            elif tool_name == "list_calendars":
+                return await self._tool_list_calendars(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -499,6 +522,99 @@ class GoogleCalendarAdapter(BaseAdapter):
     async def _tool_revoke_auth(self) -> ToolResult:
         """Tool: Revoke credentials."""
         return self.revoke_credentials()
+
+    async def _tool_list_calendars(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: List all user's calendars with metadata.
+
+        Args:
+            arguments: Tool parameters including optional filters:
+                - show_hidden: Include hidden calendars (default: False)
+                - min_access_role: Minimum access role filter (default: None)
+                - primary_only: Return only primary calendar (default: False)
+
+        Returns:
+            ToolResult containing list of calendars with metadata
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract parameters with defaults
+            show_hidden = arguments.get("show_hidden", False)
+            min_access_role = arguments.get("min_access_role")
+            primary_only = arguments.get("primary_only", False)
+
+            # Define access role hierarchy for filtering
+            access_role_hierarchy = {
+                "freeBusyReader": 0,
+                "reader": 1,
+                "writer": 2,
+                "owner": 3,
+            }
+
+            # Fetch all calendars from Google Calendar API
+            calendar_list_result = service.calendarList().list().execute()
+            calendars = calendar_list_result.get("items", [])
+
+            # Apply filters
+            filtered_calendars = []
+            for calendar in calendars:
+                # Filter by hidden status
+                if not show_hidden and calendar.get("hidden", False):
+                    continue
+
+                # Filter by primary status
+                if primary_only and not calendar.get("primary", False):
+                    continue
+
+                # Filter by minimum access role
+                if min_access_role:
+                    calendar_role = calendar.get("accessRole", "")
+                    if calendar_role not in access_role_hierarchy:
+                        continue
+
+                    min_role_level = access_role_hierarchy.get(min_access_role, 0)
+                    calendar_role_level = access_role_hierarchy.get(calendar_role, 0)
+
+                    if calendar_role_level < min_role_level:
+                        continue
+
+                # Extract relevant metadata
+                calendar_data = {
+                    "id": calendar.get("id"),
+                    "summary": calendar.get("summary", ""),
+                    "description": calendar.get("description"),
+                    "primary": calendar.get("primary", False),
+                    "access_role": calendar.get("accessRole", ""),
+                    "selected": calendar.get("selected", False),
+                    "background_color": calendar.get("backgroundColor"),
+                    "foreground_color": calendar.get("foregroundColor"),
+                    "time_zone": calendar.get("timeZone"),
+                }
+
+                filtered_calendars.append(calendar_data)
+
+            # Sort calendars: primary first, then by summary
+            filtered_calendars.sort(
+                key=lambda c: (not c["primary"], c["summary"].lower())
+            )
+
+            return ToolResult.ok(
+                {
+                    "calendars": filtered_calendars,
+                    "total_count": len(filtered_calendars),
+                    "filters_applied": {
+                        "show_hidden": show_hidden,
+                        "min_access_role": min_access_role,
+                        "primary_only": primary_only,
+                    },
+                }
+            )
+
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
 
     async def close(self):
         """
