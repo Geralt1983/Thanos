@@ -416,5 +416,362 @@ class TestBriefingEngineEdgeCases(unittest.TestCase):
         self.assertGreater(len(commitments), 0)
 
 
+class TestPriorityRanking(unittest.TestCase):
+    """Test suite for priority ranking functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.state_dir = Path(self.temp_dir) / "State"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.engine = BriefingEngine(state_dir=str(self.state_dir))
+
+    def tearDown(self):
+        """Clean up after each test."""
+        shutil.rmtree(self.temp_dir)
+
+    def test_rank_priorities_by_deadline_urgency(self):
+        """Test that items are ranked by deadline urgency."""
+        from datetime import timedelta
+
+        today = self.engine.today
+        tomorrow = today + timedelta(days=1)
+        next_week = today + timedelta(days=7)
+        overdue = today - timedelta(days=1)
+
+        commitments_content = f"""# Commitments
+
+## Work
+- [ ] Overdue task (due: {overdue.isoformat()})
+- [ ] Due today task (due: {today.isoformat()})
+- [ ] Due tomorrow task (due: {tomorrow.isoformat()})
+- [ ] Due next week task (due: {next_week.isoformat()})
+- [ ] No deadline task
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        ranked = self.engine.rank_priorities()
+
+        # Verify ordering: overdue > today > tomorrow > next week > no deadline
+        self.assertGreater(len(ranked), 0)
+
+        # Find each task
+        overdue_item = next(i for i in ranked if "Overdue" in i["title"])
+        today_item = next(i for i in ranked if "Due today" in i["title"])
+        tomorrow_item = next(i for i in ranked if "Due tomorrow" in i["title"])
+        next_week_item = next(i for i in ranked if "Due next week" in i["title"])
+        no_deadline_item = next(i for i in ranked if "No deadline" in i["title"])
+
+        # Check urgency levels
+        self.assertEqual(overdue_item["urgency_level"], "critical")
+        self.assertEqual(today_item["urgency_level"], "critical")
+        self.assertEqual(tomorrow_item["urgency_level"], "high")
+
+        # Check priority scores are in correct order
+        self.assertGreater(overdue_item["priority_score"], today_item["priority_score"])
+        self.assertGreater(today_item["priority_score"], tomorrow_item["priority_score"])
+        self.assertGreater(tomorrow_item["priority_score"], next_week_item["priority_score"])
+        self.assertGreater(next_week_item["priority_score"], no_deadline_item["priority_score"])
+
+    def test_weekend_deprioritizes_work_tasks(self):
+        """Test that work tasks are deprioritized on weekends unless urgent."""
+        from datetime import timedelta
+
+        # Mock weekend day
+        original_today = self.engine.today
+        # Find next Saturday (weekday 5)
+        days_until_saturday = (5 - original_today.weekday()) % 7
+        if days_until_saturday == 0:
+            days_until_saturday = 7
+        saturday = original_today + timedelta(days=days_until_saturday)
+        self.engine.today = saturday
+
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Regular work task
+
+## Personal
+- [ ] Personal task
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        context = self.engine.gather_context()
+        self.assertTrue(context["is_weekend"])
+
+        ranked = self.engine.rank_priorities(context)
+
+        # Find tasks
+        work_item = next(i for i in ranked if "work task" in i["title"])
+        personal_item = next(i for i in ranked if "Personal task" in i["title"])
+
+        # Personal task should be higher priority on weekend
+        self.assertGreater(personal_item["priority_score"], work_item["priority_score"])
+        self.assertIn("weekend", work_item["priority_reason"].lower())
+
+        # Restore original date
+        self.engine.today = original_today
+
+    def test_weekend_prioritizes_urgent_work_tasks(self):
+        """Test that urgent work tasks stay high priority even on weekends."""
+        from datetime import timedelta
+
+        # Mock weekend day
+        original_today = self.engine.today
+        days_until_saturday = (5 - original_today.weekday()) % 7
+        if days_until_saturday == 0:
+            days_until_saturday = 7
+        saturday = original_today + timedelta(days=days_until_saturday)
+        self.engine.today = saturday
+
+        commitments_content = f"""# Commitments
+
+## Work
+- [ ] Urgent work task (due: {saturday.isoformat()})
+
+## Personal
+- [ ] Regular personal task
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        context = self.engine.gather_context()
+        ranked = self.engine.rank_priorities(context)
+
+        # Find tasks
+        urgent_work = next(i for i in ranked if "Urgent work" in i["title"])
+        personal = next(i for i in ranked if "Regular personal" in i["title"])
+
+        # Urgent work should still be higher priority
+        self.assertGreater(urgent_work["priority_score"], personal["priority_score"])
+        self.assertEqual(urgent_work["urgency_level"], "critical")
+
+        # Restore
+        self.engine.today = original_today
+
+    def test_weekday_prioritizes_work_tasks(self):
+        """Test that work tasks get higher priority on weekdays."""
+        from datetime import timedelta
+
+        # Ensure we're on a weekday
+        original_today = self.engine.today
+        if original_today.weekday() >= 5:  # Weekend
+            # Move to next Monday
+            days_until_monday = (7 - original_today.weekday()) % 7
+            monday = original_today + timedelta(days=days_until_monday)
+            self.engine.today = monday
+
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Work task
+
+## Personal
+- [ ] Personal task
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        context = self.engine.gather_context()
+        self.assertFalse(context["is_weekend"])
+
+        ranked = self.engine.rank_priorities(context)
+
+        # Find tasks
+        work_item = next(i for i in ranked if "Work task" in i["title"])
+        personal_item = next(i for i in ranked if "Personal task" in i["title"])
+
+        # Work task should be higher priority on weekday
+        self.assertGreater(work_item["priority_score"], personal_item["priority_score"])
+        self.assertIn("weekday", work_item["priority_reason"].lower())
+
+        # Restore
+        self.engine.today = original_today
+
+    def test_energy_level_affects_complex_tasks(self):
+        """Test that energy level affects task recommendations."""
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Design new architecture for API
+- [ ] Send status update email
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        # High energy - complex task should get boost
+        ranked_high_energy = self.engine.rank_priorities(energy_level=8)
+        design_task_high = next(i for i in ranked_high_energy if "Design" in i["title"])
+        self.assertIn("good energy", design_task_high["priority_reason"].lower())
+
+        # Low energy - simple task should get boost
+        ranked_low_energy = self.engine.rank_priorities(energy_level=3)
+        email_task_low = next(i for i in ranked_low_energy if "email" in i["title"])
+        design_task_low = next(i for i in ranked_low_energy if "Design" in i["title"])
+
+        self.assertIn("manageable", email_task_low["priority_reason"].lower())
+        self.assertIn("higher energy", design_task_low["priority_reason"].lower())
+
+        # Complex task should be deprioritized with low energy
+        self.assertLess(design_task_low["priority_score"], design_task_high["priority_score"])
+
+    def test_get_top_priorities(self):
+        """Test getting top N priorities."""
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Task 1
+- [ ] Task 2
+- [ ] Task 3
+- [ ] Task 4
+- [ ] Task 5
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        top_3 = self.engine.get_top_priorities(limit=3)
+
+        self.assertEqual(len(top_3), 3)
+        # Verify they're sorted by priority
+        self.assertGreaterEqual(top_3[0]["priority_score"], top_3[1]["priority_score"])
+        self.assertGreaterEqual(top_3[1]["priority_score"], top_3[2]["priority_score"])
+
+    def test_rank_priorities_includes_all_sources(self):
+        """Test that ranking includes commitments, tasks, and current focus."""
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Work commitment
+"""
+        this_week_content = """# This Week
+
+## Tasks
+- [ ] This week task
+"""
+        current_focus_content = """# Current Focus
+
+## Priorities
+- Critical priority item
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+        (self.state_dir / "ThisWeek.md").write_text(this_week_content)
+        (self.state_dir / "CurrentFocus.md").write_text(current_focus_content)
+
+        ranked = self.engine.rank_priorities()
+
+        # Should have all three types
+        types = set(item["type"] for item in ranked)
+        self.assertIn("commitment", types)
+        self.assertIn("task", types)
+        self.assertIn("priority", types)
+
+        # Verify each source is present
+        titles = [item["title"] for item in ranked]
+        self.assertIn("Work commitment", titles)
+        self.assertIn("This week task", titles)
+        self.assertIn("Critical priority item", titles)
+
+    def test_priority_reason_is_descriptive(self):
+        """Test that priority reasons are human-readable."""
+        from datetime import timedelta
+
+        today = self.engine.today
+        commitments_content = f"""# Commitments
+
+## Work
+- [ ] Urgent task (due: {today.isoformat()})
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        ranked = self.engine.rank_priorities()
+        urgent_item = ranked[0]
+
+        # Should have descriptive reason
+        self.assertIsInstance(urgent_item["priority_reason"], str)
+        self.assertGreater(len(urgent_item["priority_reason"]), 0)
+        self.assertIn("due TODAY", urgent_item["priority_reason"])
+
+    def test_monday_meeting_boost(self):
+        """Test that Monday meetings get priority boost."""
+        from datetime import timedelta
+
+        # Mock Monday
+        original_today = self.engine.today
+        days_until_monday = (7 - original_today.weekday()) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        monday = original_today + timedelta(days=days_until_monday)
+        self.engine.today = monday
+
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Team standup meeting
+- [ ] Regular work task
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        context = self.engine.gather_context()
+        self.assertEqual(context["day_of_week"], "Monday")
+
+        ranked = self.engine.rank_priorities(context)
+
+        meeting = next(i for i in ranked if "standup" in i["title"].lower())
+        self.assertIn("Monday meeting", meeting["priority_reason"])
+
+        # Restore
+        self.engine.today = original_today
+
+    def test_friday_admin_task_boost(self):
+        """Test that Friday admin tasks get priority boost."""
+        from datetime import timedelta
+
+        # Mock Friday
+        original_today = self.engine.today
+        days_until_friday = (4 - original_today.weekday()) % 7
+        if days_until_friday == 0:
+            days_until_friday = 7
+        friday = original_today + timedelta(days=days_until_friday)
+        self.engine.today = friday
+
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Submit timesheet
+- [ ] Regular work task
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        context = self.engine.gather_context()
+        self.assertEqual(context["day_of_week"], "Friday")
+
+        ranked = self.engine.rank_priorities(context)
+
+        timesheet = next(i for i in ranked if "timesheet" in i["title"].lower())
+        self.assertIn("Friday admin", timesheet["priority_reason"])
+
+        # Restore
+        self.engine.today = original_today
+
+    def test_empty_context_returns_empty_list(self):
+        """Test that ranking with no tasks returns empty list."""
+        # Don't create any State files
+        ranked = self.engine.rank_priorities()
+
+        self.assertEqual(ranked, [])
+
+    def test_completed_tasks_excluded_from_ranking(self):
+        """Test that completed tasks are not included in ranking."""
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Pending task
+- [x] Completed task
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        ranked = self.engine.rank_priorities()
+
+        titles = [item["title"] for item in ranked]
+        self.assertIn("Pending task", titles)
+        self.assertNotIn("Completed task", titles)
+
+
 if __name__ == '__main__':
     unittest.main()
