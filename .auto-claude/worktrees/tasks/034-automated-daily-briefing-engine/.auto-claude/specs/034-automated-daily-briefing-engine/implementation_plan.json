@@ -575,7 +575,7 @@
           "id": "6.4",
           "title": "Weekly pattern summary",
           "description": "Sunday evening briefing includes weekly pattern insights",
-          "status": "pending",
+          "status": "completed",
           "dependencies": [
             "6.1"
           ],
@@ -590,7 +590,9 @@
             "Highlights pattern changes",
             "Suggests next week optimizations",
             "Optional - can disable in config"
-          ]
+          ],
+          "notes": "Successfully implemented weekly pattern summary for Sunday evening briefings. Added get_weekly_pattern_summary() method to BriefingEngine, created weekly review template, updated evening briefing to include weekly insights on Sundays, added comprehensive tests (11 tests), and created example script. All acceptance criteria met. Committed in commit above.",
+          "updated_at": "2026-01-11T23:38:00.289600+00:00"
         }
       ]
     },
@@ -756,6 +758,6 @@
   ],
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-01-11T23:26:42.949Z",
-  "last_updated": "2026-01-11T23:26:17.203740+00:00"
+  "updated_at": "2026-01-11T23:38:21.708Z",
+  "last_updated": "2026-01-11T23:38:00.289617+00:00"
 }
