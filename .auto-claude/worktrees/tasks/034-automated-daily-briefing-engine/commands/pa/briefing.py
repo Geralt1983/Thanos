@@ -24,6 +24,7 @@ from typing import Optional, Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from Tools.briefing_engine import BriefingEngine
+from Tools.delivery_channels import deliver_to_channels
 
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
@@ -212,24 +213,54 @@ def generate_briefing(
         print(f"\n❌ Error rendering briefing: {e}")
         return 1
 
-    # Print briefing
+    # Print briefing (CLI output is always shown)
     print(briefing)
     print("\n" + "-" * 60)
 
-    # Save to file if not dry run
+    # Deliver to configured channels if not dry run
     if not dry_run:
         try:
-            output_dir = config.get('delivery', {}).get('file', {}).get('output_dir')
-            if output_dir:
-                output_dir = project_root / output_dir
-            else:
-                output_dir = None
+            # Get delivery configuration
+            delivery_config = config.get('delivery', {})
 
-            file_path = save_to_file(briefing, briefing_type, output_dir)
-            print(f"💾 Saved to: {file_path}")
-            logger.info(f"Briefing saved to {file_path}")
+            # Filter to only file channel (CLI already displayed above)
+            channels_config = {}
+            if delivery_config.get('file', {}).get('enabled', True):
+                channels_config['file'] = delivery_config.get('file', {
+                    'output_dir': 'History/DailyBriefings',
+                    'filename_pattern': '{date}_{type}_briefing.md'
+                })
+
+            # Deliver to channels
+            if channels_config:
+                metadata = {
+                    'date': datetime.now().strftime('%Y-%m-%d')
+                }
+
+                results = deliver_to_channels(
+                    content=briefing,
+                    briefing_type=briefing_type,
+                    channels_config=channels_config,
+                    metadata=metadata
+                )
+
+                # Check file delivery result
+                if results.get('file', False):
+                    output_dir = channels_config['file'].get('output_dir', 'History/DailyBriefings')
+                    filename_pattern = channels_config['file'].get('filename_pattern', '{date}_{type}_briefing.md')
+                    filename = filename_pattern.format(
+                        date=metadata['date'],
+                        type=briefing_type
+                    )
+                    file_path = Path(output_dir) / filename
+                    print(f"💾 Saved to: {file_path}")
+                    logger.info(f"Briefing saved to {file_path}")
+                else:
+                    logger.warning("File delivery failed")
+                    print(f"\n⚠️  Warning: Failed to save briefing to file")
+
         except Exception as e:
-            logger.error(f"Failed to save briefing: {e}")
+            logger.error(f"Failed to deliver briefing: {e}")
             print(f"\n⚠️  Warning: Failed to save briefing to file: {e}")
             # Don't return error code since briefing was generated successfully
     else:

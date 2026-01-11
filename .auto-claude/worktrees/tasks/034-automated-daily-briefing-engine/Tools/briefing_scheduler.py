@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from Tools.briefing_engine import BriefingEngine
 from Tools.config_validator import ConfigValidator
+from Tools.delivery_channels import deliver_to_channels
 
 
 class BriefingScheduler:
@@ -277,63 +278,53 @@ class BriefingScheduler:
 
     def _deliver_briefing(self, briefing_type: str, content: str, channels: List[str]):
         """
-        Deliver briefing via configured channels.
+        Deliver briefing via configured channels using the DeliveryChannel abstraction.
 
         Args:
-            briefing_type: Type of briefing
-            content: Briefing content
-            channels: List of delivery channels
+            briefing_type: Type of briefing (morning, evening, etc.)
+            content: Briefing content to deliver
+            channels: List of delivery channel types to use
         """
         delivery_config = self.config.get("delivery", {})
 
+        # Filter delivery config to only include requested channels
+        channels_config = {}
         for channel in channels:
-            try:
-                if channel == "cli" and delivery_config.get("cli", {}).get("enabled", True):
-                    self._deliver_cli(briefing_type, content, delivery_config.get("cli", {}))
-                elif channel == "file" and delivery_config.get("file", {}).get("enabled", True):
-                    self._deliver_file(briefing_type, content, delivery_config.get("file", {}))
-                elif channel == "notification" and delivery_config.get("notification", {}).get("enabled", False):
-                    self._deliver_notification(briefing_type, content, delivery_config.get("notification", {}))
+            if channel in delivery_config:
+                channels_config[channel] = delivery_config[channel]
+            else:
+                self.logger.warning(f"Channel '{channel}' not found in delivery config")
+
+        # Prepare metadata for delivery
+        metadata = {
+            'date': date.today().isoformat(),
+            'generated_at': datetime.now().isoformat()
+        }
+
+        # Deliver to all requested channels
+        self.logger.info(f"Delivering {briefing_type} briefing via channels: {', '.join(channels)}")
+
+        try:
+            results = deliver_to_channels(
+                content=content,
+                briefing_type=briefing_type,
+                channels_config=channels_config,
+                metadata=metadata
+            )
+
+            # Log results
+            for channel, success in results.items():
+                if success:
+                    self.logger.info(f"✓ {channel} delivery successful")
                 else:
-                    self.logger.debug(f"Channel '{channel}' not enabled or not supported")
-            except Exception as e:
-                self.logger.error(f"Failed to deliver via {channel}: {e}")
+                    self.logger.error(f"✗ {channel} delivery failed")
 
-    def _deliver_cli(self, briefing_type: str, content: str, config: Dict[str, Any]):
-        """Deliver briefing to CLI (stdout)."""
-        self.logger.info(f"Delivering {briefing_type} briefing to CLI")
-        print(f"\n{'='*80}")
-        print(f"  {briefing_type.upper()} BRIEFING - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        print(f"{'='*80}\n")
-        print(content)
-        print(f"\n{'='*80}\n")
+            # Return overall success (at least one channel succeeded)
+            return any(results.values()) if results else False
 
-    def _deliver_file(self, briefing_type: str, content: str, config: Dict[str, Any]):
-        """Deliver briefing to file."""
-        output_dir = config.get("output_dir", "History/DailyBriefings")
-        filename_pattern = config.get("filename_pattern", "{date}_{type}_briefing.md")
-
-        # Format filename
-        filename = filename_pattern.format(
-            date=date.today().isoformat(),
-            type=briefing_type
-        )
-
-        # Create output directory
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        # Write file
-        file_path = output_path / filename
-        with open(file_path, 'w') as f:
-            f.write(content)
-
-        self.logger.info(f"Saved {briefing_type} briefing to {file_path}")
-
-    def _deliver_notification(self, briefing_type: str, content: str, config: Dict[str, Any]):
-        """Deliver briefing via desktop notification."""
-        # This is a stub for now - will be implemented in Phase 4
-        self.logger.info(f"Notification delivery not yet implemented for {briefing_type}")
+        except Exception as e:
+            self.logger.error(f"Failed to deliver briefing: {e}")
+            return False
 
     def _send_error_notification(self, briefing_type: str, error: str):
         """Send error notification to user."""
