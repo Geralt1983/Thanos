@@ -800,15 +800,19 @@ class Neo4jAdapter(BaseAdapter):
             conditions.append("d.created_at >= datetime() - duration({days: $days})")
             params["days"] = args["days"]
 
-        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        # Build query parts without f-string interpolation
+        query_parts = ["MATCH (d:Decision)"]
 
-        query = f"""
-        MATCH (d:Decision)
-        {where_clause}
-        RETURN d
-        ORDER BY d.created_at DESC
-        LIMIT $limit
-        """
+        if conditions:
+            query_parts.append("WHERE " + " AND ".join(conditions))
+
+        query_parts.extend([
+            "RETURN d",
+            "ORDER BY d.created_at DESC",
+            "LIMIT $limit"
+        ])
+
+        query = "\n".join(query_parts)
 
         if session is not None:
             # Use provided session/transaction (session reuse)
