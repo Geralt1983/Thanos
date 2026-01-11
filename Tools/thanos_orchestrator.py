@@ -20,10 +20,11 @@ import os
 import re
 import json
 import sys
+import asyncio
 from pathlib import Path
 from typing import Optional, Dict, List, Any, TYPE_CHECKING, Union
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Ensure Thanos project is in path for imports BEFORE importing from Tools
 _THANOS_DIR = Path(__file__).parent.parent
@@ -170,6 +171,11 @@ class ThanosOrchestrator:
         # Initialize intent matcher with pre-compiled patterns (lazy initialization)
         self._intent_matcher: Optional[Union[KeywordMatcher, TrieKeywordMatcher]] = None
 
+        # Lazy initialization for calendar adapter
+        self._calendar_adapter = None
+        self._calendar_context_cache: Optional[Dict[str, Any]] = None
+        self._calendar_cache_time: Optional[datetime] = None
+
     def _load_agents(self):
         """Load all agent definitions."""
         agents_dir = self.base_dir / "Agents"
@@ -210,6 +216,240 @@ class ThanosOrchestrator:
                     self.context[file.stem] = file.read_text()
                 except Exception as e:
                     print(f"Warning: Failed to load context {file}: {e}")
+
+    def _get_calendar_adapter(self):
+        """Lazy load the calendar adapter."""
+        if self._calendar_adapter is None:
+            try:
+                from Tools.adapters import GoogleCalendarAdapter, GOOGLE_CALENDAR_AVAILABLE
+
+                if not GOOGLE_CALENDAR_AVAILABLE:
+                    return None
+
+                self._calendar_adapter = GoogleCalendarAdapter()
+
+                # Check if authenticated
+                if not self._calendar_adapter.is_authenticated():
+                    return None
+
+            except Exception as e:
+                log_error("thanos_orchestrator", e, "Failed to initialize calendar adapter")
+                return None
+
+        return self._calendar_adapter
+
+    async def _fetch_calendar_context_async(self, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+        """Fetch calendar context asynchronously with caching.
+
+        Args:
+            force_refresh: If True, bypass cache and fetch fresh data
+
+        Returns:
+            Dictionary with calendar context including:
+            - events: List of today's events
+            - summary: Human-readable calendar summary
+            - next_event: Details of next upcoming event
+            - free_until: Next busy period
+        """
+        # Check cache (5 minute TTL)
+        if not force_refresh and self._calendar_context_cache is not None:
+            if self._calendar_cache_time and (datetime.now() - self._calendar_cache_time).seconds < 300:
+                return self._calendar_context_cache
+
+        adapter = self._get_calendar_adapter()
+        if adapter is None:
+            return None
+
+        try:
+            # Fetch today's events
+            result = await adapter.call_tool("get_today_events", {})
+
+            if not result.success:
+                return None
+
+            events = result.data.get("events", [])
+
+            # Generate summary
+            summary_result = await adapter.call_tool("generate_calendar_summary", {
+                "date": datetime.now().strftime("%Y-%m-%d")
+            })
+
+            summary = summary_result.data.get("summary", "") if summary_result.success else ""
+
+            # Find next event
+            now = datetime.now()
+            next_event = None
+            for event in events:
+                event_start_str = event.get("start", {}).get("dateTime")
+                if event_start_str:
+                    try:
+                        event_start = datetime.fromisoformat(event_start_str.replace("Z", "+00:00"))
+                        # Convert to naive datetime for comparison if it's aware
+                        if event_start.tzinfo is not None:
+                            event_start = event_start.replace(tzinfo=None)
+                        if event_start > now:
+                            next_event = event
+                            break
+                    except (ValueError, AttributeError):
+                        continue
+
+            # Calculate free until
+            free_until = None
+            if next_event:
+                event_start_str = next_event.get("start", {}).get("dateTime")
+                if event_start_str:
+                    try:
+                        free_until = datetime.fromisoformat(event_start_str.replace("Z", "+00:00"))
+                        if free_until.tzinfo is not None:
+                            free_until = free_until.replace(tzinfo=None)
+                    except (ValueError, AttributeError):
+                        pass
+
+            context = {
+                "events": events,
+                "summary": summary,
+                "next_event": next_event,
+                "free_until": free_until,
+                "event_count": len(events)
+            }
+
+            # Cache result
+            self._calendar_context_cache = context
+            self._calendar_cache_time = datetime.now()
+
+            return context
+
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to fetch calendar context")
+            return None
+
+    def _get_calendar_context(self, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+        """Synchronous wrapper for fetching calendar context.
+
+        Args:
+            force_refresh: If True, bypass cache and fetch fresh data
+
+        Returns:
+            Dictionary with calendar context or None if unavailable
+        """
+        try:
+            # Try to get existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're in an async context, we can't use asyncio.run()
+                # Return cached data or None
+                return self._calendar_context_cache
+            else:
+                return asyncio.run(self._fetch_calendar_context_async(force_refresh))
+        except RuntimeError:
+            # No event loop, create one
+            return asyncio.run(self._fetch_calendar_context_async(force_refresh))
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to get calendar context")
+            return None
+
+    async def _check_time_conflict_async(self, start_time: datetime, end_time: datetime) -> Dict[str, Any]:
+        """Check if a time slot conflicts with calendar events.
+
+        Args:
+            start_time: Proposed start time
+            end_time: Proposed end time
+
+        Returns:
+            Dictionary with:
+            - has_conflict: Boolean
+            - conflicts: List of conflicting events
+            - message: Human-readable conflict description
+        """
+        adapter = self._get_calendar_adapter()
+        if adapter is None:
+            return {
+                "has_conflict": False,
+                "conflicts": [],
+                "message": "Calendar not available"
+            }
+
+        try:
+            result = await adapter.call_tool("check_conflicts", {
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat()
+            })
+
+            if not result.success:
+                return {
+                    "has_conflict": False,
+                    "conflicts": [],
+                    "message": "Unable to check conflicts"
+                }
+
+            return result.data
+
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to check time conflict")
+            return {
+                "has_conflict": False,
+                "conflicts": [],
+                "message": f"Error checking conflicts: {str(e)}"
+            }
+
+    def check_time_conflict(self, start_time: datetime, end_time: datetime) -> Dict[str, Any]:
+        """Synchronous wrapper for checking time conflicts.
+
+        Args:
+            start_time: Proposed start time
+            end_time: Proposed end time
+
+        Returns:
+            Dictionary with conflict information
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Return a simple check based on cached context
+                context = self._calendar_context_cache
+                if context is None:
+                    return {
+                        "has_conflict": False,
+                        "conflicts": [],
+                        "message": "Calendar not available"
+                    }
+
+                conflicts = []
+                for event in context.get("events", []):
+                    event_start_str = event.get("start", {}).get("dateTime")
+                    event_end_str = event.get("end", {}).get("dateTime")
+                    if event_start_str and event_end_str:
+                        try:
+                            event_start = datetime.fromisoformat(event_start_str.replace("Z", "+00:00"))
+                            event_end = datetime.fromisoformat(event_end_str.replace("Z", "+00:00"))
+                            # Convert to naive if aware
+                            if event_start.tzinfo is not None:
+                                event_start = event_start.replace(tzinfo=None)
+                            if event_end.tzinfo is not None:
+                                event_end = event_end.replace(tzinfo=None)
+
+                            # Check overlap
+                            if start_time < event_end and end_time > event_start:
+                                conflicts.append(event)
+                        except (ValueError, AttributeError):
+                            continue
+
+                return {
+                    "has_conflict": len(conflicts) > 0,
+                    "conflicts": conflicts,
+                    "message": f"Found {len(conflicts)} conflict(s)" if conflicts else "No conflicts"
+                }
+            else:
+                return asyncio.run(self._check_time_conflict_async(start_time, end_time))
+        except RuntimeError:
+            return asyncio.run(self._check_time_conflict_async(start_time, end_time))
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to check time conflict")
+            return {
+                "has_conflict": False,
+                "conflicts": [],
+                "message": f"Error: {str(e)}"
+            }
 
     def _get_intent_matcher(self) -> Union[KeywordMatcher, TrieKeywordMatcher]:
         """Get or create the cached intent matcher with pre-compiled patterns.
@@ -375,6 +615,46 @@ You track patterns and surface them.""")
             except Exception as e:
                 # Unexpected errors should be logged
                 log_error("thanos_orchestrator", e, "Unexpected error reading Today.md")
+
+        # Add calendar context (if available)
+        if include_context:
+            calendar_context = self._get_calendar_context()
+            if calendar_context:
+                parts.append("\n## Calendar Context")
+
+                # Add summary
+                if calendar_context.get("summary"):
+                    parts.append(calendar_context["summary"])
+
+                # Add next event info
+                if calendar_context.get("next_event"):
+                    next_event = calendar_context["next_event"]
+                    event_title = next_event.get("summary", "Untitled Event")
+                    event_start = next_event.get("start", {}).get("dateTime", "")
+                    if event_start:
+                        try:
+                            start_time = datetime.fromisoformat(event_start.replace("Z", "+00:00"))
+                            if start_time.tzinfo is not None:
+                                start_time = start_time.replace(tzinfo=None)
+                            time_str = start_time.strftime("%I:%M %p")
+                            parts.append(f"Next event: {event_title} at {time_str}")
+                        except (ValueError, AttributeError):
+                            parts.append(f"Next event: {event_title}")
+
+                # Add availability note
+                if calendar_context.get("free_until"):
+                    free_until = calendar_context["free_until"]
+                    now = datetime.now()
+                    time_diff = (free_until - now).total_seconds() / 60  # minutes
+                    if time_diff > 0:
+                        if time_diff < 60:
+                            parts.append(f"You have {int(time_diff)} minutes until the next commitment.")
+                        else:
+                            hours = int(time_diff / 60)
+                            parts.append(f"You have {hours} hour{'s' if hours > 1 else ''} until the next commitment.")
+
+                # Note for scheduling
+                parts.append("\nWhen suggesting task timing or scheduling, check for calendar conflicts and prefer free blocks.")
 
         return "\n\n".join(parts)
 
