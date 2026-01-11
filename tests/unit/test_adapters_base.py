@@ -5,20 +5,23 @@ Unit tests for Tools/adapters/base.py
 Tests the ToolResult dataclass and BaseAdapter abstract base class.
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, Mock
 import sys
+from unittest.mock import Mock
+
+import pytest
+
 
 # Mock asyncpg before importing adapters (it may not be installed in test env)
-sys.modules['asyncpg'] = Mock()
+sys.modules["asyncpg"] = Mock()
 
-from Tools.adapters.base import ToolResult, BaseAdapter
+from Tools.adapters.base import BaseAdapter, ToolResult
 
 
 # ========================================================================
 # ToolResult Tests
 # ========================================================================
+
 
 class TestToolResult:
     """Test ToolResult dataclass"""
@@ -109,7 +112,7 @@ class TestToolResult:
             "list": [1, 2, 3],
             "nested": {"a": {"b": "c"}},
             "none_value": None,
-            "boolean": True
+            "boolean": True,
         }
         result = ToolResult.ok(complex_data)
         assert result.data == complex_data
@@ -125,6 +128,7 @@ class TestToolResult:
 # BaseAdapter Tests
 # ========================================================================
 
+
 class ConcreteAdapter(BaseAdapter):
     """Concrete implementation for testing BaseAdapter"""
 
@@ -136,14 +140,14 @@ class ConcreteAdapter(BaseAdapter):
                 "description": "A test tool",
                 "parameters": {
                     "param1": {"type": "string", "required": True},
-                    "param2": {"type": "integer", "required": False}
-                }
+                    "param2": {"type": "integer", "required": False},
+                },
             },
             {
                 "name": "simple_tool",
                 "description": "A simple tool with no required params",
-                "parameters": {}
-            }
+                "parameters": {},
+            },
         ]
 
     @property
@@ -287,6 +291,7 @@ class TestBaseAdapterEdgeCases:
 
     def test_empty_tools_list(self):
         """Test adapter with no tools"""
+
         class EmptyAdapter(BaseAdapter):
             @property
             def name(self):
@@ -304,19 +309,22 @@ class TestBaseAdapterEdgeCases:
 
     def test_tool_without_required_field(self):
         """Test validation when parameter spec lacks 'required' field"""
+
         class SimpleAdapter(BaseAdapter):
             @property
             def name(self):
                 return "simple"
 
             def list_tools(self):
-                return [{
-                    "name": "tool1",
-                    "description": "test",
-                    "parameters": {
-                        "param": {"type": "string"}  # No 'required' field
+                return [
+                    {
+                        "name": "tool1",
+                        "description": "test",
+                        "parameters": {
+                            "param": {"type": "string"}  # No 'required' field
+                        },
                     }
-                }]
+                ]
 
             async def call_tool(self, tool_name, arguments):
                 return ToolResult.ok({})

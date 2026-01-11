@@ -14,11 +14,12 @@ Tests cover:
 - Graceful fallback when backends unavailable
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch, AsyncMock
-from dataclasses import dataclass
-import sys
 from pathlib import Path
+import sys
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -28,12 +29,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 # Test MemoryResult Dataclass
 # ========================================================================
 
+
 class TestMemoryResult:
     """Test MemoryResult dataclass."""
 
     def test_import_memory_result(self):
         """Test MemoryResult can be imported."""
         from Tools.memos import MemoryResult
+
         assert MemoryResult is not None
 
     def test_memory_result_ok(self):
@@ -43,7 +46,7 @@ class TestMemoryResult:
         result = MemoryResult.ok(
             graph_results=[{"id": "test1"}],
             vector_results=[{"content": "test"}],
-            query="test query"
+            query="test query",
         )
 
         assert result.success is True
@@ -84,12 +87,13 @@ class TestMemoryResult:
 # Test MemOS Initialization
 # ========================================================================
 
+
 class TestMemOSInitialization:
     """Test MemOS class initialization."""
 
-    @patch('Tools.memos.NEO4J_AVAILABLE', False)
-    @patch('Tools.memos.CHROMA_AVAILABLE', False)
-    @patch('Tools.memos.OPENAI_AVAILABLE', False)
+    @patch("Tools.memos.NEO4J_AVAILABLE", False)
+    @patch("Tools.memos.CHROMA_AVAILABLE", False)
+    @patch("Tools.memos.OPENAI_AVAILABLE", False)
     def test_init_no_backends(self):
         """Test initialization when no backends are available."""
         from Tools.memos import MemOS
@@ -99,18 +103,18 @@ class TestMemOSInitialization:
         assert memos.graph_available is False
         assert memos.vector_available is False
 
-    @patch('Tools.memos.NEO4J_AVAILABLE', False)
-    @patch('Tools.memos.CHROMA_AVAILABLE', True)
-    @patch('Tools.memos.OPENAI_AVAILABLE', False)
+    @patch("Tools.memos.NEO4J_AVAILABLE", False)
+    @patch("Tools.memos.CHROMA_AVAILABLE", True)
+    @patch("Tools.memos.OPENAI_AVAILABLE", False)
     def test_init_chroma_only(self):
         """Test initialization with only ChromaDB available."""
         from Tools.memos import MemOS
 
         # Mock ChromaDB
         mock_chroma_client = Mock()
-        with patch('Tools.memos.ChromaClient', return_value=mock_chroma_client):
-            with patch('Tools.memos.Settings'):
-                with patch('pathlib.Path.mkdir'):
+        with patch("Tools.memos.ChromaClient", return_value=mock_chroma_client):
+            with patch("Tools.memos.Settings"):
+                with patch("pathlib.Path.mkdir"):
                     memos = MemOS()
 
                     assert memos.graph_available is False
@@ -120,9 +124,9 @@ class TestMemOSInitialization:
         """Test status property returns backend states."""
         from Tools.memos import MemOS
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     status = memos.status
 
@@ -135,6 +139,7 @@ class TestMemOSInitialization:
 # Test MemOS Remember Operation
 # ========================================================================
 
+
 class TestMemOSRemember:
     """Test MemOS.remember() method."""
 
@@ -143,15 +148,14 @@ class TestMemOSRemember:
         """Create MemOS with mocked backends."""
         from Tools.memos import MemOS
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', True):
-            with patch('Tools.memos.CHROMA_AVAILABLE', True):
-                with patch('Tools.memos.OPENAI_AVAILABLE', True):
+        with patch("Tools.memos.NEO4J_AVAILABLE", True):
+            with patch("Tools.memos.CHROMA_AVAILABLE", True):
+                with patch("Tools.memos.OPENAI_AVAILABLE", True):
                     # Mock Neo4j
                     mock_neo4j = AsyncMock()
-                    mock_neo4j.call_tool = AsyncMock(return_value=Mock(
-                        success=True,
-                        data={"id": "neo4j_123"}
-                    ))
+                    mock_neo4j.call_tool = AsyncMock(
+                        return_value=Mock(success=True, data={"id": "neo4j_123"})
+                    )
 
                     # Mock ChromaDB
                     mock_chroma = Mock()
@@ -164,11 +168,13 @@ class TestMemOSRemember:
                     mock_embedding_response.data = [Mock(embedding=[0.1] * 1536)]
                     mock_openai.embeddings.create = Mock(return_value=mock_embedding_response)
 
-                    with patch('Tools.memos.Neo4jAdapter', return_value=mock_neo4j):
-                        with patch('Tools.memos.ChromaClient', return_value=mock_chroma):
-                            with patch('Tools.memos.Settings'):
-                                with patch('pathlib.Path.mkdir'):
-                                    with patch('Tools.memos.openai.OpenAI', return_value=mock_openai):
+                    with patch("Tools.memos.Neo4jAdapter", return_value=mock_neo4j):
+                        with patch("Tools.memos.ChromaClient", return_value=mock_chroma):
+                            with patch("Tools.memos.Settings"):
+                                with patch("pathlib.Path.mkdir"):
+                                    with patch(
+                                        "Tools.memos.openai.OpenAI", return_value=mock_openai
+                                    ):
                                         memos = MemOS()
                                         memos._neo4j = mock_neo4j
                                         memos._chroma = mock_chroma
@@ -184,7 +190,7 @@ class TestMemOSRemember:
             content="Complete project proposal",
             memory_type="commitment",
             domain="work",
-            metadata={"to_whom": "client", "priority": 1}
+            metadata={"to_whom": "client", "priority": 1},
         )
 
         assert result.success is True
@@ -202,7 +208,7 @@ class TestMemOSRemember:
             content="Chose React over Vue",
             memory_type="decision",
             domain="work",
-            metadata={"rationale": "Team expertise", "confidence": 0.9}
+            metadata={"rationale": "Team expertise", "confidence": 0.9},
         )
 
         assert result.success is True
@@ -219,7 +225,7 @@ class TestMemOSRemember:
             content="Energy crashes after lunch meetings",
             memory_type="pattern",
             domain="health",
-            metadata={"pattern_type": "behavior", "frequency": "weekly"}
+            metadata={"pattern_type": "behavior", "frequency": "weekly"},
         )
 
         assert result.success is True
@@ -235,13 +241,14 @@ class TestMemOSRemember:
         result = await memos.remember(
             content="Meeting scheduled with client",
             memory_type="observation",
-            entities=["Memphis", "John Smith"]
+            entities=["Memphis", "John Smith"],
         )
 
         assert result.success is True
         # Should have called create_entity for each entity
-        entity_calls = [c for c in mock_neo4j.call_tool.call_args_list
-                        if c[0][0] == "create_entity"]
+        entity_calls = [
+            c for c in mock_neo4j.call_tool.call_args_list if c[0][0] == "create_entity"
+        ]
         # Note: entities are only linked if graph result has an ID
 
     @pytest.mark.asyncio
@@ -249,9 +256,9 @@ class TestMemOSRemember:
         """Test remember fails gracefully when no backends available."""
         from Tools.memos import MemOS
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     result = await memos.remember("Test content")
 
@@ -263,6 +270,7 @@ class TestMemOSRemember:
 # Test MemOS Recall Operation
 # ========================================================================
 
+
 class TestMemOSRecall:
     """Test MemOS.recall() method."""
 
@@ -272,19 +280,22 @@ class TestMemOSRecall:
         from Tools.memos import MemOS
 
         mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(return_value=Mock(
-            success=True,
-            data={"commitments": [{"id": "c1", "content": "Test commitment"}]}
-        ))
+        mock_neo4j.call_tool = AsyncMock(
+            return_value=Mock(
+                success=True, data={"commitments": [{"id": "c1", "content": "Test commitment"}]}
+            )
+        )
 
         mock_chroma = Mock()
         mock_collection = Mock()
-        mock_collection.query = Mock(return_value={
-            "ids": [["v1"]],
-            "documents": [["Test document"]],
-            "metadatas": [[{"domain": "work"}]],
-            "distances": [[0.1]]
-        })
+        mock_collection.query = Mock(
+            return_value={
+                "ids": [["v1"]],
+                "documents": [["Test document"]],
+                "metadatas": [[{"domain": "work"}]],
+                "distances": [[0.1]],
+            }
+        )
         mock_chroma.get_collection = Mock(return_value=mock_collection)
 
         mock_openai = Mock()
@@ -298,9 +309,9 @@ class TestMemOSRecall:
         memos._openai_client = mock_openai
 
         # Create actual MemOS instance for testing
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     actual_memos = MemOS()
                     actual_memos._neo4j = mock_neo4j
                     actual_memos._chroma = mock_chroma
@@ -316,8 +327,7 @@ class TestMemOSRecall:
 
         assert result.success is True
         # Should have queried Neo4j for commitments
-        neo4j_calls = [c for c in mock_neo4j.call_tool.call_args_list
-                       if "commitments" in str(c)]
+        neo4j_calls = [c for c in mock_neo4j.call_tool.call_args_list if "commitments" in str(c)]
 
     @pytest.mark.asyncio
     async def test_recall_with_domain_filter(self, memos_with_mocks):
@@ -325,9 +335,7 @@ class TestMemOSRecall:
         memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
 
         result = await memos.recall(
-            "What decisions did I make?",
-            domain="work",
-            memory_types=["decision"]
+            "What decisions did I make?", domain="work", memory_types=["decision"]
         )
 
         assert result.success is True
@@ -338,9 +346,7 @@ class TestMemOSRecall:
         memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
 
         result = await memos.recall(
-            "Show my commitments",
-            use_vector=False,
-            memory_types=["commitment"]
+            "Show my commitments", use_vector=False, memory_types=["commitment"]
         )
 
         assert result.success is True
@@ -352,10 +358,7 @@ class TestMemOSRecall:
         """Test recall using only vector search."""
         memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
 
-        result = await memos.recall(
-            "Find similar patterns",
-            use_graph=False
-        )
+        result = await memos.recall("Find similar patterns", use_graph=False)
 
         assert result.success is True
 
@@ -363,6 +366,7 @@ class TestMemOSRecall:
 # ========================================================================
 # Test MemOS Relate Operation
 # ========================================================================
+
 
 class TestMemOSRelate:
     """Test MemOS.relate() method."""
@@ -372,9 +376,9 @@ class TestMemOSRelate:
         """Test relate requires Neo4j."""
         from Tools.memos import MemOS
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     result = await memos.relate("node1", "LEADS_TO", "node2")
 
@@ -387,14 +391,13 @@ class TestMemOSRelate:
         from Tools.memos import MemOS
 
         mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(return_value=Mock(
-            success=True,
-            data={"relationship_id": "rel_123"}
-        ))
+        mock_neo4j.call_tool = AsyncMock(
+            return_value=Mock(success=True, data={"relationship_id": "rel_123"})
+        )
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     memos._neo4j = mock_neo4j
 
@@ -402,7 +405,7 @@ class TestMemOSRelate:
                         from_id="decision_1",
                         relationship="LEADS_TO",
                         to_id="outcome_1",
-                        properties={"strength": 0.8}
+                        properties={"strength": 0.8},
                     )
 
                     assert result.success is True
@@ -415,6 +418,7 @@ class TestMemOSRelate:
 # Test MemOS Reflect Operation
 # ========================================================================
 
+
 class TestMemOSReflect:
     """Test MemOS.reflect() method."""
 
@@ -424,23 +428,25 @@ class TestMemOSReflect:
         from Tools.memos import MemOS
 
         mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(return_value=Mock(
-            success=True,
-            data={"patterns": [
-                {"description": "Energy drops after meetings", "frequency": "weekly"}
-            ]}
-        ))
+        mock_neo4j.call_tool = AsyncMock(
+            return_value=Mock(
+                success=True,
+                data={
+                    "patterns": [
+                        {"description": "Energy drops after meetings", "frequency": "weekly"}
+                    ]
+                },
+            )
+        )
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     memos._neo4j = mock_neo4j
 
                     result = await memos.reflect(
-                        topic="energy management",
-                        timeframe_days=30,
-                        domain="health"
+                        topic="energy management", timeframe_days=30, domain="health"
                     )
 
                     assert result.success is True
@@ -451,6 +457,7 @@ class TestMemOSReflect:
 # Test MemOS Entity Context
 # ========================================================================
 
+
 class TestMemOSEntityContext:
     """Test MemOS.get_entity_context() method."""
 
@@ -459,9 +466,9 @@ class TestMemOSEntityContext:
         """Test entity context requires Neo4j."""
         from Tools.memos import MemOS
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     result = await memos.get_entity_context("Memphis")
 
@@ -474,18 +481,20 @@ class TestMemOSEntityContext:
         from Tools.memos import MemOS
 
         mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(return_value=Mock(
-            success=True,
-            data={
-                "entity": "Memphis",
-                "commitments": ["Complete integration"],
-                "last_contact": "2024-01-15"
-            }
-        ))
+        mock_neo4j.call_tool = AsyncMock(
+            return_value=Mock(
+                success=True,
+                data={
+                    "entity": "Memphis",
+                    "commitments": ["Complete integration"],
+                    "last_contact": "2024-01-15",
+                },
+            )
+        )
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     memos._neo4j = mock_neo4j
 
@@ -498,6 +507,7 @@ class TestMemOSEntityContext:
 # Test MemOS Health Check
 # ========================================================================
 
+
 class TestMemOSHealthCheck:
     """Test MemOS.health_check() method."""
 
@@ -506,9 +516,9 @@ class TestMemOSHealthCheck:
         """Test health check when no backends configured."""
         from Tools.memos import MemOS
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     health = await memos.health_check()
 
@@ -522,14 +532,11 @@ class TestMemOSHealthCheck:
         from Tools.memos import MemOS
 
         mock_neo4j = AsyncMock()
-        mock_neo4j.health_check = AsyncMock(return_value=Mock(
-            success=True,
-            error=None
-        ))
+        mock_neo4j.health_check = AsyncMock(return_value=Mock(success=True, error=None))
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     memos._neo4j = mock_neo4j
 
@@ -545,9 +552,9 @@ class TestMemOSHealthCheck:
         mock_chroma = Mock()
         mock_chroma.list_collections = Mock(return_value=[Mock(), Mock()])
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     memos._chroma = mock_chroma
 
@@ -561,6 +568,7 @@ class TestMemOSHealthCheck:
 # Test Singleton Functions
 # ========================================================================
 
+
 class TestMemOSSingleton:
     """Test MemOS singleton functions."""
 
@@ -571,9 +579,9 @@ class TestMemOSSingleton:
         # Reset singleton
         memos_module._memos_instance = None
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     instance1 = memos_module.get_memos()
                     instance2 = memos_module.get_memos()
 
@@ -587,10 +595,10 @@ class TestMemOSSingleton:
         # Reset singleton
         memos_module._memos_instance = None
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
-                    with patch('builtins.print'):  # Suppress output
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
+                    with patch("builtins.print"):  # Suppress output
                         instance = await memos_module.init_memos()
                         assert instance is not None
 
@@ -598,6 +606,7 @@ class TestMemOSSingleton:
 # ========================================================================
 # Test MemOS Close
 # ========================================================================
+
 
 class TestMemOSClose:
     """Test MemOS.close() method."""
@@ -610,9 +619,9 @@ class TestMemOSClose:
         mock_neo4j = AsyncMock()
         mock_neo4j.close = AsyncMock()
 
-        with patch('Tools.memos.NEO4J_AVAILABLE', False):
-            with patch('Tools.memos.CHROMA_AVAILABLE', False):
-                with patch('Tools.memos.OPENAI_AVAILABLE', False):
+        with patch("Tools.memos.NEO4J_AVAILABLE", False):
+            with patch("Tools.memos.CHROMA_AVAILABLE", False):
+                with patch("Tools.memos.OPENAI_AVAILABLE", False):
                     memos = MemOS()
                     memos._neo4j = mock_neo4j
 

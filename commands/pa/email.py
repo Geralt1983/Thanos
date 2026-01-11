@@ -14,10 +14,11 @@ Actions:
 Model: gpt-4o-mini (simple task - cost effective)
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+import sys
 from typing import Optional
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -57,7 +58,7 @@ def build_context() -> str:
     # Email context file (if exists)
     email_context = project_root / "State" / "email_context.md"
     if email_context.exists():
-        with open(email_context, 'r') as f:
+        with open(email_context) as f:
             context_parts.append(f"## Recent Email Context\n{f.read()}")
 
     # Client information
@@ -81,7 +82,7 @@ def save_to_history(action: str, response: str):
     timestamp = datetime.now()
     filename = f"email_{action}_{timestamp.strftime('%Y-%m-%d_%H%M')}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Email {action.title()} - {timestamp.strftime('%B %d, %Y %I:%M %p')}\n\n")
         f.write(response)
 
@@ -170,10 +171,7 @@ What would you like to do?
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)

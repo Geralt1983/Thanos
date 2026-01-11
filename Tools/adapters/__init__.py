@@ -24,16 +24,18 @@ Usage:
         await manager.close_all()
 """
 
-from typing import Dict, Any, List, Optional
 import logging
+from typing import Any, Optional
 
 from .base import BaseAdapter, ToolResult
-from .workos import WorkOSAdapter
 from .oura import OuraAdapter
+from .workos import WorkOSAdapter
+
 
 # Conditional Neo4j import (requires neo4j package)
 try:
     from .neo4j_adapter import Neo4jAdapter
+
     NEO4J_AVAILABLE = True
 except ImportError:
     Neo4jAdapter = None
@@ -42,22 +44,23 @@ except ImportError:
 # Conditional ChromaDB import (requires chromadb package)
 try:
     from .chroma_adapter import ChromaAdapter
+
     CHROMADB_AVAILABLE = True
 except ImportError:
     ChromaAdapter = None
     CHROMADB_AVAILABLE = False
 
 __all__ = [
-    'BaseAdapter',
-    'ToolResult',
-    'WorkOSAdapter',
-    'OuraAdapter',
-    'Neo4jAdapter',
-    'ChromaAdapter',
-    'AdapterManager',
-    'get_default_manager',
-    'NEO4J_AVAILABLE',
-    'CHROMADB_AVAILABLE',
+    "BaseAdapter",
+    "ToolResult",
+    "WorkOSAdapter",
+    "OuraAdapter",
+    "Neo4jAdapter",
+    "ChromaAdapter",
+    "AdapterManager",
+    "get_default_manager",
+    "NEO4J_AVAILABLE",
+    "CHROMADB_AVAILABLE",
 ]
 
 logger = logging.getLogger(__name__)
@@ -70,8 +73,8 @@ class AdapterManager:
     """
 
     def __init__(self):
-        self._adapters: Dict[str, BaseAdapter] = {}
-        self._tool_map: Dict[str, str] = {}  # tool_name -> adapter_name
+        self._adapters: dict[str, BaseAdapter] = {}
+        self._tool_map: dict[str, str] = {}  # tool_name -> adapter_name
         self._initialized = False
 
     def register(self, adapter: BaseAdapter) -> None:
@@ -84,7 +87,7 @@ class AdapterManager:
         self._adapters[adapter.name] = adapter
 
         for tool in adapter.list_tools():
-            tool_name = tool['name']
+            tool_name = tool["name"]
 
             # Always register with adapter prefix (e.g., "workos.get_tasks")
             full_name = f"{adapter.name}.{tool_name}"
@@ -105,7 +108,7 @@ class AdapterManager:
 
         logger.debug(f"Registered adapter '{adapter.name}' with {len(adapter.list_tools())} tools")
 
-    def list_adapters(self) -> List[str]:
+    def list_adapters(self) -> list[str]:
         """Return list of registered adapter names."""
         return list(self._adapters.keys())
 
@@ -113,19 +116,16 @@ class AdapterManager:
         """Get a specific adapter by name."""
         return self._adapters.get(name)
 
-    def list_all_tools(self) -> Dict[str, List[Dict[str, Any]]]:
+    def list_all_tools(self) -> dict[str, list[dict[str, Any]]]:
         """
         List all available tools grouped by adapter.
 
         Returns:
             Dict mapping adapter name to list of tool schemas
         """
-        return {
-            name: adapter.list_tools()
-            for name, adapter in self._adapters.items()
-        }
+        return {name: adapter.list_tools() for name, adapter in self._adapters.items()}
 
-    def list_tools_flat(self) -> List[Dict[str, Any]]:
+    def list_tools_flat(self) -> list[dict[str, Any]]:
         """
         List all tools as a flat list with adapter prefixes.
 
@@ -136,15 +136,13 @@ class AdapterManager:
         for name, adapter in self._adapters.items():
             for tool in adapter.list_tools():
                 tool_copy = tool.copy()
-                tool_copy['adapter'] = name
-                tool_copy['full_name'] = f"{name}.{tool['name']}"
+                tool_copy["adapter"] = name
+                tool_copy["full_name"] = f"{name}.{tool['name']}"
                 tools.append(tool_copy)
         return tools
 
     async def call_tool(
-        self,
-        tool_name: str,
-        arguments: Optional[Dict[str, Any]] = None
+        self, tool_name: str, arguments: Optional[dict[str, Any]] = None
     ) -> ToolResult:
         """
         Route a tool call to the appropriate adapter.
@@ -159,16 +157,15 @@ class AdapterManager:
         arguments = arguments or {}
 
         # Handle prefixed tool names (e.g., "workos.get_tasks")
-        if '.' in tool_name:
-            adapter_name, short_name = tool_name.split('.', 1)
+        if "." in tool_name:
+            adapter_name, short_name = tool_name.split(".", 1)
             if adapter_name in self._adapters:
                 adapter = self._adapters[adapter_name]
                 logger.debug(f"Calling {adapter_name}.{short_name} with {arguments}")
                 return await adapter.call_tool(short_name, arguments)
             else:
                 return ToolResult.fail(
-                    f"Unknown adapter: {adapter_name}. "
-                    f"Available: {list(self._adapters.keys())}"
+                    f"Unknown adapter: {adapter_name}. Available: {list(self._adapters.keys())}"
                 )
 
         # Try to find adapter for unprefixed tool name
@@ -185,10 +182,7 @@ class AdapterManager:
             f"Available tools: {available_tools[:10]}... ({len(available_tools)} total)"
         )
 
-    async def call_multiple(
-        self,
-        calls: List[Dict[str, Any]]
-    ) -> List[ToolResult]:
+    async def call_multiple(self, calls: list[dict[str, Any]]) -> list[ToolResult]:
         """
         Execute multiple tool calls.
 
@@ -200,13 +194,13 @@ class AdapterManager:
         """
         results = []
         for call in calls:
-            tool_name = call.get('tool')
-            arguments = call.get('arguments', {})
+            tool_name = call.get("tool")
+            arguments = call.get("arguments", {})
             result = await self.call_tool(tool_name, arguments)
             results.append(result)
         return results
 
-    async def health_check_all(self) -> Dict[str, ToolResult]:
+    async def health_check_all(self) -> dict[str, ToolResult]:
         """
         Run health checks on all adapters.
 
