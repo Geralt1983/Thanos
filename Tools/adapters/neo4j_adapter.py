@@ -1239,13 +1239,84 @@ class Neo4jAdapter(BaseAdapter):
     async def _find_related(self, args: Dict[str, Any], session=None) -> ToolResult:
         """Find nodes related to a given node.
 
-        Args:
-            args: Dictionary containing node_id, optional relationship_type, and depth
-            session: Optional Neo4j session or transaction for session reuse
-        """
-        depth = args.get("depth", 2)
-        rel_filter = f":{args['relationship_type']}" if args.get("relationship_type") else ""
+        SECURITY NOTE - Variable Path Length and Relationship Type:
+        This method uses Cypher's variable-length path syntax: -[r*1..N]- where N is the
+        depth parameter. Cypher does not support parameterization of:
+        1. Variable path length quantifiers (the *1..N part)
+        2. Relationship types in the traditional sense
 
+        To prevent injection attacks, this method implements defense-in-depth validation:
+        1. Depth parameter: Validated as integer and bounded to reasonable range (1-10)
+        2. Relationship type: Validated against ValidRelationshipType enum whitelist
+        3. Input normalization: Uppercase and replace spaces with underscores
+        4. Early rejection of invalid inputs with clear error messages
+
+        This validation approach ensures that even though string interpolation is required
+        due to Cypher's limitations, injection attacks are completely prevented through
+        strict input validation and whitelisting.
+
+        Args:
+            args: Dictionary containing:
+                - node_id (str): ID of the node to find relationships for
+                - depth (int, optional): Maximum depth to traverse (default: 2, range: 1-10)
+                - relationship_type (str, optional): Filter by relationship type (validated against whitelist)
+            session: Optional Neo4j session or transaction for session reuse
+
+        Returns:
+            ToolResult with list of related nodes and their relationships on success,
+            error message on validation failure or database errors
+
+        Raises:
+            Returns ToolResult.fail() for:
+                - Invalid depth (not integer or out of bounds)
+                - Invalid relationship type (not in whitelist)
+                - Database errors
+        """
+        # CRITICAL SECURITY VALIDATION - Depth Parameter
+        # Validate depth is an integer and within reasonable bounds
+        depth = args.get("depth", 2)
+
+        # Type validation: ensure depth is an integer (not None, not bool, not other types)
+        # Note: In Python, bool is a subclass of int, so we need to exclude it explicitly
+        if not isinstance(depth, int) or isinstance(depth, bool) or depth is None:
+            return ToolResult.fail(
+                f"Invalid depth parameter: '{depth}'. "
+                f"Depth must be an integer between 1 and 10."
+            )
+
+        # Range validation: ensure depth is within bounds (1-10)
+        if depth < 1 or depth > 10:
+            return ToolResult.fail(
+                f"Invalid depth parameter: {depth}. "
+                f"Depth must be between 1 and 10 (inclusive). "
+                f"Use smaller depths for better performance."
+            )
+
+        # CRITICAL SECURITY VALIDATION - Relationship Type Filter
+        # If relationship_type is provided, validate against whitelist
+        rel_filter = ""
+        if args.get("relationship_type"):
+            # Normalize input: uppercase and replace spaces with underscores
+            # This ensures consistent format matching against our whitelist
+            rel_type = args["relationship_type"].upper().replace(" ", "_")
+
+            # Validate relationship type against strict whitelist using enum
+            # This is our primary defense against Cypher injection since we must
+            # use string interpolation (Cypher limitation - see docstring above)
+            if not ValidRelationshipType.is_valid(rel_type):
+                valid_types = ValidRelationshipType.get_valid_types()
+                return ToolResult.fail(
+                    f"Invalid relationship type '{args['relationship_type']}'. "
+                    f"Relationship type must be one of: {', '.join(valid_types)}. "
+                    f"Normalized value '{rel_type}' was not found in the whitelist."
+                )
+
+            # SECURITY: rel_type is now guaranteed to be from our whitelist enum
+            # Safe to use in query construction via string interpolation
+            rel_filter = f":{rel_type}"
+
+        # SECURITY: Both depth and rel_type (if provided) have been validated
+        # Safe to use in query construction via string interpolation
         query = f"""
         MATCH (n {{id: $node_id}})-[r{rel_filter}*1..{depth}]-(related)
         RETURN DISTINCT related, type(r[0]) as relationship

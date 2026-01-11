@@ -516,3 +516,487 @@ class TestRelationshipValidationEdgeCases:
         result = await adapter._link_nodes(args, session=mock_session)
         assert result.success is False
         assert 'Invalid relationship type' in result.error
+
+
+class TestFindRelatedDepthValidation:
+    """Test depth parameter validation in _find_related method."""
+
+    @pytest.mark.asyncio
+    async def test_valid_depth_values_accepted(self):
+        """Test that valid depth values (1-10) are accepted."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Test all valid depths (1-10)
+        for depth in range(1, 11):
+            args = {'node_id': 'node1', 'depth': depth}
+            result = await adapter._find_related(args)
+            assert result.success is True, f"Valid depth {depth} should be accepted"
+
+    @pytest.mark.asyncio
+    async def test_default_depth_when_not_provided(self):
+        """Test that default depth of 2 is used when not provided."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Call without depth parameter
+        args = {'node_id': 'node1'}
+        result = await adapter._find_related(args)
+
+        assert result.success is True
+        # Verify query was called with depth 2 (default)
+        call_args = mock_session.run.call_args
+        query = call_args[0][0]
+        assert '*1..2' in query
+
+    @pytest.mark.asyncio
+    async def test_depth_below_minimum_rejected(self):
+        """Test that depth values below 1 are rejected."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        invalid_depths = [0, -1, -5, -100]
+
+        for depth in invalid_depths:
+            args = {'node_id': 'node1', 'depth': depth}
+            result = await adapter._find_related(args)
+            assert result.success is False, f"Depth {depth} should be rejected"
+            assert 'Invalid depth parameter' in result.error
+            assert 'must be between 1 and 10' in result.error
+
+    @pytest.mark.asyncio
+    async def test_depth_above_maximum_rejected(self):
+        """Test that depth values above 10 are rejected."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        invalid_depths = [11, 15, 100, 1000]
+
+        for depth in invalid_depths:
+            args = {'node_id': 'node1', 'depth': depth}
+            result = await adapter._find_related(args)
+            assert result.success is False, f"Depth {depth} should be rejected"
+            assert 'Invalid depth parameter' in result.error
+            assert 'must be between 1 and 10' in result.error
+
+    @pytest.mark.asyncio
+    async def test_non_integer_depth_rejected(self):
+        """Test that non-integer depth values are rejected."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        invalid_depths = [
+            '5',           # String
+            5.5,           # Float
+            '10',          # String number
+            None,          # None
+            [5],           # List
+            {'depth': 5},  # Dict
+            True,          # Boolean (subclass of int in Python, but explicitly excluded)
+            False,         # Boolean
+        ]
+
+        for depth in invalid_depths:
+            args = {'node_id': 'node1', 'depth': depth}
+            result = await adapter._find_related(args)
+            assert result.success is False, f"Non-integer depth {depth!r} should be rejected"
+            assert 'Invalid depth parameter' in result.error
+            assert 'must be an integer' in result.error
+
+    @pytest.mark.asyncio
+    async def test_depth_injection_attempts_blocked(self):
+        """Test that injection attempts via depth parameter are blocked."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        injection_attempts = [
+            '5; DROP DATABASE;',
+            '5 OR 1=1',
+            '5) MATCH (n) DETACH DELETE n //',
+            '5..10',
+            '5]',
+        ]
+
+        for injection in injection_attempts:
+            args = {'node_id': 'node1', 'depth': injection}
+            result = await adapter._find_related(args)
+            assert result.success is False, f"Injection attempt {injection!r} should be blocked"
+            assert 'Invalid depth parameter' in result.error
+
+    @pytest.mark.asyncio
+    async def test_depth_error_message_includes_value(self):
+        """Test that error messages include the invalid depth value."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        args = {'node_id': 'node1', 'depth': 100}
+        result = await adapter._find_related(args)
+        assert result.success is False
+        assert '100' in result.error
+
+
+class TestFindRelatedRelationshipTypeValidation:
+    """Test relationship type validation in _find_related method."""
+
+    @pytest.mark.asyncio
+    async def test_valid_relationship_types_accepted(self):
+        """Test that all valid relationship types from enum are accepted in _find_related."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter, ValidRelationshipType
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Test each valid relationship type
+        valid_types = ValidRelationshipType.get_valid_types()
+        for rel_type in valid_types:
+            args = {
+                'node_id': 'node1',
+                'relationship_type': rel_type,
+                'depth': 2
+            }
+            result = await adapter._find_related(args)
+            assert result.success is True, f"Valid type {rel_type} should be accepted"
+
+    @pytest.mark.asyncio
+    async def test_relationship_type_optional(self):
+        """Test that relationship_type parameter is optional."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Call without relationship_type parameter
+        args = {'node_id': 'node1', 'depth': 2}
+        result = await adapter._find_related(args)
+        assert result.success is True
+
+        # Verify query doesn't have relationship type filter
+        call_args = mock_session.run.call_args
+        query = call_args[0][0]
+        # Should have pattern like -[r*1..2]- without relationship type
+        assert '-[r*1..2]-' in query or '-[r*1..2]' in query
+
+    @pytest.mark.asyncio
+    async def test_invalid_relationship_type_rejected(self):
+        """Test that invalid relationship types are rejected in _find_related."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        invalid_types = [
+            'INVALID_TYPE',
+            'MALICIOUS',
+            'ARBITRARY_REL',
+            'NOT_IN_SCHEMA'
+        ]
+
+        for invalid_type in invalid_types:
+            args = {
+                'node_id': 'node1',
+                'relationship_type': invalid_type,
+                'depth': 2
+            }
+            result = await adapter._find_related(args)
+            assert result.success is False, f"Invalid type {invalid_type} should be rejected"
+            assert 'Invalid relationship type' in result.error
+            assert 'must be one of' in result.error
+
+    @pytest.mark.asyncio
+    async def test_relationship_type_case_insensitive(self):
+        """Test that relationship type validation is case-insensitive."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Test lowercase version
+        args = {
+            'node_id': 'node1',
+            'relationship_type': 'leads_to',  # lowercase
+            'depth': 2
+        }
+        result = await adapter._find_related(args)
+        assert result.success is True
+
+        # Verify query has uppercase relationship type
+        call_args = mock_session.run.call_args
+        query = call_args[0][0]
+        assert ':LEADS_TO*' in query
+
+    @pytest.mark.asyncio
+    async def test_relationship_type_space_normalization(self):
+        """Test that spaces in relationship types are normalized."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Test with spaces (should be normalized)
+        args = {
+            'node_id': 'node1',
+            'relationship_type': 'LEARNED FROM',  # space instead of underscore
+            'depth': 2
+        }
+        result = await adapter._find_related(args)
+        assert result.success is True
+
+        # Verify query has underscored relationship type
+        call_args = mock_session.run.call_args
+        query = call_args[0][0]
+        assert ':LEARNED_FROM*' in query
+
+    @pytest.mark.asyncio
+    async def test_relationship_type_injection_attempts_blocked(self):
+        """Test that injection attempts via relationship_type are blocked."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        injection_attempts = [
+            "LEADS_TO*1..100]-(x) WHERE x.secret",
+            "LEADS_TO]; DROP DATABASE;--",
+            "LEADS_TO|IMPACTS",
+            "LEADS_TO {malicious: 'code'}",
+            "*",
+            "LEADS_TO UNION ALL MATCH",
+        ]
+
+        for injection in injection_attempts:
+            args = {
+                'node_id': 'node1',
+                'relationship_type': injection,
+                'depth': 2
+            }
+            result = await adapter._find_related(args)
+            assert result.success is False, f"Injection attempt {injection!r} should be blocked"
+            assert 'Invalid relationship type' in result.error
+
+    @pytest.mark.asyncio
+    async def test_empty_relationship_type_treated_as_not_provided(self):
+        """Test that empty string relationship type is treated as not provided."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Empty string should be treated as falsy (not provided)
+        args = {
+            'node_id': 'node1',
+            'relationship_type': '',
+            'depth': 2
+        }
+        result = await adapter._find_related(args)
+        # Empty string is falsy, so it should be treated as not provided
+        # Query should not have relationship type filter
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_relationship_type_error_message_quality(self):
+        """Test that error messages for invalid relationship types are helpful."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter, ValidRelationshipType
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        args = {
+            'node_id': 'node1',
+            'relationship_type': 'INVALID_TYPE',
+            'depth': 2
+        }
+        result = await adapter._find_related(args)
+        assert result.success is False
+
+        # Check error message includes original input
+        assert 'INVALID_TYPE' in result.error
+
+        # Check error message includes list of valid types
+        valid_types = ValidRelationshipType.get_valid_types()
+        for valid_type in valid_types:
+            assert valid_type in result.error
+
+
+class TestFindRelatedCombinedValidation:
+    """Test combined validation scenarios in _find_related."""
+
+    @pytest.mark.asyncio
+    async def test_both_depth_and_relationship_type_validated(self):
+        """Test that both parameters are validated when both provided."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock successful session
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        adapter._driver.session = Mock(return_value=mock_session)
+
+        # Valid combination should succeed
+        args = {
+            'node_id': 'node1',
+            'relationship_type': 'LEADS_TO',
+            'depth': 3
+        }
+        result = await adapter._find_related(args)
+        assert result.success is True
+
+        # Verify query has both filters
+        call_args = mock_session.run.call_args
+        query = call_args[0][0]
+        assert ':LEADS_TO*1..3' in query
+
+    @pytest.mark.asyncio
+    async def test_depth_validated_first(self):
+        """Test that depth validation happens before relationship type validation."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Invalid depth with invalid relationship type
+        # Depth error should be returned first
+        args = {
+            'node_id': 'node1',
+            'relationship_type': 'INVALID_TYPE',
+            'depth': 100  # Invalid depth
+        }
+        result = await adapter._find_related(args)
+        assert result.success is False
+        assert 'Invalid depth parameter' in result.error
+
+    @pytest.mark.asyncio
+    async def test_relationship_type_validated_after_depth(self):
+        """Test that relationship type is validated when depth is valid."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Valid depth with invalid relationship type
+        args = {
+            'node_id': 'node1',
+            'relationship_type': 'INVALID_TYPE',
+            'depth': 3  # Valid depth
+        }
+        result = await adapter._find_related(args)
+        assert result.success is False
+        assert 'Invalid relationship type' in result.error
+
+    @pytest.mark.asyncio
+    async def test_validation_with_session_parameter(self):
+        """Test that validation works when session is provided."""
+        from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+        adapter = Neo4jAdapter()
+        adapter._driver = Mock()
+
+        # Mock session passed as parameter
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.data = AsyncMock(return_value=[])
+        mock_session.run = AsyncMock(return_value=mock_result)
+
+        # Valid parameters should work with session
+        args = {
+            'node_id': 'node1',
+            'relationship_type': 'LEADS_TO',
+            'depth': 3
+        }
+        result = await adapter._find_related(args, session=mock_session)
+        assert result.success is True
+
+        # Invalid depth should fail even with session
+        args['depth'] = 100
+        result = await adapter._find_related(args, session=mock_session)
+        assert result.success is False
+        assert 'Invalid depth parameter' in result.error
+
+        # Invalid relationship type should fail even with session
+        args['depth'] = 3
+        args['relationship_type'] = 'INVALID'
+        result = await adapter._find_related(args, session=mock_session)
+        assert result.success is False
+        assert 'Invalid relationship type' in result.error
