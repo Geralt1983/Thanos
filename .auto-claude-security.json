@@ -128,17 +128,29 @@
     "zsh"
   ],
   "stack_commands": [
+    "ar",
+    "clang",
+    "clang++",
+    "cmake",
     "createdb",
     "createuser",
     "dropdb",
     "dropuser",
+    "g++",
+    "gcc",
     "initdb",
     "ipython",
     "jupyter",
+    "ld",
+    "make",
+    "meson",
+    "ninja",
+    "nm",
     "node",
     "notebook",
     "npm",
     "npx",
+    "objdump",
     "pdb",
     "pg_ctl",
     "pg_dump",
@@ -155,6 +167,7 @@
     "python",
     "python3",
     "ruff",
+    "strip",
     "ts-node",
     "tsc",
     "tsx"
@@ -165,7 +178,9 @@
     "languages": [
       "python",
       "javascript",
-      "typescript"
+      "typescript",
+      "c",
+      "cpp"
     ],
     "package_managers": [
       "pip"
@@ -190,6 +205,6 @@
     "shell_scripts": []
   },
   "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/041-oura-health-metrics-mcp-adapter",
-  "created_at": "2026-01-11T12:01:38.053060",
+  "created_at": "2026-01-11T12:09:33.333176",
   "project_hash": "b16b3945ad8b21000f1b58b516d9c57e"
 }
