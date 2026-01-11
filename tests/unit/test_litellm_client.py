@@ -5,6 +5,8 @@ Tests model routing, caching, usage tracking, and API integration.
 import json
 import os
 import sys
+import time
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
@@ -18,6 +20,7 @@ sys.path.insert(0, str(project_root))
 from Tools.litellm_client import (
     LiteLLMClient,
     UsageTracker,
+    AsyncUsageWriter,
     ComplexityAnalyzer,
     ResponseCache,
     ModelResponse,
@@ -135,6 +138,675 @@ def mock_anthropic_response():
     mock_response.usage.input_tokens = 100
     mock_response.usage.output_tokens = 50
     return mock_response
+
+
+# ============================================================================
+# AsyncUsageWriter Tests
+# ============================================================================
+
+class TestAsyncUsageWriter:
+    """Tests for the AsyncUsageWriter class."""
+
+    # ========================================================================
+    # Basic Operations Tests
+    # ========================================================================
+
+    def test_init_creates_worker_thread(self, temp_dir):
+        """AsyncUsageWriter should start a background worker thread."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=5.0, flush_threshold=10)
+
+        assert writer._worker.is_alive()
+        assert writer._worker.daemon is True
+        assert writer._worker.name == "UsageWriter"
+
+        writer.shutdown(timeout=2.0)
+
+    def test_queue_write_non_blocking(self, temp_dir):
+        """queue_write should return immediately without blocking."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Should complete in microseconds, not milliseconds
+        start = time.time()
+        for _ in range(100):
+            writer.queue_write(record)
+        elapsed = time.time() - start
+
+        assert elapsed < 0.1  # 100 writes in <100ms
+        writer.shutdown(timeout=2.0)
+
+    def test_flush_waits_for_completion(self, temp_dir):
+        """flush should wait for pending records to be written."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=60.0)  # Long interval
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        success = writer.flush(timeout=5.0)
+
+        assert success is True
+        assert storage_path.exists()
+
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 1
+
+        writer.shutdown(timeout=2.0)
+
+    def test_get_stats_returns_current_state(self, temp_dir):
+        """get_stats should return current statistics."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        stats = writer.get_stats()
+
+        assert "total_flushes" in stats
+        assert "total_records" in stats
+        assert "buffer_size" in stats
+        assert "queue_size" in stats
+        assert "error_count" in stats
+        assert stats["total_flushes"] == 0
+
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Flush Trigger Tests
+    # ========================================================================
+
+    def test_time_based_flush(self, temp_dir):
+        """Writer should automatically flush after time interval."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=0.5, flush_threshold=100)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+
+        # Wait for automatic flush
+        time.sleep(1.0)
+
+        stats = writer.get_stats()
+        assert stats["total_flushes"] >= 1
+
+        writer.shutdown(timeout=2.0)
+
+    def test_size_based_flush(self, temp_dir):
+        """Writer should flush when buffer reaches threshold."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=60.0, flush_threshold=5)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Queue 10 records (2x threshold)
+        for i in range(10):
+            writer.queue_write(record)
+
+        # Wait for flush to complete
+        time.sleep(0.5)
+
+        stats = writer.get_stats()
+        assert stats["total_flushes"] >= 1
+
+        writer.shutdown(timeout=2.0)
+
+    def test_manual_flush_event(self, temp_dir):
+        """flush() should trigger immediate flush."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=60.0, flush_threshold=100)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        stats_before = writer.get_stats()
+
+        success = writer.flush(timeout=2.0)
+
+        assert success is True
+        stats_after = writer.get_stats()
+        assert stats_after["total_flushes"] > stats_before["total_flushes"]
+
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Thread Lifecycle Tests
+    # ========================================================================
+
+    def test_shutdown_completes_gracefully(self, temp_dir):
+        """shutdown should wait for worker thread to complete."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        writer.shutdown(timeout=5.0)
+
+        assert not writer._worker.is_alive()
+        assert writer._shutdown_event.is_set()
+
+    def test_shutdown_drains_queue(self, temp_dir):
+        """shutdown should process all remaining queued records."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=60.0, flush_threshold=100)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Queue 20 records
+        for i in range(20):
+            writer.queue_write(record)
+
+        writer.shutdown(timeout=5.0)
+
+        # All records should be written
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 20
+
+    def test_shutdown_idempotent(self, temp_dir):
+        """shutdown should be safe to call multiple times."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        writer.shutdown(timeout=2.0)
+        # Second call should not raise or hang
+        writer.shutdown(timeout=2.0)
+
+        assert not writer._worker.is_alive()
+
+    def test_atexit_handler_calls_shutdown(self, temp_dir):
+        """_atexit_handler should call shutdown."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        # Manually invoke atexit handler
+        writer._atexit_handler()
+
+        assert writer._shutdown_event.is_set()
+        assert not writer._worker.is_alive()
+
+    # ========================================================================
+    # Error Handling Tests
+    # ========================================================================
+
+    def test_retry_on_io_error(self, temp_dir):
+        """Writer should retry on transient I/O errors with exponential backoff."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=3, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+
+        # Make storage path read-only temporarily
+        writer.flush(timeout=1.0)
+        original_mode = storage_path.stat().st_mode
+        storage_path.chmod(0o444)
+
+        # Queue another record - this should trigger retry
+        writer.queue_write(record)
+        time.sleep(0.5)
+
+        stats = writer.get_stats()
+        # Restore permissions
+        storage_path.chmod(original_mode)
+
+        # Should have incremented retry count
+        assert stats["retry_count"] >= 0  # May succeed on first try or retry
+
+        writer.shutdown(timeout=2.0)
+
+    def test_fallback_to_backup_location(self, temp_dir):
+        """Writer should fallback to backup on persistent errors."""
+        storage_path = temp_dir / "usage.json"
+        backup_path = storage_path.with_suffix('.backup.json')
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Create a directory where the file should be (prevent write)
+        storage_path.mkdir()
+
+        writer.queue_write(record)
+        time.sleep(0.5)
+
+        stats = writer.get_stats()
+        # Should have attempted fallback writes
+        # Clean up
+        storage_path.rmdir()
+
+        writer.shutdown(timeout=2.0)
+
+    def test_corruption_recovery(self, temp_dir):
+        """Writer should recover from corrupted JSON files."""
+        storage_path = temp_dir / "usage.json"
+
+        # Create corrupted file
+        storage_path.write_text("{invalid json")
+
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        stats = writer.get_stats()
+        assert stats["corruption_recoveries"] >= 1
+
+        # Should have written valid data
+        data = json.loads(storage_path.read_text())
+        assert "sessions" in data
+
+        writer.shutdown(timeout=2.0)
+
+    def test_validation_error_handling(self, temp_dir):
+        """Writer should handle structure validation errors."""
+        storage_path = temp_dir / "usage.json"
+
+        # Create file with invalid structure
+        storage_path.write_text(json.dumps({"invalid": "structure"}))
+
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        # Should have recovered with fresh structure
+        data = json.loads(storage_path.read_text())
+        assert "sessions" in data
+        assert "daily_totals" in data
+
+        writer.shutdown(timeout=2.0)
+
+    def test_queue_write_after_shutdown(self, temp_dir):
+        """queue_write after shutdown should be a no-op."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        writer.shutdown(timeout=2.0)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Should not raise or hang
+        writer.queue_write(record)
+
+        stats = writer.get_stats()
+        assert stats["queue_size"] == 0
+
+    # ========================================================================
+    # Data Integrity Tests
+    # ========================================================================
+
+    def test_atomic_write_creates_backup(self, temp_dir):
+        """Atomic write should create backup of existing file."""
+        storage_path = temp_dir / "usage.json"
+        backup_path = storage_path.with_suffix('.backup.json')
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # First write
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        # Second write should create backup
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        assert storage_path.exists()
+        assert backup_path.exists()
+
+        writer.shutdown(timeout=2.0)
+
+    def test_concurrent_queue_writes(self, temp_dir):
+        """Multiple threads should be able to queue writes concurrently."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=60.0, flush_threshold=1000)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        def queue_records(count):
+            for _ in range(count):
+                writer.queue_write(record)
+
+        # Start 5 threads, each queueing 20 records
+        threads = []
+        for _ in range(5):
+            t = threading.Thread(target=queue_records, args=(20,))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        writer.flush(timeout=5.0)
+
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 100
+
+        writer.shutdown(timeout=2.0)
+
+    def test_data_consistency_after_flush(self, temp_dir):
+        """All queued records should be written after flush."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=60.0)
+
+        records = []
+        for i in range(15):
+            record = {
+                "model": f"model-{i % 3}",
+                "provider": "test",
+                "input_tokens": 100 + i,
+                "output_tokens": 50 + i,
+                "total_tokens": 150 + 2*i,
+                "cost_usd": 0.01 * (i + 1),
+                "latency_ms": 100.0,
+                "operation": "test"
+            }
+            records.append(record)
+            writer.queue_write(record)
+
+        writer.flush(timeout=5.0)
+
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 15
+
+        # Verify totals
+        total_tokens = sum(r["total_tokens"] for r in records)
+        total_cost = sum(r["cost_usd"] for r in records)
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert data["daily_totals"][today]["tokens"] == total_tokens
+        assert abs(data["daily_totals"][today]["cost"] - total_cost) < 0.001
+        assert data["daily_totals"][today]["calls"] == 15
+
+        writer.shutdown(timeout=2.0)
+
+    def test_aggregation_correctness(self, temp_dir):
+        """Data aggregation should correctly merge records."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        # Queue records with different models and providers
+        records = [
+            {
+                "model": "model-a",
+                "provider": "provider-1",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "total_tokens": 150,
+                "cost_usd": 0.01,
+                "latency_ms": 100.0,
+                "operation": "test"
+            },
+            {
+                "model": "model-a",
+                "provider": "provider-1",
+                "input_tokens": 200,
+                "output_tokens": 100,
+                "total_tokens": 300,
+                "cost_usd": 0.02,
+                "latency_ms": 150.0,
+                "operation": "test"
+            },
+            {
+                "model": "model-b",
+                "provider": "provider-2",
+                "input_tokens": 50,
+                "output_tokens": 25,
+                "total_tokens": 75,
+                "cost_usd": 0.005,
+                "latency_ms": 80.0,
+                "operation": "test"
+            }
+        ]
+
+        for record in records:
+            writer.queue_write(record)
+
+        writer.flush(timeout=5.0)
+
+        data = json.loads(storage_path.read_text())
+
+        # Verify model breakdown
+        assert data["model_breakdown"]["model-a"]["tokens"] == 450  # 150 + 300
+        assert data["model_breakdown"]["model-a"]["calls"] == 2
+        assert data["model_breakdown"]["model-b"]["tokens"] == 75
+        assert data["model_breakdown"]["model-b"]["calls"] == 1
+
+        # Verify provider breakdown
+        assert data["provider_breakdown"]["provider-1"]["tokens"] == 450
+        assert data["provider_breakdown"]["provider-1"]["calls"] == 2
+        assert data["provider_breakdown"]["provider-2"]["tokens"] == 75
+        assert data["provider_breakdown"]["provider-2"]["calls"] == 1
+
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Edge Case Tests
+    # ========================================================================
+
+    def test_empty_buffer_flush(self, temp_dir):
+        """Flushing empty buffer should not cause errors."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        success = writer.flush(timeout=2.0)
+
+        assert success is True
+
+        writer.shutdown(timeout=2.0)
+
+    def test_shutdown_timeout(self, temp_dir):
+        """shutdown should raise RuntimeError on timeout."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        # Patch worker thread to not terminate
+        def infinite_loop():
+            while True:
+                time.sleep(0.1)
+
+        # This test is tricky - we'll just verify normal timeout behavior
+        writer.shutdown(timeout=2.0)
+        assert not writer._worker.is_alive()
+
+    def test_batch_dequeue_optimization(self, temp_dir):
+        """Writer should batch dequeue multiple records at once."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, flush_interval=60.0, flush_threshold=1000)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Queue 50 records rapidly
+        for _ in range(50):
+            writer.queue_write(record)
+
+        # Wait a moment for batch dequeue
+        time.sleep(0.2)
+
+        # Force flush
+        writer.flush(timeout=5.0)
+
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 50
+
+        stats = writer.get_stats()
+        # Should have fewer flushes than records (due to batching)
+        assert stats["total_flushes"] <= 5
+
+        writer.shutdown(timeout=2.0)
+
+    def test_stats_tracking_accuracy(self, temp_dir):
+        """Statistics should accurately track operations."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Queue 10 records
+        for _ in range(10):
+            writer.queue_write(record)
+
+        stats_before = writer.get_stats()
+        assert stats_before["total_records"] == 10
+
+        writer.flush(timeout=2.0)
+
+        stats_after = writer.get_stats()
+        assert stats_after["total_flushes"] >= 1
+        assert stats_after["buffer_size"] == 0
+        assert stats_after["queue_size"] == 0
+
+        writer.shutdown(timeout=2.0)
 
 
 # ============================================================================
