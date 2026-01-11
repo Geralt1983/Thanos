@@ -1,10 +1,10 @@
 {
   "active": true,
-  "spec": "025-async-file-i-o-for-usage-tracking-to-prevent-main-",
+  "spec": "026-split-massive-mcp-server-index-ts-into-domain-modu",
   "state": "building",
   "subtasks": {
-    "completed": 11,
-    "total": 15,
+    "completed": 24,
+    "total": 28,
     "in_progress": 1,
     "failed": 0
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 3,
-    "started_at": "2026-01-10T23:17:07.412517"
+    "number": 7,
+    "started_at": "2026-01-10T23:16:53.699801"
   },
-  "last_update": "2026-01-10T23:28:13.094729"
+  "last_update": "2026-01-10T23:38:43.865809"
 }

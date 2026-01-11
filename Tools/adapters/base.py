@@ -5,40 +5,41 @@ Provides abstract base class and standard result type for all adapters.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Optional
 
 
 @dataclass
 class ToolResult:
     """Standard result from any adapter tool call."""
+
     success: bool
     data: Any
     error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Add timestamp to metadata if not present."""
-        if 'timestamp' not in self.metadata:
-            self.metadata['timestamp'] = datetime.utcnow().isoformat()
+        if "timestamp" not in self.metadata:
+            self.metadata["timestamp"] = datetime.utcnow().isoformat()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary for serialization."""
         return {
-            'success': self.success,
-            'data': self.data,
-            'error': self.error,
-            'metadata': self.metadata
+            "success": self.success,
+            "data": self.data,
+            "error": self.error,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def ok(cls, data: Any, **metadata) -> 'ToolResult':
+    def ok(cls, data: Any, **metadata) -> "ToolResult":
         """Create a successful result."""
         return cls(success=True, data=data, metadata=metadata)
 
     @classmethod
-    def fail(cls, error: str, **metadata) -> 'ToolResult':
+    def fail(cls, error: str, **metadata) -> "ToolResult":
         """Create a failed result."""
         return cls(success=False, data=None, error=error, metadata=metadata)
 
@@ -53,7 +54,7 @@ class BaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def list_tools(self) -> List[Dict[str, Any]]:
+    def list_tools(self) -> list[dict[str, Any]]:
         """
         Return list of available tools with their schemas.
 
@@ -65,7 +66,7 @@ class BaseAdapter(ABC):
         pass
 
     @abstractmethod
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
+    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """
         Execute a tool and return the result.
 
@@ -78,12 +79,14 @@ class BaseAdapter(ABC):
         """
         pass
 
-    def get_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
+    def get_tool(self, tool_name: str) -> Optional[dict[str, Any]]:
         """Get a specific tool's schema by name."""
-        tools = {t['name']: t for t in self.list_tools()}
+        tools = {t["name"]: t for t in self.list_tools()}
         return tools.get(tool_name)
 
-    def validate_arguments(self, tool_name: str, arguments: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+    def validate_arguments(
+        self, tool_name: str, arguments: dict[str, Any]
+    ) -> tuple[bool, Optional[str]]:
         """
         Validate arguments against tool schema.
 
@@ -98,11 +101,11 @@ class BaseAdapter(ABC):
         if tool is None:
             return False, f"Unknown tool: {tool_name}"
 
-        params = tool.get('parameters', {})
+        params = tool.get("parameters", {})
 
         # Check required parameters
         for param_name, param_spec in params.items():
-            if param_spec.get('required', False) and param_name not in arguments:
+            if param_spec.get("required", False) and param_name not in arguments:
                 return False, f"Missing required parameter: {param_name}"
 
         # Basic type validation could be added here
@@ -110,7 +113,7 @@ class BaseAdapter(ABC):
 
         return True, None
 
-    async def call_tool_validated(self, tool_name: str, arguments: Dict[str, Any]) -> ToolResult:
+    async def call_tool_validated(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         """
         Validate arguments then execute tool.
 
@@ -127,7 +130,8 @@ class BaseAdapter(ABC):
 
         Override in subclasses that maintain persistent connections.
         """
-        pass
+        # Default implementation does nothing - subclasses may override
+        pass  # noqa: B027
 
     async def health_check(self) -> ToolResult:
         """
@@ -135,4 +139,4 @@ class BaseAdapter(ABC):
 
         Override in subclasses to provide meaningful health checks.
         """
-        return ToolResult.ok({'status': 'ok', 'adapter': self.name})
+        return ToolResult.ok({"status": "ok", "adapter": self.name})

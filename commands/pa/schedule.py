@@ -15,10 +15,11 @@ Actions:
 Model: gpt-4o-mini (simple task - cost effective)
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+import sys
 from typing import Optional
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -60,7 +61,8 @@ def build_context() -> str:
     calendar_file = project_root / "State" / "calendar_today.json"
     if calendar_file.exists():
         import json
-        with open(calendar_file, 'r') as f:
+
+        with open(calendar_file) as f:
             try:
                 events = json.load(f)
                 context_parts.append(f"## Today's Calendar\n{json.dumps(events, indent=2)}")
@@ -71,7 +73,8 @@ def build_context() -> str:
     week_file = project_root / "State" / "calendar_week.json"
     if week_file.exists():
         import json
-        with open(week_file, 'r') as f:
+
+        with open(week_file) as f:
             try:
                 events = json.load(f)
                 context_parts.append(f"## This Week\n{json.dumps(events, indent=2)}")
@@ -81,7 +84,7 @@ def build_context() -> str:
     # Current focus
     focus_file = project_root / "State" / "CurrentFocus.md"
     if focus_file.exists():
-        with open(focus_file, 'r') as f:
+        with open(focus_file) as f:
             context_parts.append(f"## Current Focus\n{f.read()}")
 
     return "\n\n".join(context_parts) if context_parts else "No calendar data available."
@@ -96,7 +99,7 @@ def save_to_history(action: str, response: str):
     timestamp = datetime.now()
     filename = f"schedule_{action}_{timestamp.strftime('%Y-%m-%d_%H%M')}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Schedule {action.title()} - {timestamp.strftime('%B %d, %Y %I:%M %p')}\n\n")
         f.write(response)
 
@@ -205,10 +208,7 @@ What would you like to do?
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)

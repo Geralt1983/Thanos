@@ -17,7 +17,7 @@ import pytest
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from Tools.litellm_client import (
+from Tools.litellm import (
     LiteLLMClient,
     UsageTracker,
     AsyncUsageWriter,
@@ -2586,9 +2586,9 @@ class TestLiteLLMClient:
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_init_with_config(self, mock_config, temp_dir):
         """Client should initialize with provided config."""
-        with patch("Tools.litellm_client.LITELLM_AVAILABLE", False):
-            with patch("Tools.litellm_client.ANTHROPIC_AVAILABLE", True):
-                with patch("Tools.litellm_client.anthropic") as mock_anthropic:
+        with patch("Tools.litellm.client.LITELLM_AVAILABLE", False):
+            with patch("Tools.litellm.client.ANTHROPIC_AVAILABLE", True):
+                with patch("Tools.litellm.client.anthropic") as mock_anthropic:
                     client = LiteLLMClient(str(mock_config))
 
                     assert client.config is not None
@@ -2628,9 +2628,9 @@ class TestLiteLLMClient:
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_chat_uses_cache(self, mock_config, mock_anthropic_response):
         """chat should use cached responses when available."""
-        with patch("Tools.litellm_client.LITELLM_AVAILABLE", False):
-            with patch("Tools.litellm_client.ANTHROPIC_AVAILABLE", True):
-                with patch("Tools.litellm_client.anthropic") as mock_anthropic:
+        with patch("Tools.litellm.client.LITELLM_AVAILABLE", False):
+            with patch("Tools.litellm.client.ANTHROPIC_AVAILABLE", True):
+                with patch("Tools.litellm.client.anthropic") as mock_anthropic:
                     mock_client = Mock()
                     mock_client.messages.create.return_value = mock_anthropic_response
                     mock_anthropic.Anthropic.return_value = mock_client
@@ -2649,9 +2649,9 @@ class TestLiteLLMClient:
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_chat_skips_cache_when_disabled(self, mock_config, mock_anthropic_response):
         """chat should skip cache when use_cache=False."""
-        with patch("Tools.litellm_client.LITELLM_AVAILABLE", False):
-            with patch("Tools.litellm_client.ANTHROPIC_AVAILABLE", True):
-                with patch("Tools.litellm_client.anthropic") as mock_anthropic:
+        with patch("Tools.litellm.client.LITELLM_AVAILABLE", False):
+            with patch("Tools.litellm.client.ANTHROPIC_AVAILABLE", True):
+                with patch("Tools.litellm.client.anthropic") as mock_anthropic:
                     mock_client = Mock()
                     mock_client.messages.create.return_value = mock_anthropic_response
                     mock_anthropic.Anthropic.return_value = mock_client
@@ -2666,9 +2666,9 @@ class TestLiteLLMClient:
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_usage_tracking(self, mock_config, mock_anthropic_response, temp_dir):
         """chat should track usage when enabled."""
-        with patch("Tools.litellm_client.LITELLM_AVAILABLE", False):
-            with patch("Tools.litellm_client.ANTHROPIC_AVAILABLE", True):
-                with patch("Tools.litellm_client.anthropic") as mock_anthropic:
+        with patch("Tools.litellm.client.LITELLM_AVAILABLE", False):
+            with patch("Tools.litellm.client.ANTHROPIC_AVAILABLE", True):
+                with patch("Tools.litellm.client.anthropic") as mock_anthropic:
                     mock_client = Mock()
                     mock_client.messages.create.return_value = mock_anthropic_response
                     mock_anthropic.Anthropic.return_value = mock_client
@@ -2802,9 +2802,9 @@ class TestLiteLLMIntegration:
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_full_chat_flow(self, mock_config, mock_anthropic_response):
         """Test complete chat flow: routing -> API call -> tracking -> caching."""
-        with patch("Tools.litellm_client.LITELLM_AVAILABLE", False):
-            with patch("Tools.litellm_client.ANTHROPIC_AVAILABLE", True):
-                with patch("Tools.litellm_client.anthropic") as mock_anthropic:
+        with patch("Tools.litellm.client.LITELLM_AVAILABLE", False):
+            with patch("Tools.litellm.client.ANTHROPIC_AVAILABLE", True):
+                with patch("Tools.litellm.client.anthropic") as mock_anthropic:
                     mock_client = Mock()
                     mock_client.messages.create.return_value = mock_anthropic_response
                     mock_anthropic.Anthropic.return_value = mock_client
@@ -2831,9 +2831,9 @@ class TestLiteLLMIntegration:
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
     def test_complexity_based_routing(self, mock_config, mock_anthropic_response):
         """Test that complexity analysis affects model selection."""
-        with patch("Tools.litellm_client.LITELLM_AVAILABLE", False):
-            with patch("Tools.litellm_client.ANTHROPIC_AVAILABLE", True):
-                with patch("Tools.litellm_client.anthropic") as mock_anthropic:
+        with patch("Tools.litellm.client.LITELLM_AVAILABLE", False):
+            with patch("Tools.litellm.client.ANTHROPIC_AVAILABLE", True):
+                with patch("Tools.litellm.client.anthropic") as mock_anthropic:
                     mock_client = Mock()
                     mock_client.messages.create.return_value = mock_anthropic_response
                     mock_anthropic.Anthropic.return_value = mock_client

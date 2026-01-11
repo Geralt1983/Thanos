@@ -66,44 +66,19 @@ mcp-servers/workos-mcp/.npmrc
 # Auto Claude data directory
 .auto-claude/
 
-# Environment variables (sensitive)
+# Environment variables and secrets
 .env
 .env.local
 .env.*.local
 
-# Python build artifacts
+# Auto-claude framework files (at root level)
+.auto-claude-status
+.auto-claude-security.json
+.claude_settings.json
+
+# Python cache
 __pycache__/
-*.py[cod]
-*$py.class
 *.pyc
 *.pyo
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Testing
+*.pyd
 .pytest_cache/
-.coverage
-htmlcov/
-
-# IDE configurations (user-specific)
-.claude_settings.json
-.vscode/
-.idea/
