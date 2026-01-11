@@ -932,6 +932,52 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                 },
             },
+            {
+                "name": "get_availability",
+                "description": "Analyze calendar availability and return daily/weekly summary. Provides metrics including total free time, longest continuous block, fragmentation score, busy/free ratio, and scheduling insights. Useful for understanding workload distribution and finding optimal scheduling windows.",
+                "parameters": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID to analyze. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "working_hours_start": {
+                        "type": "integer",
+                        "description": "Start of working hours (0-23) to limit analysis. If specified, only hours during working time are counted. Defaults to None (all day).",
+                        "required": False,
+                    },
+                    "working_hours_end": {
+                        "type": "integer",
+                        "description": "End of working hours (0-23) to limit analysis. If specified, only hours during working time are counted. Defaults to None (all day).",
+                        "required": False,
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone for availability calculations (e.g., 'America/New_York', 'UTC'). Defaults to system timezone.",
+                        "required": False,
+                    },
+                    "exclude_weekends": {
+                        "type": "boolean",
+                        "description": "Exclude Saturday and Sunday from availability analysis. Defaults to False.",
+                        "required": False,
+                    },
+                    "min_slot_duration_minutes": {
+                        "type": "integer",
+                        "description": "Minimum duration in minutes to count as a usable free slot (affects fragmentation calculation). Defaults to 15.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -964,6 +1010,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_find_free_slots(arguments)
             elif tool_name == "check_conflicts":
                 return await self._tool_check_conflicts(arguments)
+            elif tool_name == "get_availability":
+                return await self._tool_get_availability(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -2312,6 +2360,567 @@ class GoogleCalendarAdapter(BaseAdapter):
         except ValueError as e:
             # Handle authentication errors from _get_service()
             return ToolResult.fail(str(e))
+
+    async def _tool_get_availability(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Analyze calendar availability and return daily/weekly summary.
+
+        This tool provides a comprehensive analysis of calendar availability,
+        calculating key metrics to understand workload distribution and identify
+        optimal scheduling windows. It's particularly useful for:
+        - Daily/weekly capacity planning
+        - Identifying fragmentation and context-switching overhead
+        - Finding the best times for deep work
+        - Understanding overall schedule health
+
+        Metrics Calculated:
+        1. Total Free Time: Cumulative available hours across the date range
+        2. Total Busy Time: Cumulative scheduled hours
+        3. Longest Continuous Block: Maximum uninterrupted free time slot
+        4. Fragmentation Score: Measure of how fragmented the schedule is
+           - Lower score = fewer, longer blocks (better for deep work)
+           - Higher score = many small gaps (more context switching)
+           - Formula: (number_of_free_slots / total_free_hours) * 100
+        5. Busy/Free Ratio: Percentage of time scheduled vs available
+        6. Average Free Slot Duration: Mean duration of free time blocks
+        7. Daily Breakdown: Per-day analysis with key insights
+
+        Args:
+            arguments: Tool parameters including:
+                - start_date: Start date (required)
+                - end_date: End date (required)
+                - calendar_id: Calendar to analyze (default: 'primary')
+                - working_hours_start: Working hours start hour 0-23 (default: None)
+                - working_hours_end: Working hours end hour 0-23 (default: None)
+                - timezone: Timezone for calculations (default: system timezone)
+                - exclude_weekends: Skip Saturday/Sunday (default: False)
+                - min_slot_duration_minutes: Minimum duration to count as usable slot (default: 15)
+
+        Returns:
+            ToolResult containing comprehensive availability analysis
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract and validate required parameters
+            start_date_str = arguments.get("start_date")
+            end_date_str = arguments.get("end_date")
+
+            if not start_date_str:
+                return ToolResult.fail("Missing required parameter: start_date")
+            if not end_date_str:
+                return ToolResult.fail("Missing required parameter: end_date")
+
+            # Extract optional parameters with defaults
+            calendar_id = arguments.get("calendar_id", "primary")
+            working_hours_start = arguments.get("working_hours_start")
+            working_hours_end = arguments.get("working_hours_end")
+            timezone_str = arguments.get("timezone")
+            exclude_weekends = arguments.get("exclude_weekends", False)
+            min_slot_duration_minutes = arguments.get("min_slot_duration_minutes", 15)
+
+            # Validate parameters
+            if min_slot_duration_minutes < 1:
+                return ToolResult.fail("min_slot_duration_minutes must be at least 1")
+
+            if working_hours_start is not None:
+                if not (0 <= working_hours_start <= 23):
+                    return ToolResult.fail("working_hours_start must be between 0 and 23")
+
+            if working_hours_end is not None:
+                if not (0 <= working_hours_end <= 23):
+                    return ToolResult.fail("working_hours_end must be between 0 and 23")
+
+            if working_hours_start is not None and working_hours_end is not None:
+                if working_hours_end <= working_hours_start:
+                    return ToolResult.fail("working_hours_end must be after working_hours_start")
+
+            # Determine timezone
+            if timezone_str:
+                try:
+                    tz = ZoneInfo(timezone_str)
+                except Exception:
+                    return ToolResult.fail(
+                        f"Invalid timezone: {timezone_str}. Use IANA timezone names like 'America/New_York' or 'UTC'."
+                    )
+            else:
+                # Use system local timezone
+                try:
+                    tz = ZoneInfo("localtime")
+                except Exception:
+                    # Fallback to UTC if local timezone cannot be determined
+                    tz = ZoneInfo("UTC")
+
+            # Parse dates - support both date-only and datetime formats
+            from datetime import timedelta
+            try:
+                if "T" in start_date_str:
+                    range_start = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
+                    if not range_start.tzinfo:
+                        range_start = range_start.replace(tzinfo=tz)
+                else:
+                    # Date only - start at beginning of day
+                    date_obj = datetime.fromisoformat(start_date_str)
+                    range_start = datetime(date_obj.year, date_obj.month, date_obj.day, tzinfo=tz)
+
+                if "T" in end_date_str:
+                    range_end = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                    if not range_end.tzinfo:
+                        range_end = range_end.replace(tzinfo=tz)
+                else:
+                    # Date only - end at end of day
+                    date_obj = datetime.fromisoformat(end_date_str)
+                    range_end = datetime(date_obj.year, date_obj.month, date_obj.day, 23, 59, 59, tzinfo=tz)
+
+            except ValueError as e:
+                return ToolResult.fail(
+                    f"Invalid date format: {str(e)}. Use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)"
+                )
+
+            # Validate date range
+            if range_end <= range_start:
+                return ToolResult.fail("end_date must be after start_date")
+
+            # Convert to UTC for API calls
+            api_start = range_start.astimezone(ZoneInfo("UTC")).isoformat()
+            api_end = range_end.astimezone(ZoneInfo("UTC")).isoformat()
+
+            # Fetch all events in the date range
+            events_result = (
+                service.events()
+                .list(
+                    calendarId=calendar_id,
+                    timeMin=api_start,
+                    timeMax=api_end,
+                    singleEvents=True,
+                    orderBy="startTime",
+                    maxResults=2500,
+                )
+                .execute()
+            )
+
+            events = events_result.get("items", [])
+
+            # Format events and apply filters
+            formatted_events = []
+            for event in events:
+                # Skip cancelled events
+                if event.get("status") == "cancelled":
+                    continue
+
+                # Parse event data
+                start = event.get("start", {})
+                end = event.get("end", {})
+                is_all_day = "date" in start and "dateTime" not in start
+
+                # Get event times
+                if is_all_day:
+                    # All-day events don't block specific times for availability analysis
+                    # but we'll track them separately
+                    start_time = start.get("date")
+                    end_time = end.get("date")
+                    formatted_events.append({
+                        "summary": event.get("summary", "(No title)"),
+                        "start": start_time,
+                        "end": end_time,
+                        "is_all_day": True,
+                        "status": event.get("status", "confirmed"),
+                        "transparency": event.get("transparency", "opaque"),
+                    })
+                else:
+                    start_time = start.get("dateTime")
+                    end_time = end.get("dateTime")
+
+                    if start_time and end_time:
+                        formatted_events.append({
+                            "summary": event.get("summary", "(No title)"),
+                            "start": start_time,
+                            "end": end_time,
+                            "is_all_day": False,
+                            "status": event.get("status", "confirmed"),
+                            "transparency": event.get("transparency", "opaque"),
+                        })
+
+            # Apply event filters
+            filtered_events = self._apply_event_filters(
+                formatted_events, filter_context="availability_analysis", calendar_id=calendar_id
+            )
+
+            # Build list of busy periods (only from non-all-day, opaque events)
+            busy_periods = []
+            all_day_events_count = 0
+            for event in filtered_events:
+                # Skip all-day events for time-based analysis
+                if event.get("is_all_day"):
+                    all_day_events_count += 1
+                    continue
+
+                # Skip events marked as "transparent" (free time)
+                if event.get("transparency") == "transparent":
+                    continue
+
+                try:
+                    event_start = datetime.fromisoformat(event["start"].replace("Z", "+00:00"))
+                    event_end = datetime.fromisoformat(event["end"].replace("Z", "+00:00"))
+
+                    # Convert to target timezone
+                    if event_start.tzinfo:
+                        event_start = event_start.astimezone(tz)
+                    else:
+                        event_start = event_start.replace(tzinfo=tz)
+
+                    if event_end.tzinfo:
+                        event_end = event_end.astimezone(tz)
+                    else:
+                        event_end = event_end.replace(tzinfo=tz)
+
+                    busy_periods.append({
+                        "start": event_start,
+                        "end": event_end,
+                        "summary": event.get("summary", "(No title)"),
+                    })
+
+                except (ValueError, TypeError):
+                    # Skip events with invalid time data
+                    continue
+
+            # Sort busy periods by start time
+            busy_periods.sort(key=lambda x: x["start"])
+
+            # Merge overlapping busy periods to get accurate busy time calculation
+            merged_busy_periods = []
+            for period in busy_periods:
+                if not merged_busy_periods:
+                    merged_busy_periods.append(period)
+                else:
+                    last = merged_busy_periods[-1]
+                    if period["start"] <= last["end"]:
+                        # Overlapping or adjacent - merge
+                        last["end"] = max(last["end"], period["end"])
+                    else:
+                        merged_busy_periods.append(period)
+
+            # Analyze availability day by day
+            daily_analysis = []
+            current_date = range_start.date()
+            end_date = range_end.date()
+
+            while current_date <= end_date:
+                # Skip weekends if requested
+                if exclude_weekends and current_date.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+                    current_date = current_date + timedelta(days=1)
+                    continue
+
+                # Define the analysis window for this day
+                if working_hours_start is not None and working_hours_end is not None:
+                    day_start = datetime(
+                        current_date.year, current_date.month, current_date.day,
+                        working_hours_start, 0, 0, tzinfo=tz
+                    )
+                    day_end = datetime(
+                        current_date.year, current_date.month, current_date.day,
+                        working_hours_end, 0, 0, tzinfo=tz
+                    )
+                else:
+                    # Full day (00:00 to 23:59:59)
+                    day_start = datetime(
+                        current_date.year, current_date.month, current_date.day,
+                        0, 0, 0, tzinfo=tz
+                    )
+                    day_end = datetime(
+                        current_date.year, current_date.month, current_date.day,
+                        23, 59, 59, tzinfo=tz
+                    )
+
+                # Adjust day boundaries if they're outside the requested range
+                if day_start < range_start:
+                    day_start = range_start
+                if day_end > range_end:
+                    day_end = range_end
+
+                # Find busy periods for this day
+                day_busy_periods = []
+                for period in merged_busy_periods:
+                    # Check if busy period overlaps with this day
+                    if period["start"] < day_end and period["end"] > day_start:
+                        # Clip to day boundaries
+                        busy_start = max(period["start"], day_start)
+                        busy_end = min(period["end"], day_end)
+                        day_busy_periods.append({
+                            "start": busy_start,
+                            "end": busy_end,
+                        })
+
+                # Calculate free slots for this day
+                day_free_slots = []
+                cursor = day_start
+
+                for busy in day_busy_periods:
+                    busy_start = busy["start"]
+                    busy_end = busy["end"]
+
+                    # Check if there's a gap before this busy period
+                    if cursor < busy_start:
+                        gap_duration_minutes = (busy_start - cursor).total_seconds() / 60
+
+                        day_free_slots.append({
+                            "start": cursor,
+                            "end": busy_start,
+                            "duration_minutes": gap_duration_minutes,
+                        })
+
+                    # Move cursor to end of busy period
+                    cursor = max(cursor, busy_end)
+
+                # Check if there's a free slot at the end of the day
+                if cursor < day_end:
+                    gap_duration_minutes = (day_end - cursor).total_seconds() / 60
+                    day_free_slots.append({
+                        "start": cursor,
+                        "end": day_end,
+                        "duration_minutes": gap_duration_minutes,
+                    })
+
+                # Calculate day metrics
+                total_day_minutes = (day_end - day_start).total_seconds() / 60
+                busy_minutes = sum((p["end"] - p["start"]).total_seconds() / 60 for p in day_busy_periods)
+                free_minutes = total_day_minutes - busy_minutes
+
+                # Count usable free slots (meeting minimum duration)
+                usable_free_slots = [s for s in day_free_slots if s["duration_minutes"] >= min_slot_duration_minutes]
+                usable_free_minutes = sum(s["duration_minutes"] for s in usable_free_slots)
+
+                # Find longest continuous block
+                longest_block_minutes = max(
+                    (s["duration_minutes"] for s in day_free_slots), default=0
+                )
+
+                # Calculate fragmentation score for this day
+                # Formula: (number_of_usable_slots / total_free_hours) * 100
+                # Lower is better (fewer, longer blocks)
+                if usable_free_minutes > 0:
+                    day_fragmentation = (len(usable_free_slots) / (usable_free_minutes / 60)) * 100
+                else:
+                    day_fragmentation = 0
+
+                # Calculate busy/free ratio
+                busy_ratio = (busy_minutes / total_day_minutes * 100) if total_day_minutes > 0 else 0
+
+                daily_analysis.append({
+                    "date": current_date.isoformat(),
+                    "day_of_week": current_date.strftime("%A"),
+                    "total_hours": round(total_day_minutes / 60, 2),
+                    "busy_hours": round(busy_minutes / 60, 2),
+                    "free_hours": round(free_minutes / 60, 2),
+                    "usable_free_hours": round(usable_free_minutes / 60, 2),
+                    "busy_percentage": round(busy_ratio, 1),
+                    "longest_block_hours": round(longest_block_minutes / 60, 2),
+                    "number_of_events": len(day_busy_periods),
+                    "number_of_free_slots": len(usable_free_slots),
+                    "fragmentation_score": round(day_fragmentation, 2),
+                    "quality_rating": self._calculate_day_quality(
+                        busy_ratio, day_fragmentation, longest_block_minutes
+                    ),
+                })
+
+                # Move to next day
+                current_date = current_date + timedelta(days=1)
+
+            # Calculate overall statistics
+            total_hours = sum(d["total_hours"] for d in daily_analysis)
+            total_busy_hours = sum(d["busy_hours"] for d in daily_analysis)
+            total_free_hours = sum(d["free_hours"] for d in daily_analysis)
+            total_usable_free_hours = sum(d["usable_free_hours"] for d in daily_analysis)
+            total_events = sum(d["number_of_events"] for d in daily_analysis)
+            total_free_slots = sum(d["number_of_free_slots"] for d in daily_analysis)
+
+            # Overall busy percentage
+            overall_busy_percentage = (
+                (total_busy_hours / total_hours * 100) if total_hours > 0 else 0
+            )
+
+            # Overall fragmentation score
+            overall_fragmentation = (
+                (total_free_slots / total_usable_free_hours * 100)
+                if total_usable_free_hours > 0
+                else 0
+            )
+
+            # Find longest continuous block across all days
+            longest_block_overall = max(
+                (d["longest_block_hours"] for d in daily_analysis), default=0
+            )
+
+            # Average free slot duration
+            avg_free_slot_duration = (
+                (total_usable_free_hours / total_free_slots)
+                if total_free_slots > 0
+                else 0
+            )
+
+            # Identify best and worst days
+            best_day = None
+            worst_day = None
+            if daily_analysis:
+                # Best day = most usable free time with low fragmentation
+                best_day = max(
+                    daily_analysis,
+                    key=lambda d: d["usable_free_hours"] - (d["fragmentation_score"] / 100)
+                )
+                # Worst day = highest busy percentage or highest fragmentation
+                worst_day = max(
+                    daily_analysis,
+                    key=lambda d: d["busy_percentage"] + d["fragmentation_score"]
+                )
+
+            return ToolResult.ok(
+                {
+                    "summary": {
+                        "date_range": {
+                            "start": start_date_str,
+                            "end": end_date_str,
+                            "days_analyzed": len(daily_analysis),
+                        },
+                        "total_hours": round(total_hours, 2),
+                        "busy_hours": round(total_busy_hours, 2),
+                        "free_hours": round(total_free_hours, 2),
+                        "usable_free_hours": round(total_usable_free_hours, 2),
+                        "busy_percentage": round(overall_busy_percentage, 1),
+                        "total_events": total_events,
+                        "all_day_events": all_day_events_count,
+                    },
+                    "availability_metrics": {
+                        "longest_continuous_block_hours": round(longest_block_overall, 2),
+                        "fragmentation_score": round(overall_fragmentation, 2),
+                        "fragmentation_interpretation": self._interpret_fragmentation(overall_fragmentation),
+                        "average_free_slot_hours": round(avg_free_slot_duration, 2),
+                        "total_usable_free_slots": total_free_slots,
+                    },
+                    "daily_breakdown": daily_analysis,
+                    "insights": {
+                        "best_day_for_deep_work": {
+                            "date": best_day["date"] if best_day else None,
+                            "day_of_week": best_day["day_of_week"] if best_day else None,
+                            "usable_free_hours": best_day["usable_free_hours"] if best_day else None,
+                            "fragmentation_score": best_day["fragmentation_score"] if best_day else None,
+                        } if best_day else None,
+                        "busiest_day": {
+                            "date": worst_day["date"] if worst_day else None,
+                            "day_of_week": worst_day["day_of_week"] if worst_day else None,
+                            "busy_percentage": worst_day["busy_percentage"] if worst_day else None,
+                        } if worst_day else None,
+                        "schedule_health": self._calculate_schedule_health(
+                            overall_busy_percentage, overall_fragmentation, longest_block_overall
+                        ),
+                    },
+                    "settings": {
+                        "calendar_id": calendar_id,
+                        "timezone": str(tz),
+                        "working_hours": (
+                            f"{working_hours_start or 0}:00-{working_hours_end or 24}:00"
+                            if working_hours_start is not None or working_hours_end is not None
+                            else "all day"
+                        ),
+                        "exclude_weekends": exclude_weekends,
+                        "min_slot_duration_minutes": min_slot_duration_minutes,
+                    },
+                }
+            )
+
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+
+    def _calculate_day_quality(
+        self, busy_percentage: float, fragmentation_score: float, longest_block_minutes: float
+    ) -> str:
+        """
+        Calculate a qualitative rating for a day's schedule quality.
+
+        Args:
+            busy_percentage: Percentage of day that is busy
+            fragmentation_score: Fragmentation score for the day
+            longest_block_minutes: Duration of longest continuous free block in minutes
+
+        Returns:
+            Quality rating: "excellent", "good", "fair", "poor"
+        """
+        # Excellent: Low busy (<60%), low fragmentation (<50), good longest block (>2h)
+        if busy_percentage < 60 and fragmentation_score < 50 and longest_block_minutes >= 120:
+            return "excellent"
+
+        # Good: Moderate busy (<75%), moderate fragmentation (<100), decent block (>1h)
+        if busy_percentage < 75 and fragmentation_score < 100 and longest_block_minutes >= 60:
+            return "good"
+
+        # Fair: High busy (<90%) or high fragmentation but some free time
+        if busy_percentage < 90 and longest_block_minutes >= 30:
+            return "fair"
+
+        # Poor: Very high busy (>90%) or very fragmented or no significant blocks
+        return "poor"
+
+    def _interpret_fragmentation(self, fragmentation_score: float) -> str:
+        """
+        Provide human-readable interpretation of fragmentation score.
+
+        Args:
+            fragmentation_score: Calculated fragmentation score
+
+        Returns:
+            Interpretation string
+        """
+        if fragmentation_score < 50:
+            return "Low fragmentation - good for deep work with long, continuous blocks"
+        elif fragmentation_score < 100:
+            return "Moderate fragmentation - mixed schedule with some context switching"
+        elif fragmentation_score < 200:
+            return "High fragmentation - many small gaps, significant context switching overhead"
+        else:
+            return "Very high fragmentation - heavily fragmented schedule, difficult for focused work"
+
+    def _calculate_schedule_health(
+        self, busy_percentage: float, fragmentation_score: float, longest_block_hours: float
+    ) -> dict[str, Any]:
+        """
+        Calculate overall schedule health assessment.
+
+        Args:
+            busy_percentage: Overall busy percentage
+            fragmentation_score: Overall fragmentation score
+            longest_block_hours: Longest continuous block in hours
+
+        Returns:
+            Dictionary with health rating and recommendations
+        """
+        # Calculate health score (0-100, higher is better)
+        # Factors: busy percentage (lower is better), fragmentation (lower is better), longest block (higher is better)
+        busy_score = max(0, 100 - busy_percentage)  # 0-100
+        fragmentation_score_normalized = max(0, 100 - (fragmentation_score / 2))  # 0-100
+        block_score = min(100, (longest_block_hours / 4) * 100)  # 0-100 (4 hours = perfect)
+
+        overall_score = (busy_score * 0.4 + fragmentation_score_normalized * 0.3 + block_score * 0.3)
+
+        # Determine rating
+        if overall_score >= 80:
+            rating = "excellent"
+            recommendation = "Your schedule is well-balanced with good availability for deep work."
+        elif overall_score >= 60:
+            rating = "good"
+            recommendation = "Your schedule is manageable but could benefit from consolidating meetings."
+        elif overall_score >= 40:
+            rating = "fair"
+            recommendation = "Your schedule is quite busy or fragmented. Consider blocking time for focused work."
+        else:
+            rating = "needs_attention"
+            recommendation = "Your schedule is heavily booked or fragmented. Prioritize protecting time for important work."
+
+        return {
+            "rating": rating,
+            "score": round(overall_score, 1),
+            "recommendation": recommendation,
+        }
 
     def _determine_conflict_type(
         self,
