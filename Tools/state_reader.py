@@ -226,6 +226,74 @@ class StateReader:
         except Exception:
             return None
 
+    def update_last_interaction(self, interaction_type: str = "chat",
+                                 agent: Optional[str] = None) -> bool:
+        """Update the last interaction timestamp in TimeState.json.
+
+        Records the current timestamp and interaction metadata to persist
+        time awareness across sessions. Creates TimeState.json if it doesn't
+        exist, or updates existing data preserving session information.
+
+        Args:
+            interaction_type: Type of interaction (e.g., 'chat', 'command', 'route')
+            agent: Optional agent name that handled the interaction
+
+        Returns:
+            True if update succeeded, False on error
+        """
+        path = self.state_dir / "TimeState.json"
+        now = datetime.now().astimezone()
+
+        # Load existing data or create new structure
+        data = {}
+        if path.exists():
+            try:
+                content = path.read_text()
+                data = json.loads(content)
+            except (json.JSONDecodeError, OSError):
+                # Corrupted or unreadable file, start fresh
+                data = {}
+
+        # Check if this is a new day to reset interaction count
+        today = now.date().isoformat()
+        last_date = None
+        if "last_interaction" in data:
+            try:
+                last_ts = data["last_interaction"].get("timestamp")
+                if last_ts:
+                    last_date = datetime.fromisoformat(last_ts).date().isoformat()
+            except (ValueError, TypeError):
+                pass
+
+        # Initialize or update session data
+        if "session_started" not in data:
+            data["session_started"] = now.isoformat()
+
+        # Reset or increment interaction count
+        if last_date != today:
+            data["interaction_count_today"] = 1
+        else:
+            data["interaction_count_today"] = data.get("interaction_count_today", 0) + 1
+
+        # Update last interaction
+        data["last_interaction"] = {
+            "timestamp": now.isoformat(),
+            "type": interaction_type
+        }
+        if agent:
+            data["last_interaction"]["agent"] = agent
+
+        # Write atomically by writing to temp file first
+        try:
+            # Ensure state directory exists
+            self.state_dir.mkdir(parents=True, exist_ok=True)
+
+            # Write the file
+            path.write_text(json.dumps(data, indent=2))
+            return True
+        except Exception:
+            return False
+
     def is_morning(self) -> bool:
         """Check if current time is morning (5am-12pm).
 
