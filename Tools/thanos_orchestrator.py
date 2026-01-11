@@ -310,67 +310,13 @@ You track patterns and surface them.""")
         2. Keyword/phrase matching with scoring
         3. Question type detection
         4. Default to Ops for task-related, Strategy for big-picture
+
+        This method now uses pre-compiled regex patterns for O(m) complexity
+        instead of O(n*m) nested loops. Patterns are cached after first use.
         """
-        message_lower = message.lower()
-
-        # Score each agent based on matches
-        agent_scores = {}
-
-        # Extended keyword mappings for each agent type
-        agent_keywords = {
-            'ops': {
-                'high': ['what should i do', 'whats on my plate', 'help me plan', 'overwhelmed',
-                         'what did i commit', 'process inbox', 'clear my inbox', 'prioritize'],
-                'medium': ['task', 'tasks', 'todo', 'to-do', 'schedule', 'plan', 'organize',
-                           'today', 'tomorrow', 'this week', 'deadline', 'due'],
-                'low': ['busy', 'work', 'productive', 'efficiency']
-            },
-            'coach': {
-                'high': ['i keep doing this', 'why cant i', 'im struggling', 'pattern',
-                         'be honest', 'accountability', 'avoiding', 'procrastinating'],
-                'medium': ['habit', 'stuck', 'motivation', 'discipline', 'consistent',
-                           'excuse', 'failing', 'trying', 'again'],
-                'low': ['feel', 'feeling', 'hard', 'difficult']
-            },
-            'strategy': {
-                'high': ['quarterly', 'long-term', 'strategy', 'goals', 'where am i headed',
-                         'big picture', 'priorities', 'direction'],
-                'medium': ['should i take this client', 'revenue', 'growth', 'future',
-                           'planning', 'decision', 'tradeoff', 'invest'],
-                'low': ['career', 'business', 'opportunity', 'risk']
-            },
-            'health': {
-                'high': ['im tired', 'should i take my vyvanse', 'i cant focus', 'supplements',
-                         'i crashed', 'energy', 'sleep', 'medication'],
-                'medium': ['exhausted', 'fatigue', 'focus', 'concentration', 'adhd',
-                           'stimulant', 'caffeine', 'workout', 'exercise'],
-                'low': ['rest', 'break', 'recovery', 'burnout']
-            }
-        }
-
-        # First pass: Check direct triggers from agent definitions
-        for agent in self.agents.values():
-            agent_key = agent.name.lower()
-            agent_scores[agent_key] = 0
-
-            for trigger in agent.triggers:
-                if trigger.lower() in message_lower:
-                    agent_scores[agent_key] += 10  # High weight for direct triggers
-
-        # Second pass: Score based on keyword matching
-        for agent_key, keywords in agent_keywords.items():
-            if agent_key not in agent_scores:
-                agent_scores[agent_key] = 0
-
-            for kw in keywords.get('high', []):
-                if kw in message_lower:
-                    agent_scores[agent_key] += 5
-            for kw in keywords.get('medium', []):
-                if kw in message_lower:
-                    agent_scores[agent_key] += 2
-            for kw in keywords.get('low', []):
-                if kw in message_lower:
-                    agent_scores[agent_key] += 1
+        # Use pre-compiled KeywordMatcher for O(m) performance
+        matcher = self._get_intent_matcher()
+        agent_scores = matcher.match(message)
 
         # Find the agent with the highest score
         best_agent = max(agent_scores.items(), key=lambda x: x[1]) if agent_scores else (None, 0)
@@ -379,6 +325,7 @@ You track patterns and surface them.""")
             return self.agents.get(best_agent[0])
 
         # Default behavior based on question type
+        message_lower = message.lower()
         if any(word in message_lower for word in ['what should', 'help me', 'need to', 'have to']):
             return self.agents.get('ops')
 
