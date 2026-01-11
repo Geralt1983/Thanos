@@ -129,6 +129,21 @@ All core components have been tested in isolation with comprehensive test suites
     - Recoverable error detection
     - Error handling utilities (logError, handleToolError)
 
+### Integration Tests
+
+14. **test-integration-mcp-tools.mjs** - End-to-End MCP Functionality
+    - Health check tool system status
+    - Cache-first behavior with API fallback
+    - Cached data retrieval
+    - Sleep tool cache integration
+    - Weekly trends multi-source aggregation
+    - Error handling (invalid dates, missing data)
+    - Cache statistics verification
+    - Response format validation
+    - Default parameter behavior
+    - **12 comprehensive integration tests**
+    - See INTEGRATION_TESTS.md for detailed documentation
+
 ## Test Execution
 
 To run all tests:
@@ -137,7 +152,7 @@ To run all tests:
 # Build the project first
 npm run build
 
-# Run individual tests
+# Run unit tests
 ./test-api-client.mjs
 ./test-oauth.mjs
 ./test-rate-limiter.mjs
@@ -151,6 +166,9 @@ npm run build
 ./test-trends-tool.mjs
 ./test-health-check-tool.mjs
 ./test-errors.mjs
+
+# Run integration tests
+./test-integration-mcp-tools.mjs
 
 # Or run all tests at once
 for test in test-*.mjs; do
@@ -173,8 +191,8 @@ Based on the test suite, we estimate **>80% code coverage** across all modules:
 
 ## Test Types
 
-- **Unit Tests**: All components tested in isolation
-- **Integration Tests**: Cache and API integration verified through tool tests
+- **Unit Tests**: All components tested in isolation (tests 1-13)
+- **Integration Tests**: End-to-end MCP tool functionality (test-integration-mcp-tools.mjs)
 - **Structural Tests**: API client and OAuth tested without real API calls
 - **Functional Tests**: All tools tested with expected behaviors documented
 
