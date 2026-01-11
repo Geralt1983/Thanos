@@ -226,7 +226,7 @@ class StateReader:
         except Exception:
             return None
 
-    def calculate_elapsed_time(self) -> timedelta:
+    def calculate_elapsed_time(self) -> Optional[timedelta]:
         """Calculate elapsed time since the last user interaction.
 
         Uses get_last_interaction_time() to retrieve the last interaction
@@ -234,11 +234,11 @@ class StateReader:
 
         Returns:
             timedelta representing elapsed time since last interaction,
-            or timedelta(0) if no previous interaction recorded
+            or None if no previous interaction recorded (first interaction)
         """
         last_time = self.get_last_interaction_time()
         if last_time is None:
-            return timedelta(0)
+            return None
 
         try:
             now = datetime.now().astimezone()
@@ -250,21 +250,24 @@ class StateReader:
             # Ensure we don't return negative timedelta (clock skew, etc.)
             return elapsed if elapsed > timedelta(0) else timedelta(0)
         except Exception:
-            return timedelta(0)
+            return None
 
-    def format_elapsed_time(self, elapsed: timedelta) -> str:
+    def format_elapsed_time(self, elapsed: Optional[timedelta]) -> str:
         """Format a timedelta as human-readable elapsed time string.
 
         Converts a timedelta to a natural language string showing the most
         significant time units (up to two), with " ago" suffix.
 
         Args:
-            elapsed: The timedelta to format
+            elapsed: The timedelta to format, or None for first interaction
 
         Returns:
             Human-readable string like "5 minutes ago", "2 hours and 30 minutes ago",
-            or "1 day and 3 hours ago"
+            "1 day and 3 hours ago", or "This is our first interaction" if elapsed is None
         """
+        if elapsed is None:
+            return "This is our first interaction"
+
         total_seconds = int(elapsed.total_seconds())
 
         if total_seconds < 60:
