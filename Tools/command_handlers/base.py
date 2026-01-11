@@ -9,7 +9,7 @@ import asyncio
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 
 # MemOS integration (optional - graceful degradation if unavailable)
@@ -64,6 +64,7 @@ class BaseHandler:
         context_manager,  # ContextManager
         state_reader,  # StateReader
         thanos_dir: Path,
+        current_agent_getter: Optional[Callable[[], str]] = None,
     ):
         """
         Initialize with injected dependencies.
@@ -74,16 +75,29 @@ class BaseHandler:
             context_manager: ContextManager for context usage info
             state_reader: StateReader for state and commitments
             thanos_dir: Path to Thanos root directory
+            current_agent_getter: Optional callable to get current agent name
         """
         self.orchestrator = orchestrator
         self.session = session_manager
         self.context_mgr = context_manager
         self.state_reader = state_reader
         self.thanos_dir = thanos_dir
+        self._current_agent_getter = current_agent_getter
 
         # MemOS integration (lazy initialization)
         self._memos: Optional[MemOS] = None
         self._memos_initialized = False
+
+    def _get_current_agent(self) -> str:
+        """
+        Get the current agent name.
+
+        Returns:
+            Name of the currently active agent, or "ops" as default
+        """
+        if self._current_agent_getter:
+            return self._current_agent_getter()
+        return "ops"  # Default fallback
 
     def _get_memos(self) -> Optional["MemOS"]:
         """
