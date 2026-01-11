@@ -9,7 +9,7 @@ generation.
 import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import json
 import re
 
@@ -615,6 +615,223 @@ class BriefingEngine:
         """
         ranked_items = self.rank_priorities(context, energy_level)
         return ranked_items[:limit]
+
+    def _classify_task_type(self, item: Dict[str, Any]) -> str:
+        """
+        Classify a task as 'deep_work', 'admin', or 'general'.
+
+        Analyzes task title and category to determine cognitive load.
+
+        Args:
+            item: Task/commitment/priority item
+
+        Returns:
+            One of: 'deep_work', 'admin', 'general'
+        """
+        title_lower = item.get("title", "").lower()
+        category_lower = item.get("category", "").lower()
+
+        # Deep work keywords (require high cognitive load)
+        deep_work_keywords = [
+            "design", "architect", "plan", "research", "analyze", "write",
+            "develop", "implement", "refactor", "debug", "solve", "create",
+            "strategy", "prototype", "algorithm", "optimize", "complex"
+        ]
+
+        # Admin/light work keywords (lower cognitive load)
+        admin_keywords = [
+            "send", "email", "call", "schedule", "update", "review", "respond",
+            "organize", "file", "expense", "timesheet", "report", "status",
+            "meeting", "standup", "sync", "check-in", "admin", "coordinate"
+        ]
+
+        # Check for deep work
+        if any(keyword in title_lower for keyword in deep_work_keywords):
+            return "deep_work"
+
+        # Check for admin
+        if any(keyword in title_lower for keyword in admin_keywords):
+            return "admin"
+
+        # Check category for hints
+        if any(keyword in category_lower for keyword in ["admin", "meeting", "email"]):
+            return "admin"
+
+        return "general"
+
+    def _calculate_peak_focus_time(self, vyvanse_time: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Calculate peak focus window based on Vyvanse timing.
+
+        Vyvanse typically peaks 2-4 hours after dose.
+
+        Args:
+            vyvanse_time: Time medication was taken (HH:MM format)
+
+        Returns:
+            Dictionary with peak_start, peak_end (datetime), or None if no vyvanse_time
+        """
+        if not vyvanse_time:
+            return None
+
+        try:
+            from datetime import time as dt_time
+            vyvanse_dt = datetime.combine(self.today, dt_time.fromisoformat(vyvanse_time))
+            peak_start = vyvanse_dt + timedelta(hours=2)
+            peak_end = vyvanse_dt + timedelta(hours=4)
+
+            return {
+                "peak_start": peak_start,
+                "peak_end": peak_end,
+                "peak_start_str": peak_start.strftime("%I:%M %p"),
+                "peak_end_str": peak_end.strftime("%I:%M %p"),
+                "is_peak_now": peak_start <= datetime.now() <= peak_end
+            }
+        except (ValueError, TypeError):
+            return None
+
+    def get_health_aware_recommendations(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+        health_state: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Get task recommendations based on current health state.
+
+        Integrates energy level, sleep quality, and medication timing to provide
+        intelligent task recommendations and scheduling advice.
+
+        Args:
+            context: Briefing context dict. If None, will gather fresh context.
+            health_state: Health state assessment from HealthStateTracker.
+                         If None and health_tracker available, will get current state.
+
+        Returns:
+            Dictionary with:
+            - recommended_tasks: Tasks suited to current energy
+            - deep_work_tasks: High-value complex tasks (if energy permits)
+            - admin_tasks: Light tasks suitable for low energy
+            - reschedule_recommendations: Tasks to reschedule if energy too low
+            - peak_focus_window: Optimal focus time based on medication
+            - reasoning: Explanation of recommendations
+        """
+        if context is None:
+            context = self.gather_context()
+
+        # Get health state
+        if health_state is None and self.health_tracker:
+            health_state = self.health_tracker.get_current_state_assessment()
+
+        # Extract key health metrics
+        energy_level = None
+        vyvanse_time = None
+        if health_state and health_state.get("has_todays_data"):
+            energy_level = health_state.get("current_energy")
+            vyvanse_time = health_state.get("vyvanse_time")
+
+        # Get all ranked priorities
+        all_priorities = self.rank_priorities(context, energy_level)
+
+        # Classify tasks
+        deep_work_tasks = []
+        admin_tasks = []
+        general_tasks = []
+
+        for item in all_priorities:
+            task_type = self._classify_task_type(item)
+            item["task_type"] = task_type
+
+            if task_type == "deep_work":
+                deep_work_tasks.append(item)
+            elif task_type == "admin":
+                admin_tasks.append(item)
+            else:
+                general_tasks.append(item)
+
+        # Calculate peak focus window
+        peak_focus = self._calculate_peak_focus_time(vyvanse_time)
+
+        # Generate recommendations based on energy level
+        recommended_tasks = []
+        reschedule_recommendations = []
+        reasoning = []
+
+        if energy_level is not None:
+            if energy_level >= 8:
+                # High energy - recommend deep work
+                reasoning.append("🚀 High energy detected - ideal for deep work and complex tasks")
+                recommended_tasks = deep_work_tasks[:3] + general_tasks[:2]
+
+                if peak_focus and peak_focus["is_peak_now"]:
+                    reasoning.append(f"⚡ Currently in peak focus window ({peak_focus['peak_start_str']} - {peak_focus['peak_end_str']})")
+                elif peak_focus:
+                    reasoning.append(f"⏰ Peak focus time coming: {peak_focus['peak_start_str']} - {peak_focus['peak_end_str']}")
+
+            elif energy_level >= 6:
+                # Good energy - mix of deep work and general tasks
+                reasoning.append("✅ Good energy - suitable for most tasks, prioritize important work")
+                recommended_tasks = (deep_work_tasks[:2] + general_tasks[:2] + admin_tasks[:1])[:5]
+
+            elif energy_level >= 4:
+                # Moderate energy - focus on lighter tasks
+                reasoning.append("⚠️ Moderate energy - focus on lighter tasks and admin work")
+                recommended_tasks = admin_tasks[:3] + general_tasks[:2]
+
+                # Identify deep work tasks that should be rescheduled
+                for task in deep_work_tasks:
+                    if task.get("urgency_level") in ["critical", "high"]:
+                        reschedule_recommendations.append({
+                            "task": task,
+                            "reason": "Important complex task requires higher energy - consider rescheduling to peak focus time"
+                        })
+
+            else:
+                # Low energy - only admin/light tasks
+                reasoning.append("🔋 Low energy - prioritize rest and simple administrative tasks only")
+                recommended_tasks = admin_tasks[:3]
+
+                # All deep work should be rescheduled
+                for task in deep_work_tasks[:5]:
+                    reschedule_recommendations.append({
+                        "task": task,
+                        "reason": "Complex task - reschedule to when energy is higher"
+                    })
+
+                # High-urgency general tasks might also need rescheduling
+                for task in general_tasks:
+                    if task.get("urgency_level") in ["critical", "high"]:
+                        reschedule_recommendations.append({
+                            "task": task,
+                            "reason": "Important task but low energy - consider rescheduling or getting support"
+                        })
+                        break  # Only suggest rescheduling most urgent
+
+        else:
+            # No energy data - use standard priority ranking
+            reasoning.append("ℹ️ No energy data available - using standard priority ranking")
+            recommended_tasks = all_priorities[:5]
+
+        # Add pattern-based insights
+        if health_state and health_state.get("patterns"):
+            patterns = health_state["patterns"]
+            day_of_week = self.today.strftime("%A")
+
+            if patterns.get("worst_energy_day") == day_of_week:
+                reasoning.append(f"📊 Historically low energy on {day_of_week} - adjust expectations accordingly")
+            elif patterns.get("best_energy_day") == day_of_week:
+                reasoning.append(f"📊 Typically high energy on {day_of_week} - great day for challenges!")
+
+        return {
+            "recommended_tasks": recommended_tasks[:5],
+            "deep_work_tasks": deep_work_tasks[:5],
+            "admin_tasks": admin_tasks[:5],
+            "general_tasks": general_tasks[:5],
+            "reschedule_recommendations": reschedule_recommendations,
+            "peak_focus_window": peak_focus,
+            "energy_level": energy_level,
+            "reasoning": reasoning,
+            "health_state": health_state
+        }
 
     def render_briefing(
         self,

@@ -1171,5 +1171,321 @@ Priorities: {{ top_priorities|length }}"""
         self.assertIn("Priorities:", briefing)
 
 
+class TestHealthAwareRecommendations(unittest.TestCase):
+    """Test suite for health-aware task recommendation functionality."""
+
+    def setUp(self):
+        """Set up test fixtures before each test."""
+        # Create temporary directory for State files
+        self.temp_dir = tempfile.mkdtemp()
+        self.state_dir = Path(self.temp_dir) / "State"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize engine with test state directory
+        self.engine = BriefingEngine(state_dir=str(self.state_dir))
+
+        # Create test State files with diverse tasks
+        self._create_test_state_files()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        shutil.rmtree(self.temp_dir)
+
+    def _create_test_state_files(self):
+        """Create test State files with various task types."""
+        # Commitments with mix of deep work and admin tasks
+        commitments_content = """# Commitments
+
+## Work
+- [ ] Design new authentication system (Work) @due:2026-01-15
+- [ ] Send project status email to client (Work) @due:2026-01-12
+- [ ] Research API architecture patterns (Work) @due:2026-01-20
+
+## Personal
+- [ ] Schedule dentist appointment (Personal)
+- [ ] Review and organize files (Personal)
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments_content)
+
+        # This Week tasks
+        thisweek_content = """# This Week
+
+## Goals
+- [ ] Implement complex algorithm optimization
+- [ ] Call insurance company
+- [ ] Write technical documentation
+- [ ] Update timesheet
+"""
+        (self.state_dir / "ThisWeek.md").write_text(thisweek_content)
+
+        # Current Focus
+        focus_content = """# Current Focus
+
+## Priorities
+- Refactor core database layer
+- Send team meeting notes
+"""
+        (self.state_dir / "CurrentFocus.md").write_text(focus_content)
+
+    def test_classify_task_type_deep_work(self):
+        """Test classification of deep work tasks."""
+        deep_work_tasks = [
+            {"title": "Design new authentication system", "category": "Work"},
+            {"title": "Research API architecture patterns", "category": "Work"},
+            {"title": "Implement complex algorithm", "category": "Work"},
+            {"title": "Refactor core database layer", "category": "Work"},
+            {"title": "Analyze performance bottlenecks", "category": "Work"}
+        ]
+
+        for task in deep_work_tasks:
+            result = self.engine._classify_task_type(task)
+            self.assertEqual(result, "deep_work", f"Failed for task: {task['title']}")
+
+    def test_classify_task_type_admin(self):
+        """Test classification of admin/light tasks."""
+        admin_tasks = [
+            {"title": "Send project status email", "category": "Work"},
+            {"title": "Schedule dentist appointment", "category": "Personal"},
+            {"title": "Call insurance company", "category": "Personal"},
+            {"title": "Update timesheet", "category": "Work"},
+            {"title": "Review meeting notes", "category": "Work"}
+        ]
+
+        for task in admin_tasks:
+            result = self.engine._classify_task_type(task)
+            self.assertEqual(result, "admin", f"Failed for task: {task['title']}")
+
+    def test_classify_task_type_general(self):
+        """Test classification of general tasks."""
+        general_task = {"title": "Complete project milestone", "category": "Work"}
+        result = self.engine._classify_task_type(general_task)
+        self.assertEqual(result, "general")
+
+    def test_calculate_peak_focus_time_with_vyvanse(self):
+        """Test peak focus time calculation with Vyvanse timing."""
+        result = self.engine._calculate_peak_focus_time("08:00")
+
+        self.assertIsNotNone(result)
+        self.assertIn("peak_start", result)
+        self.assertIn("peak_end", result)
+        self.assertIn("peak_start_str", result)
+        self.assertIn("peak_end_str", result)
+        self.assertIn("is_peak_now", result)
+
+        # Peak should be 2-4 hours after dose
+        from datetime import time as dt_time
+        vyvanse_dt = datetime.combine(self.engine.today, dt_time(8, 0))
+        expected_start = vyvanse_dt + timedelta(hours=2)
+        self.assertEqual(result["peak_start"], expected_start)
+
+    def test_calculate_peak_focus_time_without_vyvanse(self):
+        """Test peak focus time calculation without Vyvanse timing."""
+        result = self.engine._calculate_peak_focus_time(None)
+        self.assertIsNone(result)
+
+    def test_health_aware_recommendations_high_energy(self):
+        """Test recommendations with high energy level (8+)."""
+        # Create mock health state
+        health_state = {
+            "has_todays_data": True,
+            "current_energy": 9,
+            "current_sleep": 8.0,
+            "vyvanse_time": "08:00",
+            "patterns": None
+        }
+
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=health_state
+        )
+
+        # Should prioritize deep work
+        self.assertIsNotNone(recommendations)
+        self.assertIn("recommended_tasks", recommendations)
+        self.assertIn("deep_work_tasks", recommendations)
+        self.assertIn("reasoning", recommendations)
+
+        # Check reasoning includes high energy message
+        reasoning_text = " ".join(recommendations["reasoning"])
+        self.assertIn("High energy", reasoning_text)
+
+        # Should have deep work tasks in recommendations
+        self.assertTrue(len(recommendations["deep_work_tasks"]) > 0)
+
+    def test_health_aware_recommendations_low_energy(self):
+        """Test recommendations with low energy level (< 4)."""
+        # Create mock health state
+        health_state = {
+            "has_todays_data": True,
+            "current_energy": 3,
+            "current_sleep": 5.0,
+            "vyvanse_time": None,
+            "patterns": None
+        }
+
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=health_state
+        )
+
+        # Should prioritize admin tasks
+        self.assertIsNotNone(recommendations)
+        reasoning_text = " ".join(recommendations["reasoning"])
+        self.assertIn("Low energy", reasoning_text)
+
+        # Should have reschedule recommendations for deep work
+        self.assertTrue(len(recommendations["reschedule_recommendations"]) > 0)
+
+        # Rescheduled tasks should be deep work
+        for item in recommendations["reschedule_recommendations"]:
+            self.assertIn("task", item)
+            self.assertIn("reason", item)
+
+    def test_health_aware_recommendations_moderate_energy(self):
+        """Test recommendations with moderate energy level (4-6)."""
+        # Create mock health state
+        health_state = {
+            "has_todays_data": True,
+            "current_energy": 5,
+            "current_sleep": 7.0,
+            "vyvanse_time": None,
+            "patterns": None
+        }
+
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=health_state
+        )
+
+        # Should focus on lighter tasks
+        reasoning_text = " ".join(recommendations["reasoning"])
+        self.assertIn("Moderate energy", reasoning_text)
+
+        # Should have admin tasks prioritized
+        self.assertTrue(len(recommendations["admin_tasks"]) > 0)
+
+    def test_health_aware_recommendations_with_peak_focus(self):
+        """Test that peak focus window is identified."""
+        # Create mock health state with Vyvanse timing
+        health_state = {
+            "has_todays_data": True,
+            "current_energy": 8,
+            "current_sleep": 7.5,
+            "vyvanse_time": "08:00",
+            "patterns": None
+        }
+
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=health_state
+        )
+
+        # Should have peak focus window
+        self.assertIn("peak_focus_window", recommendations)
+        self.assertIsNotNone(recommendations["peak_focus_window"])
+
+        peak_focus = recommendations["peak_focus_window"]
+        self.assertIn("peak_start_str", peak_focus)
+        self.assertIn("peak_end_str", peak_focus)
+
+    def test_health_aware_recommendations_reschedule_logic(self):
+        """Test that important tasks are recommended for rescheduling when energy is low."""
+        # Create mock health state with low energy
+        health_state = {
+            "has_todays_data": True,
+            "current_energy": 2,
+            "current_sleep": 4.0,
+            "vyvanse_time": None,
+            "patterns": None
+        }
+
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=health_state
+        )
+
+        # Should have reschedule recommendations
+        reschedule = recommendations["reschedule_recommendations"]
+        self.assertTrue(len(reschedule) > 0)
+
+        # Each recommendation should have task and reason
+        for item in reschedule:
+            self.assertIn("task", item)
+            self.assertIn("reason", item)
+            self.assertIsInstance(item["reason"], str)
+            self.assertTrue(len(item["reason"]) > 0)
+
+    def test_health_aware_recommendations_no_health_data(self):
+        """Test recommendations when no health data is available."""
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=None
+        )
+
+        # Should still return recommendations with fallback
+        self.assertIsNotNone(recommendations)
+        reasoning_text = " ".join(recommendations["reasoning"])
+        self.assertIn("No energy data", reasoning_text)
+
+        # Should have recommended tasks (using standard priority ranking)
+        self.assertTrue(len(recommendations["recommended_tasks"]) > 0)
+
+    def test_health_aware_recommendations_with_patterns(self):
+        """Test recommendations include pattern-based insights."""
+        # Create mock health state with patterns
+        health_state = {
+            "has_todays_data": True,
+            "current_energy": 6,
+            "current_sleep": 7.0,
+            "vyvanse_time": None,
+            "patterns": {
+                "has_sufficient_data": True,
+                "worst_energy_day": self.engine.today.strftime("%A"),
+                "best_energy_day": "Friday"
+            }
+        }
+
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=health_state
+        )
+
+        # Should include pattern-based reasoning
+        reasoning_text = " ".join(recommendations["reasoning"])
+        self.assertIn("Historically low energy", reasoning_text)
+
+    def test_health_aware_recommendations_structure(self):
+        """Test that recommendations return expected data structure."""
+        health_state = {
+            "has_todays_data": True,
+            "current_energy": 7,
+            "current_sleep": 7.5,
+            "vyvanse_time": "08:00",
+            "patterns": None
+        }
+
+        recommendations = self.engine.get_health_aware_recommendations(
+            health_state=health_state
+        )
+
+        # Verify all expected keys are present
+        expected_keys = [
+            "recommended_tasks",
+            "deep_work_tasks",
+            "admin_tasks",
+            "general_tasks",
+            "reschedule_recommendations",
+            "peak_focus_window",
+            "energy_level",
+            "reasoning",
+            "health_state"
+        ]
+
+        for key in expected_keys:
+            self.assertIn(key, recommendations, f"Missing key: {key}")
+
+        # Verify types
+        self.assertIsInstance(recommendations["recommended_tasks"], list)
+        self.assertIsInstance(recommendations["deep_work_tasks"], list)
+        self.assertIsInstance(recommendations["admin_tasks"], list)
+        self.assertIsInstance(recommendations["general_tasks"], list)
+        self.assertIsInstance(recommendations["reschedule_recommendations"], list)
+        self.assertIsInstance(recommendations["reasoning"], list)
+        self.assertEqual(recommendations["energy_level"], 7)
+
+
 if __name__ == '__main__':
     unittest.main()
