@@ -978,6 +978,72 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                 },
             },
+            {
+                "name": "create_event",
+                "description": "Create a new calendar event. Supports summary, description, start/end time, all-day events, location, attendees, reminders, and color coding. Returns the created event details including event ID and link.",
+                "parameters": {
+                    "summary": {
+                        "type": "string",
+                        "description": "Event title/summary. Required.",
+                        "required": True,
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Start time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS) for timed events, or (YYYY-MM-DD) for all-day events. Required.",
+                        "required": True,
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "End time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS) for timed events, or (YYYY-MM-DD) for all-day events. Required.",
+                        "required": True,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID to create event in. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Event description/notes. Defaults to empty string.",
+                        "required": False,
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "Event location (address, meeting room, virtual link, etc.). Defaults to empty string.",
+                        "required": False,
+                    },
+                    "attendees": {
+                        "type": "array",
+                        "description": "List of attendee email addresses. Each item should be a string email. Defaults to empty list.",
+                        "required": False,
+                    },
+                    "color_id": {
+                        "type": "string",
+                        "description": "Calendar color ID (1-11). See Google Calendar API docs for color meanings. Defaults to None (calendar default color).",
+                        "required": False,
+                    },
+                    "reminders": {
+                        "type": "object",
+                        "description": "Reminder settings. Format: {'useDefault': False, 'overrides': [{'method': 'email'|'popup', 'minutes': int}]}. If not specified, uses calendar default reminders.",
+                        "required": False,
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone for event times (e.g., 'America/New_York', 'UTC'). Only used for timed events. Defaults to system timezone.",
+                        "required": False,
+                    },
+                    "transparency": {
+                        "type": "string",
+                        "description": "Event transparency: 'opaque' (busy) or 'transparent' (free). Defaults to 'opaque'.",
+                        "required": False,
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "description": "Event visibility: 'default', 'public', 'private', or 'confidential'. Defaults to 'default'.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -1012,6 +1078,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_check_conflicts(arguments)
             elif tool_name == "get_availability":
                 return await self._tool_get_availability(arguments)
+            elif tool_name == "create_event":
+                return await self._tool_create_event(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -2831,6 +2899,277 @@ class GoogleCalendarAdapter(BaseAdapter):
         except ValueError as e:
             # Handle authentication errors from _get_service()
             return ToolResult.fail(str(e))
+
+    async def _tool_create_event(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Create a new calendar event.
+
+        This tool creates a new event in the specified calendar with full support for:
+        - Timed events with specific start/end times
+        - All-day events (when date format is YYYY-MM-DD)
+        - Event description and location
+        - Attendee list with automatic invitation emails
+        - Custom reminders (email or popup)
+        - Color coding for visual organization
+        - Transparency (busy/free status)
+        - Visibility settings (default/public/private/confidential)
+
+        The created event is immediately visible in Google Calendar and synced
+        across all devices. Attendees (if specified) will receive invitation emails.
+
+        Args:
+            arguments: Tool parameters including:
+                - summary: Event title (required)
+                - start_time: Start time in ISO format (required)
+                - end_time: End time in ISO format (required)
+                - calendar_id: Target calendar ID (default: 'primary')
+                - description: Event description (optional)
+                - location: Event location (optional)
+                - attendees: List of attendee emails (optional)
+                - color_id: Color ID 1-11 (optional)
+                - reminders: Reminder configuration object (optional)
+                - timezone: Timezone for timed events (optional)
+                - transparency: 'opaque' or 'transparent' (default: 'opaque')
+                - visibility: Visibility setting (default: 'default')
+
+        Returns:
+            ToolResult containing created event details including:
+            - Event ID (for future updates/deletions)
+            - HTML link to view in Google Calendar
+            - Event summary, times, location, attendees
+            - All configured properties
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract and validate required parameters
+            summary = arguments.get("summary")
+            start_time_str = arguments.get("start_time")
+            end_time_str = arguments.get("end_time")
+
+            if not summary:
+                return ToolResult.fail("Missing required parameter: summary")
+            if not start_time_str:
+                return ToolResult.fail("Missing required parameter: start_time")
+            if not end_time_str:
+                return ToolResult.fail("Missing required parameter: end_time")
+
+            # Extract optional parameters with defaults
+            calendar_id = arguments.get("calendar_id", "primary")
+            description = arguments.get("description", "")
+            location = arguments.get("location", "")
+            attendees_list = arguments.get("attendees", [])
+            color_id = arguments.get("color_id")
+            reminders = arguments.get("reminders")
+            timezone_str = arguments.get("timezone")
+            transparency = arguments.get("transparency", "opaque")
+            visibility = arguments.get("visibility", "default")
+
+            # Validate transparency
+            if transparency not in ["opaque", "transparent"]:
+                return ToolResult.fail(
+                    "Invalid transparency value. Must be 'opaque' (busy) or 'transparent' (free)."
+                )
+
+            # Validate visibility
+            if visibility not in ["default", "public", "private", "confidential"]:
+                return ToolResult.fail(
+                    "Invalid visibility value. Must be 'default', 'public', 'private', or 'confidential'."
+                )
+
+            # Validate color_id if provided
+            if color_id is not None:
+                # Color IDs are strings "1" through "11"
+                if color_id not in [str(i) for i in range(1, 12)]:
+                    return ToolResult.fail(
+                        "Invalid color_id. Must be a string from '1' to '11'."
+                    )
+
+            # Determine timezone
+            if timezone_str:
+                try:
+                    tz = ZoneInfo(timezone_str)
+                except Exception:
+                    return ToolResult.fail(
+                        f"Invalid timezone: {timezone_str}. Use IANA timezone names like 'America/New_York' or 'UTC'."
+                    )
+            else:
+                # Use system local timezone
+                try:
+                    tz = ZoneInfo("localtime")
+                except Exception:
+                    tz = ZoneInfo("UTC")
+
+            # Parse start and end times to determine if this is an all-day event
+            # All-day events use date format (YYYY-MM-DD)
+            # Timed events use datetime format (YYYY-MM-DDTHH:MM:SS)
+            is_all_day = False
+
+            # Check if the time strings are date-only format (YYYY-MM-DD)
+            # Simple heuristic: if no 'T' separator and length is 10, it's likely a date
+            if len(start_time_str) == 10 and "T" not in start_time_str:
+                is_all_day = True
+
+            if len(end_time_str) == 10 and "T" not in end_time_str:
+                if not is_all_day:
+                    return ToolResult.fail(
+                        "Start and end times must both be dates (YYYY-MM-DD) or both be datetimes (YYYY-MM-DDTHH:MM:SS)"
+                    )
+                is_all_day = True
+            elif is_all_day:
+                return ToolResult.fail(
+                    "Start and end times must both be dates (YYYY-MM-DD) or both be datetimes (YYYY-MM-DDTHH:MM:SS)"
+                )
+
+            # Build the event object
+            event_body = {
+                "summary": summary,
+                "description": description,
+            }
+
+            # Add location if provided
+            if location:
+                event_body["location"] = location
+
+            # Configure start and end times based on event type
+            if is_all_day:
+                # All-day event - use date format
+                event_body["start"] = {
+                    "date": start_time_str,
+                }
+                event_body["end"] = {
+                    "date": end_time_str,
+                }
+            else:
+                # Timed event - use dateTime format with timezone
+                # Parse and validate datetime strings
+                try:
+                    # Try to parse the datetime to validate format
+                    start_dt = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                    end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+
+                    # Ensure end is after start
+                    if end_dt <= start_dt:
+                        return ToolResult.fail("end_time must be after start_time")
+
+                except ValueError as e:
+                    return ToolResult.fail(
+                        f"Invalid datetime format: {e}. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"
+                    )
+
+                event_body["start"] = {
+                    "dateTime": start_time_str,
+                    "timeZone": str(tz),
+                }
+                event_body["end"] = {
+                    "dateTime": end_time_str,
+                    "timeZone": str(tz),
+                }
+
+            # Add attendees if provided
+            if attendees_list:
+                event_body["attendees"] = [{"email": email} for email in attendees_list]
+
+            # Add color if provided
+            if color_id:
+                event_body["colorId"] = color_id
+
+            # Add reminders if provided
+            if reminders:
+                event_body["reminders"] = reminders
+            # Otherwise, use calendar default reminders (Google's default behavior)
+
+            # Add transparency
+            event_body["transparency"] = transparency
+
+            # Add visibility
+            event_body["visibility"] = visibility
+
+            # Create the event using Google Calendar API
+            created_event = (
+                service.events()
+                .insert(calendarId=calendar_id, body=event_body, sendUpdates="all")
+                .execute()
+            )
+
+            # Format the response with all relevant event details
+            event_data = {
+                "event_id": created_event.get("id"),
+                "html_link": created_event.get("htmlLink"),
+                "summary": created_event.get("summary"),
+                "description": created_event.get("description", ""),
+                "location": created_event.get("location", ""),
+                "created": created_event.get("created"),
+                "updated": created_event.get("updated"),
+                "creator": {
+                    "email": created_event.get("creator", {}).get("email"),
+                    "display_name": created_event.get("creator", {}).get("displayName"),
+                },
+                "organizer": {
+                    "email": created_event.get("organizer", {}).get("email"),
+                    "display_name": created_event.get("organizer", {}).get("displayName"),
+                },
+                "is_all_day": is_all_day,
+                "transparency": created_event.get("transparency", "opaque"),
+                "visibility": created_event.get("visibility", "default"),
+                "status": created_event.get("status", "confirmed"),
+                "calendar_id": calendar_id,
+            }
+
+            # Add time information based on event type
+            if is_all_day:
+                event_data["start_date"] = created_event.get("start", {}).get("date")
+                event_data["end_date"] = created_event.get("end", {}).get("date")
+            else:
+                event_data["start_time"] = created_event.get("start", {}).get("dateTime")
+                event_data["end_time"] = created_event.get("end", {}).get("dateTime")
+                event_data["timezone"] = created_event.get("start", {}).get("timeZone")
+
+            # Add attendees information if present
+            if "attendees" in created_event:
+                event_data["attendees"] = [
+                    {
+                        "email": attendee.get("email"),
+                        "display_name": attendee.get("displayName"),
+                        "response_status": attendee.get("responseStatus", "needsAction"),
+                        "organizer": attendee.get("organizer", False),
+                    }
+                    for attendee in created_event.get("attendees", [])
+                ]
+                event_data["attendees_count"] = len(event_data["attendees"])
+            else:
+                event_data["attendees"] = []
+                event_data["attendees_count"] = 0
+
+            # Add color information if present
+            if "colorId" in created_event:
+                event_data["color_id"] = created_event.get("colorId")
+
+            # Add reminders information
+            if "reminders" in created_event:
+                event_data["reminders"] = created_event.get("reminders")
+
+            return ToolResult.ok(
+                event_data,
+                message=f"Successfully created event: {summary}",
+            )
+
+        except HttpError as e:
+            # Handle specific Google Calendar API errors
+            if e.resp.status == 404:
+                return ToolResult.fail(f"Calendar not found: {calendar_id}")
+            elif e.resp.status == 403:
+                return ToolResult.fail(
+                    f"Permission denied. Check that you have write access to calendar: {calendar_id}"
+                )
+            else:
+                return ToolResult.fail(f"Google Calendar API error: {e}")
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+        except Exception as e:
+            return ToolResult.fail(f"Error creating event: {e}")
 
     def _calculate_day_quality(
         self, busy_percentage: float, fragmentation_score: float, longest_block_minutes: float
