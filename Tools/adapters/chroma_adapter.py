@@ -599,19 +599,24 @@ class ChromaAdapter(BaseAdapter):
         """
         Generate embedding for a single text using OpenAI.
 
-        Returns None if embedding generation fails.
-        """
-        if not self._openai_client:
-            return None
+        This method delegates to _generate_embeddings_batch internally to
+        ensure consistent embedding generation logic and error handling.
+        Maintains backward compatibility with existing single-item operations
+        while benefiting from the optimized batch implementation.
 
-        try:
-            response = self._openai_client.embeddings.create(
-                model=VECTOR_SCHEMA["embedding_model"],
-                input=text
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            return None
+        Args:
+            text: Single text string to generate embedding for.
+
+        Returns:
+            Embedding vector as list of floats, or None if generation fails.
+        """
+        # Delegate to batch method with single-item list for code consolidation
+        embeddings_batch = self._generate_embeddings_batch([text])
+
+        # Return first (and only) embedding if successful, None otherwise
+        if embeddings_batch and len(embeddings_batch) > 0:
+            return embeddings_batch[0]
+        return None
 
     def _generate_embeddings_batch(self, texts: List[str]) -> Optional[List[List[float]]]:
         """
