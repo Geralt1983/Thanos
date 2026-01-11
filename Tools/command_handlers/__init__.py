@@ -34,6 +34,7 @@ from Tools.command_handlers.state_handler import StateHandler
 from Tools.command_handlers.memory_handler import MemoryHandler
 from Tools.command_handlers.analytics_handler import AnalyticsHandler
 from Tools.command_handlers.model_handler import ModelHandler
+from Tools.command_handlers.core_handler import CoreHandler
 
 __all__ = [
     "BaseHandler",
@@ -46,4 +47,5 @@ __all__ = [
     "MemoryHandler",
     "AnalyticsHandler",
     "ModelHandler",
+    "CoreHandler",
 ]
