@@ -25,6 +25,204 @@ import type { ToolDefinition } from "../../shared/types.js";
  * @returns Array of task tool definitions for MCP protocol
  */
 export function getTaskTools(): ToolDefinition[] {
-  // Tool definitions will be added in subtask-2.2
-  return [];
+  return [
+    {
+      name: "workos_get_today_metrics",
+      description: "Get today's work progress: points earned, target, pace status, streak, and clients touched",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "workos_get_tasks",
+      description: "Get tasks from WorkOS. Filter by status: 'active' (today), 'queued' (up next), 'backlog', or 'done'",
+      inputSchema: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            description: "Filter by status: active, queued, backlog, done",
+            enum: ["active", "queued", "backlog", "done"],
+          },
+          clientId: {
+            type: "number",
+            description: "Filter by client ID",
+          },
+          limit: {
+            type: "number",
+            description: "Max tasks to return (default 50)",
+          },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "workos_get_clients",
+      description: "Get all active clients from WorkOS",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "workos_create_task",
+      description: "Create a new task in WorkOS",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Task title (required)",
+          },
+          description: {
+            type: "string",
+            description: "Task description",
+          },
+          clientId: {
+            type: "number",
+            description: "Client ID to associate with",
+          },
+          status: {
+            type: "string",
+            description: "Initial status (default: backlog)",
+            enum: ["active", "queued", "backlog"],
+          },
+          category: {
+            type: "string",
+            description: "Task category: work or personal (default: work)",
+            enum: ["work", "personal"],
+          },
+          valueTier: {
+            type: "string",
+            description: "Value tier: checkbox, progress, deliverable, milestone",
+            enum: ["checkbox", "progress", "deliverable", "milestone"],
+          },
+          drainType: {
+            type: "string",
+            description: "Energy drain type: deep, shallow, admin",
+            enum: ["deep", "shallow", "admin"],
+          },
+        },
+        required: ["title"],
+      },
+    },
+    {
+      name: "workos_complete_task",
+      description: "Mark a task as completed",
+      inputSchema: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "number",
+            description: "Task ID to complete",
+          },
+        },
+        required: ["taskId"],
+      },
+    },
+    {
+      name: "workos_promote_task",
+      description: "Promote a task to 'active' (today) status",
+      inputSchema: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "number",
+            description: "Task ID to promote",
+          },
+        },
+        required: ["taskId"],
+      },
+    },
+    {
+      name: "workos_get_streak",
+      description: "Get current streak information and daily goal status",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "workos_get_client_memory",
+      description: "Get AI-generated notes and status for a client",
+      inputSchema: {
+        type: "object",
+        properties: {
+          clientName: {
+            type: "string",
+            description: "Client name to look up",
+          },
+        },
+        required: ["clientName"],
+      },
+    },
+    {
+      name: "workos_daily_summary",
+      description: "Get a comprehensive daily summary for Life OS morning brief",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: "workos_update_task",
+      description: "Update a task's properties (clientId, title, description, status, valueTier, drainType)",
+      inputSchema: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "number",
+            description: "Task ID to update (required)",
+          },
+          clientId: {
+            type: "number",
+            description: "New client ID (use null to unassign)",
+          },
+          title: {
+            type: "string",
+            description: "New task title",
+          },
+          description: {
+            type: "string",
+            description: "New task description",
+          },
+          status: {
+            type: "string",
+            description: "New status",
+            enum: ["active", "queued", "backlog", "done"],
+          },
+          valueTier: {
+            type: "string",
+            description: "New value tier",
+            enum: ["checkbox", "progress", "deliverable", "milestone"],
+          },
+          drainType: {
+            type: "string",
+            description: "New drain type",
+            enum: ["deep", "shallow", "admin"],
+          },
+        },
+        required: ["taskId"],
+      },
+    },
+    {
+      name: "workos_delete_task",
+      description: "Permanently delete a task (use for duplicates or cleanup)",
+      inputSchema: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "number",
+            description: "Task ID to delete (required)",
+          },
+        },
+        required: ["taskId"],
+      },
+    },
+  ];
 }
