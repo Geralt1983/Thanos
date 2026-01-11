@@ -151,7 +151,82 @@ How did you balance rest and productivity this weekend?
 {% endfor %}
 {% endif %}
 
+{% if weekly_review and weekly_review.has_data %}
+---
+
+# 📊 Weekly Pattern Review
+
+{% if weekly_review.total_completions > 0 %}
+**Week of {{ weekly_review.week_start }} to {{ weekly_review.week_end }}**
+
+## 📈 This Week's Summary
+
+**Total Tasks Completed:** {{ weekly_review.total_completions }}
+
+{% if weekly_review.most_productive_day %}
+### 🌟 Most Productive Day
+**{{ weekly_review.most_productive_day.day }}** - {{ weekly_review.most_productive_day.count }} tasks completed
+{% endif %}
+
+{% if weekly_review.most_productive_time %}
+### ⏰ Peak Productivity Time
+**{{ weekly_review.most_productive_time.time|title }}** - {{ weekly_review.most_productive_time.count }} tasks completed
+{% endif %}
+
+---
+
+## 🎯 Task Category Breakdown
+
+{% if weekly_review.category_breakdown %}
+{% for category, data in weekly_review.category_breakdown.items() %}
+- **{{ category.replace('_', ' ')|title }}**: {{ data.count }} tasks ({{ data.percentage }}%)
+{% endfor %}
+{% endif %}
+
+---
+
+## 💡 Key Insights
+
+{% if weekly_review.insights %}
+{% for insight in weekly_review.insights %}
+- {{ insight }}
+{% endfor %}
+{% endif %}
+
+{% if weekly_review.pattern_changes %}
+
+---
+
+## 🔄 Pattern Changes
+
+{% for change in weekly_review.pattern_changes %}
+- {{ change.description }}
+{% endfor %}
+{% endif %}
+
+---
+
+## 🚀 Optimizations for Next Week
+
+{% if weekly_review.optimizations %}
+{% for optimization in weekly_review.optimizations %}
+- {{ optimization.suggestion }}
+{% endfor %}
+{% else %}
+Continue with your current approach - your patterns look healthy!
+{% endif %}
+
+{% else %}
+**Week of {{ weekly_review.week_start }} to {{ weekly_review.week_end }}**
+
+No task completions recorded this week. Consider tracking your completed tasks to build productivity insights!
+{% endif %}
+
+---
+{% endif %}
+
 ---
 
 *Generated at {{ generated_at }}*
 *Briefing Type: Evening*
+{% if weekly_review and weekly_review.has_data %}*Includes Weekly Pattern Review*{% endif %}

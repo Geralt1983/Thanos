@@ -1162,6 +1162,20 @@ class BriefingEngine:
                 "commitment_progress": kwargs.get("commitment_progress", []),
             })
 
+            # Add weekly review on Sundays if enabled
+            weekly_review_config = self.config.get("patterns", {}).get("weekly_review", {})
+            is_sunday = context["day_of_week"] == "Sunday"
+            weekly_review_enabled = weekly_review_config.get("enabled", True)
+
+            if is_sunday and weekly_review_enabled and "weekly_review" not in kwargs:
+                # Generate weekly pattern summary
+                comparison_weeks = weekly_review_config.get("comparison_weeks", 2)
+                weekly_summary = self.get_weekly_pattern_summary(comparison_weeks=comparison_weeks)
+                template_data["weekly_review"] = weekly_summary
+            elif "weekly_review" in kwargs:
+                # Allow manual override via kwargs
+                template_data["weekly_review"] = kwargs["weekly_review"]
+
         # Add any additional kwargs
         template_data.update(kwargs)
 
@@ -1982,3 +1996,236 @@ class BriefingEngine:
             "recommendations": recommendations,
             "detected_at": datetime.now().isoformat()
         }
+
+    def get_weekly_pattern_summary(self, comparison_weeks: int = 2) -> Dict[str, Any]:
+        """
+        Generate a weekly pattern summary for Sunday evening briefings.
+
+        Analyzes task completion patterns from the past week and compares with
+        previous weeks to identify trends, most productive times, and optimization opportunities.
+
+        Args:
+            comparison_weeks: Number of previous weeks to compare against (default: 2)
+
+        Returns:
+            Dictionary containing:
+            - has_data: Whether sufficient data exists for analysis
+            - week_start: Start date of the current week
+            - week_end: End date of the current week
+            - total_completions: Number of tasks completed this week
+            - most_productive_day: Day with most completions
+            - most_productive_time: Time period with most completions
+            - category_breakdown: Distribution of task categories
+            - pattern_changes: Notable changes from previous weeks
+            - optimizations: Suggested optimizations for next week
+            - insights: Human-readable insights
+        """
+        if not PATTERN_ANALYZER_AVAILABLE or self.pattern_analyzer is None:
+            return {
+                "has_data": False,
+                "reason": "Pattern learning is not enabled or PatternAnalyzer not available"
+            }
+
+        # Calculate date range for the week to review
+        today = date.today()
+        days_since_sunday = (today.weekday() + 1) % 7
+
+        # If today is Sunday, review the completed previous week (last Sun through last Sat)
+        # Otherwise, review the current partial week (this Sunday through today)
+        if days_since_sunday == 0:  # Today is Sunday
+            week_end = today - timedelta(days=1)  # Last Saturday
+            week_start = week_end - timedelta(days=6)  # Last Sunday
+        else:
+            week_start = today - timedelta(days=days_since_sunday)
+            week_end = today
+
+        # Get completions for this week (use up to 14 days to ensure we get full week)
+        all_completions = self.pattern_analyzer.get_completions(days=14)
+        this_week_completions = [
+            c for c in all_completions
+            if week_start <= date.fromisoformat(c["completion_date"]) <= week_end
+        ]
+
+        if len(this_week_completions) == 0:
+            return {
+                "has_data": False,
+                "reason": "No task completions recorded this week",
+                "week_start": week_start.isoformat(),
+                "week_end": week_end.isoformat()
+            }
+
+        # Get patterns for overall context
+        patterns = self.pattern_analyzer.identify_patterns()
+
+        # Analyze this week's data
+        result = {
+            "has_data": True,
+            "week_start": week_start.isoformat(),
+            "week_end": week_end.isoformat(),
+            "total_completions": len(this_week_completions)
+        }
+
+        # Find most productive day this week
+        day_counts = {}
+        for completion in this_week_completions:
+            day = completion["day_of_week"]
+            day_counts[day] = day_counts.get(day, 0) + 1
+
+        if day_counts:
+            most_productive_day = max(day_counts.items(), key=lambda x: x[1])
+            result["most_productive_day"] = {
+                "day": most_productive_day[0],
+                "count": most_productive_day[1]
+            }
+
+        # Find most productive time this week
+        time_counts = {}
+        for completion in this_week_completions:
+            time_period = completion["time_of_day"]
+            time_counts[time_period] = time_counts.get(time_period, 0) + 1
+
+        if time_counts:
+            most_productive_time = max(time_counts.items(), key=lambda x: x[1])
+            result["most_productive_time"] = {
+                "time": most_productive_time[0],
+                "count": most_productive_time[1]
+            }
+
+        # Category breakdown for this week
+        category_counts = {}
+        for completion in this_week_completions:
+            category = completion["task_category"]
+            category_counts[category] = category_counts.get(category, 0) + 1
+
+        result["category_breakdown"] = {
+            cat: {
+                "count": count,
+                "percentage": round((count / len(this_week_completions)) * 100, 1)
+            }
+            for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
+        }
+
+        # Pattern changes compared to historical data
+        pattern_changes = []
+        if patterns.get("has_sufficient_data"):
+            # Compare this week's most productive day to overall pattern
+            if "day_of_week_patterns" in patterns:
+                day_patterns = patterns["day_of_week_patterns"]
+                overall_most_productive = max(
+                    day_patterns.items(),
+                    key=lambda x: x[1].get("total_completions", 0)
+                )[0] if day_patterns else None
+
+                if overall_most_productive and result.get("most_productive_day"):
+                    this_week_day = result["most_productive_day"]["day"]
+                    if this_week_day != overall_most_productive:
+                        pattern_changes.append({
+                            "type": "productivity_shift",
+                            "description": f"This week's most productive day was {this_week_day}, "
+                                         f"different from your usual pattern ({overall_most_productive})"
+                        })
+
+            # Compare category distribution
+            if "category_patterns" in patterns:
+                cat_patterns = patterns["category_patterns"]
+                for category, this_week_data in result["category_breakdown"].items():
+                    if category in cat_patterns:
+                        historical_pct = cat_patterns[category]["percentage_of_total"]
+                        this_week_pct = this_week_data["percentage"]
+                        difference = this_week_pct - historical_pct
+
+                        if abs(difference) > 20:  # Significant change
+                            direction = "increased" if difference > 0 else "decreased"
+                            pattern_changes.append({
+                                "type": "category_shift",
+                                "category": category,
+                                "description": f"{category.replace('_', ' ').title()} tasks {direction} "
+                                             f"({abs(difference):.1f}% change from usual)"
+                            })
+
+        result["pattern_changes"] = pattern_changes
+
+        # Generate optimization suggestions
+        optimizations = []
+
+        # Suggest focusing on most productive times
+        if result.get("most_productive_time"):
+            optimizations.append({
+                "type": "time_optimization",
+                "suggestion": f"Schedule important tasks during your most productive time: "
+                            f"{result['most_productive_time']['time']}"
+            })
+
+        # Suggest based on category distribution
+        work_related = sum(
+            data["count"] for cat, data in result["category_breakdown"].items()
+            if "work" in cat.lower()
+        )
+        personal_related = sum(
+            data["count"] for cat, data in result["category_breakdown"].items()
+            if cat.lower() in ["personal", "health", "household"]
+        )
+
+        if work_related > personal_related * 3:
+            optimizations.append({
+                "type": "balance",
+                "suggestion": "Consider allocating more time for personal tasks next week to maintain work-life balance"
+            })
+        elif personal_related > work_related * 3 and not self.today.weekday() >= 5:  # Not weekend
+            optimizations.append({
+                "type": "balance",
+                "suggestion": "You focused heavily on personal tasks this week. "
+                            "Consider planning work priorities for next week."
+            })
+
+        # Suggest based on completion volume
+        if len(this_week_completions) < 7:  # Less than one task per day
+            optimizations.append({
+                "type": "productivity",
+                "suggestion": "Low task completion this week. Consider breaking larger tasks into smaller, trackable items."
+            })
+        elif len(this_week_completions) > 35:  # More than 5 per day
+            optimizations.append({
+                "type": "pacing",
+                "suggestion": "High task volume this week! Great productivity, but remember to schedule rest and recovery."
+            })
+
+        # Suggest based on pattern data
+        if patterns.get("has_sufficient_data"):
+            insights = patterns.get("insights", [])
+            # Add pattern-based optimization
+            if result.get("most_productive_day"):
+                day = result["most_productive_day"]["day"]
+                optimizations.append({
+                    "type": "scheduling",
+                    "suggestion": f"Consider scheduling your most important tasks on {day}s, "
+                                f"your most productive day this week"
+                })
+
+        result["optimizations"] = optimizations
+
+        # Generate human-readable insights
+        insights = []
+        if result.get("most_productive_day"):
+            insights.append(
+                f"Your most productive day this week was {result['most_productive_day']['day']} "
+                f"with {result['most_productive_day']['count']} tasks completed"
+            )
+
+        if result.get("most_productive_time"):
+            insights.append(
+                f"You completed most tasks in the {result['most_productive_time']['time']} "
+                f"({result['most_productive_time']['count']} tasks)"
+            )
+
+        # Top category
+        if result["category_breakdown"]:
+            top_category = list(result["category_breakdown"].items())[0]
+            insights.append(
+                f"{top_category[0].replace('_', ' ').title()} tasks were your main focus "
+                f"({top_category[1]['percentage']}%)"
+            )
+
+        result["insights"] = insights
+
+        return result
