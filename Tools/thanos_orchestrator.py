@@ -501,13 +501,18 @@ You track patterns and surface them.""")
         2. Command shortcut detection (daily, email, tasks)
         3. Agent trigger matching
         4. Default to chat with best-fit agent
+
+        After handling the request, updates the last interaction timestamp
+        in TimeState.json for time-awareness across sessions.
         """
         message_lower = message.lower().strip()
 
         # 1. Check for explicit command pattern
         cmd_match = re.match(r'^/?(\w+:\w+)\s*(.*)?$', message)
         if cmd_match:
-            return self.run_command(cmd_match.group(1), cmd_match.group(2) or "", stream)
+            result = self.run_command(cmd_match.group(1), cmd_match.group(2) or "", stream)
+            self.state_reader.update_last_interaction("route")
+            return result
 
         # 2. Check for command keywords in natural language
         command_keywords = {
@@ -523,14 +528,18 @@ You track patterns and surface them.""")
             if any(kw in message_lower for kw in keywords):
                 # Only trigger if it's a short request (likely a command, not a question about it)
                 if len(message.split()) <= 4:
-                    return self.run_command(cmd, "", stream)
+                    result = self.run_command(cmd, "", stream)
+                    self.state_reader.update_last_interaction("route")
+                    return result
 
         # 3. Find best agent based on triggers and context
         agent = self.find_agent(message)
 
         # 4. Chat with the detected agent (or default)
         agent_name = agent.name if agent else None
-        return self.chat(message, agent=agent_name, stream=stream)
+        result = self.chat(message, agent=agent_name, stream=stream)
+        self.state_reader.update_last_interaction("route", agent_name)
+        return result
 
     def list_commands(self) -> List[str]:
         """List all available commands."""
