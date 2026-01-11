@@ -20,6 +20,14 @@ from .habit_streaks import (
     analyze_streak_breaks,
     get_all_habit_streaks,
 )
+from .trend_detector import (
+    detect_trend,
+    analyze_task_completion_trend,
+    analyze_health_metric_trend,
+    analyze_productivity_trend,
+    calculate_momentum,
+    get_all_trends,
+)
 
 __all__ = [
     "analyze_hourly_patterns",
@@ -36,4 +44,10 @@ __all__ = [
     "analyze_habit_streak",
     "analyze_streak_breaks",
     "get_all_habit_streaks",
+    "detect_trend",
+    "analyze_task_completion_trend",
+    "analyze_health_metric_trend",
+    "analyze_productivity_trend",
+    "calculate_momentum",
+    "get_all_trends",
 ]
