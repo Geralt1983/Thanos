@@ -300,6 +300,65 @@ class ValidRelationshipType(Enum):
 
 
 # ============================================================================
+# CODE REVIEW GUIDELINES FOR CYPHER QUERY CONSTRUCTION
+# ============================================================================
+# When adding or modifying Cypher queries in this file, follow these guidelines
+# to maintain security and prevent injection attacks:
+#
+# DO:
+#   ✓ Use Neo4j query parameters ($param_name) for ALL user-provided values
+#   ✓ Build query structure from static strings using array-based patterns
+#   ✓ Use validation utilities (validate_relationship_type, validate_integer_bounds)
+#     for non-parameterizable components (relationship types, labels, path lengths)
+#   ✓ Add "SECURITY:" or "SAFE:" comments explaining why string interpolation
+#     is safe (when unavoidable) or why parameterization is used
+#   ✓ Include docstring security notes for methods that handle non-parameterizable
+#     components (relationship types, variable path lengths, node labels)
+#   ✓ Test with injection attempts (see test_neo4j_security_injection_prevention.py)
+#
+# DON'T:
+#   ✗ Use f-strings or .format() to interpolate user input into queries
+#   ✗ Build WHERE clauses with string interpolation of filter values
+#   ✗ Skip validation for relationship types, node labels, or depth parameters
+#   ✗ Assume user input is safe - always validate or parameterize
+#   ✗ Mix parameterized and non-parameterized approaches in the same method
+#
+# EXAMPLES:
+#
+#   GOOD - Parameterized value:
+#     query = "MATCH (n:Node) WHERE n.name = $name RETURN n"
+#     params = {"name": user_input}
+#
+#   GOOD - Validated non-parameterizable component:
+#     rel_type, error = validate_relationship_type(user_input)
+#     if error:
+#         return ToolResult.fail(error)
+#     query = f"CREATE (a)-[r:{rel_type}]->(b)"  # Safe after validation
+#
+#   GOOD - Array-based query building:
+#     query_parts = ["MATCH (n:Node)"]
+#     if filter_value:
+#         query_parts.append("WHERE n.field = $field")
+#         params["field"] = filter_value
+#     query = "\n".join(query_parts)
+#
+#   BAD - String interpolation of user input:
+#     query = f"MATCH (n:Node) WHERE n.name = '{user_input}'"  # INJECTION RISK!
+#
+#   BAD - F-string for WHERE clause values:
+#     query = f"MATCH (n) WHERE n.status = '{status}'"  # Use $status instead!
+#
+#   BAD - Unvalidated relationship type:
+#     query = f"CREATE (a)-[r:{user_input}]->(b)"  # Must validate first!
+#
+# REFERENCES:
+#   - Neo4j Parameterization Guide: https://neo4j.com/docs/cypher-manual/current/syntax/parameters/
+#   - Security tests: tests/unit/test_neo4j_security_injection_prevention.py
+#   - Validation tests: tests/unit/test_neo4j_relationship_validation.py
+# ============================================================================
+
+
+# ============================================================================
 # CYPHER QUERY VALIDATION UTILITIES
 # ============================================================================
 # These utility functions provide centralized validation for Cypher query
@@ -902,37 +961,62 @@ class Neo4jAdapter(BaseAdapter):
     async def _get_commitments(self, args: Dict[str, Any], session=None) -> ToolResult:
         """Get commitments with optional filters.
 
+        SECURITY NOTE - Query Construction:
+        This method builds WHERE clauses dynamically but safely through proper parameterization.
+        All user-provided filter values (status, domain, to_whom, limit) are passed as query
+        parameters ($status, $domain, etc.) rather than being interpolated into the query string.
+
+        Why this is secure:
+        1. Query structure is built from static strings ("c.status = $status")
+        2. Filter values are passed through Neo4j's parameter mechanism
+        3. Neo4j driver handles proper escaping and type conversion
+        4. No user input can alter the query structure or inject malicious Cypher
+
+        Array-based query building approach:
+        - Build query_parts array with static structure elements
+        - Conditionally add WHERE clause only if filters are provided
+        - Join parts with newlines for readable query string
+        - All dynamic values are parameterized, never interpolated
+
         Args:
             args: Dictionary containing optional filters (status, domain, to_whom, limit)
             session: Optional Neo4j session or transaction for session reuse
         """
+        # Build parameterized conditions array
+        # Each condition uses a parameter placeholder ($name) for the actual value
         conditions = []
         params = {"limit": args.get("limit", 20)}
 
         if args.get("status"):
+            # SAFE: Query structure is static, value is parameterized
             conditions.append("c.status = $status")
             params["status"] = args["status"]
 
         if args.get("domain"):
+            # SAFE: Query structure is static, value is parameterized
             conditions.append("c.domain = $domain")
             params["domain"] = args["domain"]
 
         if args.get("to_whom"):
+            # SAFE: Query structure is static, value is parameterized
             conditions.append("c.to_whom = $to_whom")
             params["to_whom"] = args["to_whom"]
 
         # Build query parts without f-string interpolation
+        # This array-based approach ensures we never interpolate user data into query structure
         query_parts = ["MATCH (c:Commitment)"]
 
         if conditions:
+            # Join conditions with AND - structure only, no user data
             query_parts.append("WHERE " + " AND ".join(conditions))
 
         query_parts.extend([
             "RETURN c",
             "ORDER BY c.created_at DESC",
-            "LIMIT $limit"
+            "LIMIT $limit"  # SAFE: Limit value is parameterized, not interpolated
         ])
 
+        # Final query string contains only structure and parameter placeholders
         query = "\n".join(query_parts)
 
         if session is not None:
@@ -1005,33 +1089,55 @@ class Neo4jAdapter(BaseAdapter):
     async def _get_decisions(self, args: Dict[str, Any], session=None) -> ToolResult:
         """Get decisions with optional filters.
 
+        SECURITY NOTE - Query Construction:
+        This method builds WHERE clauses dynamically but safely through proper parameterization.
+        All user-provided filter values (domain, days, limit) are passed as query parameters
+        rather than being interpolated into the query string.
+
+        Why this is secure:
+        1. Query structure is built from static strings
+        2. Filter values are passed through Neo4j's parameter mechanism
+        3. Neo4j driver handles proper escaping and type conversion
+        4. No user input can alter the query structure or inject malicious Cypher
+
+        Note: The days filter uses Cypher's duration() function with a parameterized value,
+        demonstrating that even complex expressions can safely use parameterization.
+
         Args:
             args: Dictionary containing optional filters (domain, days, limit)
             session: Optional Neo4j session or transaction for session reuse
         """
+        # Build parameterized conditions array
+        # Each condition uses a parameter placeholder ($name) for the actual value
         conditions = []
         params = {"limit": args.get("limit", 20)}
 
         if args.get("domain"):
+            # SAFE: Query structure is static, value is parameterized
             conditions.append("d.domain = $domain")
             params["domain"] = args["domain"]
 
         if args.get("days"):
+            # SAFE: days parameter is used inside duration() function
+            # Neo4j's parameter substitution works correctly within function arguments
             conditions.append("d.created_at >= datetime() - duration({days: $days})")
             params["days"] = args["days"]
 
         # Build query parts without f-string interpolation
+        # This array-based approach ensures we never interpolate user data into query structure
         query_parts = ["MATCH (d:Decision)"]
 
         if conditions:
+            # Join conditions with AND - structure only, no user data
             query_parts.append("WHERE " + " AND ".join(conditions))
 
         query_parts.extend([
             "RETURN d",
             "ORDER BY d.created_at DESC",
-            "LIMIT $limit"
+            "LIMIT $limit"  # SAFE: Limit value is parameterized, not interpolated
         ])
 
+        # Final query string contains only structure and parameter placeholders
         query = "\n".join(query_parts)
 
         if session is not None:
@@ -1190,33 +1296,51 @@ class Neo4jAdapter(BaseAdapter):
     async def _get_patterns(self, args: Dict[str, Any], session=None) -> ToolResult:
         """Get recorded patterns.
 
+        SECURITY NOTE - Query Construction:
+        This method builds WHERE clauses dynamically but safely through proper parameterization.
+        All user-provided filter values (type, domain, limit) are passed as query parameters
+        rather than being interpolated into the query string.
+
+        Why this is secure:
+        1. Query structure is built from static strings
+        2. Filter values are passed through Neo4j's parameter mechanism
+        3. Neo4j driver handles proper escaping and type conversion
+        4. No user input can alter the query structure or inject malicious Cypher
+
         Args:
             args: Dictionary containing optional filters (type, domain, limit)
             session: Optional Neo4j session or transaction for session reuse
         """
+        # Build parameterized conditions array
+        # Each condition uses a parameter placeholder ($name) for the actual value
         conditions = []
         params = {"limit": args.get("limit", 20)}
 
         if args.get("type"):
+            # SAFE: Query structure is static, value is parameterized
             conditions.append("p.type = $type")
             params["type"] = args["type"]
 
         if args.get("domain"):
+            # SAFE: Query structure is static, value is parameterized
             conditions.append("p.domain = $domain")
             params["domain"] = args["domain"]
 
         # Build query parts without f-string interpolation
+        # This array-based approach ensures we never interpolate user data into query structure
         query_parts = ["MATCH (p:Pattern)"]
 
         if conditions:
+            # Join conditions with AND - structure only, no user data
             query_parts.append("WHERE " + " AND ".join(conditions))
 
         query_parts.extend([
             "RETURN p",
             "ORDER BY p.strength DESC, p.last_observed DESC",
-            "LIMIT $limit"
+            "LIMIT $limit"  # SAFE: Limit value is parameterized, not interpolated
         ])
 
+        # Final query string contains only structure and parameter placeholders
         query = "\n".join(query_parts)
 
         if session is not None:
@@ -1369,6 +1493,18 @@ class Neo4jAdapter(BaseAdapter):
 
         # SECURITY: rel_type is now guaranteed to be from our whitelist enum
         # Safe to use in query construction via string interpolation
+        #
+        # WHY STRING INTERPOLATION IS REQUIRED HERE:
+        # Cypher syntax requires relationship types to be literal identifiers:
+        #   CREATE (a)-[r:INVOLVES]->(b)  ✓ Valid
+        #   CREATE (a)-[r:$type]->(b)     ✗ Invalid (Cypher limitation)
+        #
+        # Because we cannot use traditional parameterization for relationship types,
+        # we must interpolate the validated type into the query string. This is safe
+        # because rel_type has been validated against ValidRelationshipType enum.
+        #
+        # Note: The relationship properties ($props) ARE parameterized, demonstrating
+        # that we parameterize everything that Cypher allows us to parameterize.
         query = f"""
         MATCH (a {{id: $from_id}})
         MATCH (b {{id: $to_id}})
@@ -1470,6 +1606,22 @@ class Neo4jAdapter(BaseAdapter):
 
         # SECURITY: Both depth and rel_type (if provided) have been validated
         # Safe to use in query construction via string interpolation
+        #
+        # WHY STRING INTERPOLATION IS REQUIRED HERE:
+        # Cypher has two components that cannot be parameterized:
+        #
+        # 1. Variable path length quantifier (*1..N):
+        #    -[r*1..{depth}]- uses interpolated depth value
+        #    Cypher does not support: -[r*1..$depth]-
+        #    The depth value has been validated as integer within bounds (1-10)
+        #
+        # 2. Relationship type filter (optional):
+        #    -[r:INVOLVES*1..2]- requires literal relationship type
+        #    Cypher does not support: -[r:$type*1..2]-
+        #    The rel_type value (if provided) has been validated against whitelist
+        #
+        # All other values (node_id) ARE parameterized, demonstrating that we
+        # parameterize everything that Cypher allows us to parameterize.
         query = f"""
         MATCH (n {{id: $node_id}})-[r{rel_filter}*1..{depth}]-(related)
         RETURN DISTINCT related, type(r[0]) as relationship
