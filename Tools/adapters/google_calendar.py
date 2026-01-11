@@ -1074,6 +1074,169 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                 },
             },
+            {
+                "name": "block_time_for_task",
+                "description": "Create a calendar time block for a task with Thanos metadata. Intelligently formats event description, applies color coding based on priority, and embeds Thanos metadata for tracking. Can auto-schedule if no time specified.",
+                "parameters": {
+                    "task_id": {
+                        "type": "string",
+                        "description": "Unique task identifier. Required.",
+                        "required": True,
+                    },
+                    "task_title": {
+                        "type": "string",
+                        "description": "Task title/summary. Required.",
+                        "required": True,
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Start time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS). Optional if auto_schedule is true.",
+                        "required": False,
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "End time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS). Optional - calculated from duration if not provided.",
+                        "required": False,
+                    },
+                    "estimated_duration_minutes": {
+                        "type": "integer",
+                        "description": "Task duration in minutes. Defaults to 60.",
+                        "required": False,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID to create event in. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "task_description": {
+                        "type": "string",
+                        "description": "Detailed task description. Defaults to empty string.",
+                        "required": False,
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": "Project name. Defaults to empty string.",
+                        "required": False,
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "Priority level: 'high', 'medium', or 'low'. Affects color coding. Defaults to 'medium'.",
+                        "required": False,
+                    },
+                    "tags": {
+                        "type": "array",
+                        "description": "List of task tags. Defaults to empty list.",
+                        "required": False,
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "URL to task details. Defaults to empty string.",
+                        "required": False,
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "Event location. Defaults to empty string.",
+                        "required": False,
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone for event times (e.g., 'America/New_York', 'UTC'). Defaults to system timezone.",
+                        "required": False,
+                    },
+                    "auto_schedule": {
+                        "type": "boolean",
+                        "description": "If true and no start_time provided, automatically find free slot. Defaults to false.",
+                        "required": False,
+                    },
+                },
+            },
+            {
+                "name": "update_event",
+                "description": "Update an existing calendar event. Supports modifying summary, description, times, location, attendees, and other properties. Includes safety checks to prevent accidental modification of non-Thanos events (can be overridden with force=true).",
+                "parameters": {
+                    "event_id": {
+                        "type": "string",
+                        "description": "Event ID to update. Required.",
+                        "required": True,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID containing the event. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "New event title/summary. Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New event description. Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "New start time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS) or (YYYY-MM-DD) for all-day. Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "New end time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS) or (YYYY-MM-DD) for all-day. Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "New event location. Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "color_id": {
+                        "type": "string",
+                        "description": "New color ID (1-11). Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "transparency": {
+                        "type": "string",
+                        "description": "Event transparency: 'opaque' (busy) or 'transparent' (free). Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "visibility": {
+                        "type": "string",
+                        "description": "Event visibility: 'default', 'public', 'private', or 'confidential'. Optional - only updates if provided.",
+                        "required": False,
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "If true, allows updating events not created by Thanos. Defaults to false for safety.",
+                        "required": False,
+                    },
+                },
+            },
+            {
+                "name": "delete_event",
+                "description": "Delete a calendar event. Includes safety checks to prevent accidental deletion of non-Thanos events (can be overridden with force=true). Supports sending cancellation notifications to attendees.",
+                "parameters": {
+                    "event_id": {
+                        "type": "string",
+                        "description": "Event ID to delete. Required.",
+                        "required": True,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID containing the event. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "send_updates": {
+                        "type": "string",
+                        "description": "Whether to send cancellation notifications: 'all' (all attendees), 'externalOnly' (external only), 'none' (no notifications). Defaults to 'none'.",
+                        "required": False,
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "If true, allows deleting events not created by Thanos. Defaults to false for safety.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -1112,6 +1275,10 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_create_event(arguments)
             elif tool_name == "block_time_for_task":
                 return await self._tool_block_time_for_task(arguments)
+            elif tool_name == "update_event":
+                return await self._tool_update_event(arguments)
+            elif tool_name == "delete_event":
+                return await self._tool_delete_event(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -3483,6 +3650,403 @@ class GoogleCalendarAdapter(BaseAdapter):
             return ToolResult.fail(str(e))
         except Exception as e:
             return ToolResult.fail(f"Error creating time block: {e}")
+
+    async def _tool_update_event(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Update an existing calendar event.
+
+        This tool allows modifying calendar events with safety checks to prevent
+        accidental modification of events not created by Thanos. By default, it only
+        allows updating events that have the Thanos metadata marker. Use force=true
+        to override this safety check.
+
+        Features:
+        - Partial updates: only specified fields are modified
+        - Safety checks: prevents modifying non-Thanos events by default
+        - Supports rescheduling (changing start/end times)
+        - Supports updating summary, description, location, color, transparency, visibility
+        - Preserves existing Thanos metadata when updating
+        - Sends notifications to attendees if requested
+
+        Args:
+            arguments: Tool parameters including:
+                - event_id: Event ID to update (required)
+                - calendar_id: Calendar ID (default: 'primary')
+                - summary: New event title (optional)
+                - description: New description (optional)
+                - start_time: New start time in ISO format (optional)
+                - end_time: New end time in ISO format (optional)
+                - location: New location (optional)
+                - color_id: New color ID (optional)
+                - transparency: New transparency setting (optional)
+                - visibility: New visibility setting (optional)
+                - force: Allow updating non-Thanos events (default: false)
+
+        Returns:
+            ToolResult containing updated event details or error
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract and validate required parameters
+            event_id = arguments.get("event_id")
+            if not event_id:
+                return ToolResult.fail("Missing required parameter: event_id")
+
+            # Extract optional parameters
+            calendar_id = arguments.get("calendar_id", "primary")
+            force = arguments.get("force", False)
+
+            # Retrieve the existing event to check metadata and get current values
+            try:
+                existing_event = service.events().get(
+                    calendarId=calendar_id,
+                    eventId=event_id
+                ).execute()
+            except HttpError as e:
+                if e.resp.status == 404:
+                    return ToolResult.fail(f"Event not found: {event_id}")
+                elif e.resp.status == 403:
+                    return ToolResult.fail(f"Permission denied. Check that you have access to calendar: {calendar_id}")
+                else:
+                    raise
+
+            # Safety check: verify event was created by Thanos
+            extended_props = existing_event.get("extendedProperties", {})
+            private_props = extended_props.get("private", {})
+            is_thanos_event = private_props.get("thanos_created") == "true"
+
+            if not is_thanos_event and not force:
+                return ToolResult.fail(
+                    f"Safety check: Event '{existing_event.get('summary', 'Unknown')}' was not created by Thanos. "
+                    f"This prevents accidental modification of external events. "
+                    f"To update this event anyway, set force=true."
+                )
+
+            # Build update body with only the fields that are provided
+            update_body = {}
+            fields_updated = []
+
+            # Update summary if provided
+            summary = arguments.get("summary")
+            if summary is not None:
+                update_body["summary"] = summary
+                fields_updated.append("summary")
+
+            # Update description if provided
+            description = arguments.get("description")
+            if description is not None:
+                update_body["description"] = description
+                fields_updated.append("description")
+
+            # Update location if provided
+            location = arguments.get("location")
+            if location is not None:
+                update_body["location"] = location
+                fields_updated.append("location")
+
+            # Update color_id if provided
+            color_id = arguments.get("color_id")
+            if color_id is not None:
+                # Validate color_id
+                if color_id not in [str(i) for i in range(1, 12)]:
+                    return ToolResult.fail("Invalid color_id. Must be a string from '1' to '11'.")
+                update_body["colorId"] = color_id
+                fields_updated.append("color")
+
+            # Update transparency if provided
+            transparency = arguments.get("transparency")
+            if transparency is not None:
+                if transparency not in ["opaque", "transparent"]:
+                    return ToolResult.fail("Invalid transparency value. Must be 'opaque' or 'transparent'.")
+                update_body["transparency"] = transparency
+                fields_updated.append("transparency")
+
+            # Update visibility if provided
+            visibility = arguments.get("visibility")
+            if visibility is not None:
+                if visibility not in ["default", "public", "private", "confidential"]:
+                    return ToolResult.fail("Invalid visibility value. Must be 'default', 'public', 'private', or 'confidential'.")
+                update_body["visibility"] = visibility
+                fields_updated.append("visibility")
+
+            # Update start and end times if provided
+            start_time_str = arguments.get("start_time")
+            end_time_str = arguments.get("end_time")
+
+            if start_time_str is not None or end_time_str is not None:
+                # Get existing start/end for fallback
+                existing_start = existing_event.get("start", {})
+                existing_end = existing_event.get("end", {})
+
+                # Determine if this is an all-day event
+                is_all_day = "date" in existing_start
+
+                # If only one time is provided, we need both
+                if start_time_str is None:
+                    # Use existing start time
+                    if is_all_day:
+                        start_time_str = existing_start.get("date")
+                    else:
+                        start_time_str = existing_start.get("dateTime")
+
+                if end_time_str is None:
+                    # Use existing end time
+                    if is_all_day:
+                        end_time_str = existing_end.get("date")
+                    else:
+                        end_time_str = existing_end.get("dateTime")
+
+                # Validate time format consistency
+                new_is_all_day = len(start_time_str) == 10 and "T" not in start_time_str
+
+                if is_all_day != new_is_all_day:
+                    return ToolResult.fail(
+                        "Cannot change event type between all-day and timed. "
+                        "Keep the same format as the existing event."
+                    )
+
+                # Build start/end time structure
+                if new_is_all_day:
+                    update_body["start"] = {"date": start_time_str}
+                    update_body["end"] = {"date": end_time_str}
+                else:
+                    # Validate datetime format
+                    try:
+                        start_dt = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                        end_dt = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
+
+                        if end_dt <= start_dt:
+                            return ToolResult.fail("end_time must be after start_time")
+                    except ValueError as e:
+                        return ToolResult.fail(
+                            f"Invalid datetime format: {e}. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"
+                        )
+
+                    # Get timezone from existing event or use default
+                    timezone = existing_start.get("timeZone", "UTC")
+
+                    update_body["start"] = {
+                        "dateTime": start_time_str,
+                        "timeZone": timezone,
+                    }
+                    update_body["end"] = {
+                        "dateTime": end_time_str,
+                        "timeZone": timezone,
+                    }
+
+                fields_updated.append("times")
+
+            # Check if any fields were provided for update
+            if not update_body:
+                return ToolResult.fail("No fields provided for update. Specify at least one field to modify.")
+
+            # Preserve existing extended properties (Thanos metadata)
+            if extended_props:
+                update_body["extendedProperties"] = extended_props
+
+            # Update the event using Google Calendar API
+            updated_event = (
+                service.events()
+                .update(calendarId=calendar_id, eventId=event_id, body=update_body, sendUpdates="all")
+                .execute()
+            )
+
+            # Format the response
+            event_data = {
+                "event_id": updated_event.get("id"),
+                "html_link": updated_event.get("htmlLink"),
+                "summary": updated_event.get("summary"),
+                "description": updated_event.get("description", ""),
+                "location": updated_event.get("location", ""),
+                "updated": updated_event.get("updated"),
+                "status": updated_event.get("status", "confirmed"),
+                "calendar_id": calendar_id,
+                "fields_updated": fields_updated,
+                "is_thanos_event": is_thanos_event,
+            }
+
+            # Add time information
+            start = updated_event.get("start", {})
+            end = updated_event.get("end", {})
+            if "date" in start:
+                event_data["start_date"] = start.get("date")
+                event_data["end_date"] = end.get("date")
+                event_data["is_all_day"] = True
+            else:
+                event_data["start_time"] = start.get("dateTime")
+                event_data["end_time"] = end.get("dateTime")
+                event_data["timezone"] = start.get("timeZone")
+                event_data["is_all_day"] = False
+
+            # Add Thanos metadata if present
+            if is_thanos_event:
+                event_data["thanos_metadata"] = private_props
+
+            message = f"Successfully updated event: {updated_event.get('summary')} ({', '.join(fields_updated)} updated)"
+
+            return ToolResult.ok(event_data, message=message)
+
+        except HttpError as e:
+            if e.resp.status == 404:
+                return ToolResult.fail(f"Calendar or event not found: {calendar_id}/{event_id}")
+            elif e.resp.status == 403:
+                return ToolResult.fail(
+                    f"Permission denied. Check that you have write access to calendar: {calendar_id}"
+                )
+            else:
+                return ToolResult.fail(f"Google Calendar API error: {e}")
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+        except Exception as e:
+            return ToolResult.fail(f"Error updating event: {e}")
+
+    async def _tool_delete_event(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Delete a calendar event.
+
+        This tool allows deleting calendar events with safety checks to prevent
+        accidental deletion of events not created by Thanos. By default, it only
+        allows deleting events that have the Thanos metadata marker. Use force=true
+        to override this safety check.
+
+        Features:
+        - Safety checks: prevents deleting non-Thanos events by default
+        - Supports sending cancellation notifications to attendees
+        - Returns event details before deletion for confirmation
+        - Graceful error handling for non-existent events
+
+        Args:
+            arguments: Tool parameters including:
+                - event_id: Event ID to delete (required)
+                - calendar_id: Calendar ID (default: 'primary')
+                - send_updates: Notification setting: 'all', 'externalOnly', 'none' (default: 'none')
+                - force: Allow deleting non-Thanos events (default: false)
+
+        Returns:
+            ToolResult indicating success or failure with deleted event details
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract and validate required parameters
+            event_id = arguments.get("event_id")
+            if not event_id:
+                return ToolResult.fail("Missing required parameter: event_id")
+
+            # Extract optional parameters
+            calendar_id = arguments.get("calendar_id", "primary")
+            send_updates = arguments.get("send_updates", "none")
+            force = arguments.get("force", False)
+
+            # Validate send_updates parameter
+            if send_updates not in ["all", "externalOnly", "none"]:
+                return ToolResult.fail(
+                    "Invalid send_updates value. Must be 'all', 'externalOnly', or 'none'."
+                )
+
+            # Retrieve the existing event to check metadata and get details
+            try:
+                existing_event = service.events().get(
+                    calendarId=calendar_id,
+                    eventId=event_id
+                ).execute()
+            except HttpError as e:
+                if e.resp.status == 404:
+                    return ToolResult.fail(f"Event not found: {event_id}")
+                elif e.resp.status == 403:
+                    return ToolResult.fail(f"Permission denied. Check that you have access to calendar: {calendar_id}")
+                else:
+                    raise
+
+            # Safety check: verify event was created by Thanos
+            extended_props = existing_event.get("extendedProperties", {})
+            private_props = extended_props.get("private", {})
+            is_thanos_event = private_props.get("thanos_created") == "true"
+
+            event_summary = existing_event.get("summary", "Unknown")
+
+            if not is_thanos_event and not force:
+                return ToolResult.fail(
+                    f"Safety check: Event '{event_summary}' was not created by Thanos. "
+                    f"This prevents accidental deletion of external events. "
+                    f"To delete this event anyway, set force=true."
+                )
+
+            # Store event details before deletion for confirmation
+            event_details = {
+                "event_id": existing_event.get("id"),
+                "summary": event_summary,
+                "description": existing_event.get("description", ""),
+                "location": existing_event.get("location", ""),
+                "status": existing_event.get("status", "confirmed"),
+                "calendar_id": calendar_id,
+                "is_thanos_event": is_thanos_event,
+            }
+
+            # Add time information
+            start = existing_event.get("start", {})
+            end = existing_event.get("end", {})
+            if "date" in start:
+                event_details["start_date"] = start.get("date")
+                event_details["end_date"] = end.get("date")
+                event_details["is_all_day"] = True
+            else:
+                event_details["start_time"] = start.get("dateTime")
+                event_details["end_time"] = end.get("dateTime")
+                event_details["timezone"] = start.get("timeZone")
+                event_details["is_all_day"] = False
+
+            # Add attendee count
+            attendees = existing_event.get("attendees", [])
+            event_details["attendees_count"] = len(attendees)
+
+            # Add Thanos metadata if present
+            if is_thanos_event:
+                event_details["thanos_metadata"] = private_props
+
+            # Delete the event using Google Calendar API
+            service.events().delete(
+                calendarId=calendar_id,
+                eventId=event_id,
+                sendUpdates=send_updates
+            ).execute()
+
+            # Build success message
+            message = f"Successfully deleted event: {event_summary}"
+            if send_updates != "none":
+                notification_target = "all attendees" if send_updates == "all" else "external attendees only"
+                message += f" (cancellation notifications sent to {notification_target})"
+
+            return ToolResult.ok(
+                {
+                    "deleted": True,
+                    "event_details": event_details,
+                    "notifications_sent": send_updates,
+                },
+                message=message
+            )
+
+        except HttpError as e:
+            if e.resp.status == 404:
+                return ToolResult.fail(f"Calendar or event not found: {calendar_id}/{event_id}")
+            elif e.resp.status == 403:
+                return ToolResult.fail(
+                    f"Permission denied. Check that you have write access to calendar: {calendar_id}"
+                )
+            elif e.resp.status == 410:
+                # Event was already deleted
+                return ToolResult.fail(f"Event has already been deleted: {event_id}")
+            else:
+                return ToolResult.fail(f"Google Calendar API error: {e}")
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+        except Exception as e:
+            return ToolResult.fail(f"Error deleting event: {e}")
 
     def _calculate_day_quality(
         self, busy_percentage: float, fragmentation_score: float, longest_block_minutes: float
