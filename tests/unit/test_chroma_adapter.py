@@ -267,6 +267,7 @@ class TestChromaAdapterStoreBatch:
         adapter = object.__new__(ChromaAdapter)
         # Mock batch method to return None (simulating API failure)
         adapter._generate_embeddings_batch = MagicMock(return_value=None)
+        adapter._get_collection = MagicMock(return_value=MagicMock())
 
         result = await adapter._store_batch({
             "items": [{"content": "item1"}, {"content": "item2"}]

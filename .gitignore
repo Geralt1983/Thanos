@@ -3,6 +3,9 @@
 *.key
 *.pem
 
+# Environment variables with secrets
+.env
+
 # Caches & Temp
 stats-cache.json
 shell-snapshots/
