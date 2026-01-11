@@ -1,13 +1,47 @@
 #!/usr/bin/env python3
 """
-AnalyticsHandler - Handles conversation analytics and pattern analysis
+AnalyticsHandler - Handles conversation analytics and pattern analysis in Thanos Interactive Mode.
 
-Analyzes session history to provide insights into usage patterns, agent preferences,
-activity hours, and session characteristics. Provides data-driven insights to help
-users understand their interaction patterns with Thanos.
+This module analyzes session history to provide data-driven insights into usage
+patterns, agent preferences, activity hours, and session characteristics. It helps
+users understand their interaction patterns with Thanos and identify trends in
+their workflow.
 
 Commands:
     /patterns    - Analyze conversation patterns and usage analytics
+
+Classes:
+    AnalyticsHandler: Handler for analytics and pattern analysis commands
+
+Dependencies:
+    - BaseHandler: Provides shared utilities and dependency injection
+    - CommandResult: Standard result format for command execution
+    - Colors: ANSI color codes for formatted output
+
+Architecture:
+    Session data is read from History/Sessions/ directory where each session is
+    stored as JSON containing messages, timestamps, and metadata. Analytics include:
+    - Session overview: Total sessions, messages, averages
+    - Agent usage distribution: Which agents are used most
+    - Peak activity hours: When users interact most with Thanos
+    - Session types: Deep sessions (>20 messages) vs quick sessions
+
+Example:
+    handler = AnalyticsHandler(orchestrator, session_mgr, context_mgr,
+                              state_reader, thanos_dir)
+
+    # Analyze usage patterns
+    result = handler.handle_patterns("")
+
+    # Output includes:
+    # - Total sessions and message counts
+    # - Agent preference visualization with bar charts
+    # - Peak activity hours in 12-hour format
+    # - Session type distribution
+
+See Also:
+    - Tools.command_handlers.base: Base handler infrastructure
+    - History/Sessions/: Session data storage
 """
 
 import json

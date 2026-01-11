@@ -1,16 +1,57 @@
 #!/usr/bin/env python3
 """
-MemoryHandler - Handles MemOS integration commands
+MemoryHandler - Handles MemOS integration commands in Thanos Interactive Mode.
 
-Manages memory storage and retrieval using the MemOS hybrid memory system
-(Neo4j knowledge graph + ChromaDB vector store). Provides functionality for
-storing observations, decisions, patterns, and entities, as well as searching
-across both knowledge graph relationships and semantic similarity.
+This module manages memory storage and retrieval using the MemOS hybrid memory
+system, which combines Neo4j knowledge graph with ChromaDB vector store for
+powerful semantic search and relationship tracking. It provides functionality
+for storing observations, decisions, patterns, and entities, as well as searching
+across both graph relationships and semantic similarity.
 
 Commands:
     /remember <content>     - Store a memory in MemOS knowledge graph
     /recall <query>         - Search memories using hybrid search
     /memory                 - Display memory system information and status
+
+Classes:
+    MemoryHandler: Handler for all MemOS integration commands
+
+Dependencies:
+    - BaseHandler: Provides shared utilities and dependency injection
+    - CommandResult: Standard result format for command execution
+    - Colors: ANSI color codes for formatted output
+    - MEMOS_AVAILABLE: Flag indicating if MemOS is available
+    - MemOS: Hybrid memory system (optional dependency)
+
+Architecture:
+    MemOS provides a dual-storage architecture:
+    - Neo4j graph database: Stores structured knowledge with entities and relationships
+    - ChromaDB vector store: Enables semantic similarity search
+    - Hybrid search: Combines graph traversal and vector similarity for optimal recall
+
+    Memory types supported:
+    - decision: Important decisions and their rationale
+    - pattern: Recurring patterns and insights
+    - commitment: Promises and obligations
+    - entity: People, projects, tools, concepts
+    - observation: General notes and observations
+
+Example:
+    handler = MemoryHandler(orchestrator, session_mgr, context_mgr,
+                           state_reader, thanos_dir)
+
+    # Store a memory
+    result = handler.handle_remember("Decided to use FastAPI for API server")
+
+    # Recall memories
+    result = handler.handle_recall("API framework decisions")
+
+    # Check memory system status
+    result = handler.handle_memory("")
+
+See Also:
+    - Tools.memos: MemOS hybrid memory system
+    - Tools.command_handlers.base: Base handler infrastructure
 """
 
 import json

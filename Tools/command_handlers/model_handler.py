@@ -1,12 +1,46 @@
 #!/usr/bin/env python3
 """
-ModelHandler - Handles AI model management commands
+ModelHandler - Handles AI model management commands in Thanos Interactive Mode.
 
-Manages model switching and display operations in Thanos Interactive Mode.
-Provides commands for viewing available models and switching between them.
+This module manages AI model selection and switching operations. It provides
+commands for viewing available Claude models and switching between them, with
+pricing information to help users make informed decisions about cost vs capability.
 
 Commands:
     /model [name]   - Switch AI model or show current model and options
+
+Classes:
+    ModelHandler: Handler for AI model management commands
+
+Dependencies:
+    - BaseHandler: Provides shared utilities and dependency injection
+    - CommandResult: Standard result format for command execution
+    - Colors: ANSI color codes for formatted output
+
+Architecture:
+    Supports three Claude models with different capabilities and pricing:
+    - opus: claude-opus-4-5-20251101 ($15/$75 per 1M tokens) - Most capable
+    - sonnet: claude-sonnet-4-20250514 ($3/$15 per 1M tokens) - Balanced
+    - haiku: claude-3-5-haiku-20241022 ($0.25/$1.25 per 1M tokens) - Fastest
+
+    Model selection persists across sessions and affects all subsequent API calls.
+
+Example:
+    handler = ModelHandler(orchestrator, session_mgr, context_mgr,
+                          state_reader, thanos_dir)
+
+    # Switch to opus model
+    result = handler.handle_model("opus")
+
+    # Show current model
+    result = handler.handle_model("")
+
+    # Get full model name for API
+    model_name = handler.get_current_model()  # Returns "claude-opus-4-5-20251101"
+
+See Also:
+    - Tools.command_handlers.base: Base handler infrastructure
+    - Anthropic Claude Models: https://docs.anthropic.com/claude/docs/models
 """
 
 from Tools.command_handlers.base import BaseHandler, CommandResult, Colors

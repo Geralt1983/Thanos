@@ -1,11 +1,51 @@
 #!/usr/bin/env python3
 """
-PersonaRouter - Intelligent routing for agent detection and selection
+PersonaRouter - Intelligent routing for agent detection and selection.
 
-Handles agent detection based on trigger patterns, scoring agents by message content,
-and managing agent switching in Thanos Interactive Mode.
+This module provides intelligent agent detection and routing based on trigger
+patterns. It analyzes user messages to determine which agent (persona) is most
+appropriate to handle the conversation based on trigger words and phrases defined
+in agent configurations.
 
-Single Responsibility: Agent detection and intelligent routing
+Classes:
+    PersonaRouter: Routes messages to appropriate agents using pattern matching
+
+Dependencies:
+    - re: Regular expression matching for trigger patterns
+    - typing: Type hints for better code clarity
+
+Architecture:
+    The PersonaRouter uses a scoring system to detect agent switches:
+    1. Each agent has a list of trigger phrases (e.g., "urgent", "strategic", "health")
+    2. Messages are analyzed against all trigger patterns using case-insensitive regex
+    3. Each agent gets a score based on how many triggers match
+    4. The highest-scoring agent is suggested for handling the conversation
+    5. Switching only occurs if the new agent's score is meaningful (>= 1 match)
+
+    This enables context-aware agent switching where Thanos automatically detects
+    when a different persona would be more appropriate for the conversation.
+
+Example:
+    # Initialize router
+    router = PersonaRouter(orchestrator, current_agent="ops")
+
+    # Detect agent from message
+    detected = router.detect_agent("I need urgent help with deployment")
+    # Returns "ops" if ops agent has "urgent" as a trigger
+
+    detected = router.detect_agent("let's strategize about Q2 planning")
+    # Returns "strategy" if strategy agent has "strategize" as a trigger
+
+    # Manual agent management
+    router.set_current_agent("coach")
+    current = router.get_current_agent()  # Returns "coach"
+
+    # Get agent triggers
+    triggers = router.get_agent_triggers("ops")  # Returns ["urgent", "deploy", ...]
+
+See Also:
+    - Tools.command_handlers.agent_handler: Agent management commands
+    - Tools.command_router: Main command routing orchestration
 """
 
 import re

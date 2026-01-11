@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-SessionHandler - Handles session management commands
+SessionHandler - Handles session management commands in Thanos Interactive Mode.
 
-Manages session operations including saving, loading, clearing, and branching
-conversations in Thanos Interactive Mode. Provides comprehensive session lifecycle
-management and conversation history operations.
+This module manages the complete lifecycle of conversation sessions, including
+saving, loading, clearing, and branching. It provides git-like branching capabilities
+for conversations, allowing users to explore different conversation paths and
+maintain multiple conversation threads.
 
 Commands:
     /clear              - Clear current conversation history
@@ -14,6 +15,37 @@ Commands:
     /branch [name]      - Create a conversation branch from current point
     /branches           - List all branches in current session tree
     /switch <ref>       - Switch to a different conversation branch
+
+Classes:
+    SessionHandler: Handler for all session management commands
+
+Dependencies:
+    - BaseHandler: Provides shared utilities and dependency injection
+    - CommandResult: Standard result format for command execution
+    - Colors: ANSI color codes for formatted output
+    - SessionManager: Manages session persistence and retrieval
+
+Architecture:
+    Sessions are stored in History/Sessions/ directory with JSON format containing
+    conversation messages, metadata, and timestamps. Branching creates a tree
+    structure similar to git, enabling conversation version control.
+
+Example:
+    handler = SessionHandler(orchestrator, session_mgr, context_mgr,
+                            state_reader, thanos_dir)
+
+    # Save current session
+    result = handler.handle_save("")
+
+    # Create a branch
+    result = handler.handle_branch("experimental-feature")
+
+    # List all sessions
+    result = handler.handle_sessions("")
+
+See Also:
+    - Tools.command_handlers.base: Base handler infrastructure
+    - History/Sessions/: Session storage directory
 """
 
 from Tools.command_handlers.base import BaseHandler, CommandResult, Colors

@@ -1,8 +1,39 @@
 #!/usr/bin/env python3
 """
-Base handler for command execution in Thanos Interactive Mode
+Base handler for command execution in Thanos Interactive Mode.
 
-Provides shared utilities, result types, and base class for all command handlers.
+This module provides the foundational infrastructure for all command handlers
+in the Thanos command routing system. It defines shared utilities, result types,
+and the base class that all specific handlers inherit from.
+
+Classes:
+    Colors: ANSI color codes for formatted terminal output
+    CommandAction: Enum defining post-command actions (CONTINUE, QUIT)
+    CommandResult: Dataclass for command execution results
+    BaseHandler: Base class providing dependency injection and shared utilities
+
+Constants:
+    MEMOS_AVAILABLE: Boolean indicating if MemOS integration is available
+
+Architecture:
+    All handler classes (AgentHandler, SessionHandler, etc.) inherit from BaseHandler
+    to gain access to shared dependencies and utilities. This promotes code reuse
+    and ensures consistent dependency injection across all handlers.
+
+Example:
+    class MyHandler(BaseHandler):
+        def handle_command(self, args: str) -> CommandResult:
+            # Access shared utilities
+            agent = self._get_current_agent()
+            memos = self._get_memos()
+
+            # Return formatted result
+            return CommandResult(success=True, message="Done!")
+
+See Also:
+    - Tools.command_handlers.agent_handler: Agent management commands
+    - Tools.command_handlers.session_handler: Session management commands
+    - Tools.routing.command_registry: Command registration system
 """
 
 import asyncio
