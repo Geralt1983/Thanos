@@ -840,6 +840,57 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                 },
             },
+            {
+                "name": "find_free_slots",
+                "description": "Find available time slots within a date range. Considers working hours, minimum slot duration, buffer time between events, and calendar preferences. Useful for scheduling tasks or finding meeting times.",
+                "parameters": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). Required.",
+                        "required": True,
+                    },
+                    "calendar_id": {
+                        "type": "string",
+                        "description": "Calendar ID to check for conflicts. Use 'primary' for primary calendar. Defaults to 'primary'.",
+                        "required": False,
+                    },
+                    "min_duration_minutes": {
+                        "type": "integer",
+                        "description": "Minimum slot duration in minutes to consider as available. Defaults to 30.",
+                        "required": False,
+                    },
+                    "working_hours_start": {
+                        "type": "integer",
+                        "description": "Start of working hours (0-23). If specified, only slots during working hours are returned. Defaults to None (all day).",
+                        "required": False,
+                    },
+                    "working_hours_end": {
+                        "type": "integer",
+                        "description": "End of working hours (0-23). If specified, only slots during working hours are returned. Defaults to None (all day).",
+                        "required": False,
+                    },
+                    "buffer_minutes": {
+                        "type": "integer",
+                        "description": "Buffer time in minutes to add before and after each event. Defaults to 0.",
+                        "required": False,
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone for working hours and slot times (e.g., 'America/New_York', 'UTC'). Defaults to system timezone.",
+                        "required": False,
+                    },
+                    "exclude_weekends": {
+                        "type": "boolean",
+                        "description": "Exclude Saturday and Sunday from free slots. Defaults to False.",
+                        "required": False,
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -868,6 +919,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_get_events(arguments)
             elif tool_name == "get_today_events":
                 return await self._tool_get_today_events(arguments)
+            elif tool_name == "find_free_slots":
+                return await self._tool_find_free_slots(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -1470,6 +1523,407 @@ class GoogleCalendarAdapter(BaseAdapter):
                         "free_slots": free_slots,
                         "free_slots_count": len(free_slots),
                     },
+                }
+            )
+
+        except ValueError as e:
+            # Handle authentication errors from _get_service()
+            return ToolResult.fail(str(e))
+
+    async def _tool_find_free_slots(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Find available time slots within a date range.
+
+        This tool analyzes the calendar to find free time slots that meet specified criteria.
+        It considers:
+        - Existing events and their busy/free status (transparency)
+        - Working hours (optional) to limit slots to business hours
+        - Minimum slot duration to filter out very short gaps
+        - Buffer time around events to prevent back-to-back scheduling
+        - Weekend exclusion (optional)
+        - Calendar filtering preferences
+
+        Algorithm:
+        1. Fetch all events in the date range
+        2. For each day in the range:
+           - Define the available time window (working hours or full day)
+           - Identify busy periods from events (with buffer time)
+           - Find gaps between busy periods
+           - Filter by minimum duration
+        3. Return sorted list of free slots
+
+        Args:
+            arguments: Tool parameters including:
+                - start_date: Start date (required)
+                - end_date: End date (required)
+                - calendar_id: Calendar to check (default: 'primary')
+                - min_duration_minutes: Minimum slot duration (default: 30)
+                - working_hours_start: Working hours start hour 0-23 (default: None)
+                - working_hours_end: Working hours end hour 0-23 (default: None)
+                - buffer_minutes: Buffer time around events (default: 0)
+                - timezone: Timezone for calculations (default: system timezone)
+                - exclude_weekends: Skip Saturday/Sunday (default: False)
+
+        Returns:
+            ToolResult containing list of free slots with metadata
+        """
+        try:
+            # Get authenticated service
+            service = self._get_service()
+
+            # Extract and validate required parameters
+            start_date_str = arguments.get("start_date")
+            end_date_str = arguments.get("end_date")
+
+            if not start_date_str:
+                return ToolResult.fail("Missing required parameter: start_date")
+            if not end_date_str:
+                return ToolResult.fail("Missing required parameter: end_date")
+
+            # Extract optional parameters with defaults
+            calendar_id = arguments.get("calendar_id", "primary")
+            min_duration_minutes = arguments.get("min_duration_minutes", 30)
+            working_hours_start = arguments.get("working_hours_start")
+            working_hours_end = arguments.get("working_hours_end")
+            buffer_minutes = arguments.get("buffer_minutes", 0)
+            timezone_str = arguments.get("timezone")
+            exclude_weekends = arguments.get("exclude_weekends", False)
+
+            # Validate parameters
+            if min_duration_minutes < 1:
+                return ToolResult.fail("min_duration_minutes must be at least 1")
+
+            if buffer_minutes < 0:
+                return ToolResult.fail("buffer_minutes must be non-negative")
+
+            if working_hours_start is not None:
+                if not (0 <= working_hours_start <= 23):
+                    return ToolResult.fail("working_hours_start must be between 0 and 23")
+
+            if working_hours_end is not None:
+                if not (0 <= working_hours_end <= 23):
+                    return ToolResult.fail("working_hours_end must be between 0 and 23")
+
+            if working_hours_start is not None and working_hours_end is not None:
+                if working_hours_end <= working_hours_start:
+                    return ToolResult.fail("working_hours_end must be after working_hours_start")
+
+            # Determine timezone
+            if timezone_str:
+                try:
+                    tz = ZoneInfo(timezone_str)
+                except Exception:
+                    return ToolResult.fail(
+                        f"Invalid timezone: {timezone_str}. Use IANA timezone names like 'America/New_York' or 'UTC'."
+                    )
+            else:
+                # Use system local timezone
+                try:
+                    tz = ZoneInfo("localtime")
+                except Exception:
+                    # Fallback to UTC if local timezone cannot be determined
+                    tz = ZoneInfo("UTC")
+
+            # Parse dates - support both date-only and datetime formats
+            try:
+                if "T" in start_date_str:
+                    range_start = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
+                    if not range_start.tzinfo:
+                        range_start = range_start.replace(tzinfo=tz)
+                else:
+                    # Date only - start of day in the specified timezone
+                    range_start = datetime.fromisoformat(f"{start_date_str}T00:00:00").replace(tzinfo=tz)
+
+                if "T" in end_date_str:
+                    range_end = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                    if not range_end.tzinfo:
+                        range_end = range_end.replace(tzinfo=tz)
+                else:
+                    # Date only - end of day in the specified timezone
+                    range_end = datetime.fromisoformat(f"{end_date_str}T23:59:59").replace(tzinfo=tz)
+
+            except ValueError as e:
+                return ToolResult.fail(
+                    f"Invalid date format: {str(e)}. Use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)"
+                )
+
+            # Validate date range
+            if range_end <= range_start:
+                return ToolResult.fail("end_date must be after start_date")
+
+            # Fetch events from Google Calendar API for the entire date range
+            time_min = range_start.isoformat()
+            time_max = range_end.isoformat()
+
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                maxResults=2500,  # Higher limit for comprehensive conflict detection
+                singleEvents=True,
+                orderBy="startTime",
+            ).execute()
+
+            raw_events = events_result.get("items", [])
+
+            # Format events (reuse logic from get_events)
+            formatted_events = []
+            for event in raw_events:
+                # Skip cancelled events
+                if event.get("status") == "cancelled":
+                    continue
+
+                # Parse event data
+                start = event.get("start", {})
+                end = event.get("end", {})
+                is_all_day = "date" in start and "dateTime" not in start
+
+                if is_all_day:
+                    start_time = start.get("date")
+                    end_time = end.get("date")
+                else:
+                    start_time = start.get("dateTime")
+                    end_time = end.get("dateTime")
+
+                # Format attendees
+                attendees = []
+                for attendee in event.get("attendees", []):
+                    attendees.append({
+                        "email": attendee.get("email"),
+                        "response_status": attendee.get("responseStatus"),
+                        "self": attendee.get("self", False),
+                    })
+
+                formatted_event = {
+                    "id": event.get("id"),
+                    "summary": event.get("summary", "(No title)"),
+                    "description": event.get("description"),
+                    "location": event.get("location"),
+                    "start": start_time,
+                    "end": end_time,
+                    "is_all_day": is_all_day,
+                    "status": event.get("status", "confirmed"),
+                    "attendees": attendees,
+                    "organizer": {
+                        "email": event.get("organizer", {}).get("email"),
+                        "is_self": event.get("organizer", {}).get("self", False),
+                    },
+                    "transparency": event.get("transparency", "opaque"),
+                    "color_id": event.get("colorId"),
+                    "conference_data": event.get("conferenceData"),
+                    "visibility": event.get("visibility", "default"),
+                    "is_recurring": "recurringEventId" in event or "recurrence" in event,
+                }
+
+                formatted_events.append(formatted_event)
+
+            # Apply event filters (configured in calendar_filters.json)
+            filtered_events = self._apply_event_filters(
+                formatted_events, filter_context="free_slots", calendar_id=calendar_id
+            )
+
+            # Build list of busy periods
+            # A busy period is a time range when the user is unavailable
+            busy_periods = []
+
+            for event in filtered_events:
+                # Skip all-day events - they don't block specific times
+                if event.get("is_all_day"):
+                    continue
+
+                # Skip events marked as "transparent" (free time)
+                if event.get("transparency") == "transparent":
+                    continue
+
+                # Skip events the user has declined
+                user_declined = False
+                if not event.get("organizer", {}).get("is_self", False):
+                    for attendee in event.get("attendees", []):
+                        if attendee.get("self", False) and attendee.get("response_status") == "declined":
+                            user_declined = True
+                            break
+
+                if user_declined:
+                    continue
+
+                # Parse event times
+                start_str = event.get("start")
+                end_str = event.get("end")
+
+                if not start_str or not end_str:
+                    continue
+
+                try:
+                    event_start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                    event_end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+
+                    # Convert to target timezone for consistent calculation
+                    if event_start.tzinfo:
+                        event_start = event_start.astimezone(tz)
+                    else:
+                        event_start = event_start.replace(tzinfo=tz)
+
+                    if event_end.tzinfo:
+                        event_end = event_end.astimezone(tz)
+                    else:
+                        event_end = event_end.replace(tzinfo=tz)
+
+                    # Apply buffer time
+                    from datetime import timedelta
+                    if buffer_minutes > 0:
+                        event_start = event_start - timedelta(minutes=buffer_minutes)
+                        event_end = event_end + timedelta(minutes=buffer_minutes)
+
+                    busy_periods.append({
+                        "start": event_start,
+                        "end": event_end,
+                        "event_summary": event.get("summary", "(No title)"),
+                    })
+
+                except (ValueError, TypeError):
+                    # Skip events with invalid time data
+                    continue
+
+            # Sort busy periods by start time
+            busy_periods.sort(key=lambda p: p["start"])
+
+            # Merge overlapping busy periods to avoid double-counting conflicts
+            merged_busy_periods = []
+            for period in busy_periods:
+                if not merged_busy_periods:
+                    merged_busy_periods.append(period)
+                else:
+                    last_period = merged_busy_periods[-1]
+                    # If this period overlaps or touches the last one, merge them
+                    if period["start"] <= last_period["end"]:
+                        last_period["end"] = max(last_period["end"], period["end"])
+                        # Update summary to include both events
+                        if period["event_summary"] not in last_period["event_summary"]:
+                            last_period["event_summary"] = f"{last_period['event_summary']} + {period['event_summary']}"
+                    else:
+                        merged_busy_periods.append(period)
+
+            # Find free slots by analyzing gaps between busy periods
+            free_slots = []
+
+            # Generate list of days to check
+            from datetime import timedelta
+            current_date = range_start.date()
+            end_date = range_end.date()
+
+            while current_date <= end_date:
+                # Skip weekends if requested
+                if exclude_weekends and current_date.weekday() >= 5:  # 5=Saturday, 6=Sunday
+                    current_date = current_date + timedelta(days=1)
+                    continue
+
+                # Define the available time window for this day
+                if working_hours_start is not None and working_hours_end is not None:
+                    # Use working hours
+                    day_start = datetime.combine(current_date, datetime.min.time()).replace(
+                        hour=working_hours_start, minute=0, second=0, microsecond=0, tzinfo=tz
+                    )
+                    day_end = datetime.combine(current_date, datetime.min.time()).replace(
+                        hour=working_hours_end, minute=0, second=0, microsecond=0, tzinfo=tz
+                    )
+                else:
+                    # Use full day
+                    day_start = datetime.combine(current_date, datetime.min.time()).replace(
+                        hour=0, minute=0, second=0, microsecond=0, tzinfo=tz
+                    )
+                    day_end = datetime.combine(current_date, datetime.min.time()).replace(
+                        hour=23, minute=59, second=59, microsecond=0, tzinfo=tz
+                    )
+
+                # Clip to overall date range
+                day_start = max(day_start, range_start)
+                day_end = min(day_end, range_end)
+
+                # Find busy periods for this day
+                day_busy_periods = [
+                    p for p in merged_busy_periods
+                    if p["end"] > day_start and p["start"] < day_end
+                ]
+
+                # Find free gaps
+                cursor = day_start
+                for busy in day_busy_periods:
+                    # Clip busy period to day boundaries
+                    busy_start = max(busy["start"], day_start)
+                    busy_end = min(busy["end"], day_end)
+
+                    # Check if there's a free gap before this busy period
+                    if cursor < busy_start:
+                        gap_duration_minutes = (busy_start - cursor).total_seconds() / 60
+
+                        # Only include if it meets minimum duration
+                        if gap_duration_minutes >= min_duration_minutes:
+                            free_slots.append({
+                                "start": cursor.isoformat(),
+                                "end": busy_start.isoformat(),
+                                "duration_minutes": int(gap_duration_minutes),
+                                "date": current_date.isoformat(),
+                                "day_of_week": current_date.strftime("%A"),
+                            })
+
+                    # Move cursor to end of busy period
+                    cursor = max(cursor, busy_end)
+
+                # Check if there's a free slot at the end of the day
+                if cursor < day_end:
+                    gap_duration_minutes = (day_end - cursor).total_seconds() / 60
+
+                    if gap_duration_minutes >= min_duration_minutes:
+                        free_slots.append({
+                            "start": cursor.isoformat(),
+                            "end": day_end.isoformat(),
+                            "duration_minutes": int(gap_duration_minutes),
+                            "date": current_date.isoformat(),
+                            "day_of_week": current_date.strftime("%A"),
+                        })
+
+                # Move to next day
+                current_date = current_date + timedelta(days=1)
+
+            # Calculate summary statistics
+            total_free_slots = len(free_slots)
+            total_free_minutes = sum(slot["duration_minutes"] for slot in free_slots)
+            total_free_hours = round(total_free_minutes / 60, 2)
+
+            # Find longest slot
+            longest_slot = max(free_slots, key=lambda s: s["duration_minutes"]) if free_slots else None
+
+            # Group by day
+            slots_by_day = {}
+            for slot in free_slots:
+                day = slot["date"]
+                if day not in slots_by_day:
+                    slots_by_day[day] = []
+                slots_by_day[day].append(slot)
+
+            return ToolResult.ok(
+                {
+                    "free_slots": free_slots,
+                    "summary": {
+                        "total_slots": total_free_slots,
+                        "total_free_minutes": total_free_minutes,
+                        "total_free_hours": total_free_hours,
+                        "longest_slot": longest_slot,
+                        "days_with_availability": len(slots_by_day),
+                        "date_range": {
+                            "start": start_date_str,
+                            "end": end_date_str,
+                        },
+                        "filters_applied": {
+                            "min_duration_minutes": min_duration_minutes,
+                            "working_hours": f"{working_hours_start or 0}:00-{working_hours_end or 24}:00" if working_hours_start is not None or working_hours_end is not None else "all day",
+                            "buffer_minutes": buffer_minutes,
+                            "exclude_weekends": exclude_weekends,
+                            "calendar_id": calendar_id,
+                            "timezone": str(tz),
+                        },
+                    },
+                    "slots_by_day": slots_by_day,
                 }
             )
 
