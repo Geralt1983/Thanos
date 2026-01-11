@@ -1279,6 +1279,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_update_event(arguments)
             elif tool_name == "delete_event":
                 return await self._tool_delete_event(arguments)
+            elif tool_name == "batch_schedule_tasks":
+                return await self._tool_batch_schedule_tasks(arguments)
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -4047,6 +4049,282 @@ class GoogleCalendarAdapter(BaseAdapter):
             return ToolResult.fail(str(e))
         except Exception as e:
             return ToolResult.fail(f"Error deleting event: {e}")
+
+    async def _tool_batch_schedule_tasks(self, arguments: dict[str, Any]) -> ToolResult:
+        """
+        Tool: Schedule multiple tasks in optimal time slots using intelligent distribution.
+
+        This bulk operation tool takes a list of tasks and automatically schedules them
+        across available calendar slots. It uses the find_free_slots algorithm to identify
+        available time and intelligently distributes tasks based on:
+        - Task priority (high priority tasks get earlier/better slots)
+        - Task duration and estimated time requirements
+        - Even distribution throughout the specified time range
+        - Working hours and calendar preferences
+
+        The tool processes tasks in priority order and attempts to schedule each one
+        in the next available optimal slot. It provides detailed feedback on which
+        tasks were successfully scheduled and which couldn't be placed.
+
+        Features:
+        - Automatic slot finding and task distribution
+        - Priority-based scheduling (high priority tasks scheduled first)
+        - Configurable scheduling preferences (working hours, buffer time, etc.)
+        - Detailed success/failure reporting per task
+        - Optional dry-run mode to preview scheduling without creating events
+        - Respects existing calendar events and prevents conflicts
+
+        Args:
+            arguments: Tool parameters including:
+                - tasks: List of task dictionaries, each containing:
+                    - task_id: Unique task identifier (required)
+                    - task_title: Task title/summary (required)
+                    - estimated_duration_minutes: Task duration (required)
+                    - priority: 'high', 'medium', or 'low' (optional, default: 'medium')
+                    - task_description: Detailed description (optional)
+                    - project: Project name (optional)
+                    - tags: List of tags (optional)
+                    - url: Task URL (optional)
+                    - location: Event location (optional)
+                - start_date: Start date for scheduling window (required, ISO format)
+                - end_date: End date for scheduling window (required, ISO format)
+                - calendar_id: Target calendar ID (default: 'primary')
+                - working_hours_start: Working hours start hour 0-23 (optional)
+                - working_hours_end: Working hours end hour 0-23 (optional)
+                - buffer_minutes: Buffer time between tasks (default: 15)
+                - min_slot_duration_minutes: Minimum slot size to consider (default: 30)
+                - exclude_weekends: Skip Saturday/Sunday (default: False)
+                - timezone: Timezone for scheduling (optional)
+                - dry_run: Preview scheduling without creating events (default: False)
+
+        Returns:
+            ToolResult containing:
+            - scheduled_tasks: List of successfully scheduled tasks with event details
+            - failed_tasks: List of tasks that couldn't be scheduled with reasons
+            - summary: Overall scheduling statistics
+        """
+        try:
+            # Extract and validate required parameters
+            tasks = arguments.get("tasks", [])
+            start_date_str = arguments.get("start_date")
+            end_date_str = arguments.get("end_date")
+
+            if not tasks:
+                return ToolResult.fail("Missing required parameter: tasks (must be a non-empty list)")
+            if not isinstance(tasks, list):
+                return ToolResult.fail("Parameter 'tasks' must be a list of task dictionaries")
+            if not start_date_str:
+                return ToolResult.fail("Missing required parameter: start_date")
+            if not end_date_str:
+                return ToolResult.fail("Missing required parameter: end_date")
+
+            # Validate that each task has required fields
+            for i, task in enumerate(tasks):
+                if not isinstance(task, dict):
+                    return ToolResult.fail(f"Task at index {i} is not a dictionary")
+                if not task.get("task_id"):
+                    return ToolResult.fail(f"Task at index {i} missing required field: task_id")
+                if not task.get("task_title"):
+                    return ToolResult.fail(f"Task at index {i} missing required field: task_title")
+                if not task.get("estimated_duration_minutes"):
+                    return ToolResult.fail(f"Task at index {i} missing required field: estimated_duration_minutes")
+
+            # Extract optional parameters with defaults
+            calendar_id = arguments.get("calendar_id", "primary")
+            working_hours_start = arguments.get("working_hours_start")
+            working_hours_end = arguments.get("working_hours_end")
+            buffer_minutes = arguments.get("buffer_minutes", 15)
+            min_slot_duration_minutes = arguments.get("min_slot_duration_minutes", 30)
+            exclude_weekends = arguments.get("exclude_weekends", False)
+            timezone_str = arguments.get("timezone")
+            dry_run = arguments.get("dry_run", False)
+
+            # Sort tasks by priority (high > medium > low) and then by duration (shorter first for better packing)
+            priority_order = {"high": 0, "medium": 1, "low": 2}
+            sorted_tasks = sorted(
+                tasks,
+                key=lambda t: (
+                    priority_order.get(t.get("priority", "medium"), 1),
+                    t.get("estimated_duration_minutes", 60)
+                )
+            )
+
+            # Results tracking
+            scheduled_tasks = []
+            failed_tasks = []
+
+            # Process each task in priority order
+            for task in sorted_tasks:
+                task_id = task["task_id"]
+                task_title = task["task_title"]
+                duration_minutes = task["estimated_duration_minutes"]
+                priority = task.get("priority", "medium")
+
+                # Find a free slot for this task
+                # We search for slots that can accommodate this task's duration
+                free_slots_result = await self._tool_find_free_slots({
+                    "start_date": start_date_str,
+                    "end_date": end_date_str,
+                    "calendar_id": calendar_id,
+                    "min_duration_minutes": duration_minutes,
+                    "working_hours_start": working_hours_start,
+                    "working_hours_end": working_hours_end,
+                    "buffer_minutes": buffer_minutes,
+                    "timezone": timezone_str,
+                    "exclude_weekends": exclude_weekends,
+                })
+
+                if not free_slots_result.success:
+                    failed_tasks.append({
+                        "task_id": task_id,
+                        "task_title": task_title,
+                        "reason": f"Could not find free slots: {free_slots_result.error}",
+                        "priority": priority,
+                        "duration_minutes": duration_minutes,
+                    })
+                    continue
+
+                free_slots = free_slots_result.data.get("free_slots", [])
+
+                if not free_slots:
+                    failed_tasks.append({
+                        "task_id": task_id,
+                        "task_title": task_title,
+                        "reason": "No available time slots found in the specified date range",
+                        "priority": priority,
+                        "duration_minutes": duration_minutes,
+                    })
+                    continue
+
+                # Use the first available slot that fits the task duration
+                selected_slot = None
+                for slot in free_slots:
+                    slot_duration = slot.get("duration_minutes", 0)
+                    if slot_duration >= duration_minutes:
+                        selected_slot = slot
+                        break
+
+                if not selected_slot:
+                    failed_tasks.append({
+                        "task_id": task_id,
+                        "task_title": task_title,
+                        "reason": f"No slot large enough for {duration_minutes} minute task",
+                        "priority": priority,
+                        "duration_minutes": duration_minutes,
+                    })
+                    continue
+
+                # Calculate actual end time based on task duration (not using full slot)
+                from datetime import datetime, timedelta
+                slot_start_str = selected_slot["start"]
+
+                # Parse the slot start time
+                if "T" in slot_start_str:
+                    slot_start = datetime.fromisoformat(slot_start_str.replace("Z", "+00:00"))
+                else:
+                    slot_start = datetime.fromisoformat(slot_start_str)
+
+                # Calculate task end time
+                task_end = slot_start + timedelta(minutes=duration_minutes)
+                task_end_str = task_end.isoformat()
+
+                # If not in dry-run mode, create the calendar event
+                if not dry_run:
+                    block_result = await self._tool_block_time_for_task({
+                        "task_id": task_id,
+                        "task_title": task_title,
+                        "start_time": slot_start_str,
+                        "end_time": task_end_str,
+                        "estimated_duration_minutes": duration_minutes,
+                        "calendar_id": calendar_id,
+                        "task_description": task.get("task_description", ""),
+                        "project": task.get("project", ""),
+                        "priority": priority,
+                        "tags": task.get("tags", []),
+                        "url": task.get("url", ""),
+                        "location": task.get("location", ""),
+                        "timezone": timezone_str,
+                    })
+
+                    if not block_result.success:
+                        failed_tasks.append({
+                            "task_id": task_id,
+                            "task_title": task_title,
+                            "reason": f"Failed to create calendar event: {block_result.error}",
+                            "priority": priority,
+                            "duration_minutes": duration_minutes,
+                            "attempted_slot": {
+                                "start": slot_start_str,
+                                "end": task_end_str,
+                            },
+                        })
+                        continue
+
+                    # Successfully scheduled
+                    scheduled_tasks.append({
+                        "task_id": task_id,
+                        "task_title": task_title,
+                        "priority": priority,
+                        "duration_minutes": duration_minutes,
+                        "scheduled_start": slot_start_str,
+                        "scheduled_end": task_end_str,
+                        "event_id": block_result.data.get("event_id"),
+                        "event_link": block_result.data.get("event_link"),
+                        "calendar_id": calendar_id,
+                    })
+                else:
+                    # Dry-run mode: just record what would be scheduled
+                    scheduled_tasks.append({
+                        "task_id": task_id,
+                        "task_title": task_title,
+                        "priority": priority,
+                        "duration_minutes": duration_minutes,
+                        "scheduled_start": slot_start_str,
+                        "scheduled_end": task_end_str,
+                        "calendar_id": calendar_id,
+                        "dry_run": True,
+                    })
+
+                # Update start_date for next iteration to avoid scheduling in the same slot
+                # Move start_date forward past this scheduled task
+                start_date_str = task_end_str
+
+            # Build summary statistics
+            total_tasks = len(tasks)
+            scheduled_count = len(scheduled_tasks)
+            failed_count = len(failed_tasks)
+            total_scheduled_minutes = sum(t["duration_minutes"] for t in scheduled_tasks)
+
+            summary = {
+                "total_tasks": total_tasks,
+                "scheduled_count": scheduled_count,
+                "failed_count": failed_count,
+                "success_rate": round((scheduled_count / total_tasks * 100), 1) if total_tasks > 0 else 0,
+                "total_scheduled_time_minutes": total_scheduled_minutes,
+                "total_scheduled_time_hours": round(total_scheduled_minutes / 60, 1),
+                "dry_run": dry_run,
+            }
+
+            # Build success message
+            if dry_run:
+                message = f"Dry-run completed: Would schedule {scheduled_count}/{total_tasks} tasks ({summary['success_rate']}% success rate)"
+            else:
+                message = f"Batch scheduling completed: {scheduled_count}/{total_tasks} tasks scheduled successfully ({summary['success_rate']}% success rate)"
+
+            if failed_count > 0:
+                message += f". {failed_count} tasks could not be scheduled."
+
+            return ToolResult.ok(
+                {
+                    "scheduled_tasks": scheduled_tasks,
+                    "failed_tasks": failed_tasks,
+                    "summary": summary,
+                },
+                message=message
+            )
+
+        except Exception as e:
+            return ToolResult.fail(f"Error in batch scheduling: {e}")
 
     def _calculate_day_quality(
         self, busy_percentage: float, fragmentation_score: float, longest_block_minutes: float
