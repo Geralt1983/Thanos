@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "030-reduce-repetitive-cache-first-patterns-in-workos-m",
+  "state": "building",
+  "subtasks": {
+    "completed": 0,
+    "total": 0,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "",
+    "id": 0,
+    "total": 0
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 4,
+    "started_at": "2026-01-10T23:21:16.337077"
+  },
+  "last_update": "2026-01-10T23:29:59.339831"
+}
