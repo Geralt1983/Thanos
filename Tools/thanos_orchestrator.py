@@ -31,6 +31,7 @@ if str(_THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(_THANOS_DIR))
 
 from Tools.error_logger import log_error
+from Tools.intent_matcher import KeywordMatcher
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -154,6 +155,9 @@ class ThanosOrchestrator:
         self._load_commands()
         self._load_context()
 
+        # Initialize intent matcher with pre-compiled patterns (lazy initialization)
+        self._intent_matcher: Optional[KeywordMatcher] = None
+
     def _load_agents(self):
         """Load all agent definitions."""
         agents_dir = self.base_dir / "Agents"
@@ -194,6 +198,60 @@ class ThanosOrchestrator:
                     self.context[file.stem] = file.read_text()
                 except Exception as e:
                     print(f"Warning: Failed to load context {file}: {e}")
+
+    def _get_intent_matcher(self) -> KeywordMatcher:
+        """Get or create the cached intent matcher with pre-compiled patterns.
+
+        Lazy initialization: patterns are compiled once on first use and cached
+        for all subsequent intent detection calls. This converts the O(n*m)
+        keyword matching to O(m) using pre-compiled regex.
+
+        Returns:
+            KeywordMatcher instance with compiled patterns
+        """
+        if self._intent_matcher is None:
+            # Extended keyword mappings for each agent type
+            agent_keywords = {
+                'ops': {
+                    'high': ['what should i do', 'whats on my plate', 'help me plan', 'overwhelmed',
+                             'what did i commit', 'process inbox', 'clear my inbox', 'prioritize'],
+                    'medium': ['task', 'tasks', 'todo', 'to-do', 'schedule', 'plan', 'organize',
+                               'today', 'tomorrow', 'this week', 'deadline', 'due'],
+                    'low': ['busy', 'work', 'productive', 'efficiency']
+                },
+                'coach': {
+                    'high': ['i keep doing this', 'why cant i', 'im struggling', 'pattern',
+                             'be honest', 'accountability', 'avoiding', 'procrastinating'],
+                    'medium': ['habit', 'stuck', 'motivation', 'discipline', 'consistent',
+                               'excuse', 'failing', 'trying', 'again'],
+                    'low': ['feel', 'feeling', 'hard', 'difficult']
+                },
+                'strategy': {
+                    'high': ['quarterly', 'long-term', 'strategy', 'goals', 'where am i headed',
+                             'big picture', 'priorities', 'direction'],
+                    'medium': ['should i take this client', 'revenue', 'growth', 'future',
+                               'planning', 'decision', 'tradeoff', 'invest'],
+                    'low': ['career', 'business', 'opportunity', 'risk']
+                },
+                'health': {
+                    'high': ['im tired', 'should i take my vyvanse', 'i cant focus', 'supplements',
+                             'i crashed', 'energy', 'sleep', 'medication'],
+                    'medium': ['exhausted', 'fatigue', 'focus', 'concentration', 'adhd',
+                               'stimulant', 'caffeine', 'workout', 'exercise'],
+                    'low': ['rest', 'break', 'recovery', 'burnout']
+                }
+            }
+
+            # Build triggers from agent definitions
+            agent_triggers = {}
+            for agent in self.agents.values():
+                if agent.triggers:
+                    agent_triggers[agent.name.lower()] = agent.triggers
+
+            # Create and cache the matcher
+            self._intent_matcher = KeywordMatcher(agent_keywords, agent_triggers)
+
+        return self._intent_matcher
 
     def _build_system_prompt(self, agent: Optional[Agent] = None,
                              command: Optional[Command] = None,
