@@ -1046,30 +1046,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // PERSONALOS: HABITS HANDLERS (Cache-first with Neon fallback)
       // =====================================================================
       case "workos_get_habits": {
-        // Try cache first
-        const cacheAvailable = await ensureCache();
-        if (cacheAvailable && !isCacheStale()) {
-          try {
-            const cachedHabits = getCachedHabits();
-            console.error(`[Cache] Served ${cachedHabits.length} habits from cache`);
-            return {
-              content: [{ type: "text", text: JSON.stringify(cachedHabits, null, 2) }],
-            };
-          } catch (cacheError) {
-            console.error("[Cache] Error reading from cache, falling back to Neon:", cacheError);
-          }
-        }
-
-        // Fallback to Neon
-        const habits = await db
-          .select()
-          .from(schema.habits)
-          .where(eq(schema.habits.isActive, 1))
-          .orderBy(asc(schema.habits.sortOrder));
-
-        return {
-          content: [{ type: "text", text: JSON.stringify(habits, null, 2) }],
-        };
+        return withCacheFirst(
+          // Cache reader function
+          () => getCachedHabits(),
+          // Neon fallback function
+          async () => {
+            const habits = await db
+              .select()
+              .from(schema.habits)
+              .where(eq(schema.habits.isActive, 1))
+              .orderBy(asc(schema.habits.sortOrder));
+            return habits as any; // Type assertion: Dates will be serialized by JSON.stringify
+          },
+          "habits"
+        );
       }
 
       case "workos_create_habit": {
