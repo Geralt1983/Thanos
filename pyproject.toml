@@ -1,5 +1,32 @@
 # Python Project Configuration
 # Ruff linting and formatting configuration for Thanos codebase
+#
+# Configuration Strategy:
+# ----------------------
+# This configuration balances code quality with pragmatism:
+#
+# 1. ENABLED RULES: Comprehensive coverage (F, E, W, I, N, D, UP, B, C4, T20, RET, SIM, PTH, ARG)
+#    - Catches common errors, style violations, and potential bugs
+#    - Enforces consistent import organization and naming conventions
+#    - Suggests modern Python idioms and simplifications
+#
+# 2. GLOBAL IGNORES: Style rules that are too strict or conflict with project conventions
+#    - Docstring rules (D212, D415, D205, etc.) - pragmatic docs over strict formatting
+#    - Code style preferences (SIM117, RET505) - readability over rigid rules
+#    - Gradual migration (PTH123) - allow legacy patterns during transition
+#
+# 3. PER-FILE IGNORES: Context-specific exceptions where rules don't apply
+#    - Test files: Allow test-specific patterns (unused vars, long lines, missing docstrings)
+#    - Command handlers: Allow consistent interface patterns (unused args in command_router.py)
+#    - __init__ files: Allow re-export pattern (unused imports are actually public API)
+#    - Conditional imports: Allow imports after feature detection (thanos_orchestrator.py)
+#
+# 4. REMAINING ERRORS (~201):
+#    - 151 auto-fixable with --unsafe-fixes (UP006, UP035: modernize type hints)
+#    - 32 line-too-long violations (E501) - require manual review
+#    - 18 minor issues (docstrings, small bugbear warnings, etc.)
+#
+# Run 'ruff check --unsafe-fixes --fix .' to apply type hint modernization (List→list, Dict→dict)
 
 [tool.ruff]
 # Set line length to 100 characters (balances readability with modern screen sizes)
@@ -26,6 +53,8 @@ exclude = [
     "backups",
 ]
 
+# Linting configuration (moved from top-level to fix deprecation warning)
+[tool.ruff.lint]
 # Enable comprehensive rule sets for code quality
 select = [
     "F",     # Pyflakes - catch common errors (undefined variables, unused imports, etc.)
@@ -46,55 +75,78 @@ select = [
 
 # Ignore specific rules that conflict with project style or are too strict
 ignore = [
+    # Docstring style rules - too strict for this codebase's pragmatic approach
     "D100",   # Missing docstring in public module - not all modules need docstrings
     "D104",   # Missing docstring in public package - __init__.py files often don't need them
-    "D203",   # 1 blank line required before class docstring - conflicts with D211
+    "D203",   # 1 blank line required before class docstring - conflicts with D211 (no blank line)
+    "D205",   # 1 blank line required between summary and description - overly prescriptive
+    "D212",   # Multi-line docstring summary should start at the first line - prefer summary on first line
     "D213",   # Multi-line docstring summary should start at the second line - conflicts with D212
-    "D401",   # First line of docstring should be in imperative mood - too strict
+    "D401",   # First line of docstring should be in imperative mood - too strict for descriptive docs
+    "D415",   # First line should end with a period - not always appropriate (e.g., module names)
+
+    # Code style preferences - readability over rigid rules
     "T201",   # print found - legitimate in CLI tools and scripts
     "B008",   # Do not perform function calls in argument defaults - needed for FastAPI/dependency injection
     "SIM108", # Use ternary operator - sometimes if/else is clearer
+    "SIM117", # Use single with statement - nested context managers can be clearer for complex cases
+    "RET505", # Unnecessary else after return - explicit else can improve readability
+
+    # Pathlib migration - legacy code uses os.path, migrate gradually
+    "PTH123", # builtin open() - pathlib.Path.open() preferred but not required for compatibility
 ]
 
-# Allow autofix for these rule categories
+# Allow autofix for these rule categories (safe, non-breaking changes)
 fixable = [
     "F",      # Auto-remove unused imports, fix undefined names where possible
     "E",      # Auto-fix whitespace issues
     "W",      # Auto-fix warnings
     "I",      # Auto-sort imports
-    "UP",     # Auto-upgrade syntax
+    "UP",     # Auto-upgrade syntax (modernize type hints with --unsafe-fixes)
     "C4",     # Auto-fix comprehensions
 ]
 
-# Never auto-fix these (require manual review)
+# Never auto-fix these (require manual review to avoid breaking changes)
 unfixable = [
-    "B",      # Bugbear issues need manual review
-    "ARG",    # Removing arguments could break interfaces
+    "B",      # Bugbear issues need manual review (potential logic changes)
+    "ARG",    # Removing arguments could break interfaces/abstract methods
 ]
 
 # Per-file rule ignores for special cases
-[tool.ruff.per-file-ignores]
-# Test files can have longer lines, unused variables, and different patterns
+[tool.ruff.lint.per-file-ignores]
+# Test files: more lenient rules for testing patterns
 "tests/**/*.py" = [
-    "E501",   # Line too long - test data/fixtures can be long
-    "ARG",    # Unused arguments - fixtures and mocks often have unused params
-    "D",      # Docstrings - not critical for test functions
-    "B011",   # assert False - common in pytest
+    "E501",   # Line too long - test data/fixtures/assertions can be long for readability
+    "E402",   # Module import not at top - tests often need to mock/patch before importing
+    "ARG",    # Unused arguments - pytest fixtures and mock objects often have unused params
+    "F841",   # Unused variable - test setup may assign variables for assertion context
+    "D",      # Docstrings - not critical for test functions (test names are self-documenting)
+    "B011",   # assert False - legitimate in pytest for expected failures
 ]
 
-# __init__.py files can have unused imports (they're re-exported)
+# __init__.py files: allow re-export pattern
 "**/__init__.py" = [
-    "F401",   # Unused imports - often used for module-level exports
-    "D104",   # Missing docstring in public package
+    "F401",   # Unused imports - often used for module-level exports (public API)
+    "D104",   # Missing docstring in public package - package structure is self-explanatory
 ]
 
-# Commands/scripts can use print statements
+# Commands/scripts: allow print for CLI output
 "commands/**/*.py" = [
-    "T201",   # print found - CLI commands legitimately use print
+    "T201",   # print found - CLI commands legitimately use print() for user output
+]
+
+# Tools/thanos_orchestrator.py: conditional imports after feature detection
+"Tools/thanos_orchestrator.py" = [
+    "E402",   # Module import not at top - intentional: imports after checking MEMOS_AVAILABLE flag
+]
+
+# Tools/command_router.py: command handler methods follow consistent interface
+"Tools/command_router.py" = [
+    "ARG002", # Unused method argument - command handlers follow standard signature (args: str)
 ]
 
 # Configuration for import sorting (isort-compatible)
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 # Use double-line spacing between import groups for clarity
 lines-after-imports = 2
 
@@ -108,7 +160,7 @@ combine-as-imports = true
 force-sort-within-sections = true
 
 # Naming convention enforcement
-[tool.ruff.pep8-naming]
+[tool.ruff.lint.pep8-naming]
 # Allow common naming exceptions
 classmethod-decorators = [
     "classmethod",
@@ -117,6 +169,6 @@ classmethod-decorators = [
 ]
 
 # Docstring configuration
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 # Use Google-style docstrings (matches existing codebase patterns)
 convention = "google"

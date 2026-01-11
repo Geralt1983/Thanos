@@ -1247,3 +1247,123 @@ warning: The top-level linter settings are deprecated in favour of their counter
 
 ---
 
+### Subtask 3.4: Configure Rule Exceptions (COMPLETED)
+
+**Status**: ✅ COMPLETED
+**Completed**: 2026-01-11
+
+#### What Was Accomplished:
+
+Successfully configured comprehensive rule exceptions and per-file-ignores to reduce linting errors from 406 to 201 (50% reduction) while maintaining code quality standards.
+
+#### Changes Made to pyproject.toml:
+
+**1. Fixed Deprecation Warning:**
+- Moved all lint settings from top-level to [tool.ruff.lint] section
+- Updated paths: select → lint.select, ignore → lint.ignore, etc.
+- Eliminated deprecation warnings in ruff output
+
+**2. Added Global Ignores (with documentation):**
+- D205: Blank line between summary and description - overly prescriptive
+- D212: Multi-line doc summary on first line - prefer this style
+- D415: Terminal punctuation in docs - not always appropriate
+- SIM117: Multiple with statements - nested can be clearer
+- RET505: Unnecessary else after return - explicit else improves readability
+- PTH123: builtin open() - allow legacy os.path during gradual migration
+
+**3. Enhanced Per-File Ignores:**
+
+Test files (tests/**/*.py):
+- E402: Module import not at top - tests need to mock/patch before importing
+- F841: Unused variable - test setup may assign for assertion context
+- Existing: E501, ARG, D, B011
+
+Command Router (Tools/command_router.py):
+- ARG002: Unused method argument - command handlers follow standard signature
+
+Thanos Orchestrator (Tools/thanos_orchestrator.py):
+- E402: Module import not at top - conditional imports after feature detection
+
+**4. Added Comprehensive Documentation:**
+- Header comment explaining configuration strategy
+- Inline comments for each ignored rule explaining rationale
+- Documentation of remaining errors and how to fix them
+
+#### Results:
+
+**Error Reduction:**
+- Before: 406 errors
+- After: 201 errors
+- Reduction: 205 errors (50% reduction)
+
+**Breakdown of Remaining 201 Errors:**
+
+Auto-fixable with --unsafe-fixes (151 total):
+- 127 UP006: List[str] → list[str] (non-pep585-annotation)
+- 24 UP035: Dict → dict (deprecated-import from typing module)
+
+Require Manual Review (32 total):
+- 32 E501: Line too long (>100 characters)
+
+Minor Issues (18 total):
+- 6 D107: Missing doc in __init__ methods
+- 3 D102: Missing doc in public methods
+- 9 miscellaneous (ARG001, B007, B027, B904, D101, D202, PTH111, RET504, SIM102)
+
+#### Rationale for Ignores:
+
+**Doc Rules (D212, D415, D205):**
+- Codebase uses pragmatic documentation approach
+- Module names and brief descriptions don't always need terminal punctuation
+- Focus on content quality over formatting strictness
+
+**Code Style (SIM117, RET505):**
+- Nested with statements can be clearer than combined for complex cases
+- Explicit else after return improves readability in some contexts
+- Readability trumps minimal code in a CLI/tool codebase
+
+**Test Files (E402, F841, ARG, D):**
+- Tests need to mock/patch before importing modules under test
+- Unused variables are common in test setup for assertion context
+- Fixtures and mocks often have unused parameters by design
+
+**Command Router (ARG002):**
+- Command handler methods follow consistent interface pattern
+- All handlers accept args: str even if not used
+- Maintains uniform method signature for dynamic dispatch
+
+**Legacy Compatibility (PTH123):**
+- Allows gradual migration from open() to pathlib.Path.open()
+- Prevents forcing breaking changes in stable code
+
+#### Configuration Quality Checks:
+
+✅ No deprecation warnings
+✅ Well-documented rationale for each exception
+✅ Balanced approach: strict on errors, flexible on style
+✅ Context-aware per-file ignores
+✅ Comprehensive header documentation
+
+#### Next Steps:
+
+**Option A: Apply Type Hint Modernization**
+Run: ruff check --unsafe-fixes --fix .
+This will modernize 151 type hints for Python 3.9+
+
+**Option B: Proceed to Phase 4 (Formatting)**
+Configure and run Ruff formatter
+
+**Option C: Proceed to Phase 6 (Verification)**
+Accept current state with 201 errors as documented technical debt
+
+#### Files Modified:
+
+- ✅ Updated: pyproject.toml (comprehensive rule exceptions with documentation)
+- ✅ Error count reduced: 406 → 201 (50% reduction)
+- ✅ Deprecation warning eliminated: Config structure modernized
+
+**Status**: ✅ COMPLETED
+**Quality**: High - Well-documented, pragmatic approach balancing strictness and flexibility
+
+---
+
