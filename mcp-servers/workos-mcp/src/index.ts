@@ -642,9 +642,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               .orderBy(asc(schema.tasks.sortOrder), desc(schema.tasks.createdAt))
               .limit(limit);
 
-            return conditions.length > 0
+            const tasks = conditions.length > 0
               ? await query.where(and(...conditions))
               : await query;
+            return tasks as any; // Type assertion: Dates will be serialized by JSON.stringify
           },
           "tasks"
         );
@@ -654,39 +655,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // GET CLIENTS (Cache-first with Neon fallback)
       // -----------------------------------------------------------------------
       case "workos_get_clients": {
-        // Try cache first
-        const cacheAvailable = await ensureCache();
-        if (cacheAvailable && !isCacheStale()) {
-          try {
-            const cachedClients = getCachedClients();
-            console.error(`[Cache] Served ${cachedClients.length} clients from cache`);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(cachedClients, null, 2),
-                },
-              ],
-            };
-          } catch (cacheError) {
-            console.error("[Cache] Error reading from cache, falling back to Neon:", cacheError);
-          }
-        }
-
-        // Fallback to Neon
-        const clients = await db
-          .select()
-          .from(schema.clients)
-          .where(eq(schema.clients.isActive, 1));
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(clients, null, 2),
-            },
-          ],
-        };
+        return withCacheFirst(
+          // Cache reader function
+          () => getCachedClients(),
+          // Neon fallback function
+          async () => {
+            const clients = await db
+              .select()
+              .from(schema.clients)
+              .where(eq(schema.clients.isActive, 1));
+            return clients as any; // Type assertion: Dates will be serialized by JSON.stringify
+          },
+          "clients"
+        );
       }
 
       // -----------------------------------------------------------------------
