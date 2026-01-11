@@ -1000,3 +1000,369 @@ class TestFindRelatedCombinedValidation:
         result = await adapter._find_related(args, session=mock_session)
         assert result.success is False
         assert 'Invalid relationship type' in result.error
+
+
+# ============================================================================
+# VALIDATION UTILITY FUNCTION TESTS
+# ============================================================================
+# Tests for the centralized validation utility functions that prevent
+# Cypher injection attacks through non-parameterizable query components.
+# ============================================================================
+
+
+class TestValidateRelationshipTypeUtility:
+    """Test the validate_relationship_type utility function."""
+
+    def test_valid_relationship_types(self):
+        """Test that all valid relationship types are accepted."""
+        from Tools.adapters.neo4j_adapter import validate_relationship_type, ValidRelationshipType
+
+        valid_types = ValidRelationshipType.get_valid_types()
+        for rel_type in valid_types:
+            normalized, error = validate_relationship_type(rel_type)
+            assert error is None, f"Valid type {rel_type} should have no error"
+            assert normalized == rel_type, f"Type {rel_type} should not be modified"
+
+    def test_case_insensitive_validation(self):
+        """Test that validation is case-insensitive."""
+        from Tools.adapters.neo4j_adapter import validate_relationship_type
+
+        # Test lowercase
+        normalized, error = validate_relationship_type("leads_to")
+        assert error is None
+        assert normalized == "LEADS_TO"
+
+        # Test mixed case
+        normalized, error = validate_relationship_type("LeAdS_tO")
+        assert error is None
+        assert normalized == "LEADS_TO"
+
+    def test_space_normalization(self):
+        """Test that spaces are normalized to underscores."""
+        from Tools.adapters.neo4j_adapter import validate_relationship_type
+
+        normalized, error = validate_relationship_type("leads to")
+        assert error is None
+        assert normalized == "LEADS_TO"
+
+        normalized, error = validate_relationship_type("LEADS TO")
+        assert error is None
+        assert normalized == "LEADS_TO"
+
+    def test_invalid_relationship_types(self):
+        """Test that invalid relationship types are rejected."""
+        from Tools.adapters.neo4j_adapter import validate_relationship_type
+
+        invalid_types = [
+            "INVALID_TYPE",
+            "MALICIOUS",
+            "ARBITRARY_REL",
+            "NOT_IN_SCHEMA",
+            "DROP TABLE",
+            "CREATE INDEX"
+        ]
+
+        for invalid_type in invalid_types:
+            normalized, error = validate_relationship_type(invalid_type)
+            assert error is not None, f"Invalid type {invalid_type} should have error"
+            assert 'Invalid relationship type' in error
+            assert 'must be one of' in error
+            assert normalized == invalid_type, "Original input should be returned on error"
+
+    def test_injection_attempts_blocked(self):
+        """Test that Cypher injection attempts are blocked."""
+        from Tools.adapters.neo4j_adapter import validate_relationship_type
+
+        injection_attempts = [
+            "LEADS_TO] DETACH DELETE (n)-[r",
+            "LEADS_TO]; DROP DATABASE",
+            "LEADS_TO\nCREATE (x:Malicious)",
+            "LEADS_TO/*comment*/",
+            "LEADS_TO` OR 1=1--"
+        ]
+
+        for injection in injection_attempts:
+            normalized, error = validate_relationship_type(injection)
+            assert error is not None, f"Injection attempt should be blocked: {injection}"
+            assert 'Invalid relationship type' in error
+
+    def test_empty_and_whitespace_inputs(self):
+        """Test handling of empty and whitespace-only inputs."""
+        from Tools.adapters.neo4j_adapter import validate_relationship_type
+
+        # Empty string
+        normalized, error = validate_relationship_type("")
+        assert error is not None
+        assert 'Invalid relationship type' in error
+
+        # Whitespace only
+        normalized, error = validate_relationship_type("   ")
+        assert error is not None
+        assert 'Invalid relationship type' in error
+
+    def test_special_characters_rejected(self):
+        """Test that relationship types with special characters are rejected."""
+        from Tools.adapters.neo4j_adapter import validate_relationship_type
+
+        special_chars = [
+            "LEADS_TO;",
+            "LEADS_TO'",
+            "LEADS_TO\"",
+            "LEADS_TO\n",
+            "LEADS_TO\t",
+            "LEADS-TO",  # Dash instead of underscore
+            "LEADS.TO",  # Dot instead of underscore
+        ]
+
+        for special in special_chars:
+            normalized, error = validate_relationship_type(special)
+            assert error is not None, f"Special character should be rejected: {special}"
+            assert 'Invalid relationship type' in error
+
+
+class TestValidateIntegerBoundsUtility:
+    """Test the validate_integer_bounds utility function."""
+
+    def test_valid_integers_within_bounds(self):
+        """Test that valid integers within bounds are accepted."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        # Test various valid values
+        for value in [1, 5, 10]:
+            result, error = validate_integer_bounds(value, 1, 10, "depth")
+            assert error is None
+            assert result == value
+
+    def test_boundary_values(self):
+        """Test that boundary values are handled correctly."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        # Test minimum boundary
+        result, error = validate_integer_bounds(1, 1, 10, "depth")
+        assert error is None
+        assert result == 1
+
+        # Test maximum boundary
+        result, error = validate_integer_bounds(10, 1, 10, "depth")
+        assert error is None
+        assert result == 10
+
+        # Test below minimum
+        result, error = validate_integer_bounds(0, 1, 10, "depth")
+        assert error is not None
+        assert 'must be between 1 and 10' in error
+        assert result is None
+
+        # Test above maximum
+        result, error = validate_integer_bounds(11, 1, 10, "depth")
+        assert error is not None
+        assert 'must be between 1 and 10' in error
+        assert result is None
+
+    def test_non_integer_types_rejected(self):
+        """Test that non-integer types are rejected."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        non_integers = [
+            "5",          # String
+            5.5,          # Float
+            None,         # None
+            [5],          # List
+            {"value": 5}, # Dict
+            True,         # Boolean (special case in Python)
+            False,        # Boolean
+        ]
+
+        for non_int in non_integers:
+            result, error = validate_integer_bounds(non_int, 1, 10, "depth")
+            assert error is not None, f"Non-integer {non_int} should be rejected"
+            assert 'must be an integer' in error
+            assert result is None
+
+    def test_negative_values(self):
+        """Test handling of negative values."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        # Negative value when positive is required
+        result, error = validate_integer_bounds(-5, 1, 10, "depth")
+        assert error is not None
+        assert 'must be between 1 and 10' in error
+        assert result is None
+
+        # Negative value in range that allows negatives
+        result, error = validate_integer_bounds(-5, -10, 0, "offset")
+        assert error is None
+        assert result == -5
+
+    def test_zero_value(self):
+        """Test handling of zero value."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        # Zero when not allowed
+        result, error = validate_integer_bounds(0, 1, 10, "depth")
+        assert error is not None
+        assert 'must be between 1 and 10' in error
+
+        # Zero when allowed
+        result, error = validate_integer_bounds(0, 0, 10, "count")
+        assert error is None
+        assert result == 0
+
+    def test_large_values(self):
+        """Test handling of very large values."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        # Value far exceeding maximum
+        result, error = validate_integer_bounds(1000000, 1, 10, "depth")
+        assert error is not None
+        assert 'must be between 1 and 10' in error
+        assert result is None
+
+    def test_custom_parameter_names(self):
+        """Test that custom parameter names appear in error messages."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        result, error = validate_integer_bounds(100, 1, 10, "custom_param")
+        assert error is not None
+        assert 'custom_param' in error.lower()
+
+        result, error = validate_integer_bounds("not_int", 1, 10, "my_value")
+        assert error is not None
+        assert 'my_value' in error.lower()
+
+    def test_depth_parameter_special_message(self):
+        """Test that depth parameter gets special performance message."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        result, error = validate_integer_bounds(15, 1, 10, "depth")
+        assert error is not None
+        assert 'Use smaller depths for better performance' in error
+
+    def test_injection_attempts_through_type_confusion(self):
+        """Test that injection attempts through type confusion are blocked."""
+        from Tools.adapters.neo4j_adapter import validate_integer_bounds
+
+        injection_attempts = [
+            "5; DROP TABLE",
+            "5 OR 1=1",
+            "5/*comment*/",
+            "5\n10",
+            "5\t10",
+        ]
+
+        for injection in injection_attempts:
+            result, error = validate_integer_bounds(injection, 1, 10, "depth")
+            assert error is not None, f"Injection attempt should be blocked: {injection}"
+            assert 'must be an integer' in error
+            assert result is None
+
+
+class TestValidateNodeLabelUtility:
+    """Test the validate_node_label utility function."""
+
+    def test_valid_node_labels(self):
+        """Test that all valid node labels are accepted."""
+        from Tools.adapters.neo4j_adapter import validate_node_label
+
+        valid_labels = ["Commitment", "Decision", "Pattern", "Entity", "Session", "EnergyState"]
+
+        for label in valid_labels:
+            normalized, error = validate_node_label(label)
+            assert error is None, f"Valid label {label} should have no error"
+            assert normalized == label
+
+    def test_case_normalization(self):
+        """Test that labels are normalized to canonical case form."""
+        from Tools.adapters.neo4j_adapter import validate_node_label
+
+        # Lowercase
+        normalized, error = validate_node_label("commitment")
+        assert error is None
+        assert normalized == "Commitment"
+
+        # Uppercase
+        normalized, error = validate_node_label("DECISION")
+        assert error is None
+        assert normalized == "Decision"
+
+        # Mixed case - should normalize to canonical form
+        normalized, error = validate_node_label("pAtTeRn")
+        assert error is None
+        assert normalized == "Pattern"
+
+        # PascalCase with multiple words - should preserve canonical form
+        normalized, error = validate_node_label("energystate")
+        assert error is None
+        assert normalized == "EnergyState"
+
+        normalized, error = validate_node_label("ENERGYSTATE")
+        assert error is None
+        assert normalized == "EnergyState"
+
+    def test_invalid_node_labels(self):
+        """Test that invalid node labels are rejected."""
+        from Tools.adapters.neo4j_adapter import validate_node_label
+
+        invalid_labels = [
+            "InvalidLabel",
+            "Malicious",
+            "NotInSchema",
+            "DROP",
+            "CREATE",
+        ]
+
+        for label in invalid_labels:
+            normalized, error = validate_node_label(label)
+            assert error is not None, f"Invalid label {label} should have error"
+            assert 'Invalid node label' in error
+            assert 'must be one of' in error
+
+    def test_injection_attempts_blocked(self):
+        """Test that Cypher injection attempts through labels are blocked."""
+        from Tools.adapters.neo4j_adapter import validate_node_label
+
+        injection_attempts = [
+            "Commitment] DETACH DELETE (n",
+            "Decision); DROP DATABASE",
+            "Pattern\nCREATE (x:Malicious)",
+            "Entity/*comment*/",
+            "Session` OR 1=1--",
+        ]
+
+        for injection in injection_attempts:
+            normalized, error = validate_node_label(injection)
+            assert error is not None, f"Injection attempt should be blocked: {injection}"
+            assert 'Invalid node label' in error
+
+    def test_empty_and_whitespace_inputs(self):
+        """Test handling of empty and whitespace-only inputs."""
+        from Tools.adapters.neo4j_adapter import validate_node_label
+
+        # Empty string
+        normalized, error = validate_node_label("")
+        assert error is not None
+        assert 'Invalid node label' in error
+
+        # Whitespace only
+        normalized, error = validate_node_label("   ")
+        assert error is not None
+        assert 'Invalid node label' in error
+
+    def test_special_characters_rejected(self):
+        """Test that labels with special characters are rejected."""
+        from Tools.adapters.neo4j_adapter import validate_node_label
+
+        special_chars = [
+            "Commitment;",
+            "Decision'",
+            "Pattern\"",
+            "Entity\n",
+            "Session\t",
+            "Energy-State",  # Dash
+            "Energy.State",  # Dot
+        ]
+
+        for special in special_chars:
+            normalized, error = validate_node_label(special)
+            assert error is not None, f"Special character should be rejected: {special}"
+            assert 'Invalid node label' in error

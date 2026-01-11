@@ -299,6 +299,188 @@ class ValidRelationshipType(Enum):
         return [member.value for member in cls]
 
 
+# ============================================================================
+# CYPHER QUERY VALIDATION UTILITIES
+# ============================================================================
+# These utility functions provide centralized validation for Cypher query
+# components that cannot be parameterized due to Cypher language limitations.
+#
+# SECURITY CONTEXT:
+# Cypher does not support parameterization of certain query components:
+#   - Relationship types (e.g., CREATE (a)-[r:$type]->(b) is invalid)
+#   - Node labels (e.g., MATCH (n:$label) is invalid)
+#   - Property names (e.g., n.$propName is invalid)
+#   - Variable path lengths (e.g., [r*1..$depth] is invalid)
+#
+# When these components must be constructed using string interpolation,
+# rigorous input validation is essential to prevent Cypher injection attacks.
+# These utilities implement defense-in-depth validation:
+#   1. Input normalization (consistent format)
+#   2. Type validation (correct data types)
+#   3. Whitelist validation (only allowed values)
+#   4. Range validation (within bounds)
+#   5. Clear error messages (actionable feedback)
+# ============================================================================
+
+
+def validate_relationship_type(rel_type_input: str) -> tuple[str, str | None]:
+    """
+    Validate and normalize a relationship type string against the whitelist.
+
+    SECURITY: This function is critical for preventing Cypher injection attacks.
+    Relationship types cannot be parameterized in Cypher queries, so they must
+    be validated against a strict whitelist before use in query construction.
+
+    Args:
+        rel_type_input: User-provided relationship type string
+
+    Returns:
+        tuple: (normalized_type, error_message)
+            - If valid: (normalized_type, None)
+            - If invalid: (original_input, error_message)
+
+    Examples:
+        >>> validate_relationship_type("leads to")
+        ("LEADS_TO", None)
+
+        >>> validate_relationship_type("INVALID")
+        ("INVALID", "Invalid relationship type 'INVALID'. ...")
+    """
+    # Normalize input: uppercase and replace spaces with underscores
+    # This ensures consistent format matching against our whitelist
+    normalized = rel_type_input.upper().replace(" ", "_")
+
+    # Validate against whitelist using ValidRelationshipType enum
+    if not ValidRelationshipType.is_valid(normalized):
+        valid_types = ValidRelationshipType.get_valid_types()
+        error_msg = (
+            f"Invalid relationship type '{rel_type_input}'. "
+            f"Relationship type must be one of: {', '.join(valid_types)}. "
+            f"Normalized value '{normalized}' was not found in the whitelist."
+        )
+        return rel_type_input, error_msg
+
+    # Valid relationship type - safe to use in query construction
+    return normalized, None
+
+
+def validate_integer_bounds(
+    value: Any,
+    min_value: int,
+    max_value: int,
+    param_name: str = "parameter"
+) -> tuple[int | None, str | None]:
+    """
+    Validate that a value is an integer within specified bounds.
+
+    SECURITY: This function prevents injection attacks through integer parameters
+    that must be interpolated into Cypher queries (e.g., variable path lengths).
+    It ensures type safety and prevents malicious values from reaching query construction.
+
+    Args:
+        value: Value to validate (should be an integer)
+        min_value: Minimum allowed value (inclusive)
+        max_value: Maximum allowed value (inclusive)
+        param_name: Name of the parameter for error messages
+
+    Returns:
+        tuple: (validated_value, error_message)
+            - If valid: (value, None)
+            - If invalid: (None, error_message)
+
+    Examples:
+        >>> validate_integer_bounds(5, 1, 10, "depth")
+        (5, None)
+
+        >>> validate_integer_bounds("5", 1, 10, "depth")
+        (None, "Invalid depth parameter: '5'. ...")
+
+        >>> validate_integer_bounds(15, 1, 10, "depth")
+        (None, "Invalid depth parameter: 15. ...")
+    """
+    # Type validation: ensure value is an integer
+    # Note: In Python, bool is a subclass of int, so we exclude it explicitly
+    # Also check for None explicitly
+    if not isinstance(value, int) or isinstance(value, bool) or value is None:
+        error_msg = (
+            f"Invalid {param_name} parameter: '{value}'. "
+            f"{param_name.capitalize()} must be an integer between {min_value} and {max_value}."
+        )
+        return None, error_msg
+
+    # Range validation: ensure value is within bounds
+    if value < min_value or value > max_value:
+        error_msg = (
+            f"Invalid {param_name} parameter: {value}. "
+            f"{param_name.capitalize()} must be between {min_value} and {max_value} (inclusive)."
+        )
+        if param_name == "depth":
+            error_msg += " Use smaller depths for better performance."
+        return None, error_msg
+
+    # Valid integer within bounds - safe to use in query construction
+    return value, None
+
+
+def validate_node_label(label_input: str) -> tuple[str, str | None]:
+    """
+    Validate and normalize a node label string against the schema.
+
+    SECURITY: This function prevents Cypher injection attacks through node labels.
+    Node labels cannot be parameterized in Cypher queries, so they must be
+    validated against a strict whitelist before use in query construction.
+
+    Args:
+        label_input: User-provided node label string
+
+    Returns:
+        tuple: (normalized_label, error_message)
+            - If valid: (normalized_label, None)
+            - If invalid: (original_input, error_message)
+
+    Examples:
+        >>> validate_node_label("Commitment")
+        ("Commitment", None)
+
+        >>> validate_node_label("MaliciousLabel")
+        ("MaliciousLabel", "Invalid node label 'MaliciousLabel'. ...")
+
+    Note:
+        Currently, the codebase does not dynamically construct node labels from
+        user input, so this function is provided for completeness and future use.
+        If node label validation becomes necessary, this function should be
+        enhanced with a whitelist similar to ValidRelationshipType.
+    """
+    # Define valid node labels from the graph schema
+    # These are extracted from GRAPH_SCHEMA definition
+    valid_labels = {
+        "Commitment",
+        "Decision",
+        "Pattern",
+        "Entity",
+        "Session",
+        "EnergyState"
+    }
+
+    # Create case-insensitive lookup mapping
+    # Maps lowercase versions to the canonical label names
+    label_map = {label.lower(): label for label in valid_labels}
+
+    # Normalize: look up the canonical form using case-insensitive comparison
+    normalized = label_map.get(label_input.lower())
+
+    # Validate against whitelist
+    if normalized is None:
+        error_msg = (
+            f"Invalid node label '{label_input}'. "
+            f"Node label must be one of: {', '.join(sorted(valid_labels))}."
+        )
+        return label_input, error_msg
+
+    # Valid node label - safe to use in query construction
+    return normalized, None
+
+
 class Neo4jAdapter(BaseAdapter):
     """
     Neo4j AuraDB adapter for Thanos knowledge graph.
