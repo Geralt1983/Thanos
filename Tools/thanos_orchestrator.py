@@ -32,6 +32,7 @@ if str(_THANOS_DIR) not in sys.path:
 
 from Tools.error_logger import log_error
 from Tools.intent_matcher import KeywordMatcher, TrieKeywordMatcher
+from Tools.spinner import command_spinner
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -499,22 +500,39 @@ You track patterns and surface them.""")
         user_prompt += "\n\nFollow the workflow exactly and provide the output in the specified format."
 
         if stream:
+            # Streaming mode: Manual spinner control
+            # Start spinner before API call, stop before first chunk
             result = ""
-            for chunk in self.api_client.chat_stream(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                operation=f"command:{command_name}"
-            ):
-                print(chunk, end="", flush=True)
-                result += chunk
-            print()
-            return result
+            spinner = command_spinner(command_name)
+            spinner.start()
+
+            try:
+                first_chunk = True
+                for chunk in self.api_client.chat_stream(
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    operation=f"command:{command_name}"
+                ):
+                    if first_chunk:
+                        # CRITICAL: Stop spinner before first output
+                        spinner.stop()
+                        first_chunk = False
+                    print(chunk, end="", flush=True)
+                    result += chunk
+                print()
+                return result
+            except Exception:
+                # Show failure symbol before re-raising
+                spinner.fail()
+                raise
         else:
-            return self.api_client.chat(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                operation=f"command:{command_name}"
-            )
+            # Non-streaming mode: Context manager automatically handles lifecycle
+            with command_spinner(command_name):
+                return self.api_client.chat(
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    operation=f"command:{command_name}"
+                )
 
     def chat(self, message: str, agent: Optional[str] = None,
              stream: bool = False) -> str:
