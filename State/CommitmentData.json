@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-01-11T00:00:00.000000",
+  "schema": {
+    "description": "Persistent storage for commitment tracking with enhanced metadata",
+    "commitment_fields": {
+      "id": "string (UUID)",
+      "title": "string",
+      "type": "string (habit|goal|task)",
+      "status": "string (pending|in_progress|completed|missed|cancelled)",
+      "created_date": "string (ISO 8601)",
+      "due_date": "string (ISO 8601, optional)",
+      "recurrence_pattern": "string (daily|weekly|weekdays|weekends|custom|none)",
+      "streak_count": "integer",
+      "longest_streak": "integer",
+      "completion_rate": "float (0-100)",
+      "completion_history": "array of CompletionRecord objects",
+      "follow_up_schedule": "FollowUpSchedule object",
+      "notes": "string",
+      "domain": "string (work|personal|health|learning|general)",
+      "priority": "integer (1-5, 1=highest)",
+      "tags": "array of strings",
+      "metadata": "object (flexible key-value pairs)"
+    },
+    "completion_record_fields": {
+      "timestamp": "string (ISO 8601)",
+      "status": "string (completed|missed)",
+      "notes": "string (optional)"
+    },
+    "follow_up_schedule_fields": {
+      "enabled": "boolean",
+      "next_check": "string (ISO 8601, optional)",
+      "frequency_hours": "integer",
+      "escalation_count": "integer",
+      "last_reminded": "string (ISO 8601, optional)"
+    }
+  },
+  "commitments": [
+    {
+      "id": "example-commitment-001",
+      "title": "Example: Daily meditation practice",
+      "type": "habit",
+      "status": "pending",
+      "created_date": "2026-01-11T00:00:00.000000",
+      "due_date": null,
+      "recurrence_pattern": "daily",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": null,
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "This is an example commitment to demonstrate the data structure. Real commitments will be added by the commitment tracker.",
+      "domain": "health",
+      "priority": 1,
+      "tags": [
+        "mindfulness",
+        "morning-routine"
+      ],
+      "metadata": {
+        "example_field": "Metadata can store any additional information needed",
+        "is_example": true
+      }
+    }
+  ],
+  "notes": [
+    "This file stores enhanced commitment metadata for the accountability system.",
+    "It is separate from State/Commitments.md which provides the user-facing view.",
+    "The CommitmentTracker class manages read/write operations to this file.",
+    "Atomic writes are used to prevent data corruption.",
+    "Schema version 1.0 - Compatible with commitment_tracker.py data model"
+  ]
+}
