@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { getOAuthClient, OuraOAuthClient } from "./oauth.js";
+import { getRateLimiter, RateLimiter } from "./rate-limiter.js";
 
 // =============================================================================
 // CONSTANTS
@@ -147,9 +148,11 @@ interface OuraAPIError {
 export class OuraAPIClient {
   private oauthClient: OuraOAuthClient;
   private axiosInstance: AxiosInstance;
+  private rateLimiter: RateLimiter;
 
-  constructor(oauthClient?: OuraOAuthClient) {
+  constructor(oauthClient?: OuraOAuthClient, rateLimiter?: RateLimiter) {
     this.oauthClient = oauthClient || getOAuthClient();
+    this.rateLimiter = rateLimiter || getRateLimiter();
 
     // Create axios instance with base configuration
     this.axiosInstance = axios.create({
@@ -213,20 +216,44 @@ export class OuraAPIClient {
   // ===========================================================================
 
   /**
-   * Makes an API request with exponential backoff retry logic
+   * Makes an API request with exponential backoff retry logic and rate limiting
    */
   private async requestWithRetry<T>(
     config: AxiosRequestConfig,
     retries: number = MAX_RETRIES
   ): Promise<T> {
     let lastError: Error | null = null;
+    const endpoint = config.url || "unknown";
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
+        // Apply rate limiting before making the request
+        await this.rateLimiter.recordRequest(endpoint);
+
         const response = await this.axiosInstance.request<T>(config);
         return response.data;
       } catch (error) {
         lastError = this.handleAPIError(error);
+
+        // Handle 429 (Too Many Requests) with exponential backoff
+        if (axios.isAxiosError(error) && error.response?.status === 429) {
+          const retryAfter = error.response.headers["retry-after"];
+          const retryAfterSeconds = retryAfter ? parseInt(retryAfter) : undefined;
+
+          if (attempt < retries) {
+            if (DEBUG) {
+              console.log(
+                `[API] Rate limit hit (429). Retry attempt ${attempt + 1}/${retries}`
+              );
+            }
+
+            await this.rateLimiter.handleRateLimitResponse(
+              retryAfterSeconds,
+              attempt
+            );
+            continue;
+          }
+        }
 
         // Don't retry on certain errors
         if (this.shouldNotRetry(error)) {
@@ -508,6 +535,31 @@ export class OuraAPIClient {
   }
 
   // ===========================================================================
+  // RATE LIMIT MANAGEMENT
+  // ===========================================================================
+
+  /**
+   * Returns the rate limiter instance for direct access
+   */
+  public getRateLimiter(): RateLimiter {
+    return this.rateLimiter;
+  }
+
+  /**
+   * Returns current rate limit statistics
+   */
+  public getRateLimitStats() {
+    return this.rateLimiter.getStats();
+  }
+
+  /**
+   * Returns a human-readable rate limit status summary
+   */
+  public getRateLimitStatus(): string {
+    return this.rateLimiter.getStatusSummary();
+  }
+
+  // ===========================================================================
   // HELPER METHODS
   // ===========================================================================
 
@@ -597,9 +649,12 @@ export class OuraAPIClient {
  */
 let apiClientInstance: OuraAPIClient | null = null;
 
-export function getAPIClient(oauthClient?: OuraOAuthClient): OuraAPIClient {
+export function getAPIClient(
+  oauthClient?: OuraOAuthClient,
+  rateLimiter?: RateLimiter
+): OuraAPIClient {
   if (!apiClientInstance) {
-    apiClientInstance = new OuraAPIClient(oauthClient);
+    apiClientInstance = new OuraAPIClient(oauthClient, rateLimiter);
   }
   return apiClientInstance;
 }
