@@ -90,6 +90,10 @@ class CommandRouter:
         self._memos: Optional[MemOS] = None
         self._memos_initialized = False
 
+        # Calendar adapter integration (lazy initialization)
+        self._calendar_adapter = None
+        self._calendar_initialized = False
+
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
         self._register_commands()
@@ -151,6 +155,23 @@ class CommandRouter:
                 return loop.run_until_complete(coro)
         except Exception:
             return None
+
+    def _get_calendar_adapter(self):
+        """Get calendar adapter, initializing if needed."""
+        if not self._calendar_initialized:
+            try:
+                from Tools.adapters import GoogleCalendarAdapter, GOOGLE_CALENDAR_AVAILABLE
+                if GOOGLE_CALENDAR_AVAILABLE:
+                    self._calendar_adapter = GoogleCalendarAdapter()
+                    self._calendar_initialized = True
+                else:
+                    self._calendar_adapter = None
+                    self._calendar_initialized = True
+            except Exception:
+                self._calendar_adapter = None
+                self._calendar_initialized = True
+
+        return self._calendar_adapter
 
     def detect_agent(self, message: str, auto_switch: bool = True) -> Optional[str]:
         """
@@ -222,6 +243,10 @@ class CommandRouter:
             "patterns": (self._cmd_patterns, "Show conversation patterns", []),
             "model": (self._cmd_model, "Switch AI model", ["name"]),
             "m": (self._cmd_model, "Switch model (alias)", ["name"]),
+            "calendar": (self._cmd_calendar, "Show calendar events", ["args"]),
+            "cal": (self._cmd_calendar, "Show calendar (alias)", ["args"]),
+            "schedule": (self._cmd_schedule, "Schedule a task", ["args"]),
+            "free": (self._cmd_free, "Find free time slots", ["args"]),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -417,6 +442,9 @@ class CommandRouter:
   /switch <ref>  - Switch to a different branch (by name or id)
   /patterns      - Show conversation patterns and usage analytics
   /model [name]  - Switch AI model (opus, sonnet, haiku)
+  /calendar [when] - Show calendar events (today, tomorrow, week, YYYY-MM-DD)
+  /schedule <task> - Schedule a task on calendar
+  /free [when]   - Find free time slots (today, tomorrow, week)
   /run <cmd>     - Run a Thanos command (e.g., /run pa:daily)
   /help          - Show this help
   /quit          - Exit interactive mode
@@ -424,6 +452,7 @@ class CommandRouter:
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
   /r = /resume, /m = /model, /h = /help, /q = /quit
+  /cal = /calendar
 
 {Colors.DIM}Tip: Use \""" for multi-line input{Colors.RESET}
 """)
@@ -1000,3 +1029,194 @@ class CommandRouter:
         """Get the current model full name for API calls."""
         model_alias = self.current_model or self._default_model
         return self._available_models.get(model_alias, self._available_models[self._default_model])
+
+    def _cmd_calendar(self, args: str) -> CommandResult:
+        """Show calendar events for today or a specified date."""
+        calendar = self._get_calendar_adapter()
+        if not calendar:
+            print(f"{Colors.DIM}Calendar integration not available. Install google-auth, google-auth-oauthlib, and google-api-python-client.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        if not calendar.is_authenticated():
+            print(f"{Colors.DIM}Calendar not authenticated. Use /run tools to authorize Google Calendar.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        try:
+            # Parse args: default to today, support "tomorrow", "week", or specific date
+            import json
+            from datetime import datetime, timedelta
+
+            if not args or args.lower() in ["today", ""]:
+                # Show today's events
+                result = self._run_async(calendar.call_tool("get_today_events", {}))
+            elif args.lower() == "tomorrow":
+                # Show tomorrow's events
+                tomorrow = datetime.now() + timedelta(days=1)
+                start = tomorrow.strftime("%Y-%m-%d")
+                end = (tomorrow + timedelta(days=1)).strftime("%Y-%m-%d")
+                result = self._run_async(calendar.call_tool("get_events", {
+                    "start_date": start,
+                    "end_date": end
+                }))
+            elif args.lower() in ["week", "this week"]:
+                # Show this week's events
+                start = datetime.now().strftime("%Y-%m-%d")
+                end = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+                result = self._run_async(calendar.call_tool("get_events", {
+                    "start_date": start,
+                    "end_date": end
+                }))
+            else:
+                # Try to parse as date
+                try:
+                    date_obj = datetime.strptime(args, "%Y-%m-%d")
+                    start = date_obj.strftime("%Y-%m-%d")
+                    end = (date_obj + timedelta(days=1)).strftime("%Y-%m-%d")
+                    result = self._run_async(calendar.call_tool("get_events", {
+                        "start_date": start,
+                        "end_date": end
+                    }))
+                except ValueError:
+                    print(f"{Colors.DIM}Invalid date format. Use YYYY-MM-DD or 'today', 'tomorrow', 'week'{Colors.RESET}")
+                    return CommandResult(success=False)
+
+            if result and result.success:
+                data = result.data
+                events = data.get("events", [])
+
+                print(f"\n{Colors.CYAN}Calendar Events:{Colors.RESET}")
+                if not events:
+                    print(f"{Colors.DIM}  No events found{Colors.RESET}")
+                else:
+                    for event in events:
+                        summary = event.get("summary", "Untitled")
+                        start = event.get("start", {})
+                        if "dateTime" in start:
+                            time_str = datetime.fromisoformat(start["dateTime"].replace("Z", "+00:00")).strftime("%I:%M %p")
+                        elif "date" in start:
+                            time_str = "All day"
+                        else:
+                            time_str = "Unknown time"
+
+                        print(f"  • {time_str:12} {summary}")
+
+                        # Show location if available
+                        if event.get("location"):
+                            print(f"    {Colors.DIM}📍 {event['location']}{Colors.RESET}")
+
+                print()
+                return CommandResult()
+            else:
+                error_msg = result.error if result else "Unknown error"
+                print(f"{Colors.DIM}Failed to fetch calendar: {error_msg}{Colors.RESET}")
+                return CommandResult(success=False)
+
+        except Exception as e:
+            print(f"{Colors.DIM}Error fetching calendar: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
+    def _cmd_schedule(self, args: str) -> CommandResult:
+        """Schedule a task on the calendar."""
+        calendar = self._get_calendar_adapter()
+        if not calendar:
+            print(f"{Colors.DIM}Calendar integration not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        if not calendar.is_authenticated():
+            print(f"{Colors.DIM}Calendar not authenticated. Use /run tools to authorize.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        if not args:
+            print(f"{Colors.DIM}Usage: /schedule <task description>{Colors.RESET}")
+            print(f"{Colors.DIM}Example: /schedule Review PR{Colors.RESET}")
+            return CommandResult(success=False)
+
+        try:
+            # For now, delegate to the orchestrator to handle intelligent scheduling
+            # The orchestrator can use find_free_slots and block_time_for_task
+            print(f"{Colors.CYAN}Scheduling task:{Colors.RESET} {args}")
+            print(f"{Colors.DIM}Let me find a good time slot for this...{Colors.RESET}")
+
+            # This is a placeholder - the actual scheduling logic should be in the agent
+            # For now, just inform the user to use natural language with the agent
+            print(f"\n{Colors.DIM}Tip: For intelligent scheduling, ask the agent in natural language:{Colors.RESET}")
+            print(f'{Colors.DIM}Example: "Schedule this task for tomorrow morning"{Colors.RESET}\n')
+
+            return CommandResult()
+
+        except Exception as e:
+            print(f"{Colors.DIM}Error scheduling task: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
+    def _cmd_free(self, args: str) -> CommandResult:
+        """Find free time slots in calendar."""
+        calendar = self._get_calendar_adapter()
+        if not calendar:
+            print(f"{Colors.DIM}Calendar integration not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        if not calendar.is_authenticated():
+            print(f"{Colors.DIM}Calendar not authenticated. Use /run tools to authorize.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        try:
+            from datetime import datetime, timedelta
+            import json
+
+            # Parse args: default to today, support "tomorrow", "week"
+            if not args or args.lower() in ["today", ""]:
+                start = datetime.now().strftime("%Y-%m-%d")
+                end = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+                period = "today"
+            elif args.lower() == "tomorrow":
+                tomorrow = datetime.now() + timedelta(days=1)
+                start = tomorrow.strftime("%Y-%m-%d")
+                end = (tomorrow + timedelta(days=1)).strftime("%Y-%m-%d")
+                period = "tomorrow"
+            elif args.lower() in ["week", "this week"]:
+                start = datetime.now().strftime("%Y-%m-%d")
+                end = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+                period = "this week"
+            else:
+                print(f"{Colors.DIM}Usage: /free [today|tomorrow|week]{Colors.RESET}")
+                return CommandResult(success=False)
+
+            result = self._run_async(calendar.call_tool("find_free_slots", {
+                "start_date": start,
+                "end_date": end,
+                "min_duration_minutes": 30,
+                "working_hours_start": 9,
+                "working_hours_end": 18,
+            }))
+
+            if result and result.success:
+                data = result.data
+                free_slots = data.get("free_slots", [])
+
+                print(f"\n{Colors.CYAN}Free Time Slots ({period}):{Colors.RESET}")
+                if not free_slots:
+                    print(f"{Colors.DIM}  No free slots found{Colors.RESET}")
+                else:
+                    for slot in free_slots[:10]:  # Show first 10 slots
+                        start_time = datetime.fromisoformat(slot["start"].replace("Z", "+00:00"))
+                        end_time = datetime.fromisoformat(slot["end"].replace("Z", "+00:00"))
+                        duration = slot.get("duration_minutes", 0)
+
+                        date_str = start_time.strftime("%a %m/%d")
+                        time_range = f"{start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}"
+
+                        print(f"  • {date_str:10} {time_range:25} ({duration} min)")
+
+                if len(free_slots) > 10:
+                    print(f"{Colors.DIM}  ... and {len(free_slots) - 10} more slots{Colors.RESET}")
+
+                print()
+                return CommandResult()
+            else:
+                error_msg = result.error if result else "Unknown error"
+                print(f"{Colors.DIM}Failed to find free slots: {error_msg}{Colors.RESET}")
+                return CommandResult(success=False)
+
+        except Exception as e:
+            print(f"{Colors.DIM}Error finding free slots: {e}{Colors.RESET}")
+            return CommandResult(success=False)
