@@ -65,3 +65,13 @@ mcp-servers/workos-mcp/.npmrc
 
 # Auto Claude data directory
 .auto-claude/
+
+# Environment files (contains secrets)
+.env
+.env.local
+.env.*.local
+
+# Auto Claude framework files (worktree-specific)
+.auto-claude-security.json
+.auto-claude-status
+.claude_settings.json
