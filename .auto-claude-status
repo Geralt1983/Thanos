@@ -3,7 +3,7 @@
   "spec": "041-oura-health-metrics-mcp-adapter",
   "state": "building",
   "subtasks": {
-    "completed": 12,
+    "completed": 13,
     "total": 26,
     "in_progress": 1,
     "failed": 0
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 2,
+    "number": 3,
     "started_at": "2026-01-11T12:09:17.349313"
   },
-  "last_update": "2026-01-11T12:12:37.582839"
+  "last_update": "2026-01-11T12:18:14.602379"
 }
