@@ -303,9 +303,14 @@ export function initializeSchema(db: Database.Database): void {
  * @returns Current schema version number
  */
 export function getSchemaVersion(db: Database.Database): number {
-  const stmt = db.prepare("SELECT value FROM cache_meta WHERE key = ?");
-  const row = stmt.get("schema_version") as CacheMeta | undefined;
-  return row ? parseInt(row.value, 10) : 0;
+  try {
+    const stmt = db.prepare("SELECT value FROM cache_meta WHERE key = ?");
+    const row = stmt.get("schema_version") as CacheMeta | undefined;
+    return row ? parseInt(row.value, 10) : 0;
+  } catch (error) {
+    // If cache_meta table doesn't exist, this is a new database
+    return 0;
+  }
 }
 
 /**
