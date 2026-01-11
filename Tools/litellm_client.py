@@ -285,7 +285,17 @@ class AsyncUsageWriter:
                             self._perform_flush()
                             last_flush_time = time.time()
 
-        # Final flush on shutdown
+        # Final flush on shutdown - drain queue first
+        # Drain remaining items from queue into buffer
+        while not self._queue.empty():
+            try:
+                record = self._queue.get(block=False)
+                with self._buffer_lock:
+                    self._buffer.append(record)
+            except Empty:
+                break
+
+        # Flush all remaining buffered records
         with self._buffer_lock:
             if len(self._buffer) > 0:
                 try:
