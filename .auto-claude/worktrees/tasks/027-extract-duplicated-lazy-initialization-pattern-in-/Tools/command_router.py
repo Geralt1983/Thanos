@@ -430,95 +430,57 @@ class CommandRouter:
         """
         Get WorkOS adapter instance, initializing if needed.
 
-        Uses lazy initialization with graceful degradation - returns None
-        if WorkOS is unavailable or initialization fails.
+        Uses lazy initialization with graceful degradation via LazyInitializer.
 
         Returns:
             WorkOSAdapter instance or None if unavailable
         """
-        # Step 1: Check availability flag
-        if not WORKOS_AVAILABLE:
-            return None
+        instance = self._workos_lazy.get()
 
-        # Step 2: Check if already initialized (idempotency)
-        if not self._workos_initialized:
-            try:
-                # Step 3: Initialize WorkOS adapter
-                # WorkOS requires DATABASE_URL or WORKOS_DATABASE_URL env var
-                self._workos = WorkOSAdapter()
-                self._workos_initialized = True
-            except Exception:
-                # Step 4: Graceful failure - adapter will remain None
-                self._workos = None
+        # Update instance variables for backward compatibility
+        if instance is not None:
+            self._workos = instance
+            self._workos_initialized = True
 
-        # Step 5: Return instance or None
-        return self._workos
+        return instance
 
     def _get_oura(self) -> Optional["OuraAdapter"]:
         """
         Get Oura adapter instance, initializing if needed.
 
-        Uses lazy initialization with graceful degradation - returns None
-        if Oura is unavailable or initialization fails.
+        Uses lazy initialization with graceful degradation via LazyInitializer.
 
         Returns:
             OuraAdapter instance or None if unavailable
         """
-        # Step 1: Check availability flag
-        if not OURA_AVAILABLE:
-            return None
+        instance = self._oura_lazy.get()
 
-        # Step 2: Check if already initialized (idempotency)
-        if not self._oura_initialized:
-            try:
-                # Step 3: Initialize Oura adapter
-                # Oura requires OURA_PERSONAL_ACCESS_TOKEN env var
-                self._oura = OuraAdapter()
-                self._oura_initialized = True
-            except Exception:
-                # Step 4: Graceful failure - adapter will remain None
-                self._oura = None
+        # Update instance variables for backward compatibility
+        if instance is not None:
+            self._oura = instance
+            self._oura_initialized = True
 
-        # Step 5: Return instance or None
-        return self._oura
+        return instance
 
     def _get_adapter_manager(self) -> Optional["AdapterManager"]:
         """
         Get AdapterManager instance, initializing if needed.
 
-        Uses lazy initialization with graceful degradation - returns None
-        if AdapterManager is unavailable or initialization fails.
-
+        Uses lazy initialization with graceful degradation via LazyInitializer.
         The AdapterManager provides unified access to all adapters (WorkOS,
         Oura, Neo4j, ChromaDB) through a single interface.
 
         Returns:
             AdapterManager instance or None if unavailable
         """
-        # Step 1: Check availability flag
-        if not ADAPTER_MANAGER_AVAILABLE:
-            return None
+        instance = self._adapter_manager_lazy.get()
 
-        # Step 2: Check if already initialized (idempotency)
-        if not self._adapter_manager_initialized:
-            try:
-                # Step 3: Initialize AdapterManager (async initialization required)
-                # AdapterManager requires get_default_manager() which is async
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Can't use asyncio.run in running loop
-                    # Try to schedule it or skip initialization
-                    self._adapter_manager = None
-                else:
-                    # Run the async initialization
-                    self._adapter_manager = loop.run_until_complete(get_default_manager())
-                    self._adapter_manager_initialized = True
-            except Exception:
-                # Step 4: Graceful failure - adapter will remain None
-                self._adapter_manager = None
+        # Update instance variables for backward compatibility
+        if instance is not None:
+            self._adapter_manager = instance
+            self._adapter_manager_initialized = True
 
-        # Step 5: Return instance or None
-        return self._adapter_manager
+        return instance
 
     def _run_async(self, coro):
         """Run async coroutine from sync context."""
