@@ -9,17 +9,17 @@
     "failed": 0
   },
   "phase": {
-    "current": "Setup & Infrastructure",
+    "current": "Extract Command Handlers",
     "id": null,
-    "total": 4
+    "total": 7
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 5,
+    "number": 7,
     "started_at": "2026-01-11T08:04:29.350943"
   },
-  "last_update": "2026-01-11T08:20:42.832042"
+  "last_update": "2026-01-11T08:25:39.519658"
 }
