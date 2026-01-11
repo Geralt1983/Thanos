@@ -464,7 +464,11 @@ You track patterns and surface them.""")
 
     def chat(self, message: str, agent: Optional[str] = None,
              stream: bool = False) -> str:
-        """Chat with a specific agent or auto-detect."""
+        """Chat with a specific agent or auto-detect.
+
+        After handling the request, updates the last interaction timestamp
+        in TimeState.json for time-awareness across sessions.
+        """
         self._ensure_client()
 
         # Get agent
@@ -474,24 +478,28 @@ You track patterns and surface them.""")
             agent_obj = self.find_agent(message)
 
         system_prompt = self._build_system_prompt(agent=agent_obj)
+        agent_name = agent_obj.name if agent_obj else None
 
         if stream:
             result = ""
             for chunk in self.api_client.chat_stream(
                 prompt=message,
                 system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
+                operation=f"chat:{agent_name or 'default'}"
             ):
                 print(chunk, end="", flush=True)
                 result += chunk
             print()
+            self.state_reader.update_last_interaction("chat", agent_name)
             return result
         else:
-            return self.api_client.chat(
+            result = self.api_client.chat(
                 prompt=message,
                 system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
+                operation=f"chat:{agent_name or 'default'}"
             )
+            self.state_reader.update_last_interaction("chat", agent_name)
+            return result
 
     def route(self, message: str, stream: bool = False) -> str:
         """Auto-route a message to the appropriate handler using natural language understanding.
