@@ -13,10 +13,10 @@ Usage:
     context = reader.get_quick_context()
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional
 from datetime import datetime
+from pathlib import Path
 import re
+from typing import Dict, List, Optional
 
 
 class StateReader:

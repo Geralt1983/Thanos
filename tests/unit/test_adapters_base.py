@@ -5,15 +5,17 @@ Unit tests for Tools/adapters/base.py
 Tests the ToolResult dataclass and BaseAdapter abstract base class.
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, Mock
 import sys
+from unittest.mock import Mock
+
+import pytest
+
 
 # Mock asyncpg before importing adapters (it may not be installed in test env)
 sys.modules['asyncpg'] = Mock()
 
-from Tools.adapters.base import ToolResult, BaseAdapter
+from Tools.adapters.base import BaseAdapter, ToolResult
 
 
 # ========================================================================

@@ -14,11 +14,12 @@ Tests cover:
 - Graceful fallback when backends unavailable
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch, AsyncMock
-from dataclasses import dataclass
-import sys
 from pathlib import Path
+import sys
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

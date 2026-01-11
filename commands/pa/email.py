@@ -14,10 +14,11 @@ Actions:
 Model: gpt-4o-mini (simple task - cost effective)
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+import sys
 from typing import Optional
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -57,7 +58,7 @@ def build_context() -> str:
     # Email context file (if exists)
     email_context = project_root / "State" / "email_context.md"
     if email_context.exists():
-        with open(email_context, 'r') as f:
+        with open(email_context) as f:
             context_parts.append(f"## Recent Email Context\n{f.read()}")
 
     # Client information

@@ -9,9 +9,10 @@ Tests cover:
 - Max retries exhaustion
 - Handling different error types
 """
+from unittest.mock import Mock, patch
+
 import pytest
-import time
-from unittest.mock import Mock, patch, call
+
 
 # Create mock exception classes that behave like Anthropic exceptions
 # The real Anthropic exceptions require response and body parameters
@@ -34,6 +35,8 @@ class MockAPIStatusError(Exception):
 
 # Patch the anthropic imports in retry_middleware module
 import Tools.retry_middleware as retry_module
+
+
 retry_module.RateLimitError = MockRateLimitError
 retry_module.APIConnectionError = MockAPIConnectionError
 retry_module.APIStatusError = MockAPIStatusError

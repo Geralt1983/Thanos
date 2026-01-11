@@ -5,9 +5,10 @@ Tests the MemorySystem class that wraps Neo4j and ChromaDB adapters
 into a unified memory system with graceful fallback.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from dataclasses import dataclass
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 # Mock the adapters before importing

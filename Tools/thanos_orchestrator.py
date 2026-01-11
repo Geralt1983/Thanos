@@ -16,14 +16,14 @@ Usage:
     response = thanos.route("What should I do today?")
 """
 
-import os
-import re
-import json
-import sys
-from pathlib import Path
-from typing import Optional, Dict, List, Any, TYPE_CHECKING
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
+import json
+from pathlib import Path
+import re
+import sys
+from typing import TYPE_CHECKING, Dict, List, Optional
+
 
 # Ensure Thanos project is in path for imports BEFORE importing from Tools
 _THANOS_DIR = Path(__file__).parent.parent
@@ -31,6 +31,7 @@ if str(_THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(_THANOS_DIR))
 
 from Tools.error_logger import log_error
+
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -229,7 +230,7 @@ You track patterns and surface them.""")
             try:
                 today_state = state_file.read_text()
                 parts.append(f"\n## Today's State\n{today_state[:2000]}")  # Limit size
-            except (OSError, IOError) as e:
+            except OSError as e:
                 # File read errors are not critical for system prompt
                 log_error("thanos_orchestrator", e, "Failed to read Today.md for system prompt")
             except Exception as e:
@@ -504,7 +505,7 @@ def _log_hook_error(error: str):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(log_file, 'a') as f:
             f.write(f"[{timestamp}] [thanos-orchestrator] {error}\n")
-    except (OSError, IOError) as e:
+    except OSError as e:
         # Can't write to log file - note to stderr but don't break hooks
         import sys
         print(f"[hooks] Cannot write to log file: {e}", file=sys.stderr)
@@ -601,7 +602,7 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
                     session_log += f"- Focus: {ctx['focus']}\n"
                 if ctx["pending_commitments"] > 0:
                     session_log += f"- Pending commitments: {ctx['pending_commitments']}\n"
-            except (OSError, IOError) as e:
+            except OSError as e:
                 # State file read errors - note in log but continue
                 log_error("thanos_orchestrator", e, "Failed to read state for session log")
                 session_log += "- [Context unavailable]\n"
@@ -610,7 +611,7 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
                 log_error("thanos_orchestrator", e, "Unexpected error reading context for session log")
                 session_log += "- [Context unavailable]\n"
 
-            session_log += f"""
+            session_log += """
 ## State Changes
 - Check git diff for file changes
 

@@ -9,8 +9,10 @@ Tests cover:
 - Context window limits
 - Usage reporting
 """
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
+
 from Tools.context_manager import ContextManager
 
 

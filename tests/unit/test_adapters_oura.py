@@ -5,19 +5,19 @@ Unit tests for Tools/adapters/oura.py
 Tests the OuraAdapter class for Oura Ring API integration.
 """
 
-import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
-from datetime import datetime, timedelta
-import os
 import sys
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 
 # Mock asyncpg before importing adapters (it may not be installed in test env)
 sys.modules['asyncpg'] = Mock()
 
 import httpx
 
-from Tools.adapters.oura import OuraAdapter
 from Tools.adapters.base import ToolResult
+from Tools.adapters.oura import OuraAdapter
 
 
 # ========================================================================

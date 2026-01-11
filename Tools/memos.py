@@ -11,16 +11,16 @@ This hybrid architecture provides:
 - Pattern recognition across both stores
 """
 
-import os
-import asyncio
-from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field
 from datetime import datetime
+import os
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 
 # Conditional imports with graceful fallbacks
 try:
-    from .adapters.neo4j_adapter import Neo4jAdapter, GRAPH_SCHEMA
+    from .adapters.neo4j_adapter import GRAPH_SCHEMA, Neo4jAdapter
     NEO4J_AVAILABLE = True
 except ImportError:
     NEO4J_AVAILABLE = False

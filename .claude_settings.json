@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Glob(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Grep(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/.auto-claude/specs/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/.auto-claude/specs/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/028-add-python-linting-configuration-ruff-flake8/.auto-claude/specs/028-add-python-linting-configuration-ruff-flake8/**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Glob(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Grep(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}

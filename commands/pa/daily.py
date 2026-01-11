@@ -9,10 +9,11 @@ Usage:
 Model: gpt-4o-mini (simple task - cost effective)
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+import sys
 from typing import Optional
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -54,26 +55,26 @@ def build_context() -> str:
     # Yesterday's summary
     yesterday_file = project_root / "History" / "yesterday.md"
     if yesterday_file.exists():
-        with open(yesterday_file, 'r') as f:
+        with open(yesterday_file) as f:
             context_parts.append(f"## Yesterday\n{f.read()}")
 
     # Today's state
     today_file = project_root / "State" / "Today.md"
     if today_file.exists():
-        with open(today_file, 'r') as f:
+        with open(today_file) as f:
             context_parts.append(f"## Current State\n{f.read()}")
 
     # Commitments
     commitments_file = project_root / "State" / "Commitments.md"
     if commitments_file.exists():
-        with open(commitments_file, 'r') as f:
+        with open(commitments_file) as f:
             context_parts.append(f"## Active Commitments\n{f.read()}")
 
     # Calendar (if available)
     calendar_file = project_root / "State" / "calendar_today.json"
     if calendar_file.exists():
         import json
-        with open(calendar_file, 'r') as f:
+        with open(calendar_file) as f:
             try:
                 events = json.load(f)
                 context_parts.append(f"## Today's Calendar\n{json.dumps(events, indent=2)}")
@@ -162,7 +163,7 @@ Be concise. I have ADHD - don't overwhelm me.
 
     # Save to history
     save_to_history(response)
-    print(f"\n✅ Saved to History/DailyBriefings/")
+    print("\n✅ Saved to History/DailyBriefings/")
 
     return response
 

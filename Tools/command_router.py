@@ -5,17 +5,18 @@ CommandRouter - Routes and executes slash commands for Thanos Interactive Mode
 Single Responsibility: Command parsing and delegation
 """
 
+import asyncio
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Callable, Optional, List, Tuple
+import os
 from pathlib import Path
 import re
-import asyncio
-import os
+from typing import Callable, Dict, List, Optional, Tuple
+
 
 # MemOS integration (optional - graceful degradation if unavailable)
 try:
-    from Tools.memos import get_memos, init_memos, MemOS
+    from Tools.memos import MemOS, get_memos, init_memos
     MEMOS_AVAILABLE = True
 except ImportError:
     MEMOS_AVAILABLE = False
@@ -144,7 +145,7 @@ class CommandRouter:
                     return future.result(timeout=30)
             else:
                 return loop.run_until_complete(coro)
-        except Exception as e:
+        except Exception:
             return None
 
     def detect_agent(self, message: str, auto_switch: bool = True) -> Optional[str]:
@@ -326,7 +327,7 @@ class CommandRouter:
             print(f"  Focus: {ctx['focus']}")
 
         if ctx["top3"]:
-            print(f"\n  Today's Top 3:")
+            print("\n  Today's Top 3:")
             for i, item in enumerate(ctx["top3"], 1):
                 print(f"    {i}. {item}")
 
@@ -564,7 +565,7 @@ class CommandRouter:
                 node_id = result.graph_results.get("node_id", "")
                 print(f"  Graph ID: {node_id[:8]}..." if node_id else "")
             if result.vector_results:
-                print(f"  Vector stored: ✓")
+                print("  Vector stored: ✓")
             print()
             return CommandResult()
         else:
@@ -686,7 +687,7 @@ class CommandRouter:
         print(f"  {Colors.BOLD}MemOS Hybrid Memory:{Colors.RESET}")
         memos = self._get_memos()
         if memos:
-            print(f"    ✓ MemOS initialized")
+            print("    ✓ MemOS initialized")
 
             # Neo4j status
             neo4j_url = os.environ.get("NEO4J_URL", "")
@@ -695,7 +696,7 @@ class CommandRouter:
                 masked_url = neo4j_url.split("@")[-1] if "@" in neo4j_url else neo4j_url[:30]
                 print(f"    🔗 Neo4j Graph: {masked_url}")
             else:
-                print(f"    🔗 Neo4j Graph: Not configured")
+                print("    🔗 Neo4j Graph: Not configured")
 
             # ChromaDB status
             chroma_path = os.environ.get("CHROMADB_PATH", "~/.chromadb")
@@ -706,16 +707,16 @@ class CommandRouter:
                 try:
                     result = self._run_async(memos._neo4j.health_check())
                     if result and result.success:
-                        print(f"    ✓ Neo4j connected")
+                        print("    ✓ Neo4j connected")
                 except Exception:
-                    print(f"    ⚠ Neo4j connection issue")
+                    print("    ⚠ Neo4j connection issue")
         else:
             if MEMOS_AVAILABLE:
-                print(f"    ⚠ MemOS available but not initialized")
-                print(f"    💡 MemOS will initialize on first /remember or /recall")
+                print("    ⚠ MemOS available but not initialized")
+                print("    💡 MemOS will initialize on first /remember or /recall")
             else:
-                print(f"    ✗ MemOS not available")
-                print(f"    💡 Install neo4j and chromadb packages")
+                print("    ✗ MemOS not available")
+                print("    💡 Install neo4j and chromadb packages")
 
         print()
 
@@ -726,7 +727,7 @@ class CommandRouter:
             print(f"  📝 Session History: {session_count} saved sessions")
             print(f"     Location: {history_dir}")
         else:
-            print(f"  📝 Session History: Not initialized")
+            print("  📝 Session History: Not initialized")
 
         # Check for swarm memory
         swarm_db = self.thanos_dir / ".swarm" / "memory.db"
@@ -735,7 +736,7 @@ class CommandRouter:
             print(f"  🔮 Swarm Memory: {size_kb:.1f} KB")
             print(f"     Location: {swarm_db}")
         else:
-            print(f"  🔮 Swarm Memory: Not initialized")
+            print("  🔮 Swarm Memory: Not initialized")
 
         # Check for hive-mind memory
         hive_db = self.thanos_dir / ".hive-mind" / "memory.db"
@@ -744,15 +745,15 @@ class CommandRouter:
             print(f"  🐝 Hive Mind Memory: {size_kb:.1f} KB")
             print(f"     Location: {hive_db}")
         else:
-            print(f"  🐝 Hive Mind Memory: Not initialized")
+            print("  🐝 Hive Mind Memory: Not initialized")
 
         # Check for claude-mem integration
         claude_mem = Path.home() / ".claude-mem"
         if claude_mem.exists():
-            print(f"  🧠 Claude-mem: Active")
+            print("  🧠 Claude-mem: Active")
             print(f"     Location: {claude_mem}")
         else:
-            print(f"  🧠 Claude-mem: Not detected")
+            print("  🧠 Claude-mem: Not detected")
 
         print(f"\n{Colors.DIM}Commands:{Colors.RESET}")
         print(f"{Colors.DIM}  /remember <content> - Store memory in knowledge graph{Colors.RESET}")
@@ -817,9 +818,9 @@ class CommandRouter:
 
     def _cmd_patterns(self, args: str) -> CommandResult:
         """Analyze conversation patterns from session history."""
-        import json
-        from datetime import datetime
         from collections import Counter
+        from datetime import datetime
+        import json
 
         history_dir = self.thanos_dir / "History" / "Sessions"
         if not history_dir.exists():

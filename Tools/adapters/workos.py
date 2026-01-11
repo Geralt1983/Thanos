@@ -5,9 +5,9 @@ Provides direct PostgreSQL access to the WorkOS productivity database,
 bypassing the MCP server for better performance and control.
 """
 
+from datetime import datetime
 import os
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import asyncpg

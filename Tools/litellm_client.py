@@ -20,24 +20,25 @@ Usage:
         print(chunk, end="", flush=True)
 """
 
-import os
-import json
-import hashlib
-import time
-import re
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Optional, Dict, Generator, Any, List, Tuple
+from collections.abc import Generator
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+import hashlib
+import json
+import os
+from pathlib import Path
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
 
 # LiteLLM import with fallback
 try:
     import litellm
-    from litellm import completion, acompletion
+    from litellm import acompletion, completion
     from litellm.exceptions import (
-        RateLimitError as LiteLLMRateLimitError,
         APIConnectionError as LiteLLMConnectionError,
         APIError as LiteLLMAPIError,
+        RateLimitError as LiteLLMRateLimitError,
     )
     LITELLM_AVAILABLE = True
 except ImportError:
@@ -49,7 +50,7 @@ except ImportError:
 # Fallback to direct Anthropic if LiteLLM unavailable
 try:
     import anthropic
-    from anthropic import RateLimitError, APIConnectionError, APIStatusError
+    from anthropic import APIConnectionError, APIStatusError, RateLimitError
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False

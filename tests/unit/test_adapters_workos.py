@@ -5,11 +5,12 @@ Unit tests for Tools/adapters/workos.py
 Tests the WorkOSAdapter class for PostgreSQL database integration.
 """
 
-import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
-from datetime import datetime, timedelta
-import os
+from datetime import datetime
 import sys
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 
 # Mock asyncpg before importing adapters
 # Create a proper mock with PostgresError class
@@ -19,11 +20,10 @@ mock_asyncpg.Pool = Mock
 mock_asyncpg.Record = dict
 sys.modules['asyncpg'] = mock_asyncpg
 
-from Tools.adapters.workos import WorkOSAdapter
-from Tools.adapters.base import ToolResult
-
 # Import the mocked asyncpg for test use
-import asyncpg
+
+from Tools.adapters.base import ToolResult
+from Tools.adapters.workos import WorkOSAdapter
 
 
 # ========================================================================

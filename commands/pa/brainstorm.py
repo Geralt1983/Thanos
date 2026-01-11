@@ -9,10 +9,11 @@ Usage:
 Model: claude-3-5-sonnet-20241022 (standard task - needs creativity)
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+import sys
 from typing import Optional
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -55,7 +56,7 @@ def build_context() -> str:
     # Core context (values, goals)
     core_file = project_root / "Context" / "CORE.md"
     if core_file.exists():
-        with open(core_file, 'r') as f:
+        with open(core_file) as f:
             context_parts.append(f"## Jeremy's Context\n{f.read()[:1000]}")
 
     # Recent ideas (if tracked)
@@ -64,7 +65,7 @@ def build_context() -> str:
         idea_files = sorted(ideas_dir.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True)
         if idea_files:
             recent = idea_files[0]
-            with open(recent, 'r') as f:
+            with open(recent) as f:
                 context_parts.append(f"## Recent Brainstorm\n{f.read()[:500]}")
 
     return "\n\n".join(context_parts) if context_parts else ""
@@ -152,7 +153,7 @@ Let's think together.
 
     # Save to ideas
     save_to_history(topic, response)
-    print(f"\n✅ Saved to Memory/Ideas/")
+    print("\n✅ Saved to Memory/Ideas/")
 
     return response
 

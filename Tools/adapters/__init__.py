@@ -24,12 +24,13 @@ Usage:
         await manager.close_all()
 """
 
-from typing import Dict, Any, List, Optional
 import logging
+from typing import Any, Dict, List, Optional
 
 from .base import BaseAdapter, ToolResult
-from .workos import WorkOSAdapter
 from .oura import OuraAdapter
+from .workos import WorkOSAdapter
+
 
 # Conditional Neo4j import (requires neo4j package)
 try:

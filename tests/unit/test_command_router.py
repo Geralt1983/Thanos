@@ -5,18 +5,12 @@ Unit tests for CommandRouter
 Tests command routing, execution, and all command handlers with mocked dependencies.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch, mock_open
 from pathlib import Path
-from io import StringIO
-import sys
+from unittest.mock import Mock, patch
 
-from Tools.command_router import (
-    CommandRouter,
-    CommandResult,
-    CommandAction,
-    Colors
-)
+import pytest
+
+from Tools.command_router import Colors, CommandAction, CommandResult, CommandRouter
 
 
 # ========================================================================
@@ -260,7 +254,7 @@ class TestCommitmentsCommand:
     def test_commitments_read_error(self, router, capsys):
         """Test commitments command handles read errors"""
         with patch('pathlib.Path.exists', return_value=True):
-            with patch('pathlib.Path.read_text', side_effect=IOError("Read error")):
+            with patch('pathlib.Path.read_text', side_effect=OSError("Read error")):
                 result = router.route_command('/commitments')
                 assert result.action == CommandAction.CONTINUE
                 assert result.success is False

@@ -16,11 +16,12 @@ Actions:
 Model: gpt-4o-mini (simple task - cost effective)
 """
 
-import sys
-import re
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, List, Tuple
+from pathlib import Path
+import re
+import sys
+from typing import List, Optional, Tuple
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -60,19 +61,19 @@ def build_context() -> str:
     # Commitments
     commitments_file = project_root / "State" / "Commitments.md"
     if commitments_file.exists():
-        with open(commitments_file, 'r') as f:
+        with open(commitments_file) as f:
             context_parts.append(f"## Active Commitments\n{f.read()}")
 
     # Today's focus
     today_file = project_root / "State" / "Today.md"
     if today_file.exists():
-        with open(today_file, 'r') as f:
+        with open(today_file) as f:
             context_parts.append(f"## Today\n{f.read()}")
 
     # Current focus
     focus_file = project_root / "State" / "CurrentFocus.md"
     if focus_file.exists():
-        with open(focus_file, 'r') as f:
+        with open(focus_file) as f:
             context_parts.append(f"## Current Focus\n{f.read()}")
 
     # Inbox (tasks to process)
@@ -82,7 +83,7 @@ def build_context() -> str:
         if inbox_items:
             items_text = []
             for item in inbox_items[:10]:  # Limit to 10
-                with open(item, 'r') as f:
+                with open(item) as f:
                     content = f.read()[:200]  # First 200 chars
                     items_text.append(f"- **{item.stem}**: {content[:100]}...")
             context_parts.append(f"## Inbox ({len(inbox_items)} items)\n" + "\n".join(items_text))
@@ -295,7 +296,7 @@ Use Eisenhower matrix:
     elif action == "complete":
         # Handle task completion directly without LLM
         result = complete_task(details)
-        print(f"✅ Task Manager - Complete")
+        print("✅ Task Manager - Complete")
         print("-" * 50)
         print(result)
         print("-" * 50)

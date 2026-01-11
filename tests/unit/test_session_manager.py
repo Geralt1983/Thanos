@@ -10,10 +10,12 @@ Tests cover:
 - History clearing
 - Session persistence
 """
-import pytest
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, timedelta
-from Tools.session_manager import SessionManager, Session, Message, MAX_HISTORY
+
+import pytest
+
+from Tools.session_manager import MAX_HISTORY, Message, Session, SessionManager
 
 
 @pytest.mark.unit

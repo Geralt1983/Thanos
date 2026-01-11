@@ -5,10 +5,10 @@ Tests the ChromaAdapter class for vector storage operations
 with semantic search capabilities.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 import sys
-from dataclasses import dataclass
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 # Mock chromadb before importing the adapter

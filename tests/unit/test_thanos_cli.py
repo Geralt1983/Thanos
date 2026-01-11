@@ -13,22 +13,22 @@ Tests cover:
 - Natural language routing
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch, call
 from pathlib import Path
 import sys
-import io
+from unittest.mock import Mock, patch
+
+import pytest
+
 
 # Import after setting up path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import thanos
 from thanos import (
     COMMAND_SHORTCUTS,
     SYSTEM_COMMANDS,
     is_natural_language,
-    print_usage,
     main,
+    print_usage,
 )
 
 
@@ -299,7 +299,6 @@ class TestMainInteractiveCommand:
         with patch.object(sys, 'argv', ['thanos', 'interactive']):
             with patch.dict('sys.modules', {'Tools.thanos_interactive': Mock(ThanosInteractive=mock_interactive_class)}):
                 # We need to re-import to pick up the mock
-                import importlib
                 with patch('thanos.ThanosOrchestrator', mock_orch):
                     # The import happens inside main(), so we patch it there
                     pass

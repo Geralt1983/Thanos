@@ -4,23 +4,23 @@ Tests model routing, caching, usage tracking, and API integration.
 """
 import json
 import os
-import sys
-from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch
+import sys
+from unittest.mock import Mock, patch
 
 import pytest
+
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from Tools.litellm_client import (
-    LiteLLMClient,
-    UsageTracker,
     ComplexityAnalyzer,
-    ResponseCache,
+    LiteLLMClient,
     ModelResponse,
+    ResponseCache,
+    UsageTracker,
     get_client,
     init_client,
 )

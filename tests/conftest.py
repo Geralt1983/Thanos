@@ -1,11 +1,11 @@
 """
 Pytest configuration and shared fixtures for Thanos tests.
 """
-import os
-import sys
 from pathlib import Path
+import sys
 
 import pytest
+
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent

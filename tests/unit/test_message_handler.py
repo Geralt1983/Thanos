@@ -5,12 +5,14 @@ Unit tests for MessageHandler
 Tests message streaming, retry logic, error handling, and token tracking.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
 from dataclasses import dataclass
-
-import sys
 from pathlib import Path
+import sys
+from unittest.mock import Mock, patch
+
+import pytest
+
+
 THANOS_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(THANOS_DIR))
 
@@ -35,6 +37,8 @@ class MockAPIStatusError(Exception):
 
 # Patch the anthropic imports in message_handler module
 import Tools.message_handler as handler_module
+
+
 handler_module.RateLimitError = MockRateLimitError
 handler_module.APIConnectionError = MockAPIConnectionError
 handler_module.APIStatusError = MockAPIStatusError
@@ -44,7 +48,7 @@ RateLimitError = MockRateLimitError
 APIConnectionError = MockAPIConnectionError
 APIStatusError = MockAPIStatusError
 
-from Tools.message_handler import MessageHandler, MessageResult
+from Tools.message_handler import MessageHandler
 
 
 @dataclass

@@ -5,19 +5,17 @@ Unit tests for Tools/error_logger.py
 Tests the error logging, warning logging, and log rotation functionality.
 """
 
-import pytest
-from unittest.mock import Mock, patch, mock_open, MagicMock
 from pathlib import Path
-from datetime import datetime
-import sys
-from io import StringIO
+from unittest.mock import mock_open, patch
+
+import pytest
 
 from Tools.error_logger import (
+    MAX_LOG_BACKUPS,
+    MAX_LOG_SIZE_BYTES,
+    _rotate_log_if_needed,
     log_error,
     log_warning,
-    _rotate_log_if_needed,
-    MAX_LOG_SIZE_BYTES,
-    MAX_LOG_BACKUPS
 )
 
 
