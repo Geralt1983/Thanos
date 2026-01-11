@@ -16,6 +16,15 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that in
 - **Health Diagnostics** - Built-in health check tool for troubleshooting
 - **Type-Safe** - Full TypeScript support with Zod validation
 
+## 📖 Documentation
+
+- **[Setup Guide](./SETUP.md)** - Complete step-by-step installation and configuration
+- **[Usage Examples](./EXAMPLES.md)** - Practical examples and use cases
+- **[OAuth Setup](./OAUTH_SETUP.md)** - OAuth configuration for multi-user apps
+- **[Architecture](./ARCHITECTURE.md)** - Technical architecture for developers
+- **[Test Summary](./TEST_SUMMARY.md)** - Test coverage and testing guide
+- **[Integration Tests](./INTEGRATION_TESTS.md)** - End-to-end testing documentation
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -46,7 +55,7 @@ cp .env.example .env
 
 ```bash
 # Required: Oura Personal Access Token
-OURA_API_KEY=your_oura_personal_access_token_here
+OURA_ACCESS_TOKEN=your_oura_personal_access_token_here
 
 # Optional: Custom cache directory (defaults to ~/.oura-cache)
 # OURA_CACHE_DIR=/path/to/cache
@@ -55,7 +64,7 @@ OURA_API_KEY=your_oura_personal_access_token_here
 # DEBUG_SYNC=true
 ```
 
-See the [Personal Access Token Setup](#personal-access-token-setup) below for detailed instructions on obtaining your token.
+See the [Personal Access Token Setup](#personal-access-token-setup) below or the [complete Setup Guide](./SETUP.md) for detailed instructions.
 
 ### Running the Server
 
@@ -89,7 +98,7 @@ The server will start and listen for MCP protocol requests over stdio.
 Paste your token into the `.env` file:
 
 ```bash
-OURA_API_KEY=your_copied_token_here
+OURA_ACCESS_TOKEN=your_copied_token_here
 ```
 
 **Important Security Notes**:
@@ -367,15 +376,19 @@ The Oura API has a limit of 5000 requests per day. This server implements:
 
 ## 🧪 Testing
 
+The server includes comprehensive test coverage (>80%) across all components.
+
 ```bash
 # Run all tests
-npm test
+find . -name "test-*.mjs" -exec node {} \;
 
-# Run specific test suites
-npm run test:api
-npm run test:cache
-npm run test:tools
+# Run specific test
+./test-readiness-tool.mjs
+./test-integration-mcp-tools.mjs
 ```
+
+**See [TEST_SUMMARY.md](./TEST_SUMMARY.md)** for detailed testing documentation and coverage report.
+**See [INTEGRATION_TESTS.md](./INTEGRATION_TESTS.md)** for integration testing guide.
 
 ## 🔧 Configuration
 
@@ -383,9 +396,18 @@ All configuration is managed through environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OURA_API_KEY` | Personal Access Token | Required |
+| `OURA_ACCESS_TOKEN` | Personal Access Token (recommended) | Required* |
+| `OURA_CLIENT_ID` | OAuth Client ID (alternative to PAT) | Optional |
+| `OURA_CLIENT_SECRET` | OAuth Client Secret (alternative to PAT) | Optional |
 | `OURA_CACHE_DIR` | Cache directory path | `~/.oura-cache` |
+| `CACHE_TTL_HOURS` | Cache expiration time | `1` |
+| `SYNC_INTERVAL_HOURS` | Background sync frequency | `1` |
+| `SYNC_HISTORY_DAYS` | Days of historical data to cache | `7` |
+| `RATE_LIMIT_MAX_REQUESTS` | API request limit per day | `5000` |
 | `DEBUG_SYNC` | Enable sync debugging | `false` |
+| `DEBUG_API_CALLS` | Enable API call logging | `false` |
+
+\* Either `OURA_ACCESS_TOKEN` or both `OURA_CLIENT_ID` and `OURA_CLIENT_SECRET` are required. See [OAuth Setup Guide](./OAUTH_SETUP.md) for OAuth configuration.
 
 ## 🔗 Integration with Claude Desktop
 
@@ -398,7 +420,7 @@ Add this server to your Claude Desktop configuration (`~/Library/Application Sup
       "command": "node",
       "args": ["/absolute/path/to/oura-mcp/dist/index.js"],
       "env": {
-        "OURA_API_KEY": "your_personal_access_token_here"
+        "OURA_ACCESS_TOKEN": "your_personal_access_token_here"
       }
     }
   }
@@ -427,6 +449,8 @@ This MCP server is designed to work with the Thanos Health persona. Example prom
 - "Should I do a hard workout today based on my recovery?"
 
 The Health persona can use this data to provide personalized recommendations based on your physical state.
+
+**See [EXAMPLES.md](./EXAMPLES.md) for more usage examples and advanced use cases.**
 
 ## 🐛 Troubleshooting
 
