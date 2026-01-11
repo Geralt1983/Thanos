@@ -22,6 +22,7 @@ import {
   getCacheStats,
 } from "./cache/cache.js";
 import { syncAll, syncSingleTask, removeCachedTask } from "./cache/sync.js";
+// Cache abstraction utility - encapsulates cache-first-with-fallback pattern
 import { withCacheFirst } from "./cache/utils.js";
 
 // =============================================================================
@@ -594,7 +595,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // -----------------------------------------------------------------------
-      // GET TASKS (Cache-first with Neon fallback)
+      // GET TASKS (Uses withCacheFirst utility for cache-first with Neon fallback)
       // -----------------------------------------------------------------------
       case "workos_get_tasks": {
         const { status, clientId, limit = 50 } = args as any;
@@ -652,7 +653,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // -----------------------------------------------------------------------
-      // GET CLIENTS (Cache-first with Neon fallback)
+      // GET CLIENTS (Uses withCacheFirst utility for cache-first with Neon fallback)
       // -----------------------------------------------------------------------
       case "workos_get_clients": {
         return withCacheFirst(
@@ -1043,7 +1044,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // =====================================================================
-      // PERSONALOS: HABITS HANDLERS (Cache-first with Neon fallback)
+      // PERSONALOS: HABITS HANDLERS (Uses withCacheFirst utility for cache-first with Neon fallback)
       // =====================================================================
       case "workos_get_habits": {
         return withCacheFirst(
