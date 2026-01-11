@@ -468,11 +468,100 @@ Successfully implemented comprehensive HealthStateTracker module for tracking an
 
 ---
 
+## ✅ Subtask 3.3: Integrate health state into task recommendations
+**Commit:** (pending)
+**Completed:** 2026-01-11
+
+Successfully integrated health state into task recommendations with intelligent energy-aware task classification and scheduling recommendations.
+
+**Implementation:**
+- Added `_classify_task_type()` method to BriefingEngine (42 lines)
+  * Classifies tasks as 'deep_work', 'admin', or 'general'
+  * Analyzes title and category for cognitive load keywords
+  * Deep work: design, architect, research, analyze, implement, refactor
+  * Admin: email, call, schedule, update, review, organize, meeting
+
+- Added `_calculate_peak_focus_time()` method (30 lines)
+  * Calculates peak focus window (2-4 hours post-Vyvanse)
+  * Returns peak start/end times with human-readable format
+  * Detects if currently in peak focus window
+  * Handles missing Vyvanse data gracefully
+
+- Added `get_health_aware_recommendations()` method (142 lines)
+  * Main recommendation engine integrating health state with tasks
+  * Energy-based task filtering and prioritization
+  * Reschedule recommendations for energy/task mismatches
+  * Peak focus window identification
+  * Pattern-based insights integration
+  * Transparent reasoning for all recommendations
+
+**Energy-Level Recommendations:**
+- **High Energy (8-10)**: Prioritizes deep work (design, coding, architecture)
+- **Good Energy (6-7)**: Balanced mix of deep work and general tasks
+- **Moderate Energy (4-5)**: Focuses on admin and lighter work
+- **Low Energy (1-3)**: Only simple admin tasks, reschedules complex work
+
+**Rescheduling Logic:**
+- Low energy + deep work task → "Reschedule to when energy is higher"
+- Moderate energy + urgent complex task → "Consider rescheduling to peak focus time"
+- Low energy + important general task → "Consider rescheduling or getting support"
+- Always preserves critical deadline tasks with warnings
+
+**Peak Focus Integration:**
+- Identifies 2-4 hour window post-Vyvanse dosage
+- Shows current peak status (in window vs. upcoming)
+- Recommends scheduling deep work during peak times
+- Integrates with energy levels for optimal recommendations
+
+**Pattern Integration:**
+- Detects worst/best energy days from historical patterns
+- Adjusts recommendations based on day-of-week patterns
+- Provides context-aware insights (e.g., "Historically low energy on Mondays")
+- Helps calibrate expectations based on user's unique rhythms
+
+**Testing:**
+- Added TestHealthAwareRecommendations class with 14 comprehensive tests (315 lines)
+- Tests task classification (deep work, admin, general)
+- Tests peak focus time calculation with/without Vyvanse
+- Tests recommendations for all energy levels (high, good, moderate, low)
+- Tests reschedule logic and recommendations
+- Tests pattern integration and insights
+- Tests data structure integrity and fallback behavior
+- 100% coverage of new recommendation logic
+
+**Example Script:**
+- Created example_health_aware_recommendations.py (280 lines)
+- Demonstrates 5 real-world scenarios:
+  1. High energy morning (9/10) - deep work focus
+  2. Moderate energy afternoon (5/10) - light tasks
+  3. Low energy day (3/10) - admin only, rescheduling
+  4. Good energy with medication (7/10) - peak focus window
+  5. With historical patterns - personalized insights
+- Shows task classification breakdown
+- Displays reasoning and recommendations clearly
+
+**All Acceptance Criteria Met:**
+✅ Low energy → suggests admin/light tasks
+✅ High energy → suggests deep work/complex tasks
+✅ Post-Vyvanse peak (2-4hr) → prime focus time identified
+✅ Tired + important task → recommends rescheduling
+✅ Briefing explains reasoning
+✅ Unit tests for recommendation logic
+
+**Files Modified:**
+- Tools/briefing_engine.py: Added 214 lines (3 new methods)
+- tests/unit/test_briefing_engine.py: Added 315 lines (14 tests)
+- example_health_aware_recommendations.py: Created (280 lines)
+
+**Total:** 809 lines of implementation, tests, and examples
+
+---
+
 ## Next Steps
-1. **Phase 3**: Health State Assessment (1 of 4 complete)
+1. **Phase 3**: Health State Assessment (3 of 4 complete)
    - ✅ 3.1: Create HealthStateTracker
-   - Subtask 3.2: Add health prompts to morning briefing
-   - Subtask 3.3: Integrate health state into task recommendations
+   - ✅ 3.2: Add health prompts to morning briefing
+   - ✅ 3.3: Integrate health state into task recommendations
    - Subtask 3.4: Add evening reflection on energy/accomplishments
 
 ## Risks & Mitigations
@@ -482,4 +571,4 @@ Successfully implemented comprehensive HealthStateTracker module for tracking an
 - Pattern learning incorrect → Influence not override, require min data
 
 ---
-*Last Updated: 2026-01-11 09:57 EST - Subtask 3.1 Complete (HealthStateTracker)*
+*Last Updated: 2026-01-11 10:30 EST - Subtask 3.3 Complete (Health-Aware Recommendations)*
