@@ -6,6 +6,7 @@ for calendar integration, event management, and scheduling intelligence.
 """
 
 import json
+import logging
 import os
 import random
 import re
@@ -23,6 +24,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from .base import BaseAdapter, ToolResult
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleCalendarAdapter(BaseAdapter):
@@ -102,16 +105,19 @@ class GoogleCalendarAdapter(BaseAdapter):
         creds_path = self._get_credentials_path()
 
         if not creds_path.exists():
+            logger.debug("No existing credentials file found")
             return
 
         try:
             self._credentials = Credentials.from_authorized_user_file(
                 str(creds_path), self.SCOPES
             )
-        except Exception:
+            logger.info("Successfully loaded credentials from storage")
+        except Exception as e:
             # Credentials file is corrupted or invalid
             # We'll need to re-authenticate
             # Silently ignore and allow re-authentication
+            logger.warning(f"Failed to load credentials file (may be corrupted): {e}")
             pass
 
     def _save_credentials(self) -> None:
@@ -128,6 +134,7 @@ class GoogleCalendarAdapter(BaseAdapter):
         which must be protected from unauthorized access.
         """
         if not self._credentials:
+            logger.debug("No credentials to save")
             return
 
         creds_path = self._get_credentials_path()
@@ -143,6 +150,8 @@ class GoogleCalendarAdapter(BaseAdapter):
         # This prevents other users on the system from reading the credentials
         os.chmod(creds_path, 0o600)
 
+        logger.info(f"Successfully saved credentials to {creds_path} with secure permissions (0600)")
+
     def _refresh_credentials(self) -> bool:
         """
         Refresh expired credentials if possible.
@@ -151,22 +160,28 @@ class GoogleCalendarAdapter(BaseAdapter):
             True if credentials were refreshed successfully, False otherwise.
         """
         if not self._credentials:
+            logger.debug("Cannot refresh credentials: no credentials available")
             return False
 
         if not self._credentials.expired:
+            logger.debug("Credentials are not expired, no refresh needed")
             return True
 
         if not self._credentials.refresh_token:
+            logger.warning("Cannot refresh credentials: no refresh token available")
             return False
 
         try:
+            logger.info("Attempting to refresh expired credentials")
             self._credentials.refresh(Request())
             self._save_credentials()
             # Clear cached service to use refreshed credentials
             self._service = None
+            logger.info("Credentials refreshed successfully")
             return True
-        except Exception:
+        except Exception as e:
             # Token refresh failed - credentials may have been revoked
+            logger.error(f"Failed to refresh credentials: {e}")
             return False
 
     def _execute_api_call_with_retry(self, api_call: Callable, operation_name: str = "API call") -> Any:
@@ -198,10 +213,19 @@ class GoogleCalendarAdapter(BaseAdapter):
         last_error = None
         backoff = self.INITIAL_BACKOFF
 
+        logger.debug(f"Starting API call: {operation_name}")
+
         for attempt in range(self.MAX_RETRIES):
             try:
                 # Execute the API call
                 result = api_call()
+
+                # Log successful API call
+                if attempt > 0:
+                    logger.info(f"API call '{operation_name}' succeeded after {attempt + 1} attempts")
+                else:
+                    logger.debug(f"API call '{operation_name}' succeeded")
+
                 return result
 
             except HttpError as e:
@@ -212,12 +236,15 @@ class GoogleCalendarAdapter(BaseAdapter):
 
                 # Authentication errors - credentials expired or invalid
                 if status_code == 401:
+                    logger.warning(f"API call '{operation_name}' failed with 401 authentication error, attempting credential refresh")
                     # Try to refresh credentials
                     if self._refresh_credentials():
                         # Credentials refreshed, retry immediately
+                        logger.info("Credentials refreshed successfully, retrying API call")
                         continue
                     else:
                         # Refresh failed - need to re-authenticate
+                        logger.error(f"API call '{operation_name}' failed: credential refresh failed, re-authentication required")
                         raise ValueError(
                             f"{operation_name} failed: Authentication expired. "
                             "Please re-authenticate using the 'authorize' tool."
@@ -230,16 +257,22 @@ class GoogleCalendarAdapter(BaseAdapter):
                         # Quota error - retry with backoff
                         if attempt < self.MAX_RETRIES - 1:
                             sleep_time = self._calculate_backoff(backoff, attempt)
+                            logger.warning(
+                                f"API call '{operation_name}' hit quota limit (reason: {error_reason}). "
+                                f"Retrying in {sleep_time:.2f}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                            )
                             time.sleep(sleep_time)
                             backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
                             continue
                         else:
+                            logger.error(f"API call '{operation_name}' failed: quota exceeded after {self.MAX_RETRIES} attempts")
                             raise RuntimeError(
                                 f"{operation_name} failed: API quota exceeded. "
                                 f"Reason: {error_reason}. Please try again later."
                             ) from e
                     else:
                         # Permission denied - not retryable
+                        logger.error(f"API call '{operation_name}' failed: permission denied (reason: {error_reason})")
                         raise ValueError(
                             f"{operation_name} failed: Permission denied. "
                             f"Reason: {error_reason}. Please check calendar access permissions."
@@ -247,6 +280,7 @@ class GoogleCalendarAdapter(BaseAdapter):
 
                 # Bad request - invalid data
                 elif status_code == 400:
+                    logger.error(f"API call '{operation_name}' failed: invalid request data - {error_details['message']}")
                     raise ValueError(
                         f"{operation_name} failed: Invalid request data. "
                         f"Details: {error_details['message']}"
@@ -254,6 +288,7 @@ class GoogleCalendarAdapter(BaseAdapter):
 
                 # Not found errors
                 elif status_code == 404:
+                    logger.error(f"API call '{operation_name}' failed: resource not found - {error_details['message']}")
                     raise ValueError(
                         f"{operation_name} failed: Resource not found. "
                         f"Details: {error_details['message']}"
@@ -264,10 +299,15 @@ class GoogleCalendarAdapter(BaseAdapter):
                     # Retry with exponential backoff
                     if attempt < self.MAX_RETRIES - 1:
                         sleep_time = self._calculate_backoff(backoff, attempt)
+                        logger.warning(
+                            f"API call '{operation_name}' hit rate limit. "
+                            f"Retrying in {sleep_time:.2f}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                        )
                         time.sleep(sleep_time)
                         backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
                         continue
                     else:
+                        logger.error(f"API call '{operation_name}' failed: rate limit exceeded after {self.MAX_RETRIES} attempts")
                         raise RuntimeError(
                             f"{operation_name} failed: Rate limit exceeded. "
                             "Please try again later."
@@ -277,10 +317,18 @@ class GoogleCalendarAdapter(BaseAdapter):
                 elif 500 <= status_code < 600:
                     if attempt < self.MAX_RETRIES - 1:
                         sleep_time = self._calculate_backoff(backoff, attempt)
+                        logger.warning(
+                            f"API call '{operation_name}' encountered server error (status {status_code}). "
+                            f"Retrying in {sleep_time:.2f}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                        )
                         time.sleep(sleep_time)
                         backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
                         continue
                     else:
+                        logger.error(
+                            f"API call '{operation_name}' failed: server error (status {status_code}) "
+                            f"after {self.MAX_RETRIES} attempts"
+                        )
                         raise RuntimeError(
                             f"{operation_name} failed: Server error (status {status_code}). "
                             f"Details: {error_details['message']}"
@@ -288,6 +336,7 @@ class GoogleCalendarAdapter(BaseAdapter):
 
                 # Other HTTP errors - don't retry
                 else:
+                    logger.error(f"API call '{operation_name}' failed: HTTP {status_code} - {error_details['message']}")
                     raise RuntimeError(
                         f"{operation_name} failed: HTTP {status_code}. "
                         f"Details: {error_details['message']}"
@@ -295,6 +344,7 @@ class GoogleCalendarAdapter(BaseAdapter):
 
             except RefreshError as e:
                 # Credential refresh failed
+                logger.error(f"API call '{operation_name}' failed: credential refresh error - re-authentication required")
                 raise ValueError(
                     f"{operation_name} failed: Unable to refresh credentials. "
                     "Please re-authenticate using the 'authorize' tool."
@@ -305,10 +355,15 @@ class GoogleCalendarAdapter(BaseAdapter):
                 # Network connection error - retry with backoff
                 if attempt < self.MAX_RETRIES - 1:
                     sleep_time = self._calculate_backoff(backoff, attempt)
+                    logger.warning(
+                        f"API call '{operation_name}' encountered network connection error. "
+                        f"Retrying in {sleep_time:.2f}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                    )
                     time.sleep(sleep_time)
                     backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
                     continue
                 else:
+                    logger.error(f"API call '{operation_name}' failed: network connection error after {self.MAX_RETRIES} attempts")
                     raise RuntimeError(
                         f"{operation_name} failed: Network connection error. "
                         f"Details: {str(e)}"
@@ -319,10 +374,15 @@ class GoogleCalendarAdapter(BaseAdapter):
                 # Timeout error - retry with backoff
                 if attempt < self.MAX_RETRIES - 1:
                     sleep_time = self._calculate_backoff(backoff, attempt)
+                    logger.warning(
+                        f"API call '{operation_name}' timed out. "
+                        f"Retrying in {sleep_time:.2f}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                    )
                     time.sleep(sleep_time)
                     backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
                     continue
                 else:
+                    logger.error(f"API call '{operation_name}' failed: request timeout after {self.MAX_RETRIES} attempts")
                     raise RuntimeError(
                         f"{operation_name} failed: Request timeout. "
                         "Please check your network connection."
@@ -330,12 +390,14 @@ class GoogleCalendarAdapter(BaseAdapter):
 
             except Exception as e:
                 # Unexpected error - don't retry
+                logger.exception(f"API call '{operation_name}' failed with unexpected error")
                 raise RuntimeError(
                     f"{operation_name} failed: Unexpected error. "
                     f"Details: {str(e)}"
                 ) from e
 
         # All retries exhausted
+        logger.error(f"API call '{operation_name}' failed after {self.MAX_RETRIES} attempts - last error: {str(last_error)}")
         raise RuntimeError(
             f"{operation_name} failed after {self.MAX_RETRIES} attempts. "
             f"Last error: {str(last_error)}"
@@ -5060,36 +5122,116 @@ class GoogleCalendarAdapter(BaseAdapter):
 
     async def health_check(self) -> ToolResult:
         """
-        Check Google Calendar API connectivity.
+        Check Google Calendar API connectivity and credential validity.
+
+        Performs a comprehensive health check including:
+        - Authentication status verification
+        - Credentials validity check
+        - API connectivity test
+        - Token expiration status
 
         Returns:
-            ToolResult indicating connection status
+            ToolResult with detailed health status including:
+            - status: "ok" or error state
+            - authenticated: boolean
+            - credentials_valid: boolean
+            - credentials_expired: boolean (if authenticated)
+            - api_connected: boolean
+            - primary_calendar: calendar ID (if connected)
+            - error_details: any error information
         """
+        logger.info("Starting Google Calendar health check")
+        health_status = {
+            "status": "unknown",
+            "adapter": self.name,
+            "authenticated": False,
+            "credentials_valid": False,
+            "credentials_expired": None,
+            "api_connected": False,
+            "primary_calendar": None,
+            "error_details": None,
+        }
+
+        # Check authentication status
         if not self.is_authenticated():
+            logger.warning("Health check failed: Not authenticated")
+            health_status["error_details"] = "Not authenticated. Use the 'authorize' tool to connect Google Calendar."
             return ToolResult.fail(
-                "Not authenticated. Use the 'authorize' tool to connect Google Calendar."
+                "Not authenticated. Use the 'authorize' tool to connect Google Calendar.",
+                health_status=health_status
             )
 
+        health_status["authenticated"] = True
+
+        # Check credential validity and expiration
+        try:
+            if self._credentials:
+                health_status["credentials_expired"] = self._credentials.expired
+
+                if self._credentials.expired:
+                    logger.info("Credentials expired, attempting refresh")
+                    # Try to refresh credentials
+                    refresh_success = self._refresh_credentials()
+                    if refresh_success:
+                        logger.info("Credentials refreshed successfully")
+                        health_status["credentials_expired"] = False
+                        health_status["credentials_valid"] = True
+                    else:
+                        logger.error("Failed to refresh expired credentials")
+                        health_status["error_details"] = "Credentials expired and refresh failed. Re-authentication required."
+                        return ToolResult.fail(
+                            "Credentials expired and refresh failed. Please re-authenticate.",
+                            health_status=health_status
+                        )
+                else:
+                    health_status["credentials_valid"] = True
+
+        except Exception as e:
+            logger.exception("Error checking credential validity")
+            health_status["error_details"] = f"Credential validation error: {str(e)}"
+            return ToolResult.fail(f"Credential validation failed: {e}", health_status=health_status)
+
+        # Test API connectivity
         try:
             service = self._get_service()
 
-            # Simple API call to verify connectivity
-            # Get the user's calendar list (lightweight operation)
-            self._execute_api_call_with_retry(
-                lambda: service.calendarList().list(maxResults=1).execute(),
+            # Make a lightweight API call to verify connectivity
+            # Get the user's primary calendar info
+            logger.debug("Testing API connectivity with calendar list request")
+            result = self._execute_api_call_with_retry(
+                lambda: service.calendarList().list(maxResults=1, minAccessRole="owner").execute(),
                 operation_name="Health check"
             )
 
-            return ToolResult.ok(
-                {
-                    "status": "ok",
-                    "adapter": self.name,
-                    "api": "connected",
-                    "authenticated": True,
-                }
-            )
+            health_status["api_connected"] = True
 
-        except (ValueError, RuntimeError) as e:
-            return ToolResult.fail(str(e))
+            # Extract primary calendar if available
+            if result and "items" in result and len(result["items"]) > 0:
+                primary_cal = next((cal for cal in result["items"] if cal.get("primary")), result["items"][0])
+                health_status["primary_calendar"] = primary_cal.get("id")
+                logger.info(f"Health check successful - connected to primary calendar: {health_status['primary_calendar']}")
+            else:
+                logger.info("Health check successful - API connected but no calendars found")
+
+            health_status["status"] = "ok"
+            logger.info("Google Calendar health check completed successfully")
+
+            return ToolResult.ok(health_status)
+
+        except ValueError as e:
+            # Authentication or permission errors
+            logger.error(f"Health check failed with authentication error: {e}")
+            health_status["error_details"] = str(e)
+            return ToolResult.fail(str(e), health_status=health_status)
+
+        except RuntimeError as e:
+            # API errors that persisted after retries
+            logger.error(f"Health check failed with API error after retries: {e}")
+            health_status["error_details"] = str(e)
+            return ToolResult.fail(str(e), health_status=health_status)
+
         except Exception as e:
-            return ToolResult.fail(f"Health check failed: {e}")
+            # Unexpected errors
+            logger.exception("Health check failed with unexpected error")
+            health_status["error_details"] = f"Unexpected error: {str(e)}"
+            return ToolResult.fail(f"Health check failed: {e}", health_status=health_status)
