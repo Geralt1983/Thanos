@@ -62,3 +62,6 @@ mcp-servers/workos-mcp/node_modules/
 mcp-servers/workos-mcp/dist/
 mcp-servers/workos-mcp/mcp-servers/
 mcp-servers/workos-mcp/.npmrc
+
+# Auto Claude data directory
+.auto-claude/
