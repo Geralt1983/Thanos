@@ -32,6 +32,15 @@ except ImportError:
     WORKOS_AVAILABLE = False
     WorkOSAdapter = None
 
+# Oura integration (optional - graceful degradation if unavailable)
+try:
+    from Tools.adapters.oura import OuraAdapter
+
+    OURA_AVAILABLE = True
+except ImportError:
+    OURA_AVAILABLE = False
+    OuraAdapter = None
+
 
 # ANSI color codes (copied from thanos_interactive.py)
 class Colors:
@@ -102,6 +111,10 @@ class CommandRouter:
         # WorkOS integration (lazy initialization)
         self._workos: Optional[WorkOSAdapter] = None
         self._workos_initialized = False
+
+        # Oura integration (lazy initialization)
+        self._oura: Optional[OuraAdapter] = None
+        self._oura_initialized = False
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
@@ -176,6 +189,34 @@ class CommandRouter:
 
         # Step 5: Return instance or None
         return self._workos
+
+    def _get_oura(self) -> Optional["OuraAdapter"]:
+        """
+        Get Oura adapter instance, initializing if needed.
+
+        Uses lazy initialization with graceful degradation - returns None
+        if Oura is unavailable or initialization fails.
+
+        Returns:
+            OuraAdapter instance or None if unavailable
+        """
+        # Step 1: Check availability flag
+        if not OURA_AVAILABLE:
+            return None
+
+        # Step 2: Check if already initialized (idempotency)
+        if not self._oura_initialized:
+            try:
+                # Step 3: Initialize Oura adapter
+                # Oura requires OURA_PERSONAL_ACCESS_TOKEN env var
+                self._oura = OuraAdapter()
+                self._oura_initialized = True
+            except Exception:
+                # Step 4: Graceful failure - adapter will remain None
+                self._oura = None
+
+        # Step 5: Return instance or None
+        return self._oura
 
     def _run_async(self, coro):
         """Run async coroutine from sync context."""
