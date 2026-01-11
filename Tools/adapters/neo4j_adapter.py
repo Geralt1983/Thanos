@@ -51,6 +51,7 @@ import os
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
 from dataclasses import dataclass
+from enum import Enum
 
 from .base import BaseAdapter, ToolResult
 
@@ -259,6 +260,43 @@ GRAPH_SCHEMA = {
         "AT_ENERGY": "Session -> EnergyState"
     }
 }
+
+
+class ValidRelationshipType(Enum):
+    """
+    Enumeration of valid relationship types for the knowledge graph.
+
+    SECURITY NOTE: This enum provides type-safe relationship validation.
+    Relationship types in Cypher queries cannot be parameterized in the traditional
+    sense (i.e., CREATE (a)-[r:$type]->(b) is invalid syntax), so they must be
+    validated against a strict whitelist before being used in query construction.
+
+    This enum serves as:
+    1. A type-safe constant definition for valid relationship types
+    2. A centralized source of truth for allowed relationships
+    3. Documentation of the graph schema relationships
+    """
+    LEADS_TO = "LEADS_TO"
+    INVOLVES = "INVOLVES"
+    LEARNED_FROM = "LEARNED_FROM"
+    DURING = "DURING"
+    IMPACTS = "IMPACTS"
+    PRECEDED_BY = "PRECEDED_BY"
+    AT_ENERGY = "AT_ENERGY"
+
+    @classmethod
+    def is_valid(cls, rel_type: str) -> bool:
+        """Check if a relationship type string is valid."""
+        try:
+            cls(rel_type)
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def get_valid_types(cls) -> List[str]:
+        """Get list of all valid relationship type strings."""
+        return [member.value for member in cls]
 
 
 class Neo4jAdapter(BaseAdapter):
@@ -1107,19 +1145,56 @@ class Neo4jAdapter(BaseAdapter):
     async def _link_nodes(self, args: Dict[str, Any], session=None) -> ToolResult:
         """Create a relationship between two nodes.
 
+        SECURITY NOTE - Relationship Type Validation:
+        Cypher does not support parameterized relationship types in the traditional
+        sense. The syntax CREATE (a)-[r:$type]->(b) is invalid. Relationship types
+        must be literal identifiers in the query text, which necessitates string
+        interpolation.
+
+        To prevent Cypher injection attacks, this method implements defense-in-depth:
+        1. Input normalization (uppercase, replace spaces with underscores)
+        2. Strict whitelist validation against ValidRelationshipType enum
+        3. Early rejection of invalid relationship types with clear error messages
+
+        This whitelist approach ensures that only predefined, safe relationship types
+        from the graph schema can be used, completely preventing injection attacks
+        even though string interpolation is required due to Cypher's limitations.
+
         Args:
-            args: Dictionary containing from_id, relationship, to_id, and optional properties
+            args: Dictionary containing:
+                - from_id (str): ID of the source node
+                - relationship (str): Relationship type name (validated against whitelist)
+                - to_id (str): ID of the target node
+                - properties (dict, optional): Relationship properties
             session: Optional Neo4j session or transaction for session reuse
+
+        Returns:
+            ToolResult with relationship details on success, error message on failure
+
+        Raises:
+            Returns ToolResult.fail() for:
+                - Invalid relationship type (not in whitelist)
+                - Nodes not found
+                - Database errors
         """
+        # Normalize input: uppercase and replace spaces with underscores
+        # This ensures consistent format matching against our whitelist
         rel_type = args["relationship"].upper().replace(" ", "_")
 
-        # Validate relationship type
-        valid_rels = list(GRAPH_SCHEMA["relationships"].keys())
-        if rel_type not in valid_rels:
+        # CRITICAL SECURITY VALIDATION
+        # Validate relationship type against strict whitelist using enum
+        # This is our primary defense against Cypher injection since we must
+        # use string interpolation (Cypher limitation - see docstring above)
+        if not ValidRelationshipType.is_valid(rel_type):
+            valid_types = ValidRelationshipType.get_valid_types()
             return ToolResult.fail(
-                f"Invalid relationship type. Valid types: {', '.join(valid_rels)}"
+                f"Invalid relationship type '{args['relationship']}'. "
+                f"Relationship type must be one of: {', '.join(valid_types)}. "
+                f"Normalized value '{rel_type}' was not found in the whitelist."
             )
 
+        # SECURITY: rel_type is now guaranteed to be from our whitelist enum
+        # Safe to use in query construction via string interpolation
         query = f"""
         MATCH (a {{id: $from_id}})
         MATCH (b {{id: $to_id}})
@@ -1139,7 +1214,10 @@ class Neo4jAdapter(BaseAdapter):
             record = await result.single()
 
             if not record:
-                return ToolResult.fail("One or both nodes not found")
+                return ToolResult.fail(
+                    f"Failed to create relationship: One or both nodes not found "
+                    f"(from_id: {args['from_id']}, to_id: {args['to_id']})"
+                )
         else:
             # Create new session (backward compatibility)
             async with self._driver.session() as session:
@@ -1147,7 +1225,10 @@ class Neo4jAdapter(BaseAdapter):
                 record = await result.single()
 
                 if not record:
-                    return ToolResult.fail("One or both nodes not found")
+                    return ToolResult.fail(
+                        f"Failed to create relationship: One or both nodes not found "
+                        f"(from_id: {args['from_id']}, to_id: {args['to_id']})"
+                    )
 
         return ToolResult.ok({
             "from": args["from_id"],

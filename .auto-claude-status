@@ -3,9 +3,9 @@
   "spec": "012-neo4j-cypher-query-construction-uses-string-interp",
   "state": "building",
   "subtasks": {
-    "completed": 2,
+    "completed": 0,
     "total": 14,
-    "in_progress": 0,
+    "in_progress": 1,
     "failed": 0
   },
   "phase": {
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 2,
+    "number": 6,
     "started_at": "2026-01-11T08:32:20.088918"
   },
-  "last_update": "2026-01-11T14:15:00.000000"
+  "last_update": "2026-01-11T09:06:17.589158"
 }
