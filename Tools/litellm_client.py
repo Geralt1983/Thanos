@@ -27,12 +27,16 @@ import time
 import re
 import atexit
 import signal
+import logging
 from queue import Queue, Empty
 from threading import Thread, Event, Lock
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Generator, Any, List, Tuple
 from dataclasses import dataclass, field
+
+# Configure logger for async writer
+logger = logging.getLogger(__name__)
 
 # LiteLLM import with fallback
 try:
@@ -87,7 +91,8 @@ class AsyncUsageWriter:
     """
 
     def __init__(self, storage_path: Path, flush_interval: float = 5.0,
-                 flush_threshold: int = 10):
+                 flush_threshold: int = 10, max_retries: int = 3,
+                 retry_base_delay: float = 0.1):
         """
         Initialize the async writer.
 
@@ -95,10 +100,14 @@ class AsyncUsageWriter:
             storage_path: Path to JSON storage file
             flush_interval: Time in seconds between automatic flushes (default: 5.0)
             flush_threshold: Number of records to trigger auto-flush (default: 10)
+            max_retries: Maximum retry attempts for transient errors (default: 3)
+            retry_base_delay: Base delay in seconds for exponential backoff (default: 0.1)
         """
         self._storage_path = storage_path
         self._flush_interval = flush_interval
         self._flush_threshold = flush_threshold
+        self._max_retries = max_retries
+        self._retry_base_delay = retry_base_delay
 
         # Thread-safe queue for incoming records
         self._queue = Queue()
@@ -118,7 +127,9 @@ class AsyncUsageWriter:
             "last_flush_time": time.time(),
             "error_count": 0,
             "fallback_writes": 0,
-            "lost_records": 0
+            "lost_records": 0,
+            "retry_count": 0,
+            "corruption_recoveries": 0
         }
         self._stats_lock = Lock()
         self._last_error = None
@@ -284,13 +295,13 @@ class AsyncUsageWriter:
 
     def _perform_flush(self):
         """
-        Aggregate buffered records and write to disk atomically.
+        Aggregate buffered records and write to disk atomically with retry logic.
 
-        This method runs in the background thread and should only be
-        called while holding the buffer lock.
-
-        Note: Actual buffering and aggregation logic will be implemented
-        in subtask 2.2. For now, this is a basic implementation.
+        This method runs in the background thread and implements:
+        - Retry with exponential backoff for transient errors
+        - Fallback to backup location for persistent errors
+        - Corruption recovery with validation
+        - Comprehensive error logging
         """
         # Get records to write (should be called with buffer_lock held)
         if not self._buffer:
@@ -299,33 +310,71 @@ class AsyncUsageWriter:
         records_to_write = self._buffer.copy()
         self._buffer.clear()
 
-        try:
-            # Read current data
-            if self._storage_path.exists():
-                data = json.loads(self._storage_path.read_text())
-            else:
-                data = self._get_empty_structure()
+        # Retry loop with exponential backoff
+        for attempt in range(self._max_retries):
+            try:
+                # Read current data with corruption recovery
+                data = self._read_with_recovery()
 
-            # Merge all buffered records
-            for record in records_to_write:
-                self._merge_record(data, record)
+                # Merge all buffered records
+                for record in records_to_write:
+                    self._merge_record(data, record)
 
-            # Atomic write
-            self._atomic_write(data)
+                # Atomic write with validation
+                self._atomic_write(data)
 
-            # Update stats
-            with self._stats_lock:
-                self._stats["total_flushes"] += 1
-                self._stats["last_flush_time"] = time.time()
+                # Update stats on success
+                with self._stats_lock:
+                    self._stats["total_flushes"] += 1
+                    self._stats["last_flush_time"] = time.time()
 
-        except Exception as e:
-            # Basic error handling - detailed handling in subtask 2.3
-            with self._stats_lock:
-                self._stats["error_count"] += 1
-                self._last_error = str(e)
-            # Re-queue records for retry (simple approach for now)
-            with self._buffer_lock:
-                self._buffer.extend(records_to_write)
+                # Clear last error on success
+                self._last_error = None
+                return  # Success
+
+            except (OSError, IOError, PermissionError) as e:
+                # Transient I/O errors - retry with backoff
+                with self._stats_lock:
+                    self._stats["retry_count"] += 1
+
+                if attempt < self._max_retries - 1:
+                    # Exponential backoff
+                    delay = self._retry_base_delay * (2 ** attempt)
+                    logger.warning(
+                        f"Write failed (attempt {attempt + 1}/{self._max_retries}), "
+                        f"retrying in {delay}s: {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    # Max retries exceeded - use fallback strategy
+                    logger.error(
+                        f"Write failed after {self._max_retries} attempts, "
+                        f"using fallback: {e}"
+                    )
+                    self._handle_persistent_error(e, records_to_write, data)
+                    return
+
+            except json.JSONDecodeError as e:
+                # JSON corruption - already handled in _read_with_recovery
+                # But if it happens during write validation, log it
+                logger.error(f"JSON encoding error during write: {e}")
+                with self._stats_lock:
+                    self._stats["error_count"] += 1
+                    self._last_error = str(e)
+                # Don't retry JSON errors - re-queue records
+                with self._buffer_lock:
+                    self._buffer.extend(records_to_write)
+                return
+
+            except Exception as e:
+                # Unexpected error - log and re-queue
+                logger.error(f"Unexpected error during flush: {e}", exc_info=True)
+                with self._stats_lock:
+                    self._stats["error_count"] += 1
+                    self._last_error = str(e)
+                with self._buffer_lock:
+                    self._buffer.extend(records_to_write)
+                return
 
     def _get_empty_structure(self) -> Dict:
         """Get empty data structure for new storage file."""
@@ -336,6 +385,175 @@ class AsyncUsageWriter:
             "provider_breakdown": {},
             "last_updated": datetime.now().isoformat()
         }
+
+    def _validate_structure(self, data: Dict) -> None:
+        """
+        Validate data structure integrity.
+
+        Args:
+            data: Data dictionary to validate
+
+        Raises:
+            ValueError: If structure is invalid
+        """
+        required_keys = ["sessions", "daily_totals", "model_breakdown",
+                         "provider_breakdown", "last_updated"]
+
+        for key in required_keys:
+            if key not in data:
+                raise ValueError(f"Missing required key: {key}")
+
+        # Validate data types
+        if not isinstance(data["sessions"], list):
+            raise ValueError("sessions must be a list")
+        if not isinstance(data["daily_totals"], dict):
+            raise ValueError("daily_totals must be a dict")
+        if not isinstance(data["model_breakdown"], dict):
+            raise ValueError("model_breakdown must be a dict")
+        if not isinstance(data["provider_breakdown"], dict):
+            raise ValueError("provider_breakdown must be a dict")
+
+    def _read_with_recovery(self) -> Dict:
+        """
+        Read storage file with automatic recovery from corruption.
+
+        Returns:
+            Valid data dictionary
+
+        This method implements a multi-stage recovery strategy:
+        1. Try to read and validate primary file
+        2. If corrupted, try to read backup file
+        3. If backup also corrupted, archive corrupted file and start fresh
+        """
+        # Try to read primary file
+        if self._storage_path.exists():
+            try:
+                data = json.loads(self._storage_path.read_text())
+                self._validate_structure(data)
+                return data
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Corrupted usage file detected: {e}")
+                with self._stats_lock:
+                    self._stats["corruption_recoveries"] += 1
+
+                # Try backup file
+                backup_path = self._storage_path.with_suffix('.backup.json')
+                if backup_path.exists():
+                    try:
+                        data = json.loads(backup_path.read_text())
+                        self._validate_structure(data)
+                        logger.info("Successfully recovered from backup file")
+                        # Restore backup to primary
+                        try:
+                            self._atomic_write(data)
+                        except Exception:
+                            pass  # Best effort restoration
+                        return data
+
+                    except (json.JSONDecodeError, ValueError) as backup_error:
+                        logger.error(f"Backup file also corrupted: {backup_error}")
+
+                # Archive corrupted file
+                try:
+                    corrupted_path = self._storage_path.with_suffix(
+                        f'.corrupted.{int(time.time())}.json'
+                    )
+                    self._storage_path.rename(corrupted_path)
+                    logger.warning(f"Archived corrupted file to {corrupted_path}")
+                except Exception as archive_error:
+                    logger.error(f"Failed to archive corrupted file: {archive_error}")
+
+                # Return fresh structure
+                logger.info("Starting with fresh data structure")
+                return self._get_empty_structure()
+
+            except ValueError as e:
+                logger.error(f"Invalid data structure: {e}")
+                with self._stats_lock:
+                    self._stats["corruption_recoveries"] += 1
+                # Return fresh structure
+                return self._get_empty_structure()
+
+        # File doesn't exist - return empty structure
+        return self._get_empty_structure()
+
+    def _handle_persistent_error(self, error: Exception,
+                                  records: List[Dict], data: Dict) -> None:
+        """
+        Handle errors that persist after all retries.
+
+        Implements fallback strategies in order:
+        1. Write to backup location
+        2. Write to emergency location
+        3. Log error and data loss warning
+        4. Update error statistics
+
+        Args:
+            error: The error that occurred
+            records: Records that failed to write
+            data: The data structure that was being written
+        """
+        with self._stats_lock:
+            self._stats["error_count"] += 1
+            self._last_error = str(error)
+
+        backup_error = None
+        emergency_error = None
+
+        # Try backup location
+        backup_path = self._storage_path.with_suffix('.backup.json')
+        try:
+            backup_path.write_text(json.dumps(data, indent=2))
+            with self._stats_lock:
+                self._stats["fallback_writes"] += 1
+            logger.warning(
+                f"Primary write failed, wrote to backup location: {backup_path}. "
+                f"Error: {error}"
+            )
+            return
+
+        except Exception as e:
+            backup_error = e
+            logger.error(
+                f"Backup write also failed: {backup_error}. "
+                f"Original error: {error}"
+            )
+
+        # Try emergency write to temp location
+        try:
+            emergency_path = self._storage_path.parent / f"usage.emergency.{int(time.time())}.json"
+            emergency_path.write_text(json.dumps(data, indent=2))
+            with self._stats_lock:
+                self._stats["fallback_writes"] += 1
+            logger.critical(
+                f"Backup write failed, wrote to emergency location: {emergency_path}. "
+                f"Please manually recover this file."
+            )
+            return
+
+        except Exception as e:
+            emergency_error = e
+            logger.critical(
+                f"All write attempts failed! Data loss occurred. "
+                f"Lost {len(records)} records. "
+                f"Errors: primary={error}, backup={backup_error}, emergency={emergency_error}"
+            )
+            with self._stats_lock:
+                self._stats["lost_records"] += len(records)
+
+        # Re-queue records for one more attempt later
+        # This gives the system a chance to recover (e.g., disk space freed)
+        with self._buffer_lock:
+            # Only re-queue if buffer isn't too large (prevent memory bloat)
+            if len(self._buffer) < 100:
+                self._buffer.extend(records)
+            else:
+                logger.error(
+                    f"Buffer overflow, dropping {len(records)} records to prevent memory issues"
+                )
+                with self._stats_lock:
+                    self._stats["lost_records"] += len(records)
 
     def _merge_record(self, data: Dict, record: Dict) -> None:
         """
@@ -383,18 +601,64 @@ class AsyncUsageWriter:
 
     def _atomic_write(self, data: Dict) -> None:
         """
-        Write data atomically using temp file + rename.
+        Write data atomically using temp file + rename with backup strategy.
 
-        Prevents data corruption if write is interrupted.
+        Prevents data corruption if write is interrupted and maintains
+        a backup copy of the previous version.
+
+        Steps:
+        1. Validate data can be serialized
+        2. Write to temp file
+        3. Create backup of current file (if exists)
+        4. Atomic rename temp to primary
+        5. Clean up old backup on success
+
+        Raises:
+            OSError: If write operation fails
+            json.JSONEncodeError: If data cannot be serialized
         """
         temp_path = self._storage_path.with_suffix('.tmp')
+        backup_path = self._storage_path.with_suffix('.backup.json')
+        old_backup_path = self._storage_path.with_suffix('.backup.old.json')
 
         try:
+            # Validate data can be serialized (fail fast)
+            serialized = json.dumps(data, indent=2)
+
             # Write to temp file
-            temp_path.write_text(json.dumps(data, indent=2))
+            temp_path.write_text(serialized)
+
+            # Verify temp file is valid JSON (catch corruption early)
+            try:
+                json.loads(temp_path.read_text())
+            except json.JSONDecodeError as e:
+                raise OSError(f"Temp file write produced invalid JSON: {e}")
+
+            # Rotate backups: backup.old.json <- backup.json <- primary
+            if self._storage_path.exists():
+                # Move current backup to old backup
+                if backup_path.exists():
+                    try:
+                        backup_path.replace(old_backup_path)
+                    except Exception:
+                        pass  # Best effort
+                # Backup current primary
+                try:
+                    import shutil
+                    shutil.copy2(self._storage_path, backup_path)
+                except Exception as backup_error:
+                    # Log but don't fail - backup is best effort
+                    logger.debug(f"Backup creation failed: {backup_error}")
 
             # Atomic rename (POSIX guarantees atomicity)
             temp_path.replace(self._storage_path)
+
+            # Clean up old backup on success (keep only one backup)
+            if old_backup_path.exists():
+                try:
+                    old_backup_path.unlink()
+                except Exception:
+                    pass  # Best effort cleanup
 
         except Exception as e:
             # Clean up temp file on error
