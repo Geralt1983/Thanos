@@ -49,49 +49,133 @@ async function ensureCache(): Promise<boolean> {
 /**
  * Higher-order function that implements cache-first-with-fallback pattern
  *
- * This function encapsulates the repetitive cache-first logic used across multiple
- * WorkOS MCP server handlers. It handles:
- * 1. Cache initialization via ensureCache()
- * 2. Cache staleness check via isCacheStale()
- * 3. Try-catch wrapper for cache reads with error logging
- * 4. Automatic fallback to Neon database on cache miss/error
- * 5. Consistent logging format
- * 6. MCP response formatting
+ * ## Problem This Solves
+ * The WorkOS MCP server had repetitive cache-first logic duplicated across 8+ handlers,
+ * resulting in ~150 lines of near-duplicate code. Each handler repeated the same pattern:
+ * ensureCache() call, isCacheStale() check, try-catch for cache reads, error logging,
+ * and fallback to Neon queries. This function abstracts that cross-cutting concern into
+ * a reusable, type-safe utility.
  *
- * @template T - The type of data being cached (e.g., CachedTask[], CachedClient[])
- * @param cacheReader - Synchronous function that reads from cache
- * @param neonFallback - Async function that queries Neon database as fallback
- * @param entityName - Human-readable entity name for logging (e.g., "tasks", "clients", "habits")
- * @returns Promise<CallToolResult> - MCP-formatted response with cached or fresh data
+ * ## What It Does
+ * This function encapsulates the complete cache-first-with-fallback lifecycle:
+ * 1. **Cache initialization**: Calls ensureCache() to initialize SQLite cache if needed
+ * 2. **Staleness check**: Uses isCacheStale() to determine if cache data is too old
+ * 3. **Cache read**: Executes cacheReader() function with try-catch error handling
+ * 4. **Automatic fallback**: Falls back to neonFallback() on cache miss, staleness, or errors
+ * 5. **Consistent logging**: Logs cache hits/misses with entity counts for debugging
+ * 6. **MCP formatting**: Returns data in standard MCP CallToolResult format
+ *
+ * ## Error Handling
+ * - Cache initialization failures are logged but don't throw (falls back to Neon)
+ * - Cache read exceptions are caught and logged, triggering automatic Neon fallback
+ * - Neon fallback errors propagate to the caller (intentional - DB errors should surface)
+ * - All errors include detailed context for debugging (entity name, error details)
+ *
+ * ## Edge Cases Handled
+ * - Empty cache (first run): Automatically syncs from Neon via ensureCache()
+ * - Stale cache: Detected via isCacheStale() and triggers Neon fallback
+ * - Cache corruption: Try-catch catches read errors and falls back gracefully
+ * - Cache unavailable: If ensureCache() fails, immediately uses Neon fallback
+ * - Complex data transformations: Supports arbitrary logic in cacheReader (filtering, enrichment, etc.)
+ *
+ * ## Type Safety
+ * The generic type parameter `T` ensures type consistency between cache and Neon data:
+ * - cacheReader() must return type T
+ * - neonFallback() must return Promise<T>
+ * - Both must return the same data structure (though types may need assertions for Date/string)
+ *
+ * ## When to Use This Function
+ * Use `withCacheFirst` for any handler that needs cache-first behavior:
+ * ✅ Reading tasks, clients, habits, projects, time entries, etc.
+ * ✅ Handlers that need filtering, sorting, or data enrichment from cache
+ * ✅ Any pattern that needs cache-first-with-fallback behavior
+ *
+ * Do NOT use for:
+ * ❌ Write operations (use direct DB access)
+ * ❌ Real-time data that should never be cached
+ * ❌ Handlers that don't have a Neon fallback option
+ *
+ * @template T - The type of data being cached and returned (e.g., CachedTask[], CachedClient[], CachedHabit[])
+ *               Must match the return type of both cacheReader and neonFallback
+ *
+ * @param {() => T} cacheReader - Synchronous function that reads from SQLite cache.
+ *                                 Can include filtering, sorting, enrichment, or any data transformation.
+ *                                 Should be a pure function (no side effects).
+ *                                 Example: () => getCachedClients()
+ *                                 Example: () => getCachedTasks(status, limit).map(enrichTask)
+ *
+ * @param {() => Promise<T>} neonFallback - Async function that queries Neon Postgres as fallback.
+ *                                           Called when cache is unavailable, stale, or throws an error.
+ *                                           Should return the same data structure as cacheReader.
+ *                                           Example: async () => db.select().from(schema.clients)
+ *
+ * @param {string} entityName - Human-readable entity name for logging (e.g., "tasks", "clients", "habits").
+ *                               Used in console.error messages to track cache hits/misses.
+ *                               Should be plural lowercase (matches database table conventions).
+ *
+ * @returns {Promise<CallToolResult>} MCP-formatted response containing the data as JSON text.
+ *                                     Structure: { content: [{ type: "text", text: JSON.stringify(data) }] }
+ *                                     Data source is transparent to caller (could be cache or Neon).
+ *
+ * @throws {Error} Only throws if neonFallback() throws (cache errors are caught and logged).
+ *                 This is intentional - database errors should surface to the caller.
  *
  * @example
- * ```typescript
- * // Simple cache read
+ * // Simple cache read with direct fallback
  * return withCacheFirst(
  *   () => getCachedClients(),
  *   async () => db.select().from(schema.clients).where(eq(schema.clients.isActive, 1)),
  *   "clients"
  * );
  *
+ * @example
  * // Complex cache read with filtering and enrichment
  * return withCacheFirst(
  *   () => {
- *     const tasks = getCachedTasks(status, limit);
+ *     // Read from cache with filters
+ *     const tasks = status ? getCachedTasksByStatus(status, limit) : getCachedTasks(limit);
+ *
+ *     // Enrich with client names from cache
  *     const clients = getCachedClients();
  *     const clientMap = new Map(clients.map(c => [c.id, c.name]));
+ *
  *     return tasks.map(t => ({
  *       ...t,
  *       clientName: t.clientId ? clientMap.get(t.clientId) || null : null,
  *     }));
  *   },
  *   async () => {
- *     const conditions = [];
+ *     // Neon fallback with same filters
+ *     const conditions = [eq(schema.tasks.isActive, 1)];
  *     if (status) conditions.push(eq(schema.tasks.status, status));
+ *
+ *     return db.select().from(schema.tasks)
+ *       .where(and(...conditions))
+ *       .limit(limit || 100);
+ *   },
+ *   "tasks"
+ * );
+ *
+ * @example
+ * // Conditional cache read based on parameters
+ * return withCacheFirst(
+ *   () => {
+ *     // Use different cache readers based on parameters
+ *     if (clientId) {
+ *       return getCachedTasksByClient(clientId, status, limit);
+ *     }
+ *     return getCachedTasks(status, limit);
+ *   },
+ *   async () => {
+ *     // Neon fallback with same conditional logic
+ *     const conditions = [eq(schema.tasks.isActive, 1)];
+ *     if (clientId) conditions.push(eq(schema.tasks.clientId, clientId));
+ *     if (status) conditions.push(eq(schema.tasks.status, status));
+ *
  *     return db.select().from(schema.tasks).where(and(...conditions));
  *   },
  *   "tasks"
  * );
- * ```
  */
 export async function withCacheFirst<T>(
   cacheReader: () => T,
