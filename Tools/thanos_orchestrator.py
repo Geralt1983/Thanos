@@ -31,6 +31,7 @@ if str(_THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(_THANOS_DIR))
 
 from Tools.error_logger import log_error
+from Tools.state_reader import StateReader
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -144,6 +145,9 @@ class ThanosOrchestrator:
     def __init__(self, base_dir: str = None, api_client: "LiteLLMClient" = None):
         self.base_dir = Path(base_dir) if base_dir else Path(__file__).parent.parent
         self.api_client = api_client
+
+        # Initialize state reader for time tracking and state access
+        self.state_reader = StateReader(self.base_dir / "State")
 
         # Load components
         self.agents: Dict[str, Agent] = {}
