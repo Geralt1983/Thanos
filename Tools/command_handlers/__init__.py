@@ -28,10 +28,12 @@ from Tools.command_handlers.base import (
     CommandAction,
     CommandResult,
 )
+from Tools.command_handlers.agent_handler import AgentHandler
 
 __all__ = [
     "BaseHandler",
     "Colors",
     "CommandAction",
     "CommandResult",
+    "AgentHandler",
 ]
