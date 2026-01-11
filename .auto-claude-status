@@ -3,7 +3,7 @@
   "spec": "026-split-massive-mcp-server-index-ts-into-domain-modu",
   "state": "building",
   "subtasks": {
-    "completed": 7,
+    "completed": 11,
     "total": 28,
     "in_progress": 1,
     "failed": 0
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 1,
-    "started_at": "2026-01-10T21:49:02.998601"
+    "number": 3,
+    "started_at": "2026-01-10T22:02:07.223458"
   },
-  "last_update": "2026-01-10T21:49:03.150574"
+  "last_update": "2026-01-10T22:14:23.453172"
 }
