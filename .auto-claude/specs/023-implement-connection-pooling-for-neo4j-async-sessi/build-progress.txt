@@ -496,7 +496,14 @@ PHASE 3: ADAPTER METHOD REFACTORING
     - Backward compatibility maintained, session reuse supported
     - No code changes needed - implementation already complete
 
-[✅] Subtask 3.2: Refactor decision operations (ALREADY DONE!)
+[✅] Subtask 3.2: Refactor decision operations (COMPLETED)
+    - _record_decision: lines 611-659 ✅
+    - _get_decisions: lines 661-700 ✅
+    - Both methods have session=None parameter with proper dual-mode implementation
+    - Proper documentation in docstrings with session parameter documented
+    - Backward compatibility maintained, session reuse supported
+    - No code changes needed - implementation already complete
+
 [ ] Subtask 3.3: Refactor pattern and session operations (PENDING)
 [ ] Subtask 3.4: Refactor relationship and entity operations (PENDING)
 [ ] Subtask 3.5: Add batch operation methods
