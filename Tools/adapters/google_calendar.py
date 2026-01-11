@@ -225,7 +225,7 @@ class GoogleCalendarAdapter(BaseAdapter):
             return {"enabled": False}
 
     def _apply_event_filters(
-        self, events: list[dict[str, Any]], filter_context: str = "briefing"
+        self, events: list[dict[str, Any]], filter_context: str = "briefing", calendar_id: str = "primary"
     ) -> list[dict[str, Any]]:
         """
         Apply filtering rules to a list of events based on calendar_filters.json configuration.
@@ -233,6 +233,7 @@ class GoogleCalendarAdapter(BaseAdapter):
         Args:
             events: List of formatted event dictionaries
             filter_context: Context for filtering ('briefing', 'conflict_detection', 'free_slots')
+            calendar_id: Calendar ID for calendar-level filtering
 
         Returns:
             Filtered list of events
@@ -259,24 +260,44 @@ class GoogleCalendarAdapter(BaseAdapter):
 
         for event in events:
             # Skip if event should be excluded
-            if self._should_exclude_event(event, filters):
+            if self._should_exclude_event(event, filters, calendar_id):
                 continue
 
             filtered_events.append(event)
 
         return filtered_events
 
-    def _should_exclude_event(self, event: dict[str, Any], filters: dict[str, Any]) -> bool:
+    def _should_exclude_event(self, event: dict[str, Any], filters: dict[str, Any], calendar_id: str = "primary") -> bool:
         """
         Determine if an event should be excluded based on filter rules.
 
         Args:
             event: Formatted event dictionary
             filters: Filter configuration
+            calendar_id: Calendar ID that this event belongs to
 
         Returns:
             True if event should be excluded, False if it should be included
         """
+        # Calendar-level filters
+        calendars_config = filters.get("calendars", {})
+
+        # Check if only primary calendar should be included
+        if calendars_config.get("primary_only", False):
+            if calendar_id != "primary":
+                return True
+
+        # Check calendar include list (if specified, only these calendars are allowed)
+        calendar_include = calendars_config.get("include", [])
+        if calendar_include:
+            if calendar_id not in calendar_include:
+                return True
+
+        # Check calendar exclude list
+        calendar_exclude = calendars_config.get("exclude", [])
+        if calendar_id in calendar_exclude:
+            return True
+
         # Event type filters
         event_types = filters.get("event_types", {})
 
@@ -1166,7 +1187,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                 formatted_events.sort(key=lambda e: e["start"] or "")
 
             # Apply event filters based on configuration
-            formatted_events = self._apply_event_filters(formatted_events, filter_context="briefing")
+            formatted_events = self._apply_event_filters(formatted_events, filter_context="briefing", calendar_id=calendar_id)
 
             # Generate summary statistics
             total_events = len(formatted_events)
@@ -1341,7 +1362,7 @@ class GoogleCalendarAdapter(BaseAdapter):
             filtered_events.sort(key=lambda e: e.get("start", ""))
 
             # Apply event filters based on configuration
-            filtered_events = self._apply_event_filters(filtered_events, filter_context="briefing")
+            filtered_events = self._apply_event_filters(filtered_events, filter_context="briefing", calendar_id=calendar_id)
 
             # Calculate free/busy status
             # Track busy time (events that block time)
