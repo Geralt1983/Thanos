@@ -8,7 +8,7 @@ generation.
 
 import os
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, date
 import json
 import re
@@ -343,3 +343,243 @@ class BriefingEngine:
         tasks = this_week.get("tasks", [])
 
         return [t for t in tasks if not t.get("is_complete", False)]
+
+    def rank_priorities(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+        energy_level: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Rank all tasks and commitments by priority.
+
+        Considers multiple factors:
+        - Deadline urgency (due today > due this week > backlog)
+        - Day of week (weekday vs weekend)
+        - Task category (work vs personal)
+        - Energy level (optional, affects recommendations)
+
+        Args:
+            context: Briefing context dict. If None, will gather fresh context.
+            energy_level: Optional energy level (1-10). Used for task recommendations.
+
+        Returns:
+            List of prioritized items, sorted by priority score (highest first).
+            Each item includes 'priority_score', 'priority_reason', and 'urgency_level'.
+        """
+        if context is None:
+            context = self.gather_context()
+
+        # Gather all actionable items
+        items = []
+
+        # Add active commitments
+        for commitment in self.get_active_commitments(context):
+            items.append({
+                "type": "commitment",
+                "source": commitment,
+                "title": commitment["title"],
+                "category": commitment.get("category", "Uncategorized"),
+                "deadline": commitment.get("deadline"),
+                "is_weekend": context["is_weekend"]
+            })
+
+        # Add pending tasks from this week
+        for task in self.get_pending_tasks(context):
+            items.append({
+                "type": "task",
+                "source": task,
+                "title": task["text"],
+                "category": "This Week",
+                "deadline": None,  # ThisWeek tasks don't have explicit deadlines
+                "is_weekend": context["is_weekend"]
+            })
+
+        # Add priorities from CurrentFocus
+        current_focus = context.get("current_focus", {})
+        for priority in current_focus.get("priorities", []):
+            items.append({
+                "type": "priority",
+                "source": {"text": priority},
+                "title": priority,
+                "category": "Current Focus",
+                "deadline": None,
+                "is_weekend": context["is_weekend"]
+            })
+
+        # Calculate priority scores for each item
+        for item in items:
+            score, reason, urgency = self._calculate_priority_score(
+                item,
+                context["day_of_week"],
+                context["is_weekend"],
+                energy_level
+            )
+            item["priority_score"] = score
+            item["priority_reason"] = reason
+            item["urgency_level"] = urgency
+
+        # Sort by priority score (descending)
+        items.sort(key=lambda x: x["priority_score"], reverse=True)
+
+        return items
+
+    def _calculate_priority_score(
+        self,
+        item: Dict[str, Any],
+        day_of_week: str,
+        is_weekend: bool,
+        energy_level: Optional[int] = None
+    ) -> Tuple[float, str, str]:
+        """
+        Calculate priority score for an item.
+
+        Args:
+            item: Item dictionary with title, category, deadline, etc.
+            day_of_week: Current day name
+            is_weekend: Whether today is a weekend
+            energy_level: Optional energy level (1-10)
+
+        Returns:
+            Tuple of (score, reason, urgency_level)
+            - score: Float priority score (higher = more urgent)
+            - reason: Human-readable explanation of priority
+            - urgency_level: "critical", "high", "medium", or "low"
+        """
+        score = 0.0
+        reasons = []
+        urgency_level = "medium"
+
+        # 1. Deadline-based urgency (most important factor)
+        deadline = item.get("deadline")
+        if deadline:
+            try:
+                deadline_date = date.fromisoformat(deadline)
+                days_until = (deadline_date - self.today).days
+
+                if days_until < 0:
+                    score += 100
+                    reasons.append(f"OVERDUE by {abs(days_until)} days")
+                    urgency_level = "critical"
+                elif days_until == 0:
+                    score += 90
+                    reasons.append("due TODAY")
+                    urgency_level = "critical"
+                elif days_until == 1:
+                    score += 75
+                    reasons.append("due tomorrow")
+                    urgency_level = "high"
+                elif days_until <= 3:
+                    score += 60
+                    reasons.append(f"due in {days_until} days")
+                    urgency_level = "high"
+                elif days_until <= 7:
+                    score += 40
+                    reasons.append("due this week")
+                    urgency_level = "medium"
+                else:
+                    score += 20
+                    reasons.append(f"due in {days_until} days")
+            except (ValueError, TypeError):
+                pass
+
+        # 2. Item type priority
+        item_type = item.get("type", "task")
+        if item_type == "priority":
+            score += 35
+            reasons.append("current focus")
+        elif item_type == "commitment":
+            score += 25
+            reasons.append("active commitment")
+        else:  # task
+            score += 15
+            reasons.append("this week task")
+
+        # 3. Weekend vs weekday context
+        category_lower = item.get("category", "").lower()
+        is_work_related = any(keyword in category_lower for keyword in
+                              ["work", "project", "team", "meeting", "client"])
+
+        if is_weekend:
+            if is_work_related:
+                # Deprioritize work items on weekends unless urgent
+                if urgency_level in ["critical", "high"]:
+                    reasons.append("urgent work (weekend)")
+                else:
+                    score -= 30
+                    reasons.append("work item (weekend - lower priority)")
+            else:
+                score += 10
+                reasons.append("personal time")
+        else:  # weekday
+            if is_work_related:
+                score += 20
+                reasons.append("work priority (weekday)")
+            else:
+                score += 5
+
+        # 4. Energy level considerations (if provided)
+        if energy_level is not None:
+            # Analyze task title for complexity hints
+            title_lower = item.get("title", "").lower()
+            is_complex = any(word in title_lower for word in
+                           ["design", "architect", "plan", "research", "analyze", "write"])
+            is_simple = any(word in title_lower for word in
+                          ["send", "email", "call", "schedule", "update", "review"])
+
+            if energy_level >= 7:  # High energy
+                if is_complex:
+                    score += 15
+                    reasons.append("good energy for complex work")
+            elif energy_level <= 4:  # Low energy
+                if is_simple:
+                    score += 10
+                    reasons.append("manageable with current energy")
+                elif is_complex:
+                    score -= 20
+                    reasons.append("may need higher energy")
+
+        # 5. Day-of-week patterns
+        if day_of_week == "Monday":
+            if "meeting" in category_lower or "standup" in item.get("title", "").lower():
+                score += 10
+                reasons.append("Monday meeting")
+        elif day_of_week == "Friday":
+            if any(word in item.get("title", "").lower() for word in
+                  ["admin", "expense", "timesheet", "report", "update"]):
+                score += 10
+                reasons.append("Friday admin task")
+
+        # Determine final urgency level based on score
+        if score >= 90:
+            urgency_level = "critical"
+        elif score >= 60:
+            urgency_level = "high"
+        elif score >= 30:
+            urgency_level = "medium"
+        else:
+            urgency_level = "low"
+
+        # Format reason string
+        reason = "; ".join(reasons) if reasons else "standard priority"
+
+        return score, reason, urgency_level
+
+    def get_top_priorities(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+        limit: int = 3,
+        energy_level: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get the top N priority items for today.
+
+        Args:
+            context: Briefing context dict. If None, will gather fresh context.
+            limit: Maximum number of priorities to return (default: 3)
+            energy_level: Optional energy level (1-10) for task recommendations
+
+        Returns:
+            List of top priority items, ranked by urgency and relevance
+        """
+        ranked_items = self.rank_priorities(context, energy_level)
+        return ranked_items[:limit]
