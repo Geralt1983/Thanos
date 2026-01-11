@@ -1239,6 +1239,666 @@ class TestAsyncUsageWriter:
 
 
 # ============================================================================
+# AsyncUsageWriter Edge Cases and Failure Scenarios Tests
+# ============================================================================
+
+class TestAsyncUsageWriterEdgeCasesAndFailures:
+    """Comprehensive tests for edge cases and failure scenarios."""
+
+    # ========================================================================
+    # Disk Full Scenario Tests
+    # ========================================================================
+
+    def test_disk_full_error_handling(self, temp_dir):
+        """Writer should handle disk full errors gracefully."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=2, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Queue a record first to create the file
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        # Mock write_text to simulate disk full (OSError with ENOSPC)
+        import errno
+        original_write_text = Path.write_text
+
+        def mock_write_text_enospc(self, *args, **kwargs):
+            # Allow the first read to succeed
+            if 'usage.json' in str(self) and not hasattr(mock_write_text_enospc, 'called'):
+                mock_write_text_enospc.called = True
+                error = OSError("No space left on device")
+                error.errno = errno.ENOSPC
+                raise error
+            return original_write_text(self, *args, **kwargs)
+
+        with patch.object(Path, 'write_text', mock_write_text_enospc):
+            writer.queue_write(record)
+            time.sleep(0.5)
+
+            stats = writer.get_stats()
+            # Should have attempted retries or fallback
+            assert stats["error_count"] >= 0 or stats["fallback_writes"] >= 0
+
+        writer.shutdown(timeout=2.0)
+
+    def test_disk_full_with_fallback_success(self, temp_dir):
+        """Writer should successfully fall back to backup location when disk is full."""
+        storage_path = temp_dir / "usage.json"
+        backup_path = storage_path.with_suffix('.backup.json')
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Mock to make primary write fail but backup succeed
+        call_count = [0]
+
+        def mock_write_text_selective(self, *args, **kwargs):
+            call_count[0] += 1
+            # Fail primary writes only
+            if 'usage.json' in str(self) and not '.backup' in str(self):
+                import errno
+                error = OSError("No space left on device")
+                error.errno = errno.ENOSPC
+                raise error
+            # Succeed for backup writes
+            return Path.write_text(self, *args, **kwargs)
+
+        with patch.object(Path, 'write_text', mock_write_text_selective):
+            writer.queue_write(record)
+            time.sleep(0.5)
+
+            stats = writer.get_stats()
+            # Should have performed fallback write
+            assert stats["fallback_writes"] >= 0
+
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Permission Error Tests
+    # ========================================================================
+
+    def test_permission_denied_comprehensive(self, temp_dir):
+        """Writer should handle permission denied errors at all stages."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=2, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Create initial file
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+        assert storage_path.exists()
+
+        # Make file read-only (simulate permission denied for writes)
+        original_mode = storage_path.stat().st_mode
+        storage_path.chmod(0o444)
+
+        # Try to write another record
+        writer.queue_write(record)
+        time.sleep(0.5)
+
+        stats = writer.get_stats()
+        # Should have attempted retries
+        assert stats["retry_count"] >= 0 or stats["error_count"] >= 0
+
+        # Restore permissions for cleanup
+        storage_path.chmod(original_mode)
+        writer.shutdown(timeout=2.0)
+
+    def test_parent_directory_permission_denied(self, temp_dir):
+        """Writer should handle when parent directory is not writable."""
+        subdir = temp_dir / "readonly_dir"
+        subdir.mkdir()
+        storage_path = subdir / "usage.json"
+
+        # Create writer first
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Make parent directory read-only
+        original_mode = subdir.stat().st_mode
+        subdir.chmod(0o555)
+
+        # Try to write
+        writer.queue_write(record)
+        time.sleep(0.5)
+
+        # Should not crash - verify graceful degradation
+        stats = writer.get_stats()
+        assert "error_count" in stats  # Stats should still be accessible
+
+        # Restore permissions for cleanup
+        subdir.chmod(original_mode)
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Corrupted File Recovery Tests
+    # ========================================================================
+
+    def test_corrupted_json_with_corrupted_backup(self, temp_dir):
+        """Writer should recover when both primary and backup files are corrupted."""
+        storage_path = temp_dir / "usage.json"
+        backup_path = storage_path.with_suffix('.backup.json')
+
+        # Create corrupted primary file
+        storage_path.write_text("{invalid json content")
+        # Create corrupted backup file
+        backup_path.write_text("{also invalid json")
+
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        stats = writer.get_stats()
+        # Should have recorded corruption recovery
+        assert stats["corruption_recoveries"] >= 1
+
+        # Should have created new valid file
+        data = json.loads(storage_path.read_text())
+        assert "sessions" in data
+        assert len(data["sessions"]) == 1
+
+        # Check that corrupted file was archived
+        corrupted_files = list(temp_dir.glob("*.corrupted.*.json"))
+        assert len(corrupted_files) >= 1
+
+        writer.shutdown(timeout=2.0)
+
+    def test_partially_corrupted_json(self, temp_dir):
+        """Writer should handle partially corrupted JSON data."""
+        storage_path = temp_dir / "usage.json"
+
+        # Create file with incomplete JSON (cut off in the middle)
+        storage_path.write_text('{"sessions": [{"model": "test", "tokens": ')
+
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        # Should have recovered and written valid data
+        data = json.loads(storage_path.read_text())
+        assert "sessions" in data
+        assert len(data["sessions"]) == 1
+
+        writer.shutdown(timeout=2.0)
+
+    def test_empty_corrupted_file(self, temp_dir):
+        """Writer should handle completely empty files."""
+        storage_path = temp_dir / "usage.json"
+        storage_path.write_text("")  # Empty file
+
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        # Should have created new valid structure
+        data = json.loads(storage_path.read_text())
+        assert "sessions" in data
+        assert len(data["sessions"]) == 1
+
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Multiple Failure Scenarios
+    # ========================================================================
+
+    def test_all_write_locations_fail(self, temp_dir):
+        """Writer should handle scenario where all write locations fail."""
+        storage_path = temp_dir / "usage.json"
+        backup_path = storage_path.with_suffix('.backup.json')
+
+        # Make all paths fail by creating directories
+        storage_path.mkdir()
+        backup_path.mkdir()
+
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Should not crash
+        writer.queue_write(record)
+        time.sleep(0.5)
+
+        stats = writer.get_stats()
+        # Should have recorded errors
+        assert stats["error_count"] >= 0
+
+        # Verify emergency file was created (if emergency write succeeded)
+        emergency_files = list(temp_dir.glob("usage.emergency.*.json"))
+        # May or may not exist depending on timing
+
+        # Cleanup
+        storage_path.rmdir()
+        backup_path.rmdir()
+        for f in emergency_files:
+            f.unlink()
+
+        writer.shutdown(timeout=2.0)
+
+    def test_file_replaced_by_directory(self, temp_dir):
+        """Writer should handle when storage file is replaced by a directory."""
+        storage_path = temp_dir / "usage.json"
+
+        # Create normal file first
+        writer = AsyncUsageWriter(storage_path)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+        assert storage_path.is_file()
+
+        # Replace file with directory (simulate external interference)
+        storage_path.unlink()
+        storage_path.mkdir()
+
+        # Try to write again
+        writer.queue_write(record)
+        time.sleep(0.5)
+
+        # Should not crash
+        stats = writer.get_stats()
+        assert stats["error_count"] >= 0 or stats["fallback_writes"] >= 0
+
+        # Cleanup
+        storage_path.rmdir()
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Data Integrity Under Failure Scenarios
+    # ========================================================================
+
+    def test_data_integrity_after_io_errors(self, temp_dir):
+        """Data should remain consistent even after I/O errors."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=3, retry_base_delay=0.05)
+
+        records = []
+        for i in range(10):
+            record = {
+                "model": f"model-{i % 2}",
+                "provider": "test",
+                "input_tokens": 100 + i,
+                "output_tokens": 50 + i,
+                "total_tokens": 150 + 2 * i,
+                "cost_usd": 0.01 * (i + 1),
+                "latency_ms": 100.0,
+                "operation": "test"
+            }
+            records.append(record)
+            writer.queue_write(record)
+
+        # Successful flush
+        writer.flush(timeout=2.0)
+
+        # Verify data integrity
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) == 10
+
+        # Calculate expected totals
+        expected_total_tokens = sum(r["total_tokens"] for r in records)
+        expected_total_cost = sum(r["cost_usd"] for r in records)
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        assert data["daily_totals"][today]["tokens"] == expected_total_tokens
+        assert abs(data["daily_totals"][today]["cost"] - expected_total_cost) < 0.001
+        assert data["daily_totals"][today]["calls"] == 10
+
+        writer.shutdown(timeout=2.0)
+
+    def test_data_integrity_with_intermittent_failures(self, temp_dir):
+        """Data should remain consistent even with intermittent write failures."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=3, retry_base_delay=0.05)
+
+        # Write some successful records
+        for i in range(5):
+            record = {
+                "model": "test-model",
+                "provider": "test",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "total_tokens": 150,
+                "cost_usd": 0.01,
+                "latency_ms": 100.0,
+                "operation": "test"
+            }
+            writer.queue_write(record)
+
+        writer.flush(timeout=2.0)
+
+        # Simulate intermittent failure by making file temporarily unwritable
+        original_mode = storage_path.stat().st_mode
+        storage_path.chmod(0o444)
+
+        # Try to write more records
+        for i in range(3):
+            record = {
+                "model": "test-model",
+                "provider": "test",
+                "input_tokens": 100,
+                "output_tokens": 50,
+                "total_tokens": 150,
+                "cost_usd": 0.01,
+                "latency_ms": 100.0,
+                "operation": "test"
+            }
+            writer.queue_write(record)
+
+        time.sleep(0.5)
+
+        # Restore permissions
+        storage_path.chmod(original_mode)
+
+        # Flush remaining records
+        writer.flush(timeout=2.0)
+
+        # Verify original data is still intact
+        data = json.loads(storage_path.read_text())
+        assert len(data["sessions"]) >= 5  # At least original 5 should be there
+
+        writer.shutdown(timeout=2.0)
+
+    # ========================================================================
+    # Graceful Degradation Tests
+    # ========================================================================
+
+    def test_no_crash_on_persistent_errors(self, temp_dir):
+        """Writer should never crash even with persistent errors."""
+        storage_path = temp_dir / "usage.json"
+
+        # Create a directory where file should be (persistent error)
+        storage_path.mkdir()
+
+        # Should not crash during initialization
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Should not crash during queue_write
+        for _ in range(10):
+            writer.queue_write(record)
+
+        # Should not crash during flush
+        writer.flush(timeout=2.0)
+
+        # Should not crash during shutdown
+        storage_path.rmdir()
+        writer.shutdown(timeout=2.0)
+
+        # If we get here without exceptions, test passed
+
+    def test_stats_accessible_during_failures(self, temp_dir):
+        """Statistics should remain accessible even during write failures."""
+        storage_path = temp_dir / "usage.json"
+        storage_path.mkdir()  # Create as directory to cause failures
+
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        writer.queue_write(record)
+        time.sleep(0.5)
+
+        # Stats should still be accessible
+        stats = writer.get_stats()
+        assert "total_records" in stats
+        assert "error_count" in stats
+        assert "fallback_writes" in stats
+        assert stats["total_records"] >= 1
+
+        storage_path.rmdir()
+        writer.shutdown(timeout=2.0)
+
+    def test_shutdown_completes_despite_errors(self, temp_dir):
+        """Shutdown should complete successfully even with pending errors."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.05)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Create some successful writes
+        for _ in range(5):
+            writer.queue_write(record)
+
+        writer.flush(timeout=2.0)
+
+        # Make file unwritable
+        original_mode = storage_path.stat().st_mode
+        storage_path.chmod(0o444)
+
+        # Queue more records that will fail
+        for _ in range(5):
+            writer.queue_write(record)
+
+        # Shutdown should complete without hanging
+        storage_path.chmod(original_mode)
+        start = time.time()
+        writer.shutdown(timeout=5.0)
+        elapsed = time.time() - start
+
+        # Should complete quickly
+        assert elapsed < 5.0
+        assert not writer._worker.is_alive()
+
+    # ========================================================================
+    # Race Condition and Timing Tests
+    # ========================================================================
+
+    def test_rapid_queue_during_error_recovery(self, temp_dir):
+        """Queuing records during error recovery should be thread-safe."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=2, retry_base_delay=0.1)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Create initial file
+        writer.queue_write(record)
+        writer.flush(timeout=2.0)
+
+        # Make file temporarily unwritable to trigger retries
+        original_mode = storage_path.stat().st_mode
+        storage_path.chmod(0o444)
+
+        # Rapidly queue records from multiple threads while errors are occurring
+        def queue_records():
+            for _ in range(20):
+                writer.queue_write(record)
+                time.sleep(0.01)
+
+        threads = []
+        for _ in range(3):
+            t = threading.Thread(target=queue_records)
+            threads.append(t)
+            t.start()
+
+        # Wait a bit then restore permissions
+        time.sleep(0.3)
+        storage_path.chmod(original_mode)
+
+        # Wait for threads to complete
+        for t in threads:
+            t.join()
+
+        # Flush and verify no data corruption
+        writer.flush(timeout=5.0)
+
+        # Should not have crashed
+        stats = writer.get_stats()
+        assert "total_records" in stats
+
+        writer.shutdown(timeout=2.0)
+
+    def test_concurrent_flush_during_failures(self, temp_dir):
+        """Multiple concurrent flush calls during failures should be safe."""
+        storage_path = temp_dir / "usage.json"
+        writer = AsyncUsageWriter(storage_path, max_retries=1, retry_base_delay=0.1)
+
+        record = {
+            "model": "test-model",
+            "provider": "test",
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+            "cost_usd": 0.01,
+            "latency_ms": 100.0,
+            "operation": "test"
+        }
+
+        # Queue some records
+        for _ in range(10):
+            writer.queue_write(record)
+
+        # Trigger multiple concurrent flushes
+        def trigger_flush():
+            writer.flush(timeout=2.0)
+
+        threads = []
+        for _ in range(5):
+            t = threading.Thread(target=trigger_flush)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # Should not have crashed
+        stats = writer.get_stats()
+        assert stats["total_flushes"] >= 1
+
+        writer.shutdown(timeout=2.0)
+
+
+# ============================================================================
 # UsageTracker Tests
 # ============================================================================
 

@@ -209,3 +209,45 @@ Verified existence of 16 comprehensive edge case tests in `tests/unit/test_litel
 **Next:** Phase 5 - Documentation and Cleanup
 
 ---
+
+## [2026-01-11 18:30] Subtask 5.1 - Update code documentation and docstrings - COMPLETED
+
+### Summary
+Successfully enhanced documentation for AsyncUsageWriter and UsageTracker classes with comprehensive docstrings, usage examples, threading notes, and performance characteristics.
+
+### Changes Made
+1. **AsyncUsageWriter class docstring** - Enhanced with:
+   - Threading and concurrency section (thread-safe queue, lock-protected buffer, event-based sync)
+   - Performance characteristics (224x speedup, 17,100+ records/sec, <0.01ms latency)
+   - Error handling and recovery strategies (retry, fallback, corruption recovery)
+   - Comprehensive usage example
+   - Important notes on shutdown and data freshness
+
+2. **UsageTracker class docstring** - Enhanced with:
+   - Features overview (non-blocking recording, aggregation, cost calculation)
+   - Performance metrics (record() <0.01ms, batch writes, no streaming impact)
+   - Complete usage example with initialization and method calls
+   - Thread safety notes
+   - Shutdown behavior documentation
+
+3. **Method docstrings enhanced:**
+   - `record()`: Added detailed args, return type, performance notes, example
+   - `calculate_cost()`: Added args, returns, example
+   - `get_summary()`: Added complete args/returns documentation, example
+   - `get_today()`: Added complete returns documentation, example
+
+### Acceptance Criteria Status
+✅ AsyncUsageWriter class has complete docstring
+✅ All public methods documented with parameters and return types
+✅ Usage examples in docstrings
+✅ Threading and concurrency notes in documentation
+✅ Performance characteristics documented
+
+### Commit
+b1dc628 - "auto-claude: 5.1 - Add comprehensive docstrings to new classes and methods"
+- 206 lines added
+- Production-quality documentation following Python docstring conventions
+- All methods have examples and detailed parameter/return documentation
+
+### Next Steps
+Subtask 5.2 - Add inline comments for complex logic
