@@ -131,7 +131,6 @@ export async function handleCompleteHabit(
   if (!habit) {
     return {
       content: [{ type: "text", text: `Error: Habit ${habitId} not found` }],
-      isError: true,
     };
   }
 

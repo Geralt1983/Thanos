@@ -87,7 +87,6 @@ export const handleProcessBrainDump: ToolHandler = async (
   if (!entry) {
     return {
       content: [{ type: "text", text: `Error: Entry ${entryId} not found` }],
-      isError: true,
     };
   }
 

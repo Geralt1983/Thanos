@@ -268,7 +268,6 @@ export async function handleCreateTask(
   if (!title) {
     return {
       content: [{ type: "text", text: "Error: title is required" }],
-      isError: true,
     };
   }
 
@@ -337,7 +336,6 @@ export async function handleCompleteTask(
   if (!updatedTask) {
     return {
       content: [{ type: "text", text: `Error: Task ${taskId} not found` }],
-      isError: true,
     };
   }
 
@@ -383,7 +381,6 @@ export async function handlePromoteTask(
   if (!updatedTask) {
     return {
       content: [{ type: "text", text: `Error: Task ${taskId} not found` }],
-      isError: true,
     };
   }
 
@@ -565,7 +562,6 @@ export async function handleUpdateTask(
   if (!taskId) {
     return {
       content: [{ type: "text", text: "Error: taskId is required" }],
-      isError: true,
     };
   }
 
@@ -586,7 +582,6 @@ export async function handleUpdateTask(
   if (!updatedTask) {
     return {
       content: [{ type: "text", text: `Error: Task ${taskId} not found` }],
-      isError: true,
     };
   }
 
@@ -623,7 +618,6 @@ export async function handleDeleteTask(
   if (!taskId) {
     return {
       content: [{ type: "text", text: "Error: taskId is required" }],
-      isError: true,
     };
   }
 
@@ -635,7 +629,6 @@ export async function handleDeleteTask(
   if (!deletedTask) {
     return {
       content: [{ type: "text", text: `Error: Task ${taskId} not found` }],
-      isError: true,
     };
   }
 

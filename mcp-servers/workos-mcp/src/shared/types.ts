@@ -1,4 +1,5 @@
 import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import * as schema from "../schema.js";
 
 // =============================================================================
@@ -31,13 +32,9 @@ export interface ToolDefinition {
 /**
  * MCP Content Response
  * Standard response format for MCP tool handlers
+ * Using the official CallToolResult type from the MCP SDK
  */
-export interface ContentResponse {
-  content: Array<{
-    type: "text";
-    text: string;
-  }>;
-}
+export type ContentResponse = CallToolResult;
 
 /**
  * Tool Handler Function Signature
