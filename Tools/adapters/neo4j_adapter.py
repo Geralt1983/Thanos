@@ -703,8 +703,13 @@ class Neo4jAdapter(BaseAdapter):
     # Pattern Operations
     # =========================================================================
 
-    async def _record_pattern(self, args: Dict[str, Any]) -> ToolResult:
-        """Record or update a behavioral pattern."""
+    async def _record_pattern(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Record or update a behavioral pattern.
+
+        Args:
+            args: Dictionary containing pattern data
+            session: Optional Neo4j session or transaction for session reuse
+        """
         import uuid
 
         now = datetime.utcnow().isoformat()
@@ -721,11 +726,14 @@ class Neo4jAdapter(BaseAdapter):
         # Extract first significant word as keyword
         keyword = args["description"].split()[0] if args["description"] else ""
 
-        async with self._driver.session() as session:
-            result = await session.run(check_query, {
-                "keyword": keyword,
-                "domain": args.get("domain", "work")
-            })
+        check_params = {
+            "keyword": keyword,
+            "domain": args.get("domain", "work")
+        }
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(check_query, check_params)
             existing = await result.single()
 
             if existing:
@@ -771,14 +779,73 @@ class Neo4jAdapter(BaseAdapter):
                 "now": now
             })
 
-        return ToolResult.ok({
-            "id": pattern_id,
-            "message": f"Created new pattern: {args['description'][:50]}...",
-            "new": True
-        })
+            return ToolResult.ok({
+                "id": pattern_id,
+                "message": f"Created new pattern: {args['description'][:50]}...",
+                "new": True
+            })
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(check_query, check_params)
+                existing = await result.single()
 
-    async def _get_patterns(self, args: Dict[str, Any]) -> ToolResult:
-        """Get recorded patterns."""
+                if existing:
+                    # Update existing pattern
+                    update_query = """
+                    MATCH (p:Pattern {id: $id})
+                    SET p.last_observed = $now,
+                        p.strength = p.strength + 0.1
+                    RETURN p
+                    """
+                    await session.run(update_query, {
+                        "id": existing["p"]["id"],
+                        "now": now
+                    })
+                    return ToolResult.ok({
+                        "id": existing["p"]["id"],
+                        "message": "Updated existing pattern strength",
+                        "new": False
+                    })
+
+                # Create new pattern
+                pattern_id = f"pattern_{uuid.uuid4().hex[:8]}"
+                create_query = """
+                CREATE (p:Pattern {
+                    id: $id,
+                    description: $description,
+                    type: $type,
+                    domain: $domain,
+                    frequency: $frequency,
+                    first_observed: $now,
+                    last_observed: $now,
+                    strength: 0.5
+                })
+                RETURN p
+                """
+
+                await session.run(create_query, {
+                    "id": pattern_id,
+                    "description": args["description"],
+                    "type": args.get("type", "behavioral"),
+                    "domain": args.get("domain", "work"),
+                    "frequency": args.get("frequency", "situational"),
+                    "now": now
+                })
+
+            return ToolResult.ok({
+                "id": pattern_id,
+                "message": f"Created new pattern: {args['description'][:50]}...",
+                "new": True
+            })
+
+    async def _get_patterns(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Get recorded patterns.
+
+        Args:
+            args: Dictionary containing optional filters (type, domain, limit)
+            session: Optional Neo4j session or transaction for session reuse
+        """
         conditions = []
         params = {"limit": args.get("limit", 20)}
 
@@ -800,9 +867,15 @@ class Neo4jAdapter(BaseAdapter):
         LIMIT $limit
         """
 
-        async with self._driver.session() as session:
+        if session is not None:
+            # Use provided session/transaction (session reuse)
             result = await session.run(query, params)
             records = await result.data()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                records = await result.data()
 
         patterns = [dict(r["p"]) for r in records]
         return ToolResult.ok({"patterns": patterns, "count": len(patterns)})
@@ -811,8 +884,13 @@ class Neo4jAdapter(BaseAdapter):
     # Session Operations
     # =========================================================================
 
-    async def _start_session(self, args: Dict[str, Any]) -> ToolResult:
-        """Record start of a conversation session."""
+    async def _start_session(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Record start of a conversation session.
+
+        Args:
+            args: Dictionary containing session data (agent, mood)
+            session: Optional Neo4j session or transaction for session reuse
+        """
         import uuid
 
         session_id = f"session_{uuid.uuid4().hex[:8]}"
@@ -828,18 +906,30 @@ class Neo4jAdapter(BaseAdapter):
         RETURN s
         """
 
-        async with self._driver.session() as session:
-            await session.run(query, {
-                "id": session_id,
-                "agent": args["agent"],
-                "mood": args.get("mood"),
-                "started_at": now
-            })
+        params = {
+            "id": session_id,
+            "agent": args["agent"],
+            "mood": args.get("mood"),
+            "started_at": now
+        }
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            await session.run(query, params)
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                await session.run(query, params)
 
         return ToolResult.ok({"session_id": session_id, "started_at": now})
 
-    async def _end_session(self, args: Dict[str, Any]) -> ToolResult:
-        """Record end of session with summary."""
+    async def _end_session(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Record end of session with summary.
+
+        Args:
+            args: Dictionary containing session_id, summary, and optional tokens_used
+            session: Optional Neo4j session or transaction for session reuse
+        """
         now = datetime.utcnow().isoformat()
 
         query = """
@@ -850,17 +940,28 @@ class Neo4jAdapter(BaseAdapter):
         RETURN s
         """
 
-        async with self._driver.session() as session:
-            result = await session.run(query, {
-                "id": args["session_id"],
-                "ended_at": now,
-                "summary": args["summary"],
-                "tokens_used": args.get("tokens_used", 0)
-            })
+        params = {
+            "id": args["session_id"],
+            "ended_at": now,
+            "summary": args["summary"],
+            "tokens_used": args.get("tokens_used", 0)
+        }
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(query, params)
             record = await result.single()
 
             if not record:
                 return ToolResult.fail(f"Session not found: {args['session_id']}")
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                record = await result.single()
+
+                if not record:
+                    return ToolResult.fail(f"Session not found: {args['session_id']}")
 
         return ToolResult.ok({
             "session_id": args["session_id"],
