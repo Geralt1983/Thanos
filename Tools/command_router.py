@@ -6,13 +6,28 @@ Single Responsibility: Command parsing and delegation
 """
 
 import asyncio
-from dataclasses import dataclass
-from enum import Enum
 import os
 from pathlib import Path
 import re
 from typing import Callable, Optional
 
+# Import handler modules
+from Tools.command_handlers import (
+    BaseHandler,
+    Colors,
+    CommandAction,
+    CommandResult,
+    AgentHandler,
+    SessionHandler,
+    StateHandler,
+    MemoryHandler,
+    AnalyticsHandler,
+    ModelHandler,
+    CoreHandler,
+)
+
+# Import routing modules
+from Tools.routing import PersonaRouter, CommandRegistry
 
 # MemOS integration (optional - graceful degradation if unavailable)
 try:
@@ -22,31 +37,6 @@ try:
 except ImportError:
     MEMOS_AVAILABLE = False
     MemOS = None
-
-
-# ANSI color codes (copied from thanos_interactive.py)
-class Colors:
-    PURPLE = "\033[35m"
-    CYAN = "\033[36m"
-    DIM = "\033[2m"
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-
-
-class CommandAction(Enum):
-    """Action to take after command execution"""
-
-    CONTINUE = "continue"
-    QUIT = "quit"
-
-
-@dataclass
-class CommandResult:
-    """Result from command execution"""
-
-    action: CommandAction = CommandAction.CONTINUE
-    message: Optional[str] = None
-    success: bool = True
 
 
 class CommandRouter:
