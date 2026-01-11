@@ -2,7 +2,7 @@
   "feature": "Implement connection pooling for Neo4j async sessions",
   "description": "The Neo4j adapter creates a new session for each operation via `async with self._driver.session()`. While the driver has built-in pooling, session creation overhead can be reduced by reusing sessions for related operations within a request context.",
   "created_at": "2026-01-11T00:03:37.687Z",
-  "updated_at": "2026-01-11T00:21:50.317Z",
+  "updated_at": "2026-01-11T00:26:23.030Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "phases": [

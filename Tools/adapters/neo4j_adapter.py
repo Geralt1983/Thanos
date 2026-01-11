@@ -45,6 +45,82 @@ class GraphRelationship:
 
 
 # =============================================================================
+# Session Context Manager
+# =============================================================================
+
+class Neo4jSessionContext:
+    """
+    Async context manager for Neo4j session lifecycle management.
+
+    Provides:
+    - Automatic session creation/cleanup
+    - Support for session reuse across operations
+    - Exception-safe resource handling
+    - Optional transaction batching
+
+    Usage:
+        # Pattern A: Session reuse for multiple independent operations
+        async with adapter.session_context() as session:
+            await adapter._create_entity(entity_data, session=session)
+            await adapter._link_nodes(link_data, session=session)
+
+        # Pattern B: Atomic batch with transaction guarantee
+        async with adapter.session_context(batch_transaction=True) as tx:
+            await adapter._create_entity(entity_data, session=tx)
+            await adapter._link_nodes(link_data, session=tx)
+    """
+
+    def __init__(
+        self,
+        adapter: 'Neo4jAdapter',
+        database: str = "neo4j",
+        batch_transaction: bool = False
+    ):
+        """
+        Initialize session context.
+
+        Args:
+            adapter: Neo4jAdapter instance
+            database: Neo4j database name (avoids extra round-trip)
+            batch_transaction: If True, wrap all operations in single transaction
+        """
+        self._adapter = adapter
+        self._database = database
+        self._batch_transaction = batch_transaction
+        self._session = None
+        self._transaction = None
+
+    async def __aenter__(self):
+        """Create session and optionally begin transaction."""
+        self._session = self._adapter._driver.session(database=self._database)
+
+        if self._batch_transaction:
+            # Start explicit transaction for atomic batch
+            self._transaction = await self._session.begin_transaction()
+            return self._transaction
+
+        return self._session
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup session and handle transaction commit/rollback."""
+        try:
+            if self._transaction:
+                if exc_type is None:
+                    # No exception - commit transaction
+                    await self._transaction.commit()
+                else:
+                    # Exception occurred - rollback transaction
+                    await self._transaction.rollback()
+        finally:
+            # Always close session
+            if self._session:
+                await self._session.close()
+
+        # Don't suppress exceptions
+        return False
+
+
+# =============================================================================
 # Graph Schema Definition
 # =============================================================================
 
@@ -151,7 +227,8 @@ class Neo4jAdapter(BaseAdapter):
         self,
         uri: Optional[str] = None,
         username: Optional[str] = None,
-        password: Optional[str] = None
+        password: Optional[str] = None,
+        database: Optional[str] = None
     ):
         """
         Initialize Neo4j connection.
@@ -160,6 +237,7 @@ class Neo4jAdapter(BaseAdapter):
             uri: Neo4j connection URI (defaults to NEO4J_URL env var)
             username: Neo4j username (defaults to NEO4J_USERNAME env var)
             password: Neo4j password (defaults to NEO4J_PASSWORD env var)
+            database: Neo4j database name (defaults to NEO4J_DATABASE env var or "neo4j")
         """
         if not NEO4J_AVAILABLE:
             raise ImportError(
@@ -169,6 +247,7 @@ class Neo4jAdapter(BaseAdapter):
         self._uri = uri or os.getenv("NEO4J_URL")
         self._username = username or os.getenv("NEO4J_USERNAME", "neo4j")
         self._password = password or os.getenv("NEO4J_PASSWORD")
+        self._database = database or os.getenv("NEO4J_DATABASE", "neo4j")
 
         if not self._uri:
             raise ValueError("Neo4j URI not provided. Set NEO4J_URL env var.")
@@ -183,6 +262,33 @@ class Neo4jAdapter(BaseAdapter):
     @property
     def name(self) -> str:
         return "neo4j"
+
+    def session_context(self, batch_transaction: bool = False) -> Neo4jSessionContext:
+        """
+        Create a session context manager for session reuse.
+
+        Args:
+            batch_transaction: If True, wrap all operations in a single transaction
+
+        Returns:
+            Neo4jSessionContext instance for use with async with
+
+        Usage:
+            # Session reuse (multiple independent transactions)
+            async with adapter.session_context() as session:
+                await adapter._create_entity(data1, session=session)
+                await adapter._link_nodes(data2, session=session)
+
+            # Atomic batch (single transaction)
+            async with adapter.session_context(batch_transaction=True) as tx:
+                await adapter._create_entity(data1, session=tx)
+                await adapter._link_nodes(data2, session=tx)
+        """
+        return Neo4jSessionContext(
+            adapter=self,
+            database=self._database,
+            batch_transaction=batch_transaction
+        )
 
     def list_tools(self) -> List[Dict[str, Any]]:
         """Return available graph operations."""
