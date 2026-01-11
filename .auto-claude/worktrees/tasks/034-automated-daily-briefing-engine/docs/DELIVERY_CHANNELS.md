@@ -27,6 +27,7 @@ All delivery channels inherit from the abstract `DeliveryChannel` base class, wh
 1. **CLIChannel** - Terminal output with optional ANSI colors
 2. **FileChannel** - Save briefings to filesystem
 3. **NotificationChannel** - Desktop notifications (macOS/Linux)
+4. **StateSyncChannel** - Update State/Today.md with briefing content
 
 ---
 
@@ -149,6 +150,68 @@ sudo apt-get install libnotify-bin
 sudo dnf install libnotify
 ```
 
+### 4. StateSyncChannel
+
+Updates State/Today.md with briefing content, intelligently merging sections while preserving existing content.
+
+**Features:**
+- Creates State/Today.md if it doesn't exist
+- Updates specific sections (## Morning Brief, ## Evening Brief)
+- Preserves existing content in other sections
+- Adds timestamps to track when sections were updated
+- Maintains consistent section order
+- Non-destructive updates
+
+**Configuration:**
+```json
+{
+  "state_sync": {
+    "enabled": true,
+    "state_file": "State/Today.md"
+  }
+}
+```
+
+**How It Works:**
+1. Reads existing State/Today.md content
+2. Parses content into sections based on level-2 headers (`##`)
+3. Updates only the matching section (e.g., `## Morning Brief`)
+4. Preserves all other sections unchanged
+5. Adds timestamp to updated section
+6. Maintains section order: Morning → Evening → Other sections
+
+**Example State/Today.md:**
+```markdown
+# Today
+*Date: 2026-01-11*
+
+## Morning Brief
+*Updated: 2026-01-11 08:00 AM*
+
+**Top 3 Priorities:**
+1. Fix critical bug
+2. Review PRs
+3. Update documentation
+
+## Evening Brief
+*Updated: 2026-01-11 08:00 PM*
+
+**Today's Accomplishments:**
+✅ Fixed critical bug
+✅ Reviewed 3 PRs
+
+## Notes
+<!-- Custom notes preserved here -->
+```
+
+**Use Cases:**
+- Maintain a daily State file with both morning and evening briefs
+- Version control your daily progress with Git
+- Reference previous briefings without searching history files
+- Integrate briefings with your existing State management workflow
+
+**See Also:** [StateSyncChannel Detailed Documentation](./STATE_SYNC_CHANNEL.md)
+
 ---
 
 ## Configuration
@@ -172,6 +235,10 @@ The delivery channels are configured in `config/briefing_schedule.json`:
     "notification": {
       "enabled": false,
       "summary_only": true
+    },
+    "state_sync": {
+      "enabled": true,
+      "state_file": "State/Today.md"
     }
   }
 }
@@ -188,13 +255,13 @@ Individual briefings can specify which channels to use:
       "enabled": true,
       "time": "07:00",
       "template": "briefing_morning.md",
-      "delivery_channels": ["cli", "file"]
+      "delivery_channels": ["cli", "file", "state_sync"]
     },
     "evening": {
       "enabled": false,
       "time": "19:00",
       "template": "briefing_evening.md",
-      "delivery_channels": ["cli", "file", "notification"]
+      "delivery_channels": ["cli", "file", "state_sync", "notification"]
     }
   }
 }

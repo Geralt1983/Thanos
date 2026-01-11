@@ -23,6 +23,7 @@ from Tools.delivery_channels import (
     CLIChannel,
     FileChannel,
     NotificationChannel,
+    StateSyncChannel,
     create_delivery_channel,
     deliver_to_channels
 )
@@ -322,6 +323,203 @@ class TestNotificationChannel(unittest.TestCase):
         self.assertFalse(has_fake)
 
 
+class TestStateSyncChannel(unittest.TestCase):
+    """Test suite for StateSyncChannel class."""
+
+    def setUp(self):
+        """Set up test fixtures before each test."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.state_file = os.path.join(self.temp_dir, 'Today.md')
+        self.channel = StateSyncChannel(config={'state_file': self.state_file})
+        self.test_content = "# Morning Briefing\n\n**Top Priorities:**\n1. Task 1\n2. Task 2"
+        self.test_type = "morning"
+
+    def tearDown(self):
+        """Clean up after each test."""
+        shutil.rmtree(self.temp_dir)
+
+    def test_initialization(self):
+        """Test StateSyncChannel initialization."""
+        self.assertIsInstance(self.channel, StateSyncChannel)
+        self.assertEqual(self.channel.state_file, self.state_file)
+
+    def test_initialization_default_config(self):
+        """Test StateSyncChannel initialization with default config."""
+        channel = StateSyncChannel()
+        self.assertEqual(channel.state_file, 'State/Today.md')
+
+    def test_deliver_creates_new_file(self):
+        """Test delivering to non-existent file creates it."""
+        result = self.channel.deliver(self.test_content, self.test_type)
+
+        self.assertTrue(result)
+        self.assertTrue(os.path.exists(self.state_file))
+
+        # Verify content
+        with open(self.state_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn("# Today", content)
+        self.assertIn("## Morning Brief", content)
+        self.assertIn("Task 1", content)
+        self.assertIn("*Updated:", content)
+
+    def test_deliver_updates_existing_section(self):
+        """Test updating existing section preserves other content."""
+        # Create initial file with morning brief
+        initial_content = "# Today\n\n## Morning Brief\n*Updated: 2026-01-10 08:00 AM*\n\nOld content\n"
+        os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
+        with open(self.state_file, 'w', encoding='utf-8') as f:
+            f.write(initial_content)
+
+        # Update with new morning brief
+        new_content = "New morning priorities"
+        result = self.channel.deliver(new_content, self.test_type)
+
+        self.assertTrue(result)
+
+        # Verify content was updated
+        with open(self.state_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn("## Morning Brief", content)
+        self.assertIn("New morning priorities", content)
+        self.assertNotIn("Old content", content)
+
+    def test_deliver_preserves_other_sections(self):
+        """Test that updating one section preserves other sections."""
+        # Create file with multiple sections
+        initial_content = (
+            "# Today\n\n"
+            "## Morning Brief\n*Updated: 2026-01-10 08:00 AM*\n\nMorning content\n\n"
+            "## Evening Brief\n*Updated: 2026-01-10 08:00 PM*\n\nEvening content\n\n"
+            "## Notes\n\nSome notes\n"
+        )
+        os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
+        with open(self.state_file, 'w', encoding='utf-8') as f:
+            f.write(initial_content)
+
+        # Update only morning brief
+        new_morning = "Updated morning content"
+        result = self.channel.deliver(new_morning, "morning")
+
+        self.assertTrue(result)
+
+        # Verify morning brief updated, others preserved
+        with open(self.state_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn("Updated morning content", content)
+        self.assertIn("## Evening Brief", content)
+        self.assertIn("Evening content", content)
+        self.assertIn("## Notes", content)
+        self.assertIn("Some notes", content)
+
+    def test_deliver_adds_evening_brief(self):
+        """Test adding evening brief to file with morning brief."""
+        # Create file with only morning brief
+        initial_content = "# Today\n\n## Morning Brief\n*Updated: 2026-01-11 08:00 AM*\n\nMorning tasks\n"
+        os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
+        with open(self.state_file, 'w', encoding='utf-8') as f:
+            f.write(initial_content)
+
+        # Add evening brief
+        evening_content = "Evening reflection"
+        result = self.channel.deliver(evening_content, "evening")
+
+        self.assertTrue(result)
+
+        # Verify both sections exist
+        with open(self.state_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn("## Morning Brief", content)
+        self.assertIn("Morning tasks", content)
+        self.assertIn("## Evening Brief", content)
+        self.assertIn("Evening reflection", content)
+
+    def test_deliver_adds_timestamp(self):
+        """Test that delivery adds timestamp to section."""
+        result = self.channel.deliver(self.test_content, self.test_type)
+
+        self.assertTrue(result)
+
+        with open(self.state_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Check for timestamp pattern
+        self.assertIn("*Updated:", content)
+        # Should have date in YYYY-MM-DD format
+        self.assertRegex(content, r'\*Updated: \d{4}-\d{2}-\d{2} \d{2}:\d{2} [AP]M\*')
+
+    def test_parse_sections_empty_content(self):
+        """Test parsing empty content."""
+        sections = self.channel._parse_sections("")
+        self.assertEqual(sections, {})
+
+    def test_parse_sections_with_header(self):
+        """Test parsing content with header."""
+        content = "# Today\n*Date: 2026-01-11*\n\n## Morning Brief\n\nContent here\n"
+        sections = self.channel._parse_sections(content)
+
+        self.assertIn('# header', sections)
+        self.assertIn('## Morning Brief', sections)
+
+    def test_parse_sections_multiple_sections(self):
+        """Test parsing content with multiple sections."""
+        content = (
+            "# Today\n\n"
+            "## Morning Brief\n\nMorning\n\n"
+            "## Evening Brief\n\nEvening\n\n"
+            "## Notes\n\nNotes content\n"
+        )
+        sections = self.channel._parse_sections(content)
+
+        self.assertEqual(len(sections), 4)  # header + 3 sections
+        self.assertIn('## Morning Brief', sections)
+        self.assertIn('## Evening Brief', sections)
+        self.assertIn('## Notes', sections)
+
+    def test_rebuild_content_maintains_section_order(self):
+        """Test that rebuild maintains section order."""
+        sections = {
+            '# header': '# Today\n*Date: 2026-01-11*\n',
+            '## Evening Brief': '## Evening Brief\n\nEvening content\n',
+            '## Morning Brief': '## Morning Brief\n\nMorning content\n',
+            '## Notes': '## Notes\n\nNotes content\n'
+        }
+
+        content = self.channel._rebuild_content(sections)
+
+        # Morning should come before Evening
+        morning_pos = content.find('## Morning Brief')
+        evening_pos = content.find('## Evening Brief')
+        notes_pos = content.find('## Notes')
+
+        self.assertLess(morning_pos, evening_pos)
+        self.assertLess(evening_pos, notes_pos)
+
+    def test_read_existing_content_nonexistent_file(self):
+        """Test reading content from nonexistent file."""
+        content = self.channel._read_existing_content()
+        self.assertEqual(content, "")
+
+    def test_deliver_with_metadata(self):
+        """Test delivery with metadata (not currently used but should not error)."""
+        metadata = {'date': '2026-01-11', 'priorities': []}
+        result = self.channel.deliver(self.test_content, self.test_type, metadata)
+
+        self.assertTrue(result)
+
+    def test_deliver_error_handling(self):
+        """Test error handling for invalid file path."""
+        # Use invalid path (null byte in filename)
+        invalid_channel = StateSyncChannel(config={'state_file': '/tmp/\x00invalid'})
+        result = invalid_channel.deliver(self.test_content, self.test_type)
+
+        self.assertFalse(result)
+
+
 class TestFactoryFunction(unittest.TestCase):
     """Test suite for create_delivery_channel factory function."""
 
@@ -346,6 +544,13 @@ class TestFactoryFunction(unittest.TestCase):
         channel = create_delivery_channel('notification', {'summary_only': False})
         self.assertIsInstance(channel, NotificationChannel)
         self.assertFalse(channel.summary_only)
+
+    def test_create_state_sync_channel(self):
+        """Test creating StateSyncChannel."""
+        config = {'state_file': 'State/Today.md'}
+        channel = create_delivery_channel('state_sync', config)
+        self.assertIsInstance(channel, StateSyncChannel)
+        self.assertEqual(channel.state_file, 'State/Today.md')
 
     def test_create_with_case_insensitive_type(self):
         """Test that channel type is case-insensitive."""
