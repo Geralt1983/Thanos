@@ -19,6 +19,12 @@ try:
 except ImportError:
     JINJA2_AVAILABLE = False
 
+try:
+    from Tools.health_state_tracker import HealthStateTracker
+    HEALTH_TRACKER_AVAILABLE = True
+except ImportError:
+    HEALTH_TRACKER_AVAILABLE = False
+
 
 class BriefingEngine:
     """
@@ -54,6 +60,12 @@ class BriefingEngine:
             )
         else:
             self.jinja_env = None
+
+        # Initialize HealthStateTracker if available
+        if HEALTH_TRACKER_AVAILABLE:
+            self.health_tracker = HealthStateTracker(state_dir=str(self.state_dir))
+        else:
+            self.health_tracker = None
 
     def gather_context(self) -> Dict[str, Any]:
         """
@@ -760,3 +772,164 @@ class BriefingEngine:
 
         # Limit to top 5 quick wins
         return quick_wins[:5]
+
+    def prompt_for_health_state(
+        self,
+        skip_prompts: bool = False,
+        default_energy: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Prompt user for their current health state (energy, sleep, medication).
+
+        Args:
+            skip_prompts: If True, skip interactive prompts and return None
+            default_energy: If provided and skip_prompts is True, use this energy level
+
+        Returns:
+            Dictionary with health state data if prompts completed, None if skipped
+            Dictionary includes: energy_level, sleep_hours, vyvanse_time, trend
+        """
+        if skip_prompts:
+            if default_energy is not None:
+                # Use provided energy level but don't log
+                return {"energy_level": default_energy, "from_prompts": False}
+            return None
+
+        if not HEALTH_TRACKER_AVAILABLE or self.health_tracker is None:
+            print("⚠️  Health tracking not available (HealthStateTracker not found)")
+            return None
+
+        print("\n" + "="*60)
+        print("🏥 Morning Health Check")
+        print("="*60)
+        print("Quick health check to optimize your day:")
+        print()
+
+        # Show 7-day trend if available
+        trend = self._get_health_trend()
+        if trend:
+            print(f"📊 7-Day Trend:")
+            print(f"   Average Energy: {trend['avg_energy']:.1f}/10")
+            print(f"   Average Sleep: {trend['avg_sleep']:.1f} hours")
+            if trend.get('best_day'):
+                print(f"   Best Day: {trend['best_day']} (energy: {trend['best_energy']:.1f})")
+            print()
+
+        # Prompt for energy level (1-10)
+        while True:
+            try:
+                energy_input = input("⚡ Energy level (1-10, where 1=exhausted, 10=energized): ").strip()
+                if not energy_input:
+                    print("   ⏭️  Skipping health check...")
+                    return None
+                energy_level = int(energy_input)
+                if 1 <= energy_level <= 10:
+                    break
+                print("   ⚠️  Please enter a number between 1 and 10")
+            except ValueError:
+                print("   ⚠️  Please enter a valid number")
+            except (KeyboardInterrupt, EOFError):
+                print("\n   ⏭️  Skipping health check...")
+                return None
+
+        # Prompt for sleep hours
+        while True:
+            try:
+                sleep_input = input("😴 Hours of sleep last night (e.g., 7.5): ").strip()
+                if not sleep_input:
+                    print("   ⏭️  Skipping sleep tracking...")
+                    sleep_hours = None
+                    break
+                sleep_hours = float(sleep_input)
+                if 0 <= sleep_hours <= 24:
+                    break
+                print("   ⚠️  Please enter hours between 0 and 24")
+            except ValueError:
+                print("   ⚠️  Please enter a valid number")
+            except (KeyboardInterrupt, EOFError):
+                print("\n   ⏭️  Skipping sleep tracking...")
+                sleep_hours = None
+                break
+
+        # Prompt for Vyvanse time (optional)
+        vyvanse_time = None
+        try:
+            vyvanse_input = input("💊 Vyvanse time (HH:MM, e.g., 08:30, or press Enter to skip): ").strip()
+            if vyvanse_input:
+                # Validate time format
+                if re.match(r'^\d{1,2}:\d{2}$', vyvanse_input):
+                    # Normalize to HH:MM format
+                    hour, minute = vyvanse_input.split(':')
+                    hour = int(hour)
+                    minute = int(minute)
+                    if 0 <= hour <= 23 and 0 <= minute <= 59:
+                        vyvanse_time = f"{hour:02d}:{minute:02d}"
+                    else:
+                        print("   ⚠️  Invalid time, skipping medication tracking")
+                else:
+                    print("   ⚠️  Invalid format, skipping medication tracking")
+        except (KeyboardInterrupt, EOFError):
+            print("\n   ⏭️  Skipping medication tracking...")
+
+        # Log the entry to HealthLog.json
+        if sleep_hours is not None:
+            success = self.health_tracker.log_entry(
+                energy_level=energy_level,
+                sleep_hours=sleep_hours,
+                vyvanse_time=vyvanse_time,
+                notes="Morning briefing health check"
+            )
+            if success:
+                print(f"\n✅ Health state logged successfully!")
+            else:
+                print(f"\n⚠️  Warning: Failed to save health state")
+        else:
+            print(f"\n⚠️  Skipping health log (missing sleep hours)")
+
+        print("="*60 + "\n")
+
+        # Return health data for use in briefing
+        return {
+            "energy_level": energy_level,
+            "sleep_hours": sleep_hours,
+            "vyvanse_time": vyvanse_time,
+            "trend": trend,
+            "from_prompts": True
+        }
+
+    def _get_health_trend(self) -> Optional[Dict[str, Any]]:
+        """
+        Get 7-day health trend from HealthStateTracker.
+
+        Returns:
+            Dictionary with trend data or None if not available
+        """
+        if not HEALTH_TRACKER_AVAILABLE or self.health_tracker is None:
+            return None
+
+        try:
+            # Get 7-day averages
+            averages = self.health_tracker.calculate_averages(days=7)
+            if not averages:
+                return None
+
+            # Get recent entries for best day calculation
+            recent_entries = self.health_tracker.get_recent_entries(days=7)
+            if not recent_entries:
+                return None
+
+            # Find best energy day
+            best_entry = max(recent_entries, key=lambda e: e.get('energy_level', 0))
+            best_date = date.fromisoformat(best_entry['date'])
+            best_day = best_date.strftime('%A')
+
+            return {
+                'avg_energy': averages['avg_energy'],
+                'avg_sleep': averages['avg_sleep'],
+                'sample_size': averages['sample_size'],
+                'best_day': best_day,
+                'best_energy': best_entry['energy_level']
+            }
+        except Exception as e:
+            print(f"Warning: Error getting health trend: {e}")
+            return None

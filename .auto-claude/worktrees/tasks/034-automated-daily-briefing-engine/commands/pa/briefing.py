@@ -105,6 +105,7 @@ def generate_briefing(
     config: Dict[str, Any],
     energy_level: Optional[int] = None,
     dry_run: bool = False,
+    no_prompts: bool = False,
     logger: Optional[logging.Logger] = None
 ) -> int:
     """
@@ -115,6 +116,7 @@ def generate_briefing(
         config: Configuration dictionary
         energy_level: Optional energy level (1-10)
         dry_run: If True, print without saving
+        no_prompts: If True, skip health state prompts
         logger: Logger instance
 
     Returns:
@@ -154,6 +156,21 @@ def generate_briefing(
     if dry_run:
         print("🔍 DRY RUN MODE - Output will not be saved\n")
 
+    # Prompt for health state if morning briefing and prompts not disabled
+    health_state = None
+    if briefing_type == "morning" and not no_prompts:
+        try:
+            health_state = engine.prompt_for_health_state(
+                skip_prompts=no_prompts,
+                default_energy=energy_level
+            )
+            # Use energy level from health state if provided
+            if health_state and 'energy_level' in health_state:
+                energy_level = health_state['energy_level']
+        except Exception as e:
+            logger.warning(f"Failed to prompt for health state: {e}")
+            print(f"\n⚠️  Warning: Health check failed: {e}")
+
     if energy_level is not None:
         print(f"⚡ Energy level: {energy_level}/10\n")
 
@@ -174,7 +191,8 @@ def generate_briefing(
         briefing = engine.render_briefing(
             briefing_type=briefing_type,
             context=context,
-            energy_level=energy_level
+            energy_level=energy_level,
+            health_state=health_state
         )
     except Exception as e:
         logger.error(f"Failed to render briefing: {e}")
@@ -251,6 +269,12 @@ Examples:
     )
 
     parser.add_argument(
+        '--no-prompts',
+        action='store_true',
+        help='Skip health state prompts (for morning briefings)'
+    )
+
+    parser.add_argument(
         '--verbose',
         '-v',
         action='store_true',
@@ -286,6 +310,7 @@ Examples:
         config=config,
         energy_level=args.energy_level,
         dry_run=args.dry_run,
+        no_prompts=args.no_prompts,
         logger=logger
     )
 
