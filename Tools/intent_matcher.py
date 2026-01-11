@@ -11,8 +11,14 @@ Performance characteristics:
 - Matching: O(m) where m = message length
 - Expected speedup: 10-50x over nested loop approach
 
+Two matcher implementations are provided:
+1. KeywordMatcher: Regex-based matcher (default, no dependencies)
+2. TrieKeywordMatcher: Aho-Corasick trie-based matcher (optional, requires pyahocorasick)
+   - Falls back to KeywordMatcher if pyahocorasick is not available
+   - Optimal for 500+ keywords (we have 92)
+
 Usage:
-    from Tools.intent_matcher import KeywordMatcher
+    from Tools.intent_matcher import KeywordMatcher, TrieKeywordMatcher
 
     keywords = {
         'ops': {
@@ -26,8 +32,14 @@ Usage:
         'ops': ['urgent', 'now']
     }
 
+    # Regex-based matcher (default)
     matcher = KeywordMatcher(keywords, triggers)
     scores = matcher.match("I'm overwhelmed with tasks today")
+    # Returns: {'ops': 7}  (high: 5 + medium: 2)
+
+    # Trie-based matcher (falls back to regex if pyahocorasick not available)
+    trie_matcher = TrieKeywordMatcher(keywords, triggers)
+    scores = trie_matcher.match("I'm overwhelmed with tasks today")
     # Returns: {'ops': 7}  (high: 5 + medium: 2)
 """
 
@@ -265,6 +277,246 @@ class KeywordMatcher:
         }
 
 
+# Try to import Aho-Corasick library for trie-based matching
+try:
+    import ahocorasick
+    AHOCORASICK_AVAILABLE = True
+except ImportError:
+    AHOCORASICK_AVAILABLE = False
+
+
+class TrieKeywordMatcher:
+    """Trie-based keyword matcher using Aho-Corasick algorithm.
+
+    Uses pyahocorasick library for O(m + z) complexity where:
+    - m = message length
+    - z = number of matches
+
+    Falls back to regex-based KeywordMatcher if pyahocorasick is not available.
+
+    Performance characteristics:
+    - Optimal for 500+ keywords (we have 92)
+    - Expected speedup: 1.2-2x at current scale
+    - Better scalability for future growth
+
+    Usage:
+        from Tools.intent_matcher import TrieKeywordMatcher
+
+        keywords = {
+            'ops': {
+                'high': ['overwhelmed', 'what should i do'],
+                'medium': ['task', 'schedule'],
+                'low': ['busy', 'work']
+            }
+        }
+
+        triggers = {
+            'ops': ['urgent', 'now']
+        }
+
+        matcher = TrieKeywordMatcher(keywords, triggers)
+        scores = matcher.match("I'm overwhelmed with tasks today")
+        # Returns: {'ops': 7}  (high: 5 + medium: 2)
+    """
+
+    # Scoring weights for different match types
+    WEIGHT_TRIGGER = 10
+    WEIGHT_HIGH = 5
+    WEIGHT_MEDIUM = 2
+    WEIGHT_LOW = 1
+
+    def __init__(self, keywords: Dict[str, Dict[str, List[str]]],
+                 triggers: Optional[Dict[str, List[str]]] = None):
+        """Initialize trie-based matcher with keyword dictionaries.
+
+        Args:
+            keywords: Nested dict of {agent: {priority: [keywords]}}
+                     where priority is 'high', 'medium', or 'low'
+            triggers: Optional dict of {agent: [trigger_phrases]}
+                     Triggers have highest weight (10 points)
+        """
+        self.keywords = keywords
+        self.triggers = triggers or {}
+
+        # Use Aho-Corasick if available, otherwise fall back to regex
+        if AHOCORASICK_AVAILABLE:
+            self._use_trie = True
+            self._automaton = None
+            self._keyword_map: Dict[str, Tuple[str, int]] = {}
+            self._build_automaton()
+        else:
+            self._use_trie = False
+            # Fall back to regex-based matcher
+            self._regex_matcher = KeywordMatcher(keywords, triggers)
+
+    def _build_automaton(self):
+        """Build Aho-Corasick automaton from keywords.
+
+        Creates an automaton with all keywords and their metadata (agent, weight).
+        Uses case-insensitive matching to match legacy behavior.
+        """
+        if not AHOCORASICK_AVAILABLE:
+            return
+
+        self._automaton = ahocorasick.Automaton()
+
+        # Weight map for priorities
+        weight_map = {
+            'high': self.WEIGHT_HIGH,
+            'medium': self.WEIGHT_MEDIUM,
+            'low': self.WEIGHT_LOW
+        }
+
+        # Add triggers first (highest priority)
+        for agent, trigger_list in self.triggers.items():
+            for trigger in trigger_list:
+                keyword_lower = trigger.lower()
+                self._keyword_map[keyword_lower] = (agent, self.WEIGHT_TRIGGER)
+                # Store (agent, weight, original_keyword) as the value
+                self._automaton.add_word(keyword_lower, (agent, self.WEIGHT_TRIGGER, keyword_lower))
+
+        # Add keywords by priority
+        for agent, priority_dict in self.keywords.items():
+            for priority, keyword_list in priority_dict.items():
+                weight = weight_map.get(priority, 1)
+                for keyword in keyword_list:
+                    keyword_lower = keyword.lower()
+                    self._keyword_map[keyword_lower] = (agent, weight)
+                    # Store (agent, weight, original_keyword) as the value
+                    self._automaton.add_word(keyword_lower, (agent, weight, keyword_lower))
+
+        # Build the automaton (required step after adding all words)
+        self._automaton.make_automaton()
+
+    def match(self, message: str) -> Dict[str, int]:
+        """Match keywords in message and return agent scores.
+
+        Uses Aho-Corasick algorithm for efficient multi-pattern matching.
+        Falls back to regex matcher if Aho-Corasick is not available.
+
+        Matches legacy behavior by:
+        - Using case-insensitive substring matching
+        - Counting overlapping keywords
+        - Initializing all agents to 0
+
+        Args:
+            message: The message text to analyze
+
+        Returns:
+            Dictionary mapping agent names to total scores
+            Example: {'ops': 7, 'health': 2}
+            Returns all agents initialized to 0 even if no matches
+        """
+        # Fall back to regex matcher if trie not available
+        if not self._use_trie:
+            return self._regex_matcher.match(message)
+
+        message_lower = message.lower() if message else ""
+
+        # Initialize all agents to 0 (matches legacy behavior)
+        # Preserve agent order from keywords dict for consistent max() behavior
+        agent_scores: Dict[str, int] = {}
+
+        # Initialize agents from keywords (in order)
+        for agent in self.keywords.keys():
+            agent_scores[agent] = 0
+
+        # Add agents from triggers if not already present (in order)
+        for agent in self.triggers.keys():
+            if agent not in agent_scores:
+                agent_scores[agent] = 0
+
+        # Find all matches using Aho-Corasick automaton
+        for end_index, (agent, weight, keyword) in self._automaton.iter(message_lower):
+            # Accumulate score for each match
+            agent_scores[agent] += weight
+
+        return agent_scores
+
+    def match_with_details(self, message: str) -> Tuple[Dict[str, int], List[MatchResult]]:
+        """Match keywords and return both scores and match details.
+
+        Useful for debugging and understanding why a particular agent was selected.
+        Falls back to regex matcher if Aho-Corasick is not available.
+
+        Args:
+            message: The message text to analyze
+
+        Returns:
+            Tuple of (scores_dict, match_details_list)
+            - scores_dict: Same as match() return value
+            - match_details_list: List of MatchResult objects with full metadata
+        """
+        # Fall back to regex matcher if trie not available
+        if not self._use_trie:
+            return self._regex_matcher.match_with_details(message)
+
+        message_lower = message.lower() if message else ""
+
+        # Initialize all agents to 0 (matches legacy behavior)
+        # Preserve agent order from keywords dict for consistent max() behavior
+        agent_scores: Dict[str, int] = {}
+
+        # Initialize agents from keywords (in order)
+        for agent in self.keywords.keys():
+            agent_scores[agent] = 0
+
+        # Add agents from triggers if not already present (in order)
+        for agent in self.triggers.keys():
+            if agent not in agent_scores:
+                agent_scores[agent] = 0
+
+        matches: List[MatchResult] = []
+
+        # Find all matches using Aho-Corasick automaton
+        for end_index, (agent, weight, keyword) in self._automaton.iter(message_lower):
+            # Accumulate score for each match
+            agent_scores[agent] += weight
+
+            # Calculate start position
+            start_pos = end_index - len(keyword) + 1
+
+            matches.append(MatchResult(
+                agent=agent,
+                keyword=keyword,
+                weight=weight,
+                start=start_pos,
+                end=end_index + 1
+            ))
+
+        return agent_scores, matches
+
+    def get_pattern_info(self) -> Dict:
+        """Get information about the compiled patterns.
+
+        Useful for debugging and performance analysis.
+        Falls back to regex matcher info if Aho-Corasick is not available.
+
+        Returns:
+            Dictionary with pattern statistics:
+            - total_keywords: Number of keywords compiled
+            - matcher_type: 'trie' or 'regex' (fallback)
+            - agents: List of agent names with keyword counts
+        """
+        # Fall back to regex matcher if trie not available
+        if not self._use_trie:
+            info = self._regex_matcher.get_pattern_info()
+            info['matcher_type'] = 'regex'
+            return info
+
+        agent_counts = {}
+        for keyword, (agent, weight) in self._keyword_map.items():
+            if agent not in agent_counts:
+                agent_counts[agent] = 0
+            agent_counts[agent] += 1
+
+        return {
+            'total_keywords': len(self._keyword_map),
+            'matcher_type': 'trie',
+            'agents': agent_counts
+        }
+
+
 def main():
     """Test the keyword matcher."""
     # Sample keyword structure from ThanosOrchestrator
@@ -296,7 +548,9 @@ def main():
         'health': ['medication', 'vyvanse']
     }
 
-    matcher = KeywordMatcher(keywords, triggers)
+    # Test both matchers
+    regex_matcher = KeywordMatcher(keywords, triggers)
+    trie_matcher = TrieKeywordMatcher(keywords, triggers)
 
     # Test cases
     test_messages = [
@@ -307,13 +561,29 @@ def main():
         "Need to schedule a meeting asap"
     ]
 
-    print("KeywordMatcher Test")
+    print("KeywordMatcher (Regex) Test")
     print("=" * 60)
-    print(f"Pattern info: {matcher.get_pattern_info()}")
+    print(f"Pattern info: {regex_matcher.get_pattern_info()}")
     print()
 
     for msg in test_messages:
-        scores, details = matcher.match_with_details(msg)
+        scores, details = regex_matcher.match_with_details(msg)
+        print(f"Message: {msg}")
+        print(f"Scores: {scores}")
+        if details:
+            print("Matches:")
+            for m in details:
+                print(f"  - {m.keyword} ({m.agent}, +{m.weight})")
+        print()
+
+    print("\n" + "=" * 60)
+    print("TrieKeywordMatcher Test")
+    print("=" * 60)
+    print(f"Pattern info: {trie_matcher.get_pattern_info()}")
+    print()
+
+    for msg in test_messages:
+        scores, details = trie_matcher.match_with_details(msg)
         print(f"Message: {msg}")
         print(f"Scores: {scores}")
         if details:
