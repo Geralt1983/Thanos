@@ -2,6 +2,15 @@
 .credentials.json
 *.key
 *.pem
+.env
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Auto-Claude Metadata (root level)
+.auto-claude-*
 
 # Caches & Temp
 stats-cache.json
