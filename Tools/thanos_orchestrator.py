@@ -593,6 +593,17 @@ You track patterns and surface them.""")
         2. Command shortcut detection (daily, email, tasks)
         3. Agent trigger matching
         4. Default to chat with best-fit agent
+
+        SPINNER DESIGN NOTE:
+        -------------------
+        This method does NOT use a spinner because:
+        1. Routing logic is very fast (~12μs for find_agent, microseconds for pattern matching)
+        2. Delegates to run_command() or chat() which already have spinners
+        3. Adding a spinner here would create confusing double spinners
+        4. Users see the appropriate spinner from the delegated method (command/chat)
+
+        The routing_spinner() utility exists but is intentionally not used here to avoid
+        visual clutter and ensure users only see one spinner at a time.
         """
         message_lower = message.lower().strip()
 
