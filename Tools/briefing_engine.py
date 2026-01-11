@@ -13,6 +13,12 @@ from datetime import datetime, date
 import json
 import re
 
+try:
+    from jinja2 import Environment, FileSystemLoader, Template
+    JINJA2_AVAILABLE = True
+except ImportError:
+    JINJA2_AVAILABLE = False
+
 
 class BriefingEngine:
     """
@@ -22,18 +28,32 @@ class BriefingEngine:
     processes and structures the information, and prepares it for rendering.
     """
 
-    def __init__(self, state_dir: Optional[str] = None):
+    def __init__(self, state_dir: Optional[str] = None, templates_dir: Optional[str] = None):
         """
         Initialize the BriefingEngine.
 
         Args:
             state_dir: Path to the State directory. Defaults to ./State relative to cwd.
+            templates_dir: Path to the Templates directory. Defaults to ./Templates relative to cwd.
         """
         if state_dir is None:
             state_dir = os.path.join(os.getcwd(), "State")
+        if templates_dir is None:
+            templates_dir = os.path.join(os.getcwd(), "Templates")
 
         self.state_dir = Path(state_dir)
+        self.templates_dir = Path(templates_dir)
         self.today = date.today()
+
+        # Initialize Jinja2 environment if available
+        if JINJA2_AVAILABLE and self.templates_dir.exists():
+            self.jinja_env = Environment(
+                loader=FileSystemLoader(str(self.templates_dir)),
+                trim_blocks=True,
+                lstrip_blocks=True
+            )
+        else:
+            self.jinja_env = None
 
     def gather_context(self) -> Dict[str, Any]:
         """
@@ -583,3 +603,160 @@ class BriefingEngine:
         """
         ranked_items = self.rank_priorities(context, energy_level)
         return ranked_items[:limit]
+
+    def render_briefing(
+        self,
+        briefing_type: str = "morning",
+        context: Optional[Dict[str, Any]] = None,
+        energy_level: Optional[int] = None,
+        custom_sections: Optional[List[Dict[str, str]]] = None,
+        **kwargs
+    ) -> str:
+        """
+        Render a briefing using the appropriate template.
+
+        Args:
+            briefing_type: Type of briefing ("morning" or "evening")
+            context: Briefing context dict. If None, will gather fresh context.
+            energy_level: Optional energy level (1-10) for task recommendations
+            custom_sections: Optional list of custom sections to inject
+                Each section is a dict with 'title' and 'content' keys
+            **kwargs: Additional template variables to pass to the template
+
+        Returns:
+            Rendered briefing as markdown string
+
+        Raises:
+            ValueError: If Jinja2 is not available or template not found
+        """
+        if not JINJA2_AVAILABLE:
+            raise ValueError(
+                "Jinja2 is required for template rendering. "
+                "Install it with: pip install jinja2"
+            )
+
+        if self.jinja_env is None:
+            raise ValueError(
+                f"Templates directory not found: {self.templates_dir}. "
+                "Create the Templates directory with briefing templates."
+            )
+
+        # Gather context if not provided
+        if context is None:
+            context = self.gather_context()
+
+        # Prepare template data
+        template_data = self._prepare_template_data(
+            context,
+            briefing_type,
+            energy_level,
+            custom_sections,
+            **kwargs
+        )
+
+        # Load and render template
+        template_name = f"briefing_{briefing_type}.md"
+        try:
+            template = self.jinja_env.get_template(template_name)
+            return template.render(**template_data)
+        except Exception as e:
+            raise ValueError(f"Error rendering template {template_name}: {e}")
+
+    def _prepare_template_data(
+        self,
+        context: Dict[str, Any],
+        briefing_type: str,
+        energy_level: Optional[int] = None,
+        custom_sections: Optional[List[Dict[str, str]]] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Prepare data dictionary for template rendering.
+
+        Args:
+            context: Briefing context from gather_context()
+            briefing_type: Type of briefing ("morning" or "evening")
+            energy_level: Optional energy level (1-10)
+            custom_sections: Optional custom sections to inject
+            **kwargs: Additional template variables
+
+        Returns:
+            Dictionary of template variables
+        """
+        # Base data available to all templates
+        template_data = {
+            "today_date": context["today_date"],
+            "day_of_week": context["day_of_week"],
+            "is_weekend": context["is_weekend"],
+            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "custom_sections": custom_sections or [],
+        }
+
+        # Common data for both morning and evening
+        active_commitments = self.get_active_commitments(context)
+        pending_tasks = self.get_pending_tasks(context)
+        top_priorities = self.get_top_priorities(context, limit=3, energy_level=energy_level)
+
+        template_data.update({
+            "active_commitments": active_commitments,
+            "pending_tasks": pending_tasks,
+            "top_priorities": top_priorities,
+        })
+
+        # Morning-specific data
+        if briefing_type == "morning":
+            template_data.update({
+                "focus_areas": context.get("current_focus", {}).get("focus_areas", []),
+                "quick_wins": self._identify_quick_wins(context),
+            })
+
+        # Evening-specific data
+        elif briefing_type == "evening":
+            # Tomorrow's priorities (shift perspective by 1 day)
+            # For now, use same priorities but mark as "tomorrow"
+            template_data.update({
+                "accomplishments": kwargs.get("accomplishments", []),
+                "energy_data": kwargs.get("energy_data", {}),
+                "reflection_notes": kwargs.get("reflection_notes", {}),
+                "tomorrow_priorities": top_priorities[:3],  # Preview tomorrow's top items
+                "prep_checklist": kwargs.get("prep_checklist", []),
+                "commitment_progress": kwargs.get("commitment_progress", []),
+            })
+
+        # Add any additional kwargs
+        template_data.update(kwargs)
+
+        return template_data
+
+    def _identify_quick_wins(self, context: Dict[str, Any]) -> List[str]:
+        """
+        Identify quick win tasks (simple, low-effort items).
+
+        Args:
+            context: Briefing context
+
+        Returns:
+            List of quick win task descriptions
+        """
+        quick_wins = []
+
+        # Keywords that suggest simple/quick tasks
+        quick_keywords = [
+            "send", "email", "call", "schedule", "book", "order",
+            "reply", "respond", "check", "review", "update", "post"
+        ]
+
+        # Check commitments
+        for commitment in self.get_active_commitments(context):
+            title_lower = commitment["title"].lower()
+            if any(keyword in title_lower for keyword in quick_keywords):
+                quick_wins.append(commitment["title"])
+
+        # Check this week's tasks
+        for task in self.get_pending_tasks(context):
+            title_lower = task["text"].lower()
+            if any(keyword in title_lower for keyword in quick_keywords):
+                quick_wins.append(task["text"])
+
+        # Limit to top 5 quick wins
+        return quick_wins[:5]

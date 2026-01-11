@@ -15,7 +15,7 @@ import os
 # Add Tools to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from Tools.briefing_engine import BriefingEngine
+from Tools.briefing_engine import BriefingEngine, JINJA2_AVAILABLE
 
 
 class TestBriefingEngine(unittest.TestCase):
@@ -771,6 +771,255 @@ class TestPriorityRanking(unittest.TestCase):
         titles = [item["title"] for item in ranked]
         self.assertIn("Pending task", titles)
         self.assertNotIn("Completed task", titles)
+
+
+class TestTemplateRendering(unittest.TestCase):
+    """Test suite for template rendering functionality."""
+
+    def setUp(self):
+        """Set up test fixtures before each test."""
+        # Create temporary directory for State and Templates
+        self.temp_dir = tempfile.mkdtemp()
+        self.state_dir = Path(self.temp_dir) / "State"
+        self.templates_dir = Path(self.temp_dir) / "Templates"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.templates_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create minimal State files
+        self._create_test_state_files()
+
+        # Create minimal templates
+        self._create_test_templates()
+
+        # Initialize engine with test directories
+        self.engine = BriefingEngine(
+            state_dir=str(self.state_dir),
+            templates_dir=str(self.templates_dir)
+        )
+
+    def tearDown(self):
+        """Clean up after each test."""
+        shutil.rmtree(self.temp_dir)
+
+    def _create_test_state_files(self):
+        """Create test State files."""
+        commitments = """# Commitments
+
+## Work
+- [ ] Complete project proposal (due: 2024-12-31)
+- [ ] Send weekly update
+
+## Personal
+- [ ] Schedule dentist appointment
+"""
+        (self.state_dir / "Commitments.md").write_text(commitments)
+
+        this_week = """# This Week
+
+## Goals
+- [ ] Finish template system
+- [x] Complete priority ranking
+
+## Tasks
+- [ ] Review code
+- [ ] Update documentation
+"""
+        (self.state_dir / "ThisWeek.md").write_text(this_week)
+
+        current_focus = """# Current Focus
+
+## Focus Areas
+- Template rendering system
+- Testing infrastructure
+
+## Priorities
+- Complete briefing engine
+"""
+        (self.state_dir / "CurrentFocus.md").write_text(current_focus)
+
+    def _create_test_templates(self):
+        """Create minimal test templates."""
+        morning_template = """# Morning Briefing - {{ day_of_week }}
+
+## Top Priorities
+{% for item in top_priorities %}
+- {{ item.title }} ({{ item.urgency_level }})
+{% endfor %}
+
+## Quick Wins
+{% for win in quick_wins %}
+- {{ win }}
+{% endfor %}
+"""
+        (self.templates_dir / "briefing_morning.md").write_text(morning_template)
+
+        evening_template = """# Evening Briefing - {{ day_of_week }}
+
+## Accomplishments
+{% for item in accomplishments %}
+- {{ item }}
+{% endfor %}
+
+## Tomorrow Preview
+{% for item in tomorrow_priorities %}
+- {{ item.title }}
+{% endfor %}
+"""
+        (self.templates_dir / "briefing_evening.md").write_text(evening_template)
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_render_morning_briefing(self):
+        """Test rendering a morning briefing."""
+        briefing = self.engine.render_briefing(briefing_type="morning")
+
+        self.assertIsInstance(briefing, str)
+        self.assertIn("Morning Briefing", briefing)
+        self.assertIn("Top Priorities", briefing)
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_render_evening_briefing(self):
+        """Test rendering an evening briefing."""
+        briefing = self.engine.render_briefing(
+            briefing_type="evening",
+            accomplishments=["Task 1", "Task 2"]
+        )
+
+        self.assertIsInstance(briefing, str)
+        self.assertIn("Evening Briefing", briefing)
+        self.assertIn("Accomplishments", briefing)
+        self.assertIn("Task 1", briefing)
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_custom_sections_injection(self):
+        """Test injecting custom sections into briefing."""
+        custom_sections = [
+            {"title": "Health Goals", "content": "Exercise 30 min"},
+            {"title": "Learning", "content": "Read chapter 5"}
+        ]
+
+        # Update template to include custom sections
+        template_with_custom = """# Morning Briefing
+
+{% for section in custom_sections %}
+## {{ section.title }}
+{{ section.content }}
+{% endfor %}
+"""
+        (self.templates_dir / "briefing_morning.md").write_text(template_with_custom)
+
+        briefing = self.engine.render_briefing(
+            briefing_type="morning",
+            custom_sections=custom_sections
+        )
+
+        self.assertIn("Health Goals", briefing)
+        self.assertIn("Exercise 30 min", briefing)
+        self.assertIn("Learning", briefing)
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_prepare_template_data_morning(self):
+        """Test preparing template data for morning briefing."""
+        context = self.engine.gather_context()
+        template_data = self.engine._prepare_template_data(
+            context,
+            briefing_type="morning",
+            energy_level=7
+        )
+
+        # Check required fields
+        self.assertIn("today_date", template_data)
+        self.assertIn("day_of_week", template_data)
+        self.assertIn("top_priorities", template_data)
+        self.assertIn("active_commitments", template_data)
+        self.assertIn("pending_tasks", template_data)
+        self.assertIn("focus_areas", template_data)
+        self.assertIn("quick_wins", template_data)
+
+        # Verify data types
+        self.assertIsInstance(template_data["top_priorities"], list)
+        self.assertIsInstance(template_data["quick_wins"], list)
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_prepare_template_data_evening(self):
+        """Test preparing template data for evening briefing."""
+        context = self.engine.gather_context()
+        template_data = self.engine._prepare_template_data(
+            context,
+            briefing_type="evening",
+            accomplishments=["Task 1", "Task 2"]
+        )
+
+        # Check evening-specific fields
+        self.assertIn("accomplishments", template_data)
+        self.assertIn("tomorrow_priorities", template_data)
+        self.assertIn("energy_data", template_data)
+        self.assertIn("reflection_notes", template_data)
+
+        # Verify passed data
+        self.assertEqual(template_data["accomplishments"], ["Task 1", "Task 2"])
+
+    def test_identify_quick_wins(self):
+        """Test identifying quick win tasks."""
+        context = self.engine.gather_context()
+        quick_wins = self.engine._identify_quick_wins(context)
+
+        self.assertIsInstance(quick_wins, list)
+        # Should find "Send weekly update" as a quick win
+        self.assertTrue(any("Send weekly update" in win for win in quick_wins))
+
+    def test_render_without_jinja2(self):
+        """Test that rendering fails gracefully without Jinja2."""
+        if JINJA2_AVAILABLE:
+            self.skipTest("Jinja2 is available, cannot test failure case")
+
+        with self.assertRaises(ValueError) as context:
+            self.engine.render_briefing()
+
+        self.assertIn("Jinja2 is required", str(context.exception))
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_render_with_missing_template(self):
+        """Test that rendering fails with helpful error for missing template."""
+        with self.assertRaises(ValueError) as context:
+            self.engine.render_briefing(briefing_type="nonexistent")
+
+        self.assertIn("Error rendering template", str(context.exception))
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_energy_level_affects_template_data(self):
+        """Test that energy level is passed through to priority ranking."""
+        context = self.engine.gather_context()
+
+        # Low energy
+        low_energy_data = self.engine._prepare_template_data(
+            context,
+            briefing_type="morning",
+            energy_level=3
+        )
+
+        # High energy
+        high_energy_data = self.engine._prepare_template_data(
+            context,
+            briefing_type="morning",
+            energy_level=9
+        )
+
+        # Both should have priorities, but scores may differ
+        self.assertIsInstance(low_energy_data["top_priorities"], list)
+        self.assertIsInstance(high_energy_data["top_priorities"], list)
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_kwargs_passed_to_template(self):
+        """Test that additional kwargs are passed to template."""
+        template = """Custom: {{ custom_field }}"""
+        (self.templates_dir / "briefing_morning.md").write_text(template)
+
+        briefing = self.engine.render_briefing(
+            briefing_type="morning",
+            custom_field="test_value"
+        )
+
+        self.assertIn("test_value", briefing)
 
 
 if __name__ == '__main__':
