@@ -390,8 +390,7 @@ class Neo4jAdapter(BaseAdapter):
         }
 
         async with self._driver.session() as session:
-            result = await session.run(query, params)
-            record = await result.single()
+            await session.run(query, params)
 
         return ToolResult.ok({
             "id": commitment_id,

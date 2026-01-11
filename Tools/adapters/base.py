@@ -127,7 +127,8 @@ class BaseAdapter(ABC):
 
         Override in subclasses that maintain persistent connections.
         """
-        pass
+        # Default implementation does nothing - subclasses may override
+        pass  # noqa: B027
 
     async def health_check(self) -> ToolResult:
         """

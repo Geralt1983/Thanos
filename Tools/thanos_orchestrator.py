@@ -459,7 +459,7 @@ You track patterns and surface them.""")
         """List all available commands."""
         seen = set()
         result = []
-        for name, cmd in self.commands.items():
+        for _, cmd in self.commands.items():
             if cmd.name not in seen:
                 seen.add(cmd.name)
                 result.append(f"{cmd.name} - {cmd.description[:50]}...")

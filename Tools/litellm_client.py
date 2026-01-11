@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # LiteLLM import with fallback
 try:
     import litellm
-    from litellm import acompletion, completion
+    from litellm import completion
     from litellm.exceptions import (
         APIConnectionError as LiteLLMConnectionError,
         APIError as LiteLLMAPIError,
@@ -50,7 +50,6 @@ except ImportError:
 # Fallback to direct Anthropic if LiteLLM unavailable
 try:
     import anthropic
-    from anthropic import APIConnectionError, APIStatusError, RateLimitError
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
@@ -731,8 +730,8 @@ class LiteLLMClient:
         """List all configured models."""
         models = []
         providers = self.config.get("litellm", {}).get("providers", {})
-        for provider, pconfig in providers.items():
-            for alias, model in pconfig.get("models", {}).items():
+        for _, pconfig in providers.items():
+            for _, model in pconfig.get("models", {}).items():
                 models.append(model)
         return models
 

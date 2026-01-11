@@ -180,7 +180,6 @@ class CommandRouter:
         # Only switch if different from current and score is meaningful
         if best_agent != self.current_agent and scores[best_agent] >= 1:
             if auto_switch:
-                old_agent = self.current_agent
                 self.current_agent = best_agent
                 return best_agent
             return best_agent
@@ -879,7 +878,7 @@ class CommandRouter:
         # Find peak hours
         peak_hours = hour_usage.most_common(3)
         peak_hour_strs = []
-        for hour, count in peak_hours:
+        for hour, _ in peak_hours:
             if hour < 12:
                 peak_hour_strs.append(f"{hour}am" if hour > 0 else "12am")
             else:
