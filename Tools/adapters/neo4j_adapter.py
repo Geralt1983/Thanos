@@ -701,15 +701,19 @@ class Neo4jAdapter(BaseAdapter):
             conditions.append("c.to_whom = $to_whom")
             params["to_whom"] = args["to_whom"]
 
-        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        # Build query parts without f-string interpolation
+        query_parts = ["MATCH (c:Commitment)"]
 
-        query = f"""
-        MATCH (c:Commitment)
-        {where_clause}
-        RETURN c
-        ORDER BY c.created_at DESC
-        LIMIT $limit
-        """
+        if conditions:
+            query_parts.append("WHERE " + " AND ".join(conditions))
+
+        query_parts.extend([
+            "RETURN c",
+            "ORDER BY c.created_at DESC",
+            "LIMIT $limit"
+        ])
+
+        query = "\n".join(query_parts)
 
         if session is not None:
             # Use provided session/transaction (session reuse)
