@@ -33,6 +33,26 @@ COMMAND PATTERNS:
     thanos pa:daily
     thanos pa:email
     thanos custom:action
+
+VISUAL FEEDBACK SYSTEM:
+  This CLI provides visual feedback during long-running operations:
+
+  1. STATIC INDICATOR (🟣):
+     - Shown in thanos.py before natural language routing
+     - Immediate visual confirmation that input was received
+     - Backward compatible with existing test expectations
+
+  2. ANIMATED SPINNERS:
+     - Handled by ThanosOrchestrator (not visible in this file)
+     - Command execution: Cyan "Executing {command}..." spinner
+     - Chat operations: Magenta "Thinking..." or "Thinking as {agent}..." spinner
+     - TTY-aware: Only shown in terminals, silent in pipes/redirects
+     - Auto-stops before streaming output to avoid interference
+
+  The combination provides clear feedback throughout the request lifecycle:
+  - User sees 🟣 immediately (input acknowledged)
+  - User sees animated spinner during API call (processing)
+  - User sees response text (completion)
 """
 
 import os
@@ -330,12 +350,25 @@ def main():
 
     # Natural language detection
     if is_natural_language(full_text):
-        print("🟣", flush=True)  # Visual indicator
+        # ================================================================
+        # VISUAL FEEDBACK: Static indicator (🟣)
+        # ================================================================
+        # WHY PRINT 🟣 HERE:
+        # - Provides immediate visual confirmation of input
+        # - Backward compatible with test expectations (test_thanos_cli.py)
+        # - Shown BEFORE routing to distinguish from spinner feedback
+        #
+        # SPINNER INTEGRATION:
+        # - After routing, orchestrator will show animated spinner
+        # - Spinner is handled in run_command() or chat() (not here)
+        # - This keeps thanos.py simple and orchestrator responsible for API feedback
+        print("🟣", flush=True)  # Static visual indicator
         orchestrator.route(full_text, stream=True)
         return
 
     # Default: treat as natural language (fallback)
-    print("🟣", flush=True)  # Visual indicator
+    # Same visual feedback pattern as above
+    print("🟣", flush=True)  # Static visual indicator
     orchestrator.route(full_text, stream=True)
 
 
