@@ -2,12 +2,20 @@
 """
 Benchmark for find_agent intent detection performance.
 
-This benchmark measures the current O(n*m) complexity of the find_agent method
-to establish a baseline for optimization work.
+This benchmark measures the performance of the find_agent method using the
+optimized KeywordMatcher with pre-compiled regex patterns (O(m) complexity).
+
+The KeywordMatcher uses:
+- Pre-compiled regex patterns with alternation groups
+- Single pass through message using finditer()
+- Word boundaries to prevent false matches
 
 Usage:
-    python tests/benchmarks/bench_intent_detection.py
+    python tests/benchmarks/bench_intent_detection.py [iterations]
     pytest tests/benchmarks/bench_intent_detection.py -v
+
+Example:
+    python tests/benchmarks/bench_intent_detection.py 1000  # Run 1000 iterations
 """
 
 import sys
@@ -41,9 +49,27 @@ class IntentDetectionBenchmark:
         # Initialize orchestrator (without API client for speed)
         self.orchestrator = ThanosOrchestrator(base_dir=str(project_root))
 
+        # Verify KeywordMatcher is configured
+        self._verify_matcher_setup()
+
     def teardown(self):
         """Clean up test environment."""
         self.orchestrator = None
+
+    def _verify_matcher_setup(self):
+        """Verify that KeywordMatcher is properly configured."""
+        # Get the intent matcher to trigger its initialization
+        matcher = self.orchestrator._get_intent_matcher()
+
+        # Print matcher info for verification
+        info = matcher.get_pattern_info()
+        print("\nKeywordMatcher Configuration:")
+        print(f"  Total keywords compiled: {info['total_keywords']}")
+        print(f"  Pattern length: {info['pattern_length']} characters")
+        print(f"  Agents configured: {', '.join(info['agents'].keys())}")
+        for agent, count in info['agents'].items():
+            print(f"    - {agent}: {count} keywords")
+        print()
 
     def _time_function(self, func, *args, **kwargs) -> float:
         """Time a function call in microseconds.
@@ -255,7 +281,12 @@ class IntentDetectionBenchmark:
         # Add metadata
         output = {
             'benchmark_type': 'intent_detection',
-            'implementation': 'current_o_n_m',
+            'implementation': 'optimized_keyword_matcher',
+            'implementation_details': {
+                'algorithm': 'pre-compiled regex with alternation groups',
+                'complexity': 'O(m) where m = message length',
+                'matcher_class': 'KeywordMatcher'
+            },
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
             'iterations': self.iterations,
             'results': results
