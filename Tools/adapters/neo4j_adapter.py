@@ -1359,21 +1359,13 @@ class Neo4jAdapter(BaseAdapter):
                 - Nodes not found
                 - Database errors
         """
-        # Normalize input: uppercase and replace spaces with underscores
-        # This ensures consistent format matching against our whitelist
-        rel_type = args["relationship"].upper().replace(" ", "_")
-
         # CRITICAL SECURITY VALIDATION
-        # Validate relationship type against strict whitelist using enum
+        # Use centralized validation utility to validate relationship type
         # This is our primary defense against Cypher injection since we must
         # use string interpolation (Cypher limitation - see docstring above)
-        if not ValidRelationshipType.is_valid(rel_type):
-            valid_types = ValidRelationshipType.get_valid_types()
-            return ToolResult.fail(
-                f"Invalid relationship type '{args['relationship']}'. "
-                f"Relationship type must be one of: {', '.join(valid_types)}. "
-                f"Normalized value '{rel_type}' was not found in the whitelist."
-            )
+        rel_type, error_msg = validate_relationship_type(args["relationship"])
+        if error_msg:
+            return ToolResult.fail(error_msg)
 
         # SECURITY: rel_type is now guaranteed to be from our whitelist enum
         # Safe to use in query construction via string interpolation
@@ -1455,43 +1447,22 @@ class Neo4jAdapter(BaseAdapter):
                 - Database errors
         """
         # CRITICAL SECURITY VALIDATION - Depth Parameter
-        # Validate depth is an integer and within reasonable bounds
-        depth = args.get("depth", 2)
-
-        # Type validation: ensure depth is an integer (not None, not bool, not other types)
-        # Note: In Python, bool is a subclass of int, so we need to exclude it explicitly
-        if not isinstance(depth, int) or isinstance(depth, bool) or depth is None:
-            return ToolResult.fail(
-                f"Invalid depth parameter: '{depth}'. "
-                f"Depth must be an integer between 1 and 10."
-            )
-
-        # Range validation: ensure depth is within bounds (1-10)
-        if depth < 1 or depth > 10:
-            return ToolResult.fail(
-                f"Invalid depth parameter: {depth}. "
-                f"Depth must be between 1 and 10 (inclusive). "
-                f"Use smaller depths for better performance."
-            )
+        # Use centralized validation utility to validate depth parameter
+        depth_value = args.get("depth", 2)
+        depth, error_msg = validate_integer_bounds(depth_value, 1, 10, "depth")
+        if error_msg:
+            return ToolResult.fail(error_msg)
 
         # CRITICAL SECURITY VALIDATION - Relationship Type Filter
-        # If relationship_type is provided, validate against whitelist
+        # If relationship_type is provided, validate against whitelist using centralized utility
         rel_filter = ""
         if args.get("relationship_type"):
-            # Normalize input: uppercase and replace spaces with underscores
-            # This ensures consistent format matching against our whitelist
-            rel_type = args["relationship_type"].upper().replace(" ", "_")
-
-            # Validate relationship type against strict whitelist using enum
+            # Use centralized validation utility to validate relationship type
             # This is our primary defense against Cypher injection since we must
             # use string interpolation (Cypher limitation - see docstring above)
-            if not ValidRelationshipType.is_valid(rel_type):
-                valid_types = ValidRelationshipType.get_valid_types()
-                return ToolResult.fail(
-                    f"Invalid relationship type '{args['relationship_type']}'. "
-                    f"Relationship type must be one of: {', '.join(valid_types)}. "
-                    f"Normalized value '{rel_type}' was not found in the whitelist."
-                )
+            rel_type, error_msg = validate_relationship_type(args["relationship_type"])
+            if error_msg:
+                return ToolResult.fail(error_msg)
 
             # SECURITY: rel_type is now guaranteed to be from our whitelist enum
             # Safe to use in query construction via string interpolation
