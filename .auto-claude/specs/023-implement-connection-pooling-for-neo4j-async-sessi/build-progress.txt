@@ -201,7 +201,182 @@ CONCLUSION:
 - Existing infrastructure (Neo4jSessionContext) is production-ready
 - Main remaining work: Refactor remaining 10 methods + create batch convenience methods
 
-[ ] Subtask 1.3: Design session pooling strategy
+[COMPLETED] Subtask 1.3: Design session pooling strategy
+-----------------------------------------------------------------
+Status: ✅ COMPLETED
+Date: 2026-01-11
+
+SELECTED APPROACH: Continue with Optional Session Parameter Pattern
+===================================================================
+
+After analyzing the existing implementation and Neo4j best practices research,
+the strategic decision is to continue with the Optional Session Parameter pattern
+that is already 33% implemented (5 out of 15 methods refactored).
+
+DECISION RATIONALE:
+-------------------
+
+1. Infrastructure Already in Place
+   - Neo4jSessionContext class exists and is production-ready
+   - Supports both session reuse and atomic transaction batching modes
+   - Follows async context manager pattern with proper cleanup
+   - session_context() factory method available
+
+2. Pattern Already Proven
+   - 5 methods successfully refactored: _create_commitment, _complete_commitment,
+     _get_commitments, _record_decision, _get_decisions
+   - Backward compatibility maintained (session=None defaults to current behavior)
+   - No breaking changes to existing code
+
+3. Aligns with Neo4j Best Practices
+   - Neo4j driver already has connection pooling at driver level
+   - Sessions are lightweight and cheap to create
+   - Real optimization is in batching operations, not avoiding session creation
+   - Matches official Neo4j Python Driver 6.0 recommendations
+
+4. Maximum Flexibility
+   - Individual operations: session=None (create own session)
+   - Batch operations: pass shared session for session reuse
+   - Atomic batching: use batch_transaction=True mode
+   - Developers choose pattern based on use case
+
+CHOSEN PATTERN DETAILS:
+-----------------------
+
+Pattern A: Independent Operations (Current/Default Behavior)
+```python
+# Each operation creates its own session (backward compatible)
+await adapter._create_entity(data)
+await adapter._link_nodes(link_data)
+```
+
+Pattern B: Session Reuse for Related Operations
+```python
+# Multiple operations share one session
+async with adapter.session_context() as session:
+    await adapter._create_entity(data, session=session)
+    await adapter._link_nodes(link_data, session=session)
+    await adapter._record_pattern(pattern_data, session=session)
+```
+
+Pattern C: Atomic Transaction Batching
+```python
+# All operations in single atomic transaction
+async with adapter.session_context(batch_transaction=True) as tx:
+    await adapter._create_entity(data, session=tx)
+    await adapter._link_nodes(link_data, session=tx)
+    # If any operation fails, all are rolled back
+```
+
+Implementation Template for Refactoring:
+```python
+async def _method_name(self, args: Dict[str, Any], session=None) -> ToolResult:
+    """Method description.
+
+    Args:
+        args: Method-specific parameters
+        session: Optional Neo4j session or transaction for session reuse
+    """
+    query = "CYPHER QUERY HERE"
+    params = {...}
+
+    if session is not None:
+        # Use provided session/transaction (session reuse or batch mode)
+        result = await session.run(query, params)
+        # Process result...
+    else:
+        # Create new session (backward compatibility)
+        async with self._driver.session(database="neo4j") as session:
+            result = await session.run(query, params)
+            # Process result...
+
+    return ToolResult.ok(data)
+```
+
+ALTERNATIVES CONSIDERED AND REJECTED:
+--------------------------------------
+
+Alternative 1: Context-Based Session Reuse with Thread-Local Storage
+- REJECTED: Adds complexity with contextvars/thread-locals
+- REJECTED: Implicit session sharing harder to debug
+- REJECTED: Optional parameter is more explicit and Pythonic
+
+Alternative 2: Explicit Batch Methods Only
+- Example: store_memory_batch(), create_entity_batch()
+- REJECTED: Requires duplicating logic for batch vs single operations
+- REJECTED: Less flexible - forces two separate code paths
+- REJECTED: Can still create batch convenience methods with optional pattern
+
+Alternative 3: Session Pool Manager Class
+- REJECTED: Over-engineering - driver already has connection pooling
+- REJECTED: Sessions should be short-lived, not pooled
+- REJECTED: Goes against Neo4j recommendations
+
+PERFORMANCE EXPECTATIONS:
+--------------------------
+
+Session Reuse Benefits (Pattern B):
+- Eliminates 1-3 session creation overhead per batch operation
+- Estimated savings: 6.5-25ms per session avoided
+- Memory storage workflow: 4 ops → 1 session = 19.5-75ms saved
+
+Transaction Batching Benefits (Pattern C):
+- Groups operations into single transaction unit
+- 2-5x throughput improvement for multi-query workflows
+- Provides atomicity guarantee (all-or-nothing)
+
+Real-World Example (Memory Storage):
+Before: 4 separate sessions (create_commitment + record_decision + create_entity + link_nodes)
+After:  1 shared session with optional transaction grouping
+Impact: 75% session reduction + transaction batching efficiency
+
+REMAINING WORK:
+---------------
+
+Phase 2: Already complete (infrastructure exists)
+  ✅ Neo4jSessionContext class
+  ✅ session_context() factory method
+  ✅ Transaction batching support
+
+Phase 3: Refactor remaining 10 methods
+  Priority 1 (High): _record_pattern, _link_nodes, _create_entity
+  Priority 2 (Medium): _get_patterns, _start_session, _end_session,
+                        _find_related, _get_entity_context
+  Priority 3 (Low): _query_graph, health_check
+
+Phase 4: Testing
+  - Unit tests for Neo4jSessionContext
+  - Integration tests for batch operations
+  - Backward compatibility tests
+  - Performance benchmarks
+  - Error handling and cleanup tests
+
+Phase 5: Documentation
+  - Update docstrings with session parameter documentation
+  - Create usage examples for all three patterns
+  - Document performance characteristics
+
+RISKS & MITIGATIONS:
+--------------------
+
+Risk 1: Developers forget to pass session parameter
+  Mitigation: Default behavior (session=None) maintains current functionality
+  Mitigation: Clear documentation and examples
+
+Risk 2: Session leaks if not properly closed
+  Mitigation: Neo4jSessionContext uses async context manager with __aexit__
+  Mitigation: Comprehensive cleanup tests in Phase 4
+
+Risk 3: Transaction conflicts in batch mode
+  Mitigation: Document when batch_transaction=True is safe vs unsafe
+  Mitigation: Provide clear examples of appropriate use cases
+
+Risk 4: Breaking changes during refactoring
+  Mitigation: All refactoring maintains backward compatibility
+  Mitigation: Existing tests must continue to pass
+
+DECISION APPROVED: ✅
+Proceeding with Optional Session Parameter pattern as the implementation strategy.
 
 =============================================================================
 PHASE 2: CORE SESSION POOL IMPLEMENTATION
