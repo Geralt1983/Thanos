@@ -1,0 +1,387 @@
+# Build Progress: Automated Daily Briefing Engine
+# Task: 034-automated-daily-briefing-engine
+# Started: 2026-01-11
+
+## Status: Phase 1 - Complete ✅ | Phase 2 - Complete ✅
+
+## Overview
+Building an intelligent, automated daily briefing system that proactively generates and delivers personalized summaries at configurable times without user prompting. Addresses ADHD-specific needs for reducing morning cognitive load and maintaining focus throughout the day.
+
+## Implementation Plan Structure
+
+### Phase 1: Core Briefing Engine (4 subtasks)
+- Build foundation for intelligent content gathering and rendering
+- Integrate with existing State files and commands
+- Smart priority ranking based on deadlines and context
+
+### Phase 2: Scheduling & Automation (4 subtasks)
+- Add cron/systemd-based automation
+- Configurable timing for morning/evening briefings
+- CLI for manual triggering and testing
+
+### Phase 3: Health State Assessment (4 subtasks)
+- Track energy levels, sleep, medication timing
+- Intelligent task recommendations based on current state
+- Evening reflection on energy usage and accomplishments
+
+### Phase 4: Multi-Channel Delivery (4 subtasks)
+- CLI output with colors
+- File updates (State/Today.md)
+- Desktop notifications
+- Future: email delivery (stub)
+
+### Phase 5: Configuration & Customization (4 subtasks)
+- JSON-based configuration system
+- Customizable templates (Jinja2)
+- Pluggable content sections
+- Config management CLI
+
+### Phase 6: Pattern Learning & Intelligence (4 subtasks)
+- Track completion patterns by day/time
+- Adaptive content based on user activity
+- Weekly pattern summaries and insights
+- Learns optimal task timing
+
+### Phase 7: Testing & Documentation (5 subtasks)
+- Comprehensive unit tests (>85% coverage)
+- Integration tests for scheduler
+- User guide and setup docs
+- Developer/architecture documentation
+
+## Total Subtasks: 29
+- Pending: 21
+- In Progress: 0
+- Complete: 8
+
+## Architecture Notes
+
+### Existing Foundation
+- commands/pa/daily.py - Manual briefing command
+- Tools/daily-brief.ts - TypeScript briefing tool
+- State/*.md files - Current state tracking
+- Tools/litellm_client.py - AI integration
+
+### Key Design Decisions
+1. Build on existing patterns in commands/pa/
+2. Reuse State file structure for consistency
+3. ADHD-friendly: concise, scannable, action-oriented
+4. Graceful degradation if State files missing
+5. Multiple delivery channels for flexibility
+
+### Technology Stack
+- Python 3.x for core engine
+- Jinja2 for templating
+- Cron/systemd for scheduling
+- JSON for configuration
+- LiteLLM for AI-powered insights
+
+## Completed Work
+
+### ✅ Subtask 1.1: Create BriefingEngine core class
+**Commit:** b717ca1
+**Completed:** 2026-01-11
+
+Created the main BriefingEngine class with comprehensive functionality:
+- **Tools/briefing_engine.py** - Core engine implementation (345 lines)
+  - `gather_context()` method for reading all State files
+  - Parsers for Commitments.md, ThisWeek.md, CurrentFocus.md
+  - Intelligent markdown parsing with checkbox, deadline, and section detection
+  - Helper methods: `get_active_commitments()`, `get_pending_tasks()`
+  - Graceful error handling for missing/malformed files
+
+- **tests/unit/test_briefing_engine.py** - Comprehensive test suite (420 lines)
+  - 20+ test cases covering all core functionality
+  - Edge cases: missing files, empty files, malformed markdown, unicode
+  - Test fixtures with temporary directories
+  - Validates structured data output format
+
+- **example_usage.py** - Demonstration script (80 lines)
+  - Shows how to use the BriefingEngine
+  - Displays context data in human-readable format
+  - Useful for manual verification and testing
+
+**Acceptance Criteria Met:**
+✓ BriefingEngine class exists with gather_context() method
+✓ Can read from State files (Commitments.md, ThisWeek.md, CurrentFocus.md)
+✓ Returns structured briefing data as dict
+✓ Includes unit tests for data gathering
+
+### ✅ Subtask 1.2: Implement intelligent priority ranking
+**Commit:** 694b767
+**Completed:** 2026-01-11
+
+Implemented comprehensive priority ranking system with smart intelligence:
+- **rank_priorities()** - Main ranking method considering multiple factors
+  - Deadline urgency (overdue → today → this week → backlog)
+  - Day of week context (weekday vs weekend)
+  - Task category (work vs personal)
+  - Optional energy level for task recommendations
+
+- **_calculate_priority_score()** - Scoring algorithm
+  - Deadline-based scoring (0-100+ points)
+  - Work/personal context based on day
+  - Energy level considerations for complex vs simple tasks
+  - Day-specific boosts (Monday meetings, Friday admin)
+  - Returns score, reason, and urgency level
+
+- **get_top_priorities()** - Get top N priorities
+  - Defaults to top 3
+  - Accepts optional energy level
+  - Sorted by priority score
+
+**Key Features:**
+✓ Deadline urgency ranking (critical → high → medium → low)
+✓ Weekend deprioritizes work tasks (unless urgent)
+✓ Weekday prioritizes work commitments
+✓ Energy levels affect recommendations
+✓ Day-of-week patterns (Monday meetings, Friday admin)
+✓ Human-readable priority reasons
+✓ Integrates all sources (commitments, tasks, focus)
+
+**Testing:**
+- 14 comprehensive unit tests in TestPriorityRanking class
+- Tests cover all ranking factors and edge cases
+- example_priority_ranking.py with 5 demonstration scenarios
+- Enhanced State files with realistic test data
+
+**Acceptance Criteria Met:**
+✓ Priorities ranked by urgency (due today > due this week > backlog)
+✓ Weekend briefings exclude work tasks unless urgent
+✓ Weekday briefings prioritize work commitments
+✓ Energy state affects task recommendations
+✓ Unit tests validate ranking logic
+
+### ✅ Subtask 1.3: Build briefing template renderer
+**Commit:** 59fd9dd
+**Completed:** 2026-01-11
+
+Implemented comprehensive template rendering system with Jinja2:
+- **Templates/briefing_morning.md** - Morning briefing template (1,800 bytes)
+  - Top 3 priorities with urgency levels and reasoning
+  - Active commitments with deadlines
+  - This week's pending tasks
+  - Current focus areas
+  - Quick wins for building momentum
+  - Weekend vs weekday adaptive content
+
+- **Templates/briefing_evening.md** - Evening briefing template (2,362 bytes)
+  - Today's accomplishments tracking
+  - Energy and productivity check-in
+  - Reflection prompts (what went well, could improve, learned)
+  - Tomorrow's priority preview
+  - Tomorrow prep checklist
+  - Commitment progress tracking
+
+- **Templates/README.md** - Comprehensive documentation (5,293 bytes)
+  - Template variable reference
+  - Customization guide with examples
+  - Jinja2 syntax primer
+  - Custom sections tutorial
+  - Advanced usage patterns
+  - Troubleshooting guide
+
+- **BriefingEngine Updates (Tools/briefing_engine.py):**
+  - Added Jinja2 template support with graceful fallback
+  - `render_briefing()` method for rendering morning/evening briefings
+  - `_prepare_template_data()` for preparing template context
+  - `_identify_quick_wins()` for identifying simple, actionable tasks
+  - Support for custom section injection via `custom_sections` parameter
+  - Support for additional kwargs to pass custom data to templates
+
+- **Testing (tests/unit/test_briefing_engine.py):**
+  - Added TestTemplateRendering class with 12 comprehensive tests
+  - Tests cover morning/evening rendering, custom sections, data preparation
+  - Tests verify energy level integration, kwargs passing, error handling
+  - Auto-skip if Jinja2 not available
+
+- **example_template_rendering.py** - Demonstration script (5,626 bytes)
+  - 5 comprehensive examples showing all template features
+  - Morning briefing (basic and with energy level)
+  - Evening briefing with reflection data
+  - Custom sections injection
+  - Weekend briefing adaptation
+
+**Key Features:**
+✓ Flexible Jinja2-based template system
+✓ Separate templates for morning (action) vs evening (reflection)
+✓ Custom sections injectable without template modification
+✓ Weekend vs weekday content adaptation
+✓ Energy level affects task recommendations
+✓ Quick wins identification for momentum building
+✓ Comprehensive user documentation
+
+**Acceptance Criteria Met:**
+✓ Morning template includes: priorities, calendar, commitments, quick wins
+✓ Evening template includes: accomplishments, tomorrow prep, reflection prompts
+✓ Templates use Jinja2 for flexibility
+✓ Can inject custom sections
+✓ Templates are easily customizable by user
+
+### ✅ Subtask 1.4: Integrate with existing daily.py command
+**Commit:** f5f3445
+**Completed:** 2026-01-11
+
+Successfully integrated daily.py with BriefingEngine while maintaining full backward compatibility:
+
+- **commands/pa/daily.py** - Updated to use BriefingEngine (9,609 bytes)
+  - Primary execution now uses `BriefingEngine.gather_context()` and `render_briefing()`
+  - Template-based rendering for fast, consistent output
+  - Three-tier fallback system: templates → LLM with BriefingEngine → legacy LLM
+  - Renamed `build_context()` to `build_context_legacy()` for augmenting data
+  - Added optional `use_llm_enhancement` parameter for LLM-enhanced output
+  - Legacy context (Yesterday, Today.md, Calendar, Inbox) integrated as "Additional Context"
+
+- **tests/integration/test_daily_integration.py** - Integration tests (2,680 bytes)
+  - 3 test cases validating imports, BriefingEngine usage, backward compatibility
+  - Tests ensure function signatures and CLI interface unchanged
+  - Verifies all required functions and parameters exist
+
+- **docs/INTEGRATION_NOTES.md** - Comprehensive documentation (5,845 bytes)
+  - Detailed explanation of changes and integration approach
+  - Before/after code comparisons
+  - Fallback system documentation
+  - Benefits and testing instructions
+
+**Acceptance Criteria Met:**
+✓ daily.py uses BriefingEngine instead of direct LLM calls (primary execution path)
+✓ Maintains backward compatibility with existing command (function signatures unchanged, CLI interface identical)
+✓ Saves to History/DailyBriefings/ as before (save_to_history() function unchanged)
+✓ CLI output format unchanged (same status messages and formatting)
+✓ Existing tests still pass (no existing tests found; created test_daily_integration.py)
+
+**Key Benefits:**
+- Unified briefing generation logic across all commands
+- Template-based rendering (faster, more predictable than LLM)
+- Smart priority ranking, quick wins, day-of-week adaptations
+- Foundation for automated scheduling (Phase 2)
+
+## Phase 1 Complete! 🎉
+
+All 4 subtasks in Phase 1 (Core Briefing Engine) are now complete:
+- ✅ 1.1: BriefingEngine core class
+- ✅ 1.2: Intelligent priority ranking
+- ✅ 1.3: Template renderer
+- ✅ 1.4: Integration with daily.py
+
+The core briefing engine is fully functional with:
+- Intelligent data gathering from State files
+- Smart priority ranking based on deadlines, day of week, and energy levels
+- Flexible Jinja2 template system for morning and evening briefings
+- Integration with existing daily.py command
+- Comprehensive test coverage (60+ tests)
+- Full documentation
+
+---
+
+## ✅ Subtask 2.1: Create briefing scheduler configuration
+**Commit:** 80fd614
+**Completed:** 2026-01-11
+
+Successfully designed and implemented comprehensive config structure for briefing scheduling. Created 7 files totaling 1,202 lines with complete configuration schema, validation system, and documentation.
+
+**All Acceptance Criteria Met:**
+✓ Config includes morning_time (e.g., '07:00')
+✓ Config includes evening_time (e.g., '19:00')
+✓ Can enable/disable individual briefings
+✓ Supports weekday vs weekend schedules
+✓ JSON schema documented
+✓ Default config provided
+
+---
+
+## ✅ Subtask 2.2: Build scheduler daemon script
+**Commit:** bbf58cb
+**Completed:** 2026-01-11
+
+Successfully implemented comprehensive BriefingScheduler daemon with all acceptance criteria met. Runs continuously or via cron, checks schedule every minute, triggers briefings at configured times, prevents duplicate runs, handles timezone correctly, and gracefully shuts down.
+
+**All Acceptance Criteria Met:**
+✓ Daemon runs continuously or via cron (--mode daemon/once)
+✓ Checks schedule config every minute (configurable via check_interval_minutes)
+✓ Triggers briefings at configured times (HH:MM 24-hour format)
+✓ Logs all executions to logs/briefing_scheduler.log
+✓ Handles timezone correctly (uses system local time)
+✓ Prevents duplicate runs on same day (run state tracking)
+✓ Graceful shutdown on SIGTERM/SIGINT (signal handlers)
+
+---
+
+## ✅ Subtask 2.3: Add cron/systemd installation scripts
+**Commit:** 4baa752
+**Completed:** 2026-01-11
+
+Successfully created comprehensive installation scripts for cron and systemd with validation, error handling, and documentation.
+
+**All Acceptance Criteria Met:**
+✓ install_briefing_cron.sh adds cron entries
+✓ install_briefing_systemd.sh creates systemd timer + service
+✓ Both methods are documented (README.md + INSTALLATION.md)
+✓ User can choose preferred method (two separate scripts with platform guidance)
+✓ Uninstall script removes all traces (cron entries, systemd files, optionally logs)
+✓ Validates Python/dependencies before install (comprehensive validation)
+
+---
+
+## ✅ Subtask 2.4: Create CLI command to manually trigger briefing generation
+**Commit:** 480a985
+**Completed:** 2026-01-11
+
+Successfully created CLI command for manually triggering briefing generation with comprehensive features.
+
+**Files Created:**
+- commands/pa/briefing.py (296 lines) - Main CLI command with argparse
+- tests/unit/test_briefing_command.py (322 lines) - 12 comprehensive unit tests
+- docs/BRIEFING_COMMAND.md (250+ lines) - Complete usage guide
+
+**Key Features:**
+✓ Command: python -m commands.pa.briefing [morning|evening]
+✓ Generates briefing on demand using BriefingEngine
+✓ --dry-run flag for preview without saving
+✓ --config flag for custom configuration
+✓ --energy-level flag (1-10) for personalized recommendations
+✓ --verbose flag for detailed logging
+✓ Returns exit code 0 on success, 1 on failure
+✓ Saves to History/DailyBriefings/ by default
+
+**All Acceptance Criteria Met:**
+✓ Command: python -m commands.pa.briefing [morning|evening]
+✓ Generates briefing on demand
+✓ Supports --dry-run flag
+✓ Supports --config flag for custom config
+✓ Returns exit code 0 on success
+✓ Logs to stdout and file
+
+---
+
+## Phase 2 Complete! 🎉
+
+All 4 subtasks in Phase 2 (Scheduling & Automation) are now complete:
+- ✅ 2.1: Briefing scheduler configuration
+- ✅ 2.2: Scheduler daemon script
+- ✅ 2.3: Cron/systemd installation scripts
+- ✅ 2.4: Manual trigger command
+
+The scheduling and automation system is fully functional with:
+- Comprehensive JSON configuration with validation
+- Daemon that runs continuously or via cron
+- Easy installation scripts for cron and systemd
+- Manual CLI command for testing and on-demand use
+- Duplicate run prevention
+- Comprehensive logging and error handling
+- Full documentation
+
+## Next Steps
+1. **Phase 3**: Health State Assessment
+   - Subtask 3.1: Create HealthStateTracker
+   - Subtask 3.2: Add health prompts to morning briefing
+   - Subtask 3.3: Integrate health state into task recommendations
+   - Subtask 3.4: Add evening reflection on energy/accomplishments
+
+## Risks & Mitigations
+- Scheduler reliability → Support both cron and systemd
+- User finds briefings intrusive → Easy disable, customizable timing
+- Health prompts interrupt flow → Optional prompts, --no-prompts flag
+- Pattern learning incorrect → Influence not override, require min data
+
+---
+*Last Updated: 2026-01-11 09:55 EST - Phase 2 Complete! (Subtask 2.4)*
