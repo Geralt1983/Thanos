@@ -282,9 +282,12 @@ class ThanosOrchestrator:
             agent_keywords = {
                 'ops': {
                     'high': ['what should i do', 'whats on my plate', 'help me plan', 'overwhelmed',
-                             'what did i commit', 'process inbox', 'clear my inbox', 'prioritize'],
+                             'what did i commit', 'process inbox', 'clear my inbox', 'prioritize',
+                             'show my calendar', 'when am i free', 'schedule this task'],
                     'medium': ['task', 'tasks', 'todo', 'to-do', 'schedule', 'plan', 'organize',
-                               'today', 'tomorrow', 'this week', 'deadline', 'due'],
+                               'today', 'tomorrow', 'this week', 'deadline', 'due',
+                               'calendar', 'meeting', 'meetings', 'appointment', 'appointments',
+                               'event', 'events', 'free time', 'availability', 'book', 'block time'],
                     'low': ['busy', 'work', 'productive', 'efficiency']
                 },
                 'coach': {
