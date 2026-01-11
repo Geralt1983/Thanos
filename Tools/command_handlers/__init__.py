@@ -31,6 +31,7 @@ from Tools.command_handlers.base import (
 from Tools.command_handlers.agent_handler import AgentHandler
 from Tools.command_handlers.session_handler import SessionHandler
 from Tools.command_handlers.state_handler import StateHandler
+from Tools.command_handlers.memory_handler import MemoryHandler
 
 __all__ = [
     "BaseHandler",
@@ -40,4 +41,5 @@ __all__ = [
     "AgentHandler",
     "SessionHandler",
     "StateHandler",
+    "MemoryHandler",
 ]
