@@ -1,10 +1,57 @@
 #!/usr/bin/env python3
 """
-Usage tracking for LiteLLM client.
+Usage tracking and cost accounting for LiteLLM client.
 
-This module provides token usage and cost tracking across all model providers.
-Maintains persistent storage of API call metrics, daily totals, and breakdowns
-by model and provider.
+This module provides comprehensive tracking of API usage across all model providers,
+including token consumption, costs, and performance metrics. Data is persisted to
+JSON storage with automatic aggregation by day, model, and provider.
+
+Key Features:
+    - Automatic token and cost calculation per model
+    - Persistent storage with daily aggregation
+    - Model and provider-level breakdowns
+    - Historical summaries and trend analysis
+    - Configurable pricing tables for cost estimation
+
+Key Classes:
+    UsageTracker: Main class for recording and querying usage data
+
+Usage:
+    from Tools.litellm.usage_tracker import UsageTracker
+
+    # Initialize tracker with pricing
+    tracker = UsageTracker(
+        storage_path="State/usage.json",
+        pricing={
+            "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+            "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        }
+    )
+
+    # Record API call
+    tracker.record(
+        model="claude-sonnet-4-20250514",
+        input_tokens=150,
+        output_tokens=200,
+        cost_usd=0.0045,
+        latency_ms=1234.5,
+        operation="chat"
+    )
+
+    # Get summaries
+    summary = tracker.get_summary(days=30)  # Last 30 days
+    today = tracker.get_today()  # Today's usage
+
+Storage Format:
+    The tracker maintains a JSON file with:
+    - sessions: Individual API call records (last 1000)
+    - daily_totals: Aggregated usage by date
+    - model_breakdown: Usage statistics per model
+    - provider_breakdown: Usage statistics per provider
+    - last_updated: Timestamp of last update
+
+This module is automatically initialized by LiteLLMClient and transparently
+tracks all API interactions without requiring explicit calls.
 """
 
 import json

@@ -1,10 +1,75 @@
 #!/usr/bin/env python3
 """
-Complexity analysis for prompt routing in LiteLLM client.
+Intelligent prompt complexity analysis for automatic model routing.
 
-This module analyzes prompt complexity to determine the appropriate model tier
-for handling requests. Uses multiple factors including token count, keyword
-indicators, and conversation history to calculate a complexity score.
+This module provides sophisticated analysis of prompt complexity to enable
+intelligent model selection. By evaluating multiple factors, it determines
+the appropriate model tier (simple/standard/complex) to balance cost and
+capability for each request.
+
+Analysis Factors:
+    - Token count: Length of prompt and conversation history
+    - Keyword indicators: Presence of complexity markers (e.g., "analyze", "debug")
+    - Conversation depth: Number of messages in history
+    - Weighted scoring: Configurable weights for each factor
+
+Complexity Tiers:
+    - simple (0.0-0.3): Fast, cheap models for basic tasks
+    - standard (0.3-0.7): Balanced models for typical workloads
+    - complex (0.7-1.0): Premium models for sophisticated reasoning
+
+Key Classes:
+    ComplexityAnalyzer: Analyzes prompts and returns complexity scores with
+                        recommended model tiers
+
+Usage:
+    from Tools.litellm.complexity_analyzer import ComplexityAnalyzer
+
+    # Initialize with routing configuration
+    analyzer = ComplexityAnalyzer(config={
+        "complexity_factors": {
+            "token_count_weight": 0.3,
+            "keyword_weight": 0.4,
+            "history_length_weight": 0.3
+        }
+    })
+
+    # Analyze a prompt
+    complexity, tier = analyzer.analyze(
+        prompt="Explain the architectural design of this system",
+        history=[{"role": "user", "content": "Previous message"}]
+    )
+    # Returns: (0.75, "complex")
+
+    # Simple queries route to cheaper models
+    complexity, tier = analyzer.analyze("What time is it?")
+    # Returns: (0.15, "simple")
+
+Integration:
+    The ComplexityAnalyzer is automatically used by LiteLLMClient when no
+    explicit model is specified. The client queries the analyzer, which
+    returns a tier recommendation, then maps that tier to a specific model
+    using the routing rules configuration.
+
+Configuration Example:
+    {
+        "model_routing": {
+            "rules": {
+                "complex": {"model": "claude-opus-4-5-20251101", "min_complexity": 0.7},
+                "standard": {"model": "claude-sonnet-4-20250514", "min_complexity": 0.3},
+                "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3}
+            },
+            "complexity_factors": {
+                "token_count_weight": 0.3,
+                "keyword_weight": 0.4,
+                "history_length_weight": 0.3
+            }
+        }
+    }
+
+This intelligent routing can significantly reduce API costs by automatically
+using cheaper models for simple tasks while reserving premium models for
+complex reasoning.
 """
 
 from typing import Dict, List, Optional, Tuple
