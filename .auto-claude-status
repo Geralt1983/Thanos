@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "026-split-massive-mcp-server-index-ts-into-domain-modu",
+  "spec": "041-oura-health-metrics-mcp-adapter",
   "state": "building",
   "subtasks": {
-    "completed": 24,
-    "total": 28,
+    "completed": 3,
+    "total": 26,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "",
-    "id": 0,
-    "total": 0
+    "current": "Oura API Client Implementation",
+    "id": null,
+    "total": 3
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 7,
-    "started_at": "2026-01-10T23:16:53.699801"
+    "number": 5,
+    "started_at": "2026-01-11T08:04:03.058864"
   },
-  "last_update": "2026-01-10T23:38:43.865809"
+  "last_update": "2026-01-11T08:18:54.221602"
 }
