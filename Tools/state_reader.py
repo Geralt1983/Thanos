@@ -260,18 +260,24 @@ class StateReader:
         except Exception:
             return None
 
-    def format_elapsed_time(self, elapsed: Optional[timedelta]) -> str:
+    def format_elapsed_time(self, elapsed: Optional[timedelta],
+                            reference_time: Optional[datetime] = None) -> str:
         """Format a timedelta as human-readable elapsed time string.
 
         Converts a timedelta to a natural language string showing the most
         significant time units (up to two), with " ago" suffix.
 
+        For very long gaps (>7 days), includes the actual date for clarity.
+
         Args:
             elapsed: The timedelta to format, or None for first interaction
+            reference_time: Optional reference time (defaults to now) for
+                           calculating the actual date for long gaps
 
         Returns:
             Human-readable string like "5 minutes ago", "2 hours and 30 minutes ago",
-            "1 day and 3 hours ago", or "This is our first interaction" if elapsed is None
+            "1 day and 3 hours ago", "10 days ago (on Mon, Dec 30)",
+            or "This is our first interaction" if elapsed is None
         """
         if elapsed is None:
             return "This is our first interaction"
@@ -305,9 +311,24 @@ class StateReader:
             return "just now"
 
         if len(parts) == 1:
-            return f"{parts[0]} ago"
+            time_str = f"{parts[0]} ago"
         else:
-            return f"{parts[0]} and {parts[1]} ago"
+            time_str = f"{parts[0]} and {parts[1]} ago"
+
+        # For very long gaps (>7 days), include the actual date for clarity
+        if days > 7:
+            try:
+                if reference_time is None:
+                    reference_time = datetime.now()
+                last_date = reference_time - elapsed
+                # Format as "Mon, Dec 30" for readability
+                date_str = last_date.strftime("%a, %b %d").replace(" 0", " ")
+                return f"{time_str} (on {date_str})"
+            except Exception:
+                # Fall back to just the time string if date calculation fails
+                pass
+
+        return time_str
 
     def update_last_interaction(self, interaction_type: str = "chat",
                                  agent: Optional[str] = None) -> bool:
