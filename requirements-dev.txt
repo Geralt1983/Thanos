@@ -1,0 +1,4 @@
+# Development dependencies for Thanos project
+
+# Linting and code quality
+ruff>=0.1.0            # Fast Python linter and formatter (replaces flake8, isort, etc.)
