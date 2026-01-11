@@ -27,7 +27,7 @@ class StateHandler(BaseHandler):
     - Tracking session token usage and costs
     """
 
-    def __init__(self, orchestrator, session_manager, context_manager, state_reader, thanos_dir):
+    def __init__(self, orchestrator, session_manager, context_manager, state_reader, thanos_dir, **kwargs):
         """
         Initialize StateHandler with dependencies.
 
@@ -37,8 +37,9 @@ class StateHandler(BaseHandler):
             context_manager: ContextManager for context operations
             state_reader: StateReader for state operations
             thanos_dir: Path to Thanos root directory
+            **kwargs: Additional arguments passed to BaseHandler
         """
-        super().__init__(orchestrator, session_manager, context_manager, state_reader, thanos_dir)
+        super().__init__(orchestrator, session_manager, context_manager, state_reader, thanos_dir, **kwargs)
 
     def handle_usage(self, args: str) -> CommandResult:
         """

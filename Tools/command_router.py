@@ -126,17 +126,13 @@ class CommandRouter:
         self._build_trigger_patterns()
 
     def _build_trigger_patterns(self):
-        """Build regex patterns from agent triggers for intelligent routing."""
-        for agent_name, agent in self.orchestrator.agents.items():
-            triggers = getattr(agent, "triggers", None)
-            if triggers:
-                patterns = []
-                for trigger in triggers:
-                    # Build case-insensitive pattern for each trigger phrase
-                    # Escape special regex chars and create word boundary pattern
-                    escaped = re.escape(trigger.lower())
-                    patterns.append(re.compile(escaped, re.IGNORECASE))
-                self._trigger_patterns[agent_name] = patterns
+        """
+        Build regex patterns from agent triggers for intelligent routing.
+
+        NOTE: This is now delegated to PersonaRouter. Kept for backward compatibility.
+        """
+        # Delegate to PersonaRouter - no need to maintain duplicate patterns
+        pass
 
     def _get_memos(self) -> Optional["MemOS"]:
         """Get MemOS instance, initializing if needed."""
@@ -190,66 +186,67 @@ class CommandRouter:
         Returns:
             Agent name if a better match found, None if current agent is appropriate
         """
-        message_lower = message.lower()
-        scores: dict[str, int] = {}
+        # Delegate to PersonaRouter
+        detected = self.persona_router.detect_agent(message, auto_switch)
 
-        # Score each agent based on trigger matches
-        for agent_name, patterns in self._trigger_patterns.items():
-            score = 0
-            for pattern in patterns:
-                if pattern.search(message_lower):
-                    score += 1
-            if score > 0:
-                scores[agent_name] = score
+        # Sync agent state if switching occurred
+        if detected and auto_switch:
+            self.current_agent = self.persona_router.current_agent
 
-        if not scores:
-            return None
-
-        # Find highest scoring agent
-        best_agent = max(scores, key=scores.get)
-
-        # Only switch if different from current and score is meaningful
-        if best_agent != self.current_agent and scores[best_agent] >= 1:
-            if auto_switch:
-                self.current_agent = best_agent
-                return best_agent
-            return best_agent
-
-        return None
+        return detected
 
     def _register_commands(self):
         """Register all available commands with their handlers"""
-        self._commands = {
+        # Register commands with the CommandRegistry
+        # Map commands to new handler methods
+        self.registry.register_batch({
+            # Agent commands
             "agent": (self._cmd_agent, "Switch agent", ["name"]),
             "a": (self._cmd_agent, "Switch agent (alias)", ["name"]),
+            "agents": (self._cmd_list_agents, "List agents", []),
+
+            # Session commands
             "clear": (self._cmd_clear, "Clear history", []),
             "save": (self._cmd_save, "Save session", []),
+            "sessions": (self._cmd_sessions, "List saved sessions", []),
+            "resume": (self._cmd_resume, "Resume a session", ["session_id"]),
+            "r": (self._cmd_resume, "Resume session (alias)", ["session_id"]),
+            "branch": (self._cmd_branch, "Create conversation branch", ["name"]),
+            "branches": (self._cmd_branches, "List branches", []),
+            "switch": (self._cmd_switch, "Switch to branch", ["branch"]),
+
+            # State commands
             "usage": (self._cmd_usage, "Show token stats", []),
             "context": (self._cmd_context, "Show context usage", []),
             "state": (self._cmd_state, "Show current state", []),
             "s": (self._cmd_state, "Show current state (alias)", []),
             "commitments": (self._cmd_commitments, "Show commitments", []),
             "c": (self._cmd_commitments, "Show commitments (alias)", []),
+
+            # Memory commands
+            "recall": (self._cmd_recall, "Search past sessions", ["query"]),
+            "remember": (self._cmd_remember, "Store a memory in MemOS", ["content"]),
+            "memory": (self._cmd_memory, "Memory system info", []),
+
+            # Analytics commands
+            "patterns": (self._cmd_patterns, "Show conversation patterns", []),
+
+            # Model commands
+            "model": (self._cmd_model, "Switch AI model", ["name"]),
+            "m": (self._cmd_model, "Switch model (alias)", ["name"]),
+
+            # Core commands
             "help": (self._cmd_help, "Show help", []),
             "h": (self._cmd_help, "Show help (alias)", []),
             "quit": (self._cmd_quit, "Exit", []),
             "q": (self._cmd_quit, "Exit (alias)", []),
             "exit": (self._cmd_quit, "Exit (alias)", []),
             "run": (self._cmd_run, "Run Thanos command", ["cmd"]),
-            "agents": (self._cmd_list_agents, "List agents", []),
-            "sessions": (self._cmd_sessions, "List saved sessions", []),
-            "resume": (self._cmd_resume, "Resume a session", ["session_id"]),
-            "r": (self._cmd_resume, "Resume session (alias)", ["session_id"]),
-            "recall": (self._cmd_recall, "Search past sessions", ["query"]),
-            "remember": (self._cmd_remember, "Store a memory in MemOS", ["content"]),
-            "memory": (self._cmd_memory, "Memory system info", []),
-            "branch": (self._cmd_branch, "Create conversation branch", ["name"]),
-            "branches": (self._cmd_branches, "List branches", []),
-            "switch": (self._cmd_switch, "Switch to branch", ["branch"]),
-            "patterns": (self._cmd_patterns, "Show conversation patterns", []),
-            "model": (self._cmd_model, "Switch AI model", ["name"]),
-            "m": (self._cmd_model, "Switch model (alias)", ["name"]),
-        }
+        })
+
+        # Keep old _commands dict for backward compatibility during transition
+        # This will be removed in subtask 3.4
+        self._commands = self.registry.get_all_commands()
 
     def route_command(self, input_str: str) -> CommandResult:
         """
@@ -265,7 +262,8 @@ class CommandRouter:
         command = parts[0][1:].lower()  # Remove leading '/'
         args = parts[1] if len(parts) > 1 else ""
 
-        handler_info = self._commands.get(command)
+        # Delegate to CommandRegistry for command lookup
+        handler_info = self.registry.get(command)
         if handler_info:
             handler, _, _ = handler_info
             return handler(args)
@@ -278,14 +276,8 @@ class CommandRouter:
 
     def get_available_commands(self) -> list[tuple[str, str, list[str]]]:
         """Get list of available commands for help text"""
-        # Return unique commands (filter out aliases for main list)
-        unique_commands = []
-        seen_handlers = set()
-        for cmd, (handler, desc, args) in self._commands.items():
-            if handler not in seen_handlers:
-                unique_commands.append((cmd, desc, args))
-                seen_handlers.add(handler)
-        return sorted(unique_commands)
+        # Delegate to CommandRegistry
+        return self.registry.get_available_commands()
 
     # ========================================================================
     # Command Handlers
@@ -301,6 +293,8 @@ class CommandRouter:
         agent_name = args.lower().strip()
         if agent_name in self.orchestrator.agents:
             self.current_agent = agent_name
+            # Keep PersonaRouter in sync
+            self.persona_router.set_current_agent(agent_name)
             agent = self.orchestrator.agents[agent_name]
             print(f"{Colors.DIM}Switched to {agent.name} ({agent.role}){Colors.RESET}")
             return CommandResult()
@@ -519,6 +513,8 @@ class CommandRouter:
         if self.session.load_session(session_id):
             # Update current agent to match restored session
             self.current_agent = self.session.session.agent
+            # Keep PersonaRouter in sync
+            self.persona_router.set_current_agent(self.current_agent)
             stats = self.session.get_stats()
             print(f"{Colors.CYAN}Session restored:{Colors.RESET}")
             print(f"  ID: {stats['session_id']}")
@@ -877,6 +873,8 @@ class CommandRouter:
         if self.session.switch_branch(branch_ref):
             # Update current agent to match branch
             self.current_agent = self.session.session.agent
+            # Keep PersonaRouter in sync
+            self.persona_router.set_current_agent(self.current_agent)
             branch_info = self.session.get_branch_info()
             stats = self.session.get_stats()
 
