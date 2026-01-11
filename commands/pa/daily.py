@@ -9,10 +9,11 @@ Usage:
 Model: gpt-4o-mini (simple task - cost effective)
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+import sys
 from typing import Optional
+
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -54,26 +55,27 @@ def build_context() -> str:
     # Yesterday's summary
     yesterday_file = project_root / "History" / "yesterday.md"
     if yesterday_file.exists():
-        with open(yesterday_file, 'r') as f:
+        with open(yesterday_file) as f:
             context_parts.append(f"## Yesterday\n{f.read()}")
 
     # Today's state
     today_file = project_root / "State" / "Today.md"
     if today_file.exists():
-        with open(today_file, 'r') as f:
+        with open(today_file) as f:
             context_parts.append(f"## Current State\n{f.read()}")
 
     # Commitments
     commitments_file = project_root / "State" / "Commitments.md"
     if commitments_file.exists():
-        with open(commitments_file, 'r') as f:
+        with open(commitments_file) as f:
             context_parts.append(f"## Active Commitments\n{f.read()}")
 
     # Calendar (if available)
     calendar_file = project_root / "State" / "calendar_today.json"
     if calendar_file.exists():
         import json
-        with open(calendar_file, 'r') as f:
+
+        with open(calendar_file) as f:
             try:
                 events = json.load(f)
                 context_parts.append(f"## Today's Calendar\n{json.dumps(events, indent=2)}")
@@ -99,7 +101,7 @@ def save_to_history(response: str):
     timestamp = datetime.now()
     filename = f"daily_{timestamp.strftime('%Y-%m-%d')}.md"
 
-    with open(history_dir / filename, 'w') as f:
+    with open(history_dir / filename, "w") as f:
         f.write(f"# Daily Briefing - {timestamp.strftime('%B %d, %Y')}\n\n")
         f.write(f"*Generated at {timestamp.strftime('%I:%M %p')}*\n\n")
         f.write(response)
@@ -148,10 +150,7 @@ Be concise. I have ADHD - don't overwhelm me.
     # Stream response
     response_parts = []
     for chunk in client.chat_stream(
-        prompt=prompt,
-        model=model,
-        system_prompt=SYSTEM_PROMPT,
-        temperature=0.7
+        prompt=prompt, model=model, system_prompt=SYSTEM_PROMPT, temperature=0.7
     ):
         print(chunk, end="", flush=True)
         response_parts.append(chunk)
@@ -162,7 +161,7 @@ Be concise. I have ADHD - don't overwhelm me.
 
     # Save to history
     save_to_history(response)
-    print(f"\n✅ Saved to History/DailyBriefings/")
+    print("\n✅ Saved to History/DailyBriefings/")
 
     return response
 

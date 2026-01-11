@@ -3,9 +3,6 @@
 *.key
 *.pem
 
-# Environment variables with secrets
-.env
-
 # Caches & Temp
 stats-cache.json
 shell-snapshots/
@@ -69,32 +66,19 @@ mcp-servers/workos-mcp/.npmrc
 # Auto Claude data directory
 .auto-claude/
 
-# Python
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Auto-claude framework files (at root level)
+.auto-claude-status
+.auto-claude-security.json
+.claude_settings.json
+
+# Python cache
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-*.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.venv
-venv/
-ENV/
-env/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/

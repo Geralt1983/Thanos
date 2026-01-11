@@ -5,17 +5,19 @@ CommandRouter - Routes and executes slash commands for Thanos Interactive Mode
 Single Responsibility: Command parsing and delegation
 """
 
+import asyncio
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Callable, Optional, List, Tuple
+import os
 from pathlib import Path
 import re
-import asyncio
-import os
+from typing import Callable, Optional
+
 
 # MemOS integration (optional - graceful degradation if unavailable)
 try:
-    from Tools.memos import get_memos, init_memos, MemOS
+    from Tools.memos import MemOS, get_memos, init_memos
+
     MEMOS_AVAILABLE = True
 except ImportError:
     MEMOS_AVAILABLE = False
@@ -24,15 +26,16 @@ except ImportError:
 
 # ANSI color codes (copied from thanos_interactive.py)
 class Colors:
-    PURPLE = '\033[35m'
-    CYAN = '\033[36m'
-    DIM = '\033[2m'
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
+    PURPLE = "\033[35m"
+    CYAN = "\033[36m"
+    DIM = "\033[2m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
 
 
 class CommandAction(Enum):
     """Action to take after command execution"""
+
     CONTINUE = "continue"
     QUIT = "quit"
 
@@ -40,6 +43,7 @@ class CommandAction(Enum):
 @dataclass
 class CommandResult:
     """Result from command execution"""
+
     action: CommandAction = CommandAction.CONTINUE
     message: Optional[str] = None
     success: bool = True
@@ -54,7 +58,7 @@ class CommandRouter:
         session_manager,  # SessionManager
         context_manager,  # ContextManager
         state_reader,  # StateReader
-        thanos_dir: Path
+        thanos_dir: Path,
     ):
         """
         Initialize with injected dependencies.
@@ -87,17 +91,17 @@ class CommandRouter:
         self._memos_initialized = False
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
-        self._commands: Dict[str, Tuple[Callable, str, List[str]]] = {}
+        self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
         self._register_commands()
 
         # Build trigger patterns for intelligent routing
-        self._trigger_patterns: Dict[str, List[re.Pattern]] = {}
+        self._trigger_patterns: dict[str, list[re.Pattern]] = {}
         self._build_trigger_patterns()
 
     def _build_trigger_patterns(self):
         """Build regex patterns from agent triggers for intelligent routing."""
         for agent_name, agent in self.orchestrator.agents.items():
-            triggers = getattr(agent, 'triggers', None)
+            triggers = getattr(agent, "triggers", None)
             if triggers:
                 patterns = []
                 for trigger in triggers:
@@ -107,7 +111,7 @@ class CommandRouter:
                     patterns.append(re.compile(escaped, re.IGNORECASE))
                 self._trigger_patterns[agent_name] = patterns
 
-    def _get_memos(self) -> Optional['MemOS']:
+    def _get_memos(self) -> Optional["MemOS"]:
         """Get MemOS instance, initializing if needed."""
         if not MEMOS_AVAILABLE:
             return None
@@ -139,12 +143,13 @@ class CommandRouter:
             if loop.is_running():
                 # Create a new loop for nested async
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(asyncio.run, coro)
                     return future.result(timeout=30)
             else:
                 return loop.run_until_complete(coro)
-        except Exception as e:
+        except Exception:
             return None
 
     def detect_agent(self, message: str, auto_switch: bool = True) -> Optional[str]:
@@ -159,7 +164,7 @@ class CommandRouter:
             Agent name if a better match found, None if current agent is appropriate
         """
         message_lower = message.lower()
-        scores: Dict[str, int] = {}
+        scores: dict[str, int] = {}
 
         # Score each agent based on trigger matches
         for agent_name, patterns in self._trigger_patterns.items():
@@ -179,7 +184,6 @@ class CommandRouter:
         # Only switch if different from current and score is meaningful
         if best_agent != self.current_agent and scores[best_agent] >= 1:
             if auto_switch:
-                old_agent = self.current_agent
                 self.current_agent = best_agent
                 return best_agent
             return best_agent
@@ -189,35 +193,35 @@ class CommandRouter:
     def _register_commands(self):
         """Register all available commands with their handlers"""
         self._commands = {
-            'agent': (self._cmd_agent, "Switch agent", ["name"]),
-            'a': (self._cmd_agent, "Switch agent (alias)", ["name"]),
-            'clear': (self._cmd_clear, "Clear history", []),
-            'save': (self._cmd_save, "Save session", []),
-            'usage': (self._cmd_usage, "Show token stats", []),
-            'context': (self._cmd_context, "Show context usage", []),
-            'state': (self._cmd_state, "Show current state", []),
-            's': (self._cmd_state, "Show current state (alias)", []),
-            'commitments': (self._cmd_commitments, "Show commitments", []),
-            'c': (self._cmd_commitments, "Show commitments (alias)", []),
-            'help': (self._cmd_help, "Show help", []),
-            'h': (self._cmd_help, "Show help (alias)", []),
-            'quit': (self._cmd_quit, "Exit", []),
-            'q': (self._cmd_quit, "Exit (alias)", []),
-            'exit': (self._cmd_quit, "Exit (alias)", []),
-            'run': (self._cmd_run, "Run Thanos command", ["cmd"]),
-            'agents': (self._cmd_list_agents, "List agents", []),
-            'sessions': (self._cmd_sessions, "List saved sessions", []),
-            'resume': (self._cmd_resume, "Resume a session", ["session_id"]),
-            'r': (self._cmd_resume, "Resume session (alias)", ["session_id"]),
-            'recall': (self._cmd_recall, "Search past sessions", ["query"]),
-            'remember': (self._cmd_remember, "Store a memory in MemOS", ["content"]),
-            'memory': (self._cmd_memory, "Memory system info", []),
-            'branch': (self._cmd_branch, "Create conversation branch", ["name"]),
-            'branches': (self._cmd_branches, "List branches", []),
-            'switch': (self._cmd_switch, "Switch to branch", ["branch"]),
-            'patterns': (self._cmd_patterns, "Show conversation patterns", []),
-            'model': (self._cmd_model, "Switch AI model", ["name"]),
-            'm': (self._cmd_model, "Switch model (alias)", ["name"]),
+            "agent": (self._cmd_agent, "Switch agent", ["name"]),
+            "a": (self._cmd_agent, "Switch agent (alias)", ["name"]),
+            "clear": (self._cmd_clear, "Clear history", []),
+            "save": (self._cmd_save, "Save session", []),
+            "usage": (self._cmd_usage, "Show token stats", []),
+            "context": (self._cmd_context, "Show context usage", []),
+            "state": (self._cmd_state, "Show current state", []),
+            "s": (self._cmd_state, "Show current state (alias)", []),
+            "commitments": (self._cmd_commitments, "Show commitments", []),
+            "c": (self._cmd_commitments, "Show commitments (alias)", []),
+            "help": (self._cmd_help, "Show help", []),
+            "h": (self._cmd_help, "Show help (alias)", []),
+            "quit": (self._cmd_quit, "Exit", []),
+            "q": (self._cmd_quit, "Exit (alias)", []),
+            "exit": (self._cmd_quit, "Exit (alias)", []),
+            "run": (self._cmd_run, "Run Thanos command", ["cmd"]),
+            "agents": (self._cmd_list_agents, "List agents", []),
+            "sessions": (self._cmd_sessions, "List saved sessions", []),
+            "resume": (self._cmd_resume, "Resume a session", ["session_id"]),
+            "r": (self._cmd_resume, "Resume session (alias)", ["session_id"]),
+            "recall": (self._cmd_recall, "Search past sessions", ["query"]),
+            "remember": (self._cmd_remember, "Store a memory in MemOS", ["content"]),
+            "memory": (self._cmd_memory, "Memory system info", []),
+            "branch": (self._cmd_branch, "Create conversation branch", ["name"]),
+            "branches": (self._cmd_branches, "List branches", []),
+            "switch": (self._cmd_switch, "Switch to branch", ["branch"]),
+            "patterns": (self._cmd_patterns, "Show conversation patterns", []),
+            "model": (self._cmd_model, "Switch AI model", ["name"]),
+            "m": (self._cmd_model, "Switch model (alias)", ["name"]),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -239,10 +243,13 @@ class CommandRouter:
             handler, _, _ = handler_info
             return handler(args)
         else:
-            print(f"{Colors.DIM}Unknown command: /{command}. Type /help for available commands.{Colors.RESET}")
+            print(
+                f"{Colors.DIM}Unknown command: /{command}. "
+                f"Type /help for available commands.{Colors.RESET}"
+            )
             return CommandResult(action=CommandAction.CONTINUE, success=False)
 
-    def get_available_commands(self) -> List[Tuple[str, str, List[str]]]:
+    def get_available_commands(self) -> list[tuple[str, str, list[str]]]:
         """Get list of available commands for help text"""
         # Return unique commands (filter out aliases for main list)
         unique_commands = []
@@ -292,11 +299,11 @@ class CommandRouter:
         stats = self.session.get_stats()
         print(f"""
 {Colors.CYAN}Session Usage:{Colors.RESET}
-  Duration: {stats['duration_minutes']} minutes
-  Messages: {stats['message_count']}
-  Input tokens: {stats['total_input_tokens']:,}
-  Output tokens: {stats['total_output_tokens']:,}
-  Estimated cost: ${stats['total_cost']:.4f}
+  Duration: {stats["duration_minutes"]} minutes
+  Messages: {stats["message_count"]}
+  Input tokens: {stats["total_input_tokens"]:,}
+  Output tokens: {stats["total_output_tokens"]:,}
+  Estimated cost: ${stats["total_cost"]:.4f}
 """)
         return CommandResult()
 
@@ -309,10 +316,10 @@ class CommandRouter:
         report = self.context_mgr.get_usage_report(history, system_prompt)
         print(f"""
 {Colors.CYAN}Context Window:{Colors.RESET}
-  System prompt: ~{report['system_tokens']:,} tokens
-  Conversation: ~{report['history_tokens']:,} tokens ({report['messages_in_context']} messages)
-  Total used: ~{report['total_used']:,} / {report['available']:,} tokens
-  Usage: {report['usage_percent']:.1f}%
+  System prompt: ~{report["system_tokens"]:,} tokens
+  Conversation: ~{report["history_tokens"]:,} tokens ({report["messages_in_context"]} messages)
+  Total used: ~{report["total_used"]:,} / {report["available"]:,} tokens
+  Usage: {report["usage_percent"]:.1f}%
 """)
         return CommandResult()
 
@@ -326,7 +333,7 @@ class CommandRouter:
             print(f"  Focus: {ctx['focus']}")
 
         if ctx["top3"]:
-            print(f"\n  Today's Top 3:")
+            print("\n  Today's Top 3:")
             for i, item in enumerate(ctx["top3"], 1):
                 print(f"    {i}. {item}")
 
@@ -360,12 +367,14 @@ class CommandRouter:
             print(f"\n{Colors.CYAN}Active Commitments:{Colors.RESET}\n")
 
             # Parse and display uncompleted commitments
-            lines = content.split('\n')
+            lines = content.split("\n")
             in_section = False
             shown_count = 0
 
             for line in lines:
-                if line.startswith("## Work Commitments") or line.startswith("## Personal Commitments"):
+                if line.startswith("## Work Commitments") or line.startswith(
+                    "## Personal Commitments"
+                ):
                     in_section = True
                     print(f"{Colors.BOLD}{line[3:]}{Colors.RESET}")
                     continue
@@ -457,7 +466,10 @@ class CommandRouter:
 
         print(f"\n{Colors.CYAN}Recent Sessions:{Colors.RESET}")
         for s in sessions:
-            print(f"  {s['id']}  {s['date']}  {s['agent']:8}  {s['messages']:3} msgs  {s['tokens']:,} tokens")
+            print(
+                f"  {s['id']}  {s['date']}  {s['agent']:8}  "
+                f"{s['messages']:3} msgs  {s['tokens']:,} tokens"
+            )
         print(f"\n{Colors.DIM}Use /resume <id> or /resume last to restore{Colors.RESET}\n")
         return CommandResult()
 
@@ -485,8 +497,13 @@ class CommandRouter:
             print(f"  ID: {stats['session_id']}")
             print(f"  Agent: {stats['current_agent']}")
             print(f"  Messages: {stats['message_count']}")
-            print(f"  Previous tokens: {stats['total_input_tokens'] + stats['total_output_tokens']:,}")
-            print(f"\n{Colors.DIM}Conversation history loaded. Continue where you left off.{Colors.RESET}\n")
+            print(
+                f"  Previous tokens: {stats['total_input_tokens'] + stats['total_output_tokens']:,}"
+            )
+            print(
+                f"\n{Colors.DIM}Conversation history loaded. "
+                f"Continue where you left off.{Colors.RESET}\n"
+            )
             return CommandResult()
         else:
             print(f"{Colors.DIM}Session not found: {session_id}{Colors.RESET}")
@@ -497,14 +514,25 @@ class CommandRouter:
         """Store a memory in MemOS knowledge graph."""
         if not args:
             print(f"{Colors.DIM}Usage: /remember <content to store>{Colors.RESET}")
-            print(f"{Colors.DIM}Options: /remember decision: <text>  - Store as decision{Colors.RESET}")
-            print(f"{Colors.DIM}         /remember pattern: <text>  - Store as pattern{Colors.RESET}")
-            print(f"{Colors.DIM}         /remember <text>           - Store as observation{Colors.RESET}")
+            print(
+                f"{Colors.DIM}Options: /remember decision: <text>  - "
+                f"Store as decision{Colors.RESET}"
+            )
+            print(
+                f"{Colors.DIM}         /remember pattern: <text>  - Store as pattern{Colors.RESET}"
+            )
+            print(
+                f"{Colors.DIM}         /remember <text>           - "
+                f"Store as observation{Colors.RESET}"
+            )
             return CommandResult()
 
         memos = self._get_memos()
         if not memos:
-            print(f"{Colors.DIM}MemOS not available. Check Neo4j/ChromaDB configuration.{Colors.RESET}")
+            print(
+                f"{Colors.DIM}MemOS not available. "
+                f"Check Neo4j/ChromaDB configuration.{Colors.RESET}"
+            )
             return CommandResult(success=False)
 
         # Parse memory type from prefix
@@ -523,7 +551,7 @@ class CommandRouter:
         for prefix, mtype in type_prefixes.items():
             if content.lower().startswith(prefix):
                 memory_type = mtype
-                content = content[len(prefix):].strip()
+                content = content[len(prefix) :].strip()
                 break
 
         # Detect domain from current agent
@@ -543,16 +571,20 @@ class CommandRouter:
                 entities.append(word[1:])
 
         # Store the memory
-        result = self._run_async(memos.remember(
-            content=content,
-            memory_type=memory_type,
-            domain=domain,
-            entities=entities if entities else None,
-            metadata={
-                "agent": self.current_agent,
-                "session_id": self.session.session.id if hasattr(self.session, 'session') else None,
-            }
-        ))
+        result = self._run_async(
+            memos.remember(
+                content=content,
+                memory_type=memory_type,
+                domain=domain,
+                entities=entities if entities else None,
+                metadata={
+                    "agent": self.current_agent,
+                    "session_id": self.session.session.id
+                    if hasattr(self.session, "session")
+                    else None,
+                },
+            )
+        )
 
         if result and result.success:
             print(f"\n{Colors.CYAN}Memory stored:{Colors.RESET}")
@@ -564,7 +596,7 @@ class CommandRouter:
                 node_id = result.graph_results.get("node_id", "")
                 print(f"  Graph ID: {node_id[:8]}..." if node_id else "")
             if result.vector_results:
-                print(f"  Vector stored: ✓")
+                print("  Vector stored: ✓")
             print()
             return CommandResult()
         else:
@@ -591,38 +623,44 @@ class CommandRouter:
         memos_results = []
 
         if memos:
-            result = self._run_async(memos.recall(
-                query=query,
-                limit=5,
-                use_graph=True,
-                use_vector=True
-            ))
+            result = self._run_async(
+                memos.recall(query=query, limit=5, use_graph=True, use_vector=True)
+            )
 
             if result and result.success:
                 # Combine vector and graph results
                 if result.vector_results:
                     for item in result.vector_results[:3]:
-                        memos_results.append({
-                            "source": "vector",
-                            "content": item.get("content", "")[:150],
-                            "type": item.get("memory_type", "memory"),
-                            "score": item.get("similarity", 0),
-                        })
+                        memos_results.append(
+                            {
+                                "source": "vector",
+                                "content": item.get("content", "")[:150],
+                                "type": item.get("memory_type", "memory"),
+                                "score": item.get("similarity", 0),
+                            }
+                        )
 
                 if result.graph_results:
                     nodes = result.graph_results.get("nodes", [])
                     for node in nodes[:3]:
                         props = node.get("properties", {})
-                        memos_results.append({
-                            "source": "graph",
-                            "content": props.get("content", props.get("description", ""))[:150],
-                            "type": node.get("labels", ["memory"])[0] if node.get("labels") else "memory",
-                            "id": node.get("id", "")[:8],
-                        })
+                        memos_results.append(
+                            {
+                                "source": "graph",
+                                "content": props.get("content", props.get("description", ""))[:150],
+                                "type": node.get("labels", ["memory"])[0]
+                                if node.get("labels")
+                                else "memory",
+                                "id": node.get("id", "")[:8],
+                            }
+                        )
 
         # Display MemOS results
         if memos_results:
-            print(f"\n{Colors.CYAN}MemOS Knowledge Graph ({len(memos_results)} results):{Colors.RESET}\n")
+            print(
+                f"\n{Colors.CYAN}MemOS Knowledge Graph "
+                f"({len(memos_results)} results):{Colors.RESET}\n"
+            )
             for r in memos_results:
                 source_icon = "🔍" if r["source"] == "vector" else "🔗"
                 score_str = f" ({r.get('score', 0):.2f})" if r.get("score") else ""
@@ -636,9 +674,7 @@ class CommandRouter:
 
         if history_dir.exists():
             json_files = sorted(
-                history_dir.glob("*.json"),
-                key=lambda f: f.stat().st_mtime,
-                reverse=True
+                history_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True
             )[:30]  # Limit to last 30 sessions
 
             for json_file in json_files:
@@ -647,12 +683,14 @@ class CommandRouter:
                     for msg in data.get("history", []):
                         content = msg.get("content", "").lower()
                         if query.lower() in content:
-                            session_matches.append({
-                                "session": data.get("id", json_file.stem),
-                                "date": data.get("started_at", "")[:16].replace("T", " "),
-                                "role": msg.get("role", "unknown"),
-                                "preview": msg.get("content", "")[:100]
-                            })
+                            session_matches.append(
+                                {
+                                    "session": data.get("id", json_file.stem),
+                                    "date": data.get("started_at", "")[:16].replace("T", " "),
+                                    "role": msg.get("role", "unknown"),
+                                    "preview": msg.get("content", "")[:100],
+                                }
+                            )
                             if len(session_matches) >= 5:
                                 break
                 except (json.JSONDecodeError, KeyError):
@@ -662,9 +700,11 @@ class CommandRouter:
 
         # Display session results
         if session_matches:
-            print(f"\n{Colors.CYAN}Session History ({len(session_matches)} matches):{Colors.RESET}\n")
+            print(
+                f"\n{Colors.CYAN}Session History ({len(session_matches)} matches):{Colors.RESET}\n"
+            )
             for m in session_matches:
-                role_color = Colors.PURPLE if m['role'] == 'user' else Colors.CYAN
+                role_color = Colors.PURPLE if m["role"] == "user" else Colors.CYAN
                 print(f"  {Colors.DIM}{m['date']}{Colors.RESET} ({m['session']})")
                 print(f"  {role_color}{m['role']}:{Colors.RESET} {m['preview']}...")
                 print()
@@ -686,7 +726,7 @@ class CommandRouter:
         print(f"  {Colors.BOLD}MemOS Hybrid Memory:{Colors.RESET}")
         memos = self._get_memos()
         if memos:
-            print(f"    ✓ MemOS initialized")
+            print("    ✓ MemOS initialized")
 
             # Neo4j status
             neo4j_url = os.environ.get("NEO4J_URL", "")
@@ -695,27 +735,27 @@ class CommandRouter:
                 masked_url = neo4j_url.split("@")[-1] if "@" in neo4j_url else neo4j_url[:30]
                 print(f"    🔗 Neo4j Graph: {masked_url}")
             else:
-                print(f"    🔗 Neo4j Graph: Not configured")
+                print("    🔗 Neo4j Graph: Not configured")
 
             # ChromaDB status
             chroma_path = os.environ.get("CHROMADB_PATH", "~/.chromadb")
             print(f"    🔍 ChromaDB Vectors: {chroma_path}")
 
             # Try to get stats
-            if hasattr(memos, '_neo4j') and memos._neo4j:
+            if hasattr(memos, "_neo4j") and memos._neo4j:
                 try:
                     result = self._run_async(memos._neo4j.health_check())
                     if result and result.success:
-                        print(f"    ✓ Neo4j connected")
+                        print("    ✓ Neo4j connected")
                 except Exception:
-                    print(f"    ⚠ Neo4j connection issue")
+                    print("    ⚠ Neo4j connection issue")
         else:
             if MEMOS_AVAILABLE:
-                print(f"    ⚠ MemOS available but not initialized")
-                print(f"    💡 MemOS will initialize on first /remember or /recall")
+                print("    ⚠ MemOS available but not initialized")
+                print("    💡 MemOS will initialize on first /remember or /recall")
             else:
-                print(f"    ✗ MemOS not available")
-                print(f"    💡 Install neo4j and chromadb packages")
+                print("    ✗ MemOS not available")
+                print("    💡 Install neo4j and chromadb packages")
 
         print()
 
@@ -726,7 +766,7 @@ class CommandRouter:
             print(f"  📝 Session History: {session_count} saved sessions")
             print(f"     Location: {history_dir}")
         else:
-            print(f"  📝 Session History: Not initialized")
+            print("  📝 Session History: Not initialized")
 
         # Check for swarm memory
         swarm_db = self.thanos_dir / ".swarm" / "memory.db"
@@ -735,7 +775,7 @@ class CommandRouter:
             print(f"  🔮 Swarm Memory: {size_kb:.1f} KB")
             print(f"     Location: {swarm_db}")
         else:
-            print(f"  🔮 Swarm Memory: Not initialized")
+            print("  🔮 Swarm Memory: Not initialized")
 
         # Check for hive-mind memory
         hive_db = self.thanos_dir / ".hive-mind" / "memory.db"
@@ -744,19 +784,21 @@ class CommandRouter:
             print(f"  🐝 Hive Mind Memory: {size_kb:.1f} KB")
             print(f"     Location: {hive_db}")
         else:
-            print(f"  🐝 Hive Mind Memory: Not initialized")
+            print("  🐝 Hive Mind Memory: Not initialized")
 
         # Check for claude-mem integration
         claude_mem = Path.home() / ".claude-mem"
         if claude_mem.exists():
-            print(f"  🧠 Claude-mem: Active")
+            print("  🧠 Claude-mem: Active")
             print(f"     Location: {claude_mem}")
         else:
-            print(f"  🧠 Claude-mem: Not detected")
+            print("  🧠 Claude-mem: Not detected")
 
         print(f"\n{Colors.DIM}Commands:{Colors.RESET}")
         print(f"{Colors.DIM}  /remember <content> - Store memory in knowledge graph{Colors.RESET}")
-        print(f"{Colors.DIM}  /recall <query>     - Search memories (hybrid search){Colors.RESET}\n")
+        print(
+            f"{Colors.DIM}  /recall <query>     - Search memories (hybrid search){Colors.RESET}\n"
+        )
         return CommandResult()
 
     def _cmd_branch(self, args: str) -> CommandResult:
@@ -770,7 +812,10 @@ class CommandRouter:
         print(f"  ID: {new_id}")
         print(f"  Branched from: {branch_info['parent_id']}")
         print(f"  At message: {branch_info['branch_point']}")
-        print(f"\n{Colors.DIM}Continue conversation on this branch. Use /branches to list all.{Colors.RESET}\n")
+        print(
+            f"\n{Colors.DIM}Continue conversation on this branch. "
+            f"Use /branches to list all.{Colors.RESET}\n"
+        )
         return CommandResult()
 
     def _cmd_branches(self, args: str) -> CommandResult:
@@ -783,8 +828,12 @@ class CommandRouter:
 
         print(f"\n{Colors.CYAN}Session Branches:{Colors.RESET}\n")
         for b in branches:
-            marker = "→" if b.get('is_current') else " "
-            parent_info = f" (from {b['parent_id'][:4]}... at msg {b['branch_point']})" if b.get('parent_id') else ""
+            marker = "→" if b.get("is_current") else " "
+            parent_info = (
+                f" (from {b['parent_id'][:4]}... at msg {b['branch_point']})"
+                if b.get("parent_id")
+                else ""
+            )
             print(f"  {marker} {b['name']}: {b['id']}{parent_info}")
             print(f"      {b['date']}  {b['messages']} messages")
 
@@ -817,9 +866,9 @@ class CommandRouter:
 
     def _cmd_patterns(self, args: str) -> CommandResult:
         """Analyze conversation patterns from session history."""
-        import json
-        from datetime import datetime
         from collections import Counter
+        from datetime import datetime
+        import json
 
         history_dir = self.thanos_dir / "History" / "Sessions"
         if not history_dir.exists():
@@ -878,7 +927,7 @@ class CommandRouter:
         # Find peak hours
         peak_hours = hour_usage.most_common(3)
         peak_hour_strs = []
-        for hour, count in peak_hours:
+        for hour, _ in peak_hours:
             if hour < 12:
                 peak_hour_strs.append(f"{hour}am" if hour > 0 else "12am")
             else:

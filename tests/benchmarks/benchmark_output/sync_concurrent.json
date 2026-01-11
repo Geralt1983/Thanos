@@ -1,0 +1,278 @@
+{
+  "sessions": [
+    {
+      "timestamp": "2026-01-10T22:32:05.462430",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "total_tokens": 150,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:05.465862",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 51,
+      "total_tokens": 151,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:05.468236",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 52,
+      "total_tokens": 152,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:05.470511",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 102,
+      "output_tokens": 50,
+      "total_tokens": 152,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:05.475754",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 53,
+      "total_tokens": 153,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:05.763269",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 54,
+      "total_tokens": 154,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:05.982137",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 55,
+      "total_tokens": 155,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:05.994041",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 56,
+      "total_tokens": 156,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.023163",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 57,
+      "total_tokens": 157,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.039398",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 58,
+      "total_tokens": 158,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.047642",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 59,
+      "total_tokens": 159,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.060575",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 60,
+      "total_tokens": 160,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.223439",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 61,
+      "total_tokens": 161,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.243791",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 62,
+      "total_tokens": 162,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.245638",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 63,
+      "total_tokens": 163,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.272303",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 64,
+      "total_tokens": 164,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.301874",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 65,
+      "total_tokens": 165,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.303260",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 66,
+      "total_tokens": 166,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.306403",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 67,
+      "total_tokens": 167,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.315971",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 68,
+      "total_tokens": 168,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-10T22:32:06.318856",
+      "model": "gemini-pro",
+      "provider": "google",
+      "input_tokens": 100,
+      "output_tokens": 69,
+      "total_tokens": 169,
+      "cost_usd": 0.0002,
+      "latency_ms": 80.0,
+      "operation": "chat",
+      "metadata": {}
+    }
+  ],
+  "daily_totals": {
+    "2026-01-10": {
+      "tokens": 3342,
+      "cost": 0.004200000000000001,
+      "calls": 21
+    }
+  },
+  "model_breakdown": {
+    "gemini-pro": {
+      "tokens": 3342,
+      "cost": 0.004200000000000001,
+      "calls": 21
+    }
+  },
+  "provider_breakdown": {
+    "google": {
+      "tokens": 3342,
+      "cost": 0.004200000000000001,
+      "calls": 21
+    }
+  },
+  "last_updated": "2026-01-10T22:32:06.384105"
+}

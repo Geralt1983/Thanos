@@ -10,11 +10,7 @@ Quick commands for daily productivity:
 - weekly    : Weekly review
 """
 
-from . import daily
-from . import email
-from . import schedule
-from . import tasks
-from . import brainstorm
-from . import weekly
+from . import brainstorm, daily, email, schedule, tasks, weekly
 
-__all__ = ['daily', 'email', 'schedule', 'tasks', 'brainstorm', 'weekly']
+
+__all__ = ["daily", "email", "schedule", "tasks", "brainstorm", "weekly"]
