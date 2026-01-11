@@ -5,15 +5,17 @@ Tests the MemorySystem class that wraps Neo4j and ChromaDB adapters
 into a unified memory system with graceful fallback.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from dataclasses import dataclass
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 # Mock the adapters before importing
 @dataclass
 class MockToolResult:
     """Mock ToolResult for adapter responses."""
+
     success: bool
     data: dict = None
     error: str = None
@@ -25,6 +27,7 @@ class TestMemoryResultIntegration:
     def test_import_memory_result(self):
         """Test MemoryResult can be imported."""
         from Tools.memory_integration import MemoryResult
+
         assert MemoryResult is not None
 
     def test_memory_result_ok(self):
@@ -45,7 +48,7 @@ class TestMemoryResultIntegration:
             data="test",
             graph_results={"node": "123"},
             vector_results=[{"doc": "1"}],
-            metadata={"query": "test"}
+            metadata={"query": "test"},
         )
 
         assert result.success is True
@@ -68,10 +71,7 @@ class TestMemoryResultIntegration:
         """Test MemoryResult.fail() with additional kwargs."""
         from Tools.memory_integration import MemoryResult
 
-        result = MemoryResult.fail(
-            "Error occurred",
-            metadata={"attempt": 1}
-        )
+        result = MemoryResult.fail("Error occurred", metadata={"attempt": 1})
 
         assert result.success is False
         assert result.error == "Error occurred"
@@ -89,8 +89,8 @@ class TestMemoryResultIntegration:
 class TestMemorySystemInitialization:
     """Test MemorySystem initialization."""
 
-    @patch.dict('os.environ', {}, clear=True)
-    @patch('Tools.memory_integration.MemorySystem.__init__', return_value=None)
+    @patch.dict("os.environ", {}, clear=True)
+    @patch("Tools.memory_integration.MemorySystem.__init__", return_value=None)
     def test_init_creates_instance(self, mock_init):
         """Test MemorySystem can be instantiated."""
         from Tools.memory_integration import MemorySystem
@@ -101,10 +101,13 @@ class TestMemorySystemInitialization:
     def test_init_no_backends_available(self):
         """Test initialization when no backends are available."""
         # Patch imports to simulate unavailable backends
-        with patch.dict('sys.modules', {
-            'Tools.adapters.neo4j_adapter': MagicMock(NEO4J_AVAILABLE=False),
-            'Tools.adapters.chroma_adapter': MagicMock(CHROMADB_AVAILABLE=False)
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "Tools.adapters.neo4j_adapter": MagicMock(NEO4J_AVAILABLE=False),
+                "Tools.adapters.chroma_adapter": MagicMock(CHROMADB_AVAILABLE=False),
+            },
+        ):
             from Tools.memory_integration import MemorySystem
 
             system = MemorySystem.__new__(MemorySystem)
@@ -232,16 +235,12 @@ class TestMemorySystemStoreMemory:
         system._neo4j_available = False
         system._chroma_available = True
         system._chroma = MagicMock()
-        system._chroma.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "doc123"}
-        ))
+        system._chroma.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "doc123"})
+        )
 
         result = await system.store_memory(
-            "Test content",
-            collection="observations",
-            memory_type="observation",
-            domain="work"
+            "Test content", collection="observations", memory_type="observation", domain="work"
         )
 
         assert result.success is True
@@ -260,19 +259,15 @@ class TestMemorySystemStoreMemory:
         system._neo4j = MagicMock()
         system._chroma = MagicMock()
 
-        system._chroma.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "vec123"}
-        ))
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "node456"}
-        ))
+        system._chroma.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "vec123"})
+        )
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "node456"})
+        )
 
         result = await system.store_memory(
-            "Use TypeScript for new projects",
-            memory_type="decision",
-            domain="tech"
+            "Use TypeScript for new projects", memory_type="decision", domain="tech"
         )
 
         assert result.success is True
@@ -289,15 +284,12 @@ class TestMemorySystemStoreMemory:
         system._neo4j_available = True
         system._chroma_available = False
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "pattern789"}
-        ))
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "pattern789"})
+        )
 
         result = await system.store_memory(
-            "Energy drops after 3pm",
-            memory_type="pattern",
-            domain="health"
+            "Energy drops after 3pm", memory_type="pattern", domain="health"
         )
 
         assert result.success is True
@@ -312,16 +304,15 @@ class TestMemorySystemStoreMemory:
         system._neo4j_available = True
         system._chroma_available = False
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "commit101"}
-        ))
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "commit101"})
+        )
 
         result = await system.store_memory(
             "Exercise 3x per week",
             memory_type="commitment",
             domain="health",
-            metadata={"to_whom": "self"}
+            metadata={"to_whom": "self"},
         )
 
         assert result.success is True
@@ -338,6 +329,7 @@ class TestMemorySystemStoreMemory:
         system._neo4j = MagicMock()
 
         call_count = [0]
+
         async def mock_call_tool(tool_name, args):
             call_count[0] += 1
             if tool_name == "record_decision":
@@ -349,9 +341,7 @@ class TestMemorySystemStoreMemory:
         system._neo4j.call_tool = mock_call_tool
 
         result = await system.store_memory(
-            "Use Python for scripts",
-            memory_type="decision",
-            entities=["Python", "scripting"]
+            "Use Python for scripts", memory_type="decision", entities=["Python", "scripting"]
         )
 
         assert result.success is True
@@ -367,10 +357,9 @@ class TestMemorySystemStoreMemory:
         system._neo4j_available = False
         system._chroma_available = True
         system._chroma = MagicMock()
-        system._chroma.call_tool = AsyncMock(return_value=MockToolResult(
-            success=False,
-            error="Storage failed"
-        ))
+        system._chroma.call_tool = AsyncMock(
+            return_value=MockToolResult(success=False, error="Storage failed")
+        )
 
         result = await system.store_memory("Test content")
 
@@ -418,16 +407,14 @@ class TestMemorySystemSearchSemantic:
         system = MemorySystem.__new__(MemorySystem)
         system._chroma_available = True
         system._chroma = MagicMock()
-        system._chroma.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"results": [{"content": "match1"}], "count": 1}
-        ))
+        system._chroma.call_tool = AsyncMock(
+            return_value=MockToolResult(
+                success=True, data={"results": [{"content": "match1"}], "count": 1}
+            )
+        )
 
         result = await system.search_semantic(
-            "work decisions",
-            collection="decisions",
-            limit=5,
-            filters={"domain": "work"}
+            "work decisions", collection="decisions", limit=5, filters={"domain": "work"}
         )
 
         assert result.success is True
@@ -435,12 +422,15 @@ class TestMemorySystemSearchSemantic:
         assert result.metadata["count"] == 1
 
         # Verify correct tool was called
-        system._chroma.call_tool.assert_called_once_with("semantic_search", {
-            "query": "work decisions",
-            "collection": "decisions",
-            "limit": 5,
-            "where": {"domain": "work"}
-        })
+        system._chroma.call_tool.assert_called_once_with(
+            "semantic_search",
+            {
+                "query": "work decisions",
+                "collection": "decisions",
+                "limit": 5,
+                "where": {"domain": "work"},
+            },
+        )
 
     @pytest.mark.asyncio
     async def test_search_semantic_all_collections(self):
@@ -450,10 +440,12 @@ class TestMemorySystemSearchSemantic:
         system = MemorySystem.__new__(MemorySystem)
         system._chroma_available = True
         system._chroma = MagicMock()
-        system._chroma.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"results": [{"content": "match1"}, {"content": "match2"}], "count": 2}
-        ))
+        system._chroma.call_tool = AsyncMock(
+            return_value=MockToolResult(
+                success=True,
+                data={"results": [{"content": "match1"}, {"content": "match2"}], "count": 2},
+            )
+        )
 
         result = await system.search_semantic("general query")
 
@@ -461,10 +453,9 @@ class TestMemorySystemSearchSemantic:
         assert len(result.data) == 2
 
         # Verify search_all_collections was called
-        system._chroma.call_tool.assert_called_once_with("search_all_collections", {
-            "query": "general query",
-            "limit": 10
-        })
+        system._chroma.call_tool.assert_called_once_with(
+            "search_all_collections", {"query": "general query", "limit": 10}
+        )
 
     @pytest.mark.asyncio
     async def test_search_semantic_failure(self):
@@ -474,10 +465,9 @@ class TestMemorySystemSearchSemantic:
         system = MemorySystem.__new__(MemorySystem)
         system._chroma_available = True
         system._chroma = MagicMock()
-        system._chroma.call_tool = AsyncMock(return_value=MockToolResult(
-            success=False,
-            error="Search failed"
-        ))
+        system._chroma.call_tool = AsyncMock(
+            return_value=MockToolResult(success=False, error="Search failed")
+        )
 
         result = await system.search_semantic("test query")
 
@@ -525,13 +515,11 @@ class TestMemorySystemGetRelated:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j_available = True
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={
-                "related": [{"id": "rel1"}, {"id": "rel2"}],
-                "count": 2
-            }
-        ))
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(
+                success=True, data={"related": [{"id": "rel1"}, {"id": "rel2"}], "count": 2}
+            )
+        )
 
         result = await system.get_related("node123", relationship_type="RELATES_TO", depth=3)
 
@@ -548,10 +536,9 @@ class TestMemorySystemGetRelated:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j_available = True
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=False,
-            error="Node not found"
-        ))
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=False, error="Node not found")
+        )
 
         result = await system.get_related("invalid_node")
 
@@ -598,24 +585,20 @@ class TestMemorySystemStoreKnowledge:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j_available = True
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "dec1", "type": "Decision"}
-        ))
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "dec1", "type": "Decision"})
+        )
 
         result = await system.store_knowledge(
-            "decision",
-            "Use React for frontend",
-            rationale="Team expertise"
+            "decision", "Use React for frontend", rationale="Team expertise"
         )
 
         assert result.success is True
         assert result.data == {"id": "dec1", "type": "Decision"}
 
-        system._neo4j.call_tool.assert_called_once_with("record_decision", {
-            "content": "Use React for frontend",
-            "rationale": "Team expertise"
-        })
+        system._neo4j.call_tool.assert_called_once_with(
+            "record_decision", {"content": "Use React for frontend", "rationale": "Team expertise"}
+        )
 
     @pytest.mark.asyncio
     async def test_store_knowledge_pattern(self):
@@ -625,22 +608,18 @@ class TestMemorySystemStoreKnowledge:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j_available = True
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "pat1"}
-        ))
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "pat1"})
+        )
 
         result = await system.store_knowledge(
-            "pattern",
-            "Morning focus sessions",
-            type="productivity"
+            "pattern", "Morning focus sessions", type="productivity"
         )
 
         assert result.success is True
-        system._neo4j.call_tool.assert_called_once_with("record_pattern", {
-            "content": "Morning focus sessions",
-            "type": "productivity"
-        })
+        system._neo4j.call_tool.assert_called_once_with(
+            "record_pattern", {"content": "Morning focus sessions", "type": "productivity"}
+        )
 
     @pytest.mark.asyncio
     async def test_store_knowledge_commitment(self):
@@ -650,20 +629,16 @@ class TestMemorySystemStoreKnowledge:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j_available = True
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "com1"}
-        ))
-
-        result = await system.store_knowledge(
-            "commitment",
-            "Daily standup at 9am"
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "com1"})
         )
 
+        result = await system.store_knowledge("commitment", "Daily standup at 9am")
+
         assert result.success is True
-        system._neo4j.call_tool.assert_called_once_with("create_commitment", {
-            "content": "Daily standup at 9am"
-        })
+        system._neo4j.call_tool.assert_called_once_with(
+            "create_commitment", {"content": "Daily standup at 9am"}
+        )
 
     @pytest.mark.asyncio
     async def test_store_knowledge_entity(self):
@@ -673,25 +648,17 @@ class TestMemorySystemStoreKnowledge:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j_available = True
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"id": "ent1"}
-        ))
-
-        result = await system.store_knowledge(
-            "entity",
-            "Ashley",
-            type="person",
-            domain="family"
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=True, data={"id": "ent1"})
         )
+
+        result = await system.store_knowledge("entity", "Ashley", type="person", domain="family")
 
         assert result.success is True
         # Entity uses "name" instead of "content"
-        system._neo4j.call_tool.assert_called_once_with("create_entity", {
-            "name": "Ashley",
-            "type": "person",
-            "domain": "family"
-        })
+        system._neo4j.call_tool.assert_called_once_with(
+            "create_entity", {"name": "Ashley", "type": "person", "domain": "family"}
+        )
 
     @pytest.mark.asyncio
     async def test_store_knowledge_unknown_type(self):
@@ -715,10 +682,9 @@ class TestMemorySystemStoreKnowledge:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j_available = True
         system._neo4j = MagicMock()
-        system._neo4j.call_tool = AsyncMock(return_value=MockToolResult(
-            success=False,
-            error="Storage failed"
-        ))
+        system._neo4j.call_tool = AsyncMock(
+            return_value=MockToolResult(success=False, error="Storage failed")
+        )
 
         result = await system.store_knowledge("decision", "Test")
 
@@ -829,10 +795,9 @@ class TestMemorySystemHealthCheck:
 
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j = MagicMock()
-        system._neo4j.health_check = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"status": "healthy", "latency_ms": 5}
-        ))
+        system._neo4j.health_check = AsyncMock(
+            return_value=MockToolResult(success=True, data={"status": "healthy", "latency_ms": 5})
+        )
         system._chroma = None
         system._neo4j_available = True
         system._chroma_available = False
@@ -852,10 +817,9 @@ class TestMemorySystemHealthCheck:
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j = None
         system._chroma = MagicMock()
-        system._chroma.health_check = AsyncMock(return_value=MockToolResult(
-            success=True,
-            data={"status": "healthy", "collections": 4}
-        ))
+        system._chroma.health_check = AsyncMock(
+            return_value=MockToolResult(success=True, data={"status": "healthy", "collections": 4})
+        )
         system._neo4j_available = False
         system._chroma_available = True
 
@@ -873,10 +837,9 @@ class TestMemorySystemHealthCheck:
 
         system = MemorySystem.__new__(MemorySystem)
         system._neo4j = MagicMock()
-        system._neo4j.health_check = AsyncMock(return_value=MockToolResult(
-            success=False,
-            error="Connection timeout"
-        ))
+        system._neo4j.health_check = AsyncMock(
+            return_value=MockToolResult(success=False, error="Connection timeout")
+        )
         system._chroma = None
         system._neo4j_available = True
         system._chroma_available = False
@@ -926,7 +889,7 @@ class TestMemorySystemSingleton:
         # Reset singleton
         mi._memory_system = None
 
-        with patch.object(mi.MemorySystem, '__init__', return_value=None):
+        with patch.object(mi.MemorySystem, "__init__", return_value=None):
             system = await mi.init_memory_system()
 
         assert system is not None
@@ -940,7 +903,7 @@ class TestMemorySystemSingleton:
         # Reset singleton
         mi._memory_system = None
 
-        with patch.object(mi.MemorySystem, '__init__', return_value=None):
+        with patch.object(mi.MemorySystem, "__init__", return_value=None):
             await mi.init_memory_system()
             result = mi.get_memory_system()
 

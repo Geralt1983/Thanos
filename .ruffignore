@@ -1,0 +1,97 @@
+# Ruff Ignore Patterns
+# This file uses .gitignore syntax to specify files and directories
+# that Ruff should not lint. Complements the exclude list in pyproject.toml
+
+# Auto-Claude directories (task automation)
+.auto-claude/
+.auto-claude/**
+
+# Version control
+.git/
+.git/**
+
+# Python virtual environments
+venv/
+.venv/
+env/
+.env/
+virtualenv/
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Ruff cache
+.ruff_cache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Backups
+backups/
+*.bak
+*.backup
+
+# External tool directories
+.swarm/
+.hive-mind/
+.claude-code/
+.claude-monitor/
+.claude-squad/
+.claude-flow/
+.claude-flow@alpha/
+
+# Memory and cache directories
+.memory/
+.memory-v2/
+memory/
+stats-cache.json
+file-history/
+
+# Node.js (for mixed projects)
+node_modules/
+.npmrc
+
+# Credentials and secrets
+.credentials.json
+*.key
+*.pem
+
+# Other temporary files
+shell-snapshots/
+debug/
+statsig/
+projects/
+chrome/

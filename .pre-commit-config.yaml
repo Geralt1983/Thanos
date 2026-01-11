@@ -1,0 +1,78 @@
+# Pre-commit hooks configuration for Thanos
+# Documentation: https://pre-commit.com/
+#
+# This configuration automates code quality checks before each commit:
+# 1. Ruff linter - catches errors, enforces style, organizes imports
+# 2. Ruff formatter - applies consistent Black-compatible formatting
+#
+# Installation:
+# ------------
+# 1. Install pre-commit: pip install pre-commit
+# 2. Install git hooks: pre-commit install
+# 3. (Optional) Run on all files: pre-commit run --all-files
+#
+# Usage:
+# ------
+# Once installed, pre-commit automatically runs on staged files before each commit.
+# To bypass hooks temporarily (not recommended): git commit --no-verify
+#
+# Manual execution:
+# - Run on all files: pre-commit run --all-files
+# - Run on specific files: pre-commit run --files path/to/file.py
+# - Update hook versions: pre-commit autoupdate
+#
+# Configuration in pyproject.toml:
+# --------------------------------
+# All Ruff rules and settings are defined in pyproject.toml under [tool.ruff]
+# This file only configures when and how pre-commit runs the hooks.
+
+# Minimum pre-commit version required
+minimum_pre_commit_version: '2.20.0'
+
+# Repositories containing hooks to run
+repos:
+  # Ruff - Fast Python linter and formatter (replaces flake8, isort, black, pyupgrade, etc.)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Use the latest stable version (update with: pre-commit autoupdate)
+    rev: v0.8.4
+    hooks:
+      # Ruff linter - check for errors, style violations, and auto-fix issues
+      - id: ruff
+        name: ruff check (linter)
+        description: Run Ruff linter with auto-fix on Python files
+        # Arguments passed to ruff check
+        args:
+          - --fix              # Automatically fix auto-fixable violations
+          - --exit-non-zero-on-fix  # Exit with code 1 if files were modified (shows changes in pre-commit output)
+        # Only run on Python files
+        types_or: [python, pyi]
+        # Require serial execution (don't run in parallel)
+        require_serial: false
+        # Additional file patterns to include (empty = use types_or only)
+        files: ''
+        # Patterns to exclude (empty = use .ruffignore and pyproject.toml excludes)
+        exclude: ''
+
+      # Ruff formatter - apply consistent Black-compatible formatting
+      - id: ruff-format
+        name: ruff format (formatter)
+        description: Run Ruff formatter to ensure consistent code style
+        # No additional arguments needed - configuration in pyproject.toml
+        args: []
+        # Only run on Python files
+        types_or: [python, pyi]
+        # Require serial execution
+        require_serial: false
+        # Additional file patterns to include
+        files: ''
+        # Patterns to exclude (empty = use .ruffignore and pyproject.toml excludes)
+        exclude: ''
+
+# CI configuration - skip expensive/slow hooks in CI environments
+ci:
+  # Auto-update hook versions monthly
+  autoupdate_schedule: monthly
+  # Skip these hooks in CI (empty = run all hooks)
+  skip: []
+  # Submodules to include (empty = no submodules)
+  submodules: false
