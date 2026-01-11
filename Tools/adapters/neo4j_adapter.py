@@ -608,8 +608,13 @@ class Neo4jAdapter(BaseAdapter):
     # Decision Operations
     # =========================================================================
 
-    async def _record_decision(self, args: Dict[str, Any]) -> ToolResult:
-        """Record a decision with rationale."""
+    async def _record_decision(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Record a decision with rationale.
+
+        Args:
+            args: Dictionary containing decision data
+            session: Optional Neo4j session or transaction for session reuse
+        """
         import uuid
 
         decision_id = f"decision_{uuid.uuid4().hex[:8]}"
@@ -638,16 +643,28 @@ class Neo4jAdapter(BaseAdapter):
             "created_at": now
         }
 
-        async with self._driver.session() as session:
-            await session.run(query, params)
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(query, params)
+            record = await result.single()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                record = await result.single()
 
         return ToolResult.ok({
             "id": decision_id,
             "message": f"Recorded decision: {args['content'][:50]}..."
         })
 
-    async def _get_decisions(self, args: Dict[str, Any]) -> ToolResult:
-        """Get decisions with optional filters."""
+    async def _get_decisions(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Get decisions with optional filters.
+
+        Args:
+            args: Dictionary containing optional filters (domain, days, limit)
+            session: Optional Neo4j session or transaction for session reuse
+        """
         conditions = []
         params = {"limit": args.get("limit", 20)}
 
@@ -669,9 +686,15 @@ class Neo4jAdapter(BaseAdapter):
         LIMIT $limit
         """
 
-        async with self._driver.session() as session:
+        if session is not None:
+            # Use provided session/transaction (session reuse)
             result = await session.run(query, params)
             records = await result.data()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                records = await result.data()
 
         decisions = [dict(r["d"]) for r in records]
         return ToolResult.ok({"decisions": decisions, "count": len(decisions)})
