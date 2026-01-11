@@ -4416,6 +4416,350 @@ class GoogleCalendarAdapter(BaseAdapter):
             "recommendation": recommendation,
         }
 
+    def generate_calendar_summary(
+        self,
+        target_date: Optional[str] = None,
+        timezone_str: Optional[str] = None,
+        calendar_id: str = "primary",
+        working_hours_start: Optional[int] = None,
+        working_hours_end: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """
+        Generate a human-readable calendar summary for a specific day (today/tomorrow).
+
+        This function provides a comprehensive overview of the day's schedule including:
+        - Total event count
+        - Meeting time vs free time breakdown
+        - First and last events of the day
+        - Back-to-back meeting warnings
+        - Free time blocks
+        - Overall day assessment
+
+        Args:
+            target_date: Date to summarize in ISO format (YYYY-MM-DD). Defaults to today.
+            timezone_str: Timezone for calculations (IANA timezone name). Defaults to system timezone.
+            calendar_id: Calendar ID to analyze. Defaults to 'primary'.
+            working_hours_start: Working hours start hour (0-23). If specified, only counts time during working hours.
+            working_hours_end: Working hours end hour (0-23). If specified, only counts time during working hours.
+
+        Returns:
+            Dictionary containing:
+                - summary_text: Human-readable summary string
+                - event_count: Total number of events
+                - meeting_minutes: Total minutes in meetings
+                - free_minutes: Total minutes of free time
+                - first_event: First event of the day (or None)
+                - last_event: Last event of the day (or None)
+                - back_to_back_count: Number of back-to-back meetings
+                - back_to_back_warnings: List of back-to-back meeting warnings
+                - free_blocks: List of free time blocks
+                - day_assessment: Overall assessment of the day's schedule
+
+        Raises:
+            ValueError: If authentication fails or API request fails
+        """
+        # Verify authentication
+        if not self.is_authenticated():
+            raise ValueError("Not authenticated. Use the 'authorize' tool to connect Google Calendar.")
+
+        # Refresh credentials if needed
+        if not self._refresh_credentials():
+            raise ValueError("Failed to refresh credentials. Please re-authenticate.")
+
+        # Get authenticated service
+        service = self._get_service()
+
+        # Determine timezone
+        if timezone_str:
+            try:
+                tz = ZoneInfo(timezone_str)
+            except Exception:
+                raise ValueError(
+                    f"Invalid timezone: {timezone_str}. Use IANA timezone names like 'America/New_York' or 'UTC'."
+                )
+        else:
+            # Use system local timezone
+            try:
+                tz = ZoneInfo("localtime")
+            except Exception:
+                # Fallback to UTC if local timezone cannot be determined
+                tz = ZoneInfo("UTC")
+
+        # Parse target date
+        if target_date:
+            try:
+                # Parse ISO date string (YYYY-MM-DD)
+                date_parts = target_date.split("-")
+                if len(date_parts) != 3:
+                    raise ValueError("Invalid date format")
+                year, month, day = int(date_parts[0]), int(date_parts[1]), int(date_parts[2])
+                target_day = datetime(year, month, day, 0, 0, 0, tzinfo=tz)
+            except Exception:
+                raise ValueError(
+                    f"Invalid target_date: {target_date}. Use ISO format (YYYY-MM-DD)."
+                )
+        else:
+            # Default to today
+            target_day = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Calculate day boundaries
+        day_start = target_day
+        day_end = target_day.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        # Calculate working hours boundaries if specified
+        if working_hours_start is not None and working_hours_end is not None:
+            analysis_start = target_day.replace(hour=working_hours_start, minute=0, second=0, microsecond=0)
+            analysis_end = target_day.replace(hour=working_hours_end, minute=0, second=0, microsecond=0)
+        else:
+            analysis_start = day_start
+            analysis_end = day_end
+
+        # Convert to RFC3339 format for API
+        time_min = day_start.isoformat()
+        time_max = day_end.isoformat()
+
+        # Fetch events from Google Calendar API
+        try:
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                maxResults=250,
+                singleEvents=True,
+                orderBy="startTime",
+            ).execute()
+        except HttpError as e:
+            raise ValueError(f"Google Calendar API error: {e}")
+
+        raw_events = events_result.get("items", [])
+
+        # Filter and format events
+        events = []
+        for event in raw_events:
+            # Skip cancelled events
+            if event.get("status") == "cancelled":
+                continue
+
+            # Check if user has declined this event
+            user_declined = False
+            if not event.get("organizer", {}).get("self", False):
+                for attendee in event.get("attendees", []):
+                    if attendee.get("self", False) and attendee.get("responseStatus") == "declined":
+                        user_declined = True
+                        break
+
+            if user_declined:
+                continue
+
+            # Parse event times
+            start = event.get("start", {})
+            end = event.get("end", {})
+            is_all_day = "date" in start and "dateTime" not in start
+
+            # Skip all-day events for time calculations
+            if is_all_day:
+                continue
+
+            start_str = start.get("dateTime")
+            end_str = end.get("dateTime")
+
+            if not start_str or not end_str:
+                continue
+
+            try:
+                event_start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                event_end = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+
+                # Convert to target timezone
+                if event_start.tzinfo:
+                    event_start = event_start.astimezone(tz)
+                if event_end.tzinfo:
+                    event_end = event_end.astimezone(tz)
+
+                # Skip transparent (free) events
+                if event.get("transparency") == "transparent":
+                    continue
+
+                events.append({
+                    "summary": event.get("summary", "(No title)"),
+                    "start": event_start,
+                    "end": event_end,
+                    "duration_minutes": (event_end - event_start).total_seconds() / 60,
+                })
+
+            except Exception:
+                # Skip events with invalid time data
+                continue
+
+        # Apply event filters based on configuration
+        # (Note: The events list contains simplified dicts, so we need to format them for filtering)
+        formatted_for_filter = []
+        for evt in events:
+            formatted_for_filter.append({
+                "summary": evt["summary"],
+                "start": evt["start"].isoformat(),
+                "end": evt["end"].isoformat(),
+                "is_all_day": False,
+            })
+
+        filtered = self._apply_event_filters(formatted_for_filter, filter_context="briefing", calendar_id=calendar_id)
+
+        # Rebuild events list from filtered results
+        filtered_summaries = {e["summary"] for e in filtered}
+        events = [e for e in events if e["summary"] in filtered_summaries]
+
+        # Sort events by start time
+        events.sort(key=lambda e: e["start"])
+
+        # Calculate metrics
+        event_count = len(events)
+        meeting_minutes = 0
+        back_to_back_warnings = []
+        back_to_back_count = 0
+
+        for i, event in enumerate(events):
+            # Clip event to analysis window
+            clipped_start = max(event["start"], analysis_start)
+            clipped_end = min(event["end"], analysis_end)
+
+            if clipped_end > clipped_start:
+                duration = (clipped_end - clipped_start).total_seconds() / 60
+                meeting_minutes += duration
+
+            # Check for back-to-back meetings
+            if i > 0:
+                prev_event = events[i - 1]
+                # Consider back-to-back if less than 5 minutes gap
+                gap_minutes = (event["start"] - prev_event["end"]).total_seconds() / 60
+                if gap_minutes <= 5:
+                    back_to_back_count += 1
+                    back_to_back_warnings.append({
+                        "event1": prev_event["summary"],
+                        "event2": event["summary"],
+                        "gap_minutes": round(gap_minutes, 1),
+                        "time": event["start"].strftime("%I:%M %p"),
+                    })
+
+        # Calculate free time
+        total_window_minutes = (analysis_end - analysis_start).total_seconds() / 60
+        free_minutes = max(0, total_window_minutes - meeting_minutes)
+
+        # Calculate free blocks
+        free_blocks = []
+        last_end = analysis_start
+
+        for event in events:
+            if event["start"] > last_end:
+                gap_minutes = (event["start"] - last_end).total_seconds() / 60
+                if gap_minutes >= 15:  # Only count gaps of 15+ minutes
+                    free_blocks.append({
+                        "start": last_end.strftime("%I:%M %p"),
+                        "end": event["start"].strftime("%I:%M %p"),
+                        "duration_minutes": round(gap_minutes, 1),
+                    })
+            last_end = max(last_end, event["end"])
+
+        # Final free block after last event
+        if last_end < analysis_end:
+            gap_minutes = (analysis_end - last_end).total_seconds() / 60
+            if gap_minutes >= 15:
+                free_blocks.append({
+                    "start": last_end.strftime("%I:%M %p"),
+                    "end": analysis_end.strftime("%I:%M %p"),
+                    "duration_minutes": round(gap_minutes, 1),
+                })
+
+        # Get first and last events
+        first_event = None
+        last_event = None
+        if events:
+            first_event = {
+                "summary": events[0]["summary"],
+                "time": events[0]["start"].strftime("%I:%M %p"),
+            }
+            last_event = {
+                "summary": events[-1]["summary"],
+                "time": events[-1]["end"].strftime("%I:%M %p"),
+            }
+
+        # Generate day assessment
+        busy_percentage = (meeting_minutes / total_window_minutes * 100) if total_window_minutes > 0 else 0
+
+        if event_count == 0:
+            day_assessment = "free"
+            assessment_text = "No scheduled events - a completely free day!"
+        elif busy_percentage >= 80:
+            day_assessment = "very_busy"
+            assessment_text = f"Very busy day with {event_count} event(s) taking up {round(busy_percentage)}% of your time."
+        elif busy_percentage >= 60:
+            day_assessment = "busy"
+            assessment_text = f"Busy day with {event_count} event(s) scheduled."
+        elif busy_percentage >= 30:
+            day_assessment = "moderate"
+            assessment_text = f"Moderate day with {event_count} event(s), leaving good blocks of free time."
+        else:
+            day_assessment = "light"
+            assessment_text = f"Light day with only {event_count} event(s)."
+
+        # Add back-to-back warning to assessment
+        if back_to_back_count > 0:
+            assessment_text += f" ⚠️ {back_to_back_count} back-to-back meeting(s) detected."
+
+        # Build human-readable summary text
+        summary_lines = []
+
+        # Date header
+        if target_date:
+            date_str = target_day.strftime("%A, %B %d, %Y")
+        else:
+            date_str = "Today"
+        summary_lines.append(f"📅 {date_str}")
+        summary_lines.append("")
+
+        # Overall assessment
+        summary_lines.append(assessment_text)
+        summary_lines.append("")
+
+        # Event count and time breakdown
+        if event_count > 0:
+            summary_lines.append(f"📊 {event_count} event(s)")
+            summary_lines.append(f"⏰ {round(meeting_minutes / 60, 1)}h in meetings, {round(free_minutes / 60, 1)}h free")
+            summary_lines.append("")
+
+            # First and last events
+            summary_lines.append(f"🏁 First event: {first_event['summary']} at {first_event['time']}")
+            summary_lines.append(f"🏁 Last event: {last_event['summary']} ends at {last_event['time']}")
+            summary_lines.append("")
+
+        # Free blocks
+        if free_blocks:
+            summary_lines.append("🆓 Free time blocks:")
+            for block in free_blocks:
+                summary_lines.append(f"   • {block['start']} - {block['end']} ({round(block['duration_minutes'] / 60, 1)}h)")
+            summary_lines.append("")
+
+        # Back-to-back warnings
+        if back_to_back_warnings:
+            summary_lines.append("⚠️ Back-to-back meetings:")
+            for warning in back_to_back_warnings:
+                summary_lines.append(f"   • {warning['event1']} → {warning['event2']} ({warning['gap_minutes']} min gap)")
+
+        summary_text = "\n".join(summary_lines)
+
+        return {
+            "summary_text": summary_text,
+            "event_count": event_count,
+            "meeting_minutes": round(meeting_minutes, 1),
+            "free_minutes": round(free_minutes, 1),
+            "first_event": first_event,
+            "last_event": last_event,
+            "back_to_back_count": back_to_back_count,
+            "back_to_back_warnings": back_to_back_warnings,
+            "free_blocks": free_blocks,
+            "day_assessment": day_assessment,
+            "busy_percentage": round(busy_percentage, 1),
+        }
+
     def _determine_conflict_type(
         self,
         proposed_start: datetime,
