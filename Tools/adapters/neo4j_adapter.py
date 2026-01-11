@@ -463,8 +463,13 @@ class Neo4jAdapter(BaseAdapter):
     # Commitment Operations
     # =========================================================================
 
-    async def _create_commitment(self, args: Dict[str, Any]) -> ToolResult:
-        """Create a new commitment node."""
+    async def _create_commitment(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Create a new commitment node.
+
+        Args:
+            args: Dictionary containing commitment data
+            session: Optional Neo4j session or transaction for session reuse
+        """
         import uuid
 
         commitment_id = f"commitment_{uuid.uuid4().hex[:8]}"
@@ -494,17 +499,28 @@ class Neo4jAdapter(BaseAdapter):
             "created_at": now
         }
 
-        async with self._driver.session() as session:
+        if session is not None:
+            # Use provided session/transaction (session reuse)
             result = await session.run(query, params)
             record = await result.single()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                record = await result.single()
 
         return ToolResult.ok({
             "id": commitment_id,
             "message": f"Created commitment: {args['content'][:50]}..."
         })
 
-    async def _complete_commitment(self, args: Dict[str, Any]) -> ToolResult:
-        """Mark a commitment as completed."""
+    async def _complete_commitment(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Mark a commitment as completed.
+
+        Args:
+            args: Dictionary containing commitment_id and optional outcome
+            session: Optional Neo4j session or transaction for session reuse
+        """
         now = datetime.utcnow().isoformat()
 
         query = """
@@ -521,12 +537,21 @@ class Neo4jAdapter(BaseAdapter):
             "outcome": args.get("outcome")
         }
 
-        async with self._driver.session() as session:
+        if session is not None:
+            # Use provided session/transaction (session reuse)
             result = await session.run(query, params)
             record = await result.single()
 
             if not record:
                 return ToolResult.fail(f"Commitment not found: {args['commitment_id']}")
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                record = await result.single()
+
+                if not record:
+                    return ToolResult.fail(f"Commitment not found: {args['commitment_id']}")
 
         return ToolResult.ok({
             "id": args["commitment_id"],
@@ -534,8 +559,13 @@ class Neo4jAdapter(BaseAdapter):
             "completed_at": now
         })
 
-    async def _get_commitments(self, args: Dict[str, Any]) -> ToolResult:
-        """Get commitments with optional filters."""
+    async def _get_commitments(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Get commitments with optional filters.
+
+        Args:
+            args: Dictionary containing optional filters (status, domain, to_whom, limit)
+            session: Optional Neo4j session or transaction for session reuse
+        """
         conditions = []
         params = {"limit": args.get("limit", 20)}
 
@@ -561,9 +591,15 @@ class Neo4jAdapter(BaseAdapter):
         LIMIT $limit
         """
 
-        async with self._driver.session() as session:
+        if session is not None:
+            # Use provided session/transaction (session reuse)
             result = await session.run(query, params)
             records = await result.data()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                records = await result.data()
 
         commitments = [dict(r["c"]) for r in records]
         return ToolResult.ok({"commitments": commitments, "count": len(commitments)})
