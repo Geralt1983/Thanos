@@ -5,10 +5,10 @@ Thanos CLI - Personal AI Assistant
 NATURAL LANGUAGE INTERFACE:
   Ask questions naturally and Thanos will route to the appropriate agent or command.
 
-  Examples:
-    thanos What should I focus on today?
-    thanos I'm feeling overwhelmed with tasks
-    thanos Should I take this client?
+Examples:
+  thanos What should I focus on today?
+  thanos I'm feeling overwhelmed with tasks
+  thanos Should I take this client?
 
 EXPLICIT COMMANDS:
   thanos interactive              Launch interactive mode
@@ -55,18 +55,18 @@ VISUAL FEEDBACK SYSTEM:
   - User sees response text (completion)
 """
 
-import os
+from pathlib import Path
 import re
 import sys
-from pathlib import Path
-from typing import Optional
+
 
 # Ensure Thanos project is in path
 THANOS_DIR = Path(__file__).parent
 if str(THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(THANOS_DIR))
 
-from Tools.thanos_orchestrator import ThanosOrchestrator
+from Tools.thanos_orchestrator import ThanosOrchestrator  # noqa: E402
+
 
 # ========================================================================
 # Command Shortcuts Mapping
@@ -78,20 +78,16 @@ COMMAND_SHORTCUTS = {
     "morning": "pa:daily",
     "brief": "pa:daily",
     "briefing": "pa:daily",
-
     # Email shortcuts
     "email": "pa:email",
     "emails": "pa:email",
     "inbox": "pa:email",
-
     # Schedule shortcuts
     "schedule": "pa:schedule",
     "calendar": "pa:schedule",
-
     # Task shortcuts
     "tasks": "pa:tasks",
     "task": "pa:tasks",
-
     # Weekly review shortcuts
     "weekly": "pa:weekly",
     "week": "pa:weekly",
@@ -120,6 +116,7 @@ SYSTEM_COMMANDS = {
 # Natural Language Detection
 # ========================================================================
 
+
 def is_natural_language(text: str) -> bool:
     """
     Detect if input is natural language vs command.
@@ -144,9 +141,23 @@ def is_natural_language(text: str) -> bool:
 
     # Question word patterns (start of sentence)
     question_words = [
-        "what", "why", "how", "when", "where", "who",
-        "should", "can", "could", "would", "will",
-        "is", "am", "are", "do", "does", "did"
+        "what",
+        "why",
+        "how",
+        "when",
+        "where",
+        "who",
+        "should",
+        "can",
+        "could",
+        "would",
+        "will",
+        "is",
+        "am",
+        "are",
+        "do",
+        "does",
+        "did",
     ]
 
     # Check if starts with question word
@@ -156,14 +167,14 @@ def is_natural_language(text: str) -> bool:
 
     # Self-reference patterns
     self_patterns = [
-        r'\bi\b',           # "I"
-        r'\bi\'m\b',        # "I'm"
-        r'\bim\b',          # "Im"
-        r'\bi\'ve\b',       # "I've"
-        r'\bive\b',         # "Ive"
-        r'\bmy\b',          # "my"
-        r'\bme\b',          # "me"
-        r'\bmyself\b',      # "myself"
+        r"\bi\b",  # "I"
+        r"\bi\'m\b",  # "I'm"
+        r"\bim\b",  # "Im"
+        r"\bi\'ve\b",  # "I've"
+        r"\bive\b",  # "Ive"
+        r"\bmy\b",  # "my"
+        r"\bme\b",  # "me"
+        r"\bmyself\b",  # "myself"
     ]
 
     for pattern in self_patterns:
@@ -172,8 +183,16 @@ def is_natural_language(text: str) -> bool:
 
     # Emotional/help words
     emotional_words = [
-        "help", "need", "want", "feel", "feeling",
-        "tired", "overwhelmed", "struggling", "stuck", "confused"
+        "help",
+        "need",
+        "want",
+        "feel",
+        "feeling",
+        "tired",
+        "overwhelmed",
+        "struggling",
+        "stuck",
+        "confused",
     ]
 
     for word in emotional_words:
@@ -182,22 +201,23 @@ def is_natural_language(text: str) -> bool:
 
     # Multi-word sentences (3+ words suggests natural language)
     word_count = len(text_lower.split())
-    if word_count >= 3:
-        return True
+    return word_count >= 3
 
-    return False
 
 # ========================================================================
 # Usage Display
 # ========================================================================
 
+
 def print_usage():
     """Print usage information."""
     print(__doc__)
 
+
 # ========================================================================
 # Main CLI Entry Point
 # ========================================================================
+
 
 def main():
     """
@@ -236,6 +256,7 @@ def main():
     if first_arg in ["interactive", "i"]:
         try:
             from Tools.thanos_interactive import ThanosInteractive
+
             interactive = ThanosInteractive(orchestrator)
             interactive.run()
         except ImportError:
@@ -247,7 +268,7 @@ def main():
     if first_arg == "chat":
         if len(args) < 2:
             print("Usage: thanos chat <message>")
-            print("Example: thanos chat \"What should I focus on today?\"")
+            print('Example: thanos chat "What should I focus on today?"')
             sys.exit(1)
         message = " ".join(args[1:])
         orchestrator.chat(message, stream=True)
@@ -257,10 +278,10 @@ def main():
     if first_arg == "agent":
         if len(args) < 3:
             print("Usage: thanos agent <agent_name> <message>")
-            print("Example: thanos agent coach \"Help me focus\"")
+            print('Example: thanos agent coach "Help me focus"')
             print()
             print("Available agents:")
-            for agent_id, agent in orchestrator.agents.items():
+            for _agent_id, agent in orchestrator.agents.items():
                 print(f"  {agent.name}")
             sys.exit(1)
         agent_name = args[1]
@@ -299,7 +320,7 @@ def main():
     if first_arg == "agents":
         print("\nAvailable Agents")
         print("=" * 40)
-        for agent_id, agent in orchestrator.agents.items():
+        for _agent_id, agent in orchestrator.agents.items():
             print(f"\n{agent.name}")
             print(f"  Role: {agent.role}")
             if agent.triggers:

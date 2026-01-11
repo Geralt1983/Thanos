@@ -13,9 +13,10 @@ Tests cover:
 """
 
 import sys
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+
 
 # Mock yaspin module before importing spinner
 mock_yaspin_module = MagicMock()
@@ -25,15 +26,14 @@ mock_yaspin_module.yaspin = MagicMock()
 mock_yaspin_module.spinners = MagicMock()
 mock_yaspin_module.spinners.Spinners = mock_spinners
 
-sys.modules['yaspin'] = mock_yaspin_module
-sys.modules['yaspin.spinners'] = mock_yaspin_module.spinners
+sys.modules["yaspin"] = mock_yaspin_module
+sys.modules["yaspin.spinners"] = mock_yaspin_module.spinners
 
 from Tools.spinner import (
     ThanosSpinner,
-    command_spinner,
     chat_spinner,
+    command_spinner,
     routing_spinner,
-    SPINNER_AVAILABLE,
 )
 
 
@@ -52,11 +52,7 @@ class TestSpinnerInitialization:
 
     def test_initialization_with_custom_params(self):
         """Test initialization with custom parameters."""
-        spinner = ThanosSpinner(
-            text="Custom message",
-            color="magenta",
-            spinner_type="line"
-        )
+        spinner = ThanosSpinner(text="Custom message", color="magenta", spinner_type="line")
         assert spinner.text == "Custom message"
         assert spinner.color == "magenta"
         assert spinner.spinner_type == "line"
@@ -463,8 +459,7 @@ class TestSpinnerErrorHandling:
         mock_spinner_instance = MagicMock()
         # Make text property raise exception
         type(mock_spinner_instance).text = property(
-            lambda self: None,
-            lambda self, value: (_ for _ in ()).throw(Exception("Update error"))
+            lambda self: None, lambda self, value: (_ for _ in ()).throw(Exception("Update error"))
         )
         mock_yaspin.return_value = mock_spinner_instance
 
