@@ -38,6 +38,11 @@ from Tools.litellm import (
     UsageTracker,
     ComplexityAnalyzer,
     ResponseCache,
+    # Constants
+    LITELLM_AVAILABLE,
+    ANTHROPIC_AVAILABLE,
+    # Module references
+    anthropic,
 )
 
 # Re-export everything for backward compatibility
@@ -52,6 +57,11 @@ __all__ = [
     "UsageTracker",
     "ComplexityAnalyzer",
     "ResponseCache",
+    # Constants
+    "LITELLM_AVAILABLE",
+    "ANTHROPIC_AVAILABLE",
+    # Module references
+    "anthropic",
 ]
 
 # Convenience alias for backward compatibility

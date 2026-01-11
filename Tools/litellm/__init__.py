@@ -32,7 +32,19 @@ from .models import ModelResponse
 from .usage_tracker import UsageTracker
 from .complexity_analyzer import ComplexityAnalyzer
 from .response_cache import ResponseCache
-from .client import LiteLLMClient, get_client, init_client
+from .client import (
+    LiteLLMClient,
+    get_client,
+    init_client,
+    LITELLM_AVAILABLE,
+    ANTHROPIC_AVAILABLE,
+)
+
+# Import anthropic module for test mocking compatibility
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
 
 # Export all public classes and functions
 __all__ = [
@@ -46,4 +58,9 @@ __all__ = [
     "UsageTracker",
     "ComplexityAnalyzer",
     "ResponseCache",
+    # Constants for availability checking
+    "LITELLM_AVAILABLE",
+    "ANTHROPIC_AVAILABLE",
+    # Module reference for test mocking
+    "anthropic",
 ]

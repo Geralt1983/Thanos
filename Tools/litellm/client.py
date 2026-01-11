@@ -43,6 +43,16 @@ except ImportError:
     ANTHROPIC_AVAILABLE = False
 
 
+# Export constants and classes
+__all__ = [
+    "LiteLLMClient",
+    "get_client",
+    "init_client",
+    "LITELLM_AVAILABLE",
+    "ANTHROPIC_AVAILABLE",
+]
+
+
 class LiteLLMClient:
     """Unified multi-model client using LiteLLM with intelligent routing."""
 
