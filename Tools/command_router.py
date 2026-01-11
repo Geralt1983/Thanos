@@ -23,6 +23,15 @@ except ImportError:
     MEMOS_AVAILABLE = False
     MemOS = None
 
+# WorkOS integration (optional - graceful degradation if unavailable)
+try:
+    from Tools.adapters.workos import WorkOSAdapter
+
+    WORKOS_AVAILABLE = True
+except ImportError:
+    WORKOS_AVAILABLE = False
+    WorkOSAdapter = None
+
 
 # ANSI color codes (copied from thanos_interactive.py)
 class Colors:
@@ -90,6 +99,10 @@ class CommandRouter:
         self._memos: Optional[MemOS] = None
         self._memos_initialized = False
 
+        # WorkOS integration (lazy initialization)
+        self._workos: Optional[WorkOSAdapter] = None
+        self._workos_initialized = False
+
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
         self._register_commands()
@@ -135,6 +148,34 @@ class CommandRouter:
                     self._memos = None
 
         return self._memos
+
+    def _get_workos(self) -> Optional["WorkOSAdapter"]:
+        """
+        Get WorkOS adapter instance, initializing if needed.
+
+        Uses lazy initialization with graceful degradation - returns None
+        if WorkOS is unavailable or initialization fails.
+
+        Returns:
+            WorkOSAdapter instance or None if unavailable
+        """
+        # Step 1: Check availability flag
+        if not WORKOS_AVAILABLE:
+            return None
+
+        # Step 2: Check if already initialized (idempotency)
+        if not self._workos_initialized:
+            try:
+                # Step 3: Initialize WorkOS adapter
+                # WorkOS requires DATABASE_URL or WORKOS_DATABASE_URL env var
+                self._workos = WorkOSAdapter()
+                self._workos_initialized = True
+            except Exception:
+                # Step 4: Graceful failure - adapter will remain None
+                self._workos = None
+
+        # Step 5: Return instance or None
+        return self._workos
 
     def _run_async(self, coro):
         """Run async coroutine from sync context."""
