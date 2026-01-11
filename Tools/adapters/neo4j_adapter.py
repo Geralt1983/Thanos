@@ -972,8 +972,13 @@ class Neo4jAdapter(BaseAdapter):
     # Relationship Operations
     # =========================================================================
 
-    async def _link_nodes(self, args: Dict[str, Any]) -> ToolResult:
-        """Create a relationship between two nodes."""
+    async def _link_nodes(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Create a relationship between two nodes.
+
+        Args:
+            args: Dictionary containing from_id, relationship, to_id, and optional properties
+            session: Optional Neo4j session or transaction for session reuse
+        """
         rel_type = args["relationship"].upper().replace(" ", "_")
 
         # Validate relationship type
@@ -990,16 +995,27 @@ class Neo4jAdapter(BaseAdapter):
         RETURN a, r, b
         """
 
-        async with self._driver.session() as session:
-            result = await session.run(query, {
-                "from_id": args["from_id"],
-                "to_id": args["to_id"],
-                "props": args.get("properties", {})
-            })
+        params = {
+            "from_id": args["from_id"],
+            "to_id": args["to_id"],
+            "props": args.get("properties", {})
+        }
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(query, params)
             record = await result.single()
 
             if not record:
                 return ToolResult.fail("One or both nodes not found")
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                record = await result.single()
+
+                if not record:
+                    return ToolResult.fail("One or both nodes not found")
 
         return ToolResult.ok({
             "from": args["from_id"],
@@ -1007,8 +1023,13 @@ class Neo4jAdapter(BaseAdapter):
             "to": args["to_id"]
         })
 
-    async def _find_related(self, args: Dict[str, Any]) -> ToolResult:
-        """Find nodes related to a given node."""
+    async def _find_related(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Find nodes related to a given node.
+
+        Args:
+            args: Dictionary containing node_id, optional relationship_type, and depth
+            session: Optional Neo4j session or transaction for session reuse
+        """
         depth = args.get("depth", 2)
         rel_filter = f":{args['relationship_type']}" if args.get("relationship_type") else ""
 
@@ -1018,9 +1039,17 @@ class Neo4jAdapter(BaseAdapter):
         LIMIT 50
         """
 
-        async with self._driver.session() as session:
-            result = await session.run(query, {"node_id": args["node_id"]})
+        params = {"node_id": args["node_id"]}
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(query, params)
             records = await result.data()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                records = await result.data()
 
         related = [
             {"node": dict(r["related"]), "relationship": r["relationship"]}
@@ -1029,8 +1058,13 @@ class Neo4jAdapter(BaseAdapter):
 
         return ToolResult.ok({"related": related, "count": len(related)})
 
-    async def _query_graph(self, args: Dict[str, Any]) -> ToolResult:
-        """Execute a custom Cypher query (read-only for safety)."""
+    async def _query_graph(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Execute a custom Cypher query (read-only for safety).
+
+        Args:
+            args: Dictionary containing query and optional parameters
+            session: Optional Neo4j session or transaction for session reuse
+        """
         query = args["query"].strip()
 
         # Safety check - only allow read operations
@@ -1042,9 +1076,17 @@ class Neo4jAdapter(BaseAdapter):
                 "Only read-only queries allowed. Use specific tools for writes."
             )
 
-        async with self._driver.session() as session:
-            result = await session.run(query, args.get("parameters", {}))
+        params = args.get("parameters", {})
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(query, params)
             records = await result.data()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                records = await result.data()
 
         return ToolResult.ok({"results": records, "count": len(records)})
 
@@ -1052,8 +1094,13 @@ class Neo4jAdapter(BaseAdapter):
     # Entity Operations
     # =========================================================================
 
-    async def _create_entity(self, args: Dict[str, Any]) -> ToolResult:
-        """Create a person, client, or project entity."""
+    async def _create_entity(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Create a person, client, or project entity.
+
+        Args:
+            args: Dictionary containing entity data (name, type, domain, notes)
+            session: Optional Neo4j session or transaction for session reuse
+        """
         import uuid
 
         entity_id = f"entity_{uuid.uuid4().hex[:8]}"
@@ -1073,16 +1120,24 @@ class Neo4jAdapter(BaseAdapter):
         RETURN e
         """
 
-        async with self._driver.session() as session:
-            result = await session.run(query, {
-                "id": entity_id,
-                "name": args["name"],
-                "type": args["type"],
-                "domain": args.get("domain"),
-                "notes": args.get("notes"),
-                "created_at": now
-            })
+        params = {
+            "id": entity_id,
+            "name": args["name"],
+            "type": args["type"],
+            "domain": args.get("domain"),
+            "notes": args.get("notes"),
+            "created_at": now
+        }
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(query, params)
             record = await result.single()
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                record = await result.single()
 
         return ToolResult.ok({
             "id": record["e"]["id"],
@@ -1090,8 +1145,13 @@ class Neo4jAdapter(BaseAdapter):
             "type": args["type"]
         })
 
-    async def _get_entity_context(self, args: Dict[str, Any]) -> ToolResult:
-        """Get all context about an entity."""
+    async def _get_entity_context(self, args: Dict[str, Any], session=None) -> ToolResult:
+        """Get all context about an entity.
+
+        Args:
+            args: Dictionary containing entity name
+            session: Optional Neo4j session or transaction for session reuse
+        """
         query = """
         MATCH (e:Entity {name: $name})
         OPTIONAL MATCH (e)<-[:INVOLVES]-(commitment:Commitment)
@@ -1103,12 +1163,23 @@ class Neo4jAdapter(BaseAdapter):
                COLLECT(DISTINCT session) as sessions
         """
 
-        async with self._driver.session() as session:
-            result = await session.run(query, {"name": args["name"]})
+        params = {"name": args["name"]}
+
+        if session is not None:
+            # Use provided session/transaction (session reuse)
+            result = await session.run(query, params)
             record = await result.single()
 
             if not record:
                 return ToolResult.fail(f"Entity not found: {args['name']}")
+        else:
+            # Create new session (backward compatibility)
+            async with self._driver.session() as session:
+                result = await session.run(query, params)
+                record = await result.single()
+
+                if not record:
+                    return ToolResult.fail(f"Entity not found: {args['name']}")
 
         return ToolResult.ok({
             "entity": dict(record["e"]),
