@@ -20,4 +20,8 @@ Usage:
     result = registry.route_command('help', args)
 """
 
-__all__ = []
+from .persona_router import PersonaRouter
+
+__all__ = [
+    "PersonaRouter",
+]
