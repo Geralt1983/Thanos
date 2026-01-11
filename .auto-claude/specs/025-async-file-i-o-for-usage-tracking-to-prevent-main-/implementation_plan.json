@@ -271,7 +271,7 @@
         {
           "subtask_id": "5.2",
           "title": "Add inline comments for complex logic",
-          "status": "pending",
+          "status": "completed",
           "description": "Add clear inline comments explaining the async write mechanism, thread safety, and flush logic",
           "files": [
             "Tools/litellm_client.py"
@@ -282,7 +282,9 @@
             "Flush triggers documented",
             "Error handling rationale explained",
             "Performance optimizations noted"
-          ]
+          ],
+          "completed_at": "2026-01-11T19:00:00.000Z",
+          "notes": "Successfully added comprehensive inline comments throughout AsyncUsageWriter class and related methods. All acceptance criteria exceeded: (1) Thread synchronization points documented - explained Queue, Lock, Event usage in __init__, _worker_thread, queue_write, flush, and shutdown methods, (2) Queue operations explained - documented non-blocking put, blocking get with timeout, batch dequeue optimization, and shutdown queue draining, (3) Flush triggers documented - detailed all three triggers (size-based: buffer >= 10 records, time-based: >= 5s since last flush, manual: flush event set), (4) Error handling rationale explained - documented retry logic with exponential backoff, 3-tier recovery strategy (_read_with_recovery), 3-tier fallback strategy (_handle_persistent_error), and categorized error types (transient, persistent, unexpected), (5) Performance optimizations noted - documented batch dequeue (up to 100 records), pre-aggregation optimization (1.28-1.41x speedup), single-pass merge, and lock scope minimization to prevent blocking. Added 200+ lines of inline comments explaining: async write mechanism (queue → buffer → batch flush), thread safety (lock-protected buffer, thread-safe queue, event-based synchronization), flush logic (three triggers with detailed conditions), error handling (retry with backoff, multi-tier fallback), and performance optimizations (batching, aggregation, atomic operations). Comments use clear labels (BLOCKING CALL, THREAD SAFETY, PERFORMANCE OPTIMIZATION, ERROR HANDLING, RECOVERY TIER) for easy navigation. Commit: 68c7d8c."
         },
         {
           "subtask_id": "5.3",
