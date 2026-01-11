@@ -5,15 +5,11 @@ CommandRouter - Routes and executes slash commands for Thanos Interactive Mode
 Single Responsibility: Command parsing and delegation
 """
 
-import asyncio
-import os
 from pathlib import Path
-import re
-from typing import Callable, Optional
+from typing import Callable
 
 # Import handler modules
 from Tools.command_handlers import (
-    BaseHandler,
     Colors,
     CommandAction,
     CommandResult,
@@ -28,15 +24,6 @@ from Tools.command_handlers import (
 
 # Import routing modules
 from Tools.routing import PersonaRouter, CommandRegistry
-
-# MemOS integration (optional - graceful degradation if unavailable)
-try:
-    from Tools.memos import MemOS, get_memos, init_memos
-
-    MEMOS_AVAILABLE = True
-except ImportError:
-    MEMOS_AVAILABLE = False
-    MemOS = None
 
 
 class CommandRouter:
@@ -76,10 +63,6 @@ class CommandRouter:
         }
         self._default_model = "opus"
 
-        # MemOS integration (lazy initialization)
-        self._memos: Optional[MemOS] = None
-        self._memos_initialized = False
-
         # Initialize routing modules
         self.persona_router = PersonaRouter(orchestrator, current_agent=self.current_agent)
         self.registry = CommandRegistry()
@@ -117,65 +100,10 @@ class CommandRouter:
             current_agent_getter=current_agent_getter
         )
 
-        # Command registry: {command_name: (handler_function, description, arg_names)}
-        self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
+        # Register commands with the registry
         self._register_commands()
 
-        # Build trigger patterns for intelligent routing
-        self._trigger_patterns: dict[str, list[re.Pattern]] = {}
-        self._build_trigger_patterns()
-
-    def _build_trigger_patterns(self):
-        """
-        Build regex patterns from agent triggers for intelligent routing.
-
-        NOTE: This is now delegated to PersonaRouter. Kept for backward compatibility.
-        """
-        # Delegate to PersonaRouter - no need to maintain duplicate patterns
-        pass
-
-    def _get_memos(self) -> Optional["MemOS"]:
-        """Get MemOS instance, initializing if needed."""
-        if not MEMOS_AVAILABLE:
-            return None
-
-        if not self._memos_initialized:
-            try:
-                # Try to get existing instance
-                self._memos = get_memos()
-                self._memos_initialized = True
-            except Exception:
-                # Initialize new instance
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Can't use asyncio.run in running loop
-                        self._memos = None
-                    else:
-                        self._memos = loop.run_until_complete(init_memos())
-                        self._memos_initialized = True
-                except Exception:
-                    self._memos = None
-
-        return self._memos
-
-    def _run_async(self, coro):
-        """Run async coroutine from sync context."""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a new loop for nested async
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, coro)
-                    return future.result(timeout=30)
-            else:
-                return loop.run_until_complete(coro)
-        except Exception:
-            return None
-
-    def detect_agent(self, message: str, auto_switch: bool = True) -> Optional[str]:
+    def detect_agent(self, message: str, auto_switch: bool = True):
         """
         Detect the appropriate agent for a message based on trigger patterns.
 
