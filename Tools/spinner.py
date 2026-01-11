@@ -66,13 +66,16 @@ Spinners are visual-only enhancements. If they fail, execution continues:
 The __exit__ method calls fail() automatically on exceptions to show ✗ symbol.
 """
 
+import contextlib
 import sys
 from typing import Optional
+
 
 # Try to import yaspin with graceful fallback
 try:
     from yaspin import yaspin
     from yaspin.spinners import Spinners
+
     SPINNER_AVAILABLE = True
 except ImportError:
     SPINNER_AVAILABLE = False
@@ -90,9 +93,9 @@ class ThanosSpinner:
     - Graceful fallback if yaspin unavailable
     """
 
-    def __init__(self, text: str = "Processing...",
-                 color: str = "cyan",
-                 spinner_type: str = "dots"):
+    def __init__(
+        self, text: str = "Processing...", color: str = "cyan", spinner_type: str = "dots"
+    ):
         """
         Initialize spinner.
 
@@ -163,7 +166,7 @@ class ThanosSpinner:
             self._spinner = yaspin(
                 text=self.text,
                 color=self.color,
-                spinner=getattr(Spinners, self.spinner_type, Spinners.dots)
+                spinner=getattr(Spinners, self.spinner_type, Spinners.dots),
             )
             self._spinner.start()
         except Exception as e:
@@ -181,11 +184,9 @@ class ThanosSpinner:
         orchestrator's run_command() and chat() before first chunk.
         """
         if self._spinner:
-            try:
+            # If stop fails, ignore - spinner is non-critical
+            with contextlib.suppress(Exception):
                 self._spinner.stop()
-            except Exception:
-                # If stop fails, ignore - spinner is non-critical
-                pass
             self._spinner = None
         elif self._fallback_printed:
             # Clear fallback text
@@ -224,11 +225,9 @@ class ThanosSpinner:
         """Update spinner text while running."""
         self.text = text
         if self._spinner:
-            try:
+            # If update fails, ignore - spinner will continue with old text
+            with contextlib.suppress(Exception):
                 self._spinner.text = text
-            except Exception:
-                # If update fails, ignore - spinner will continue with old text
-                pass
 
 
 # ========================================================================
@@ -236,6 +235,7 @@ class ThanosSpinner:
 # ========================================================================
 # These factory functions ensure consistent spinner styling across Thanos CLI.
 # They are used by ThanosOrchestrator.run_command() and .chat() methods.
+
 
 def command_spinner(command_name: str) -> ThanosSpinner:
     """Create spinner for command execution.
@@ -259,11 +259,7 @@ def command_spinner(command_name: str) -> ThanosSpinner:
         >>> with spinner:
         ...     result = api_client.chat(...)
     """
-    return ThanosSpinner(
-        text=f"Executing {command_name}...",
-        color="cyan",
-        spinner_type="dots"
-    )
+    return ThanosSpinner(text=f"Executing {command_name}...", color="cyan", spinner_type="dots")
 
 
 def chat_spinner(agent_name: Optional[str] = None) -> ThanosSpinner:
@@ -296,11 +292,7 @@ def chat_spinner(agent_name: Optional[str] = None) -> ThanosSpinner:
         ...     print(chunk)
     """
     text = f"Thinking as {agent_name}..." if agent_name else "Thinking..."
-    return ThanosSpinner(
-        text=text,
-        color="magenta",
-        spinner_type="dots"
-    )
+    return ThanosSpinner(text=text, color="magenta", spinner_type="dots")
 
 
 def routing_spinner() -> ThanosSpinner:
@@ -320,8 +312,4 @@ def routing_spinner() -> ThanosSpinner:
     Returns:
         ThanosSpinner configured for routing operations
     """
-    return ThanosSpinner(
-        text="Routing...",
-        color="yellow",
-        spinner_type="dots"
-    )
+    return ThanosSpinner(text="Routing...", color="yellow", spinner_type="dots")

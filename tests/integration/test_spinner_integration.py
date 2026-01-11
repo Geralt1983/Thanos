@@ -16,12 +16,12 @@ Test Coverage:
 - Spinner lifecycle (start/stop/ok/fail)
 """
 
-import os
-import sys
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-from io import StringIO
+import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 
 # Ensure Thanos is in path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -40,6 +40,7 @@ pytestmark = pytest.mark.integration
 def orchestrator():
     """Create ThanosOrchestrator instance for testing"""
     from pathlib import Path
+
     base_dir = Path(__file__).parent.parent.parent
     return ThanosOrchestrator(base_dir=str(base_dir))
 
@@ -47,26 +48,25 @@ def orchestrator():
 @pytest.fixture
 def mock_api_client():
     """Create a mock API client for testing"""
-    from unittest.mock import MagicMock
-    mock_client = MagicMock()
-    return mock_client
+    return MagicMock()
 
 
 # =============================================================================
 # Test Spinner Integration with Orchestrator Commands
 # =============================================================================
 
+
 class TestSpinnerIntegrationWithCommands:
     """Test spinner integration with actual orchestrator command flow"""
 
     def test_run_command_streaming_spinner_lifecycle(self, orchestrator):
         """Test spinner lifecycle in run_command with streaming enabled"""
-        from unittest.mock import patch, MagicMock
 
         # Mock the API client and spinner
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
@@ -79,7 +79,7 @@ class TestSpinnerIntegrationWithCommands:
             mock_command.name = "daily"
             mock_command.instructions = "Test instructions"
 
-            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+            with patch.object(orchestrator, "find_command", return_value=mock_command):
                 # Call run_command with streaming
                 result = orchestrator.run_command("daily", stream=True)
 
@@ -97,12 +97,12 @@ class TestSpinnerIntegrationWithCommands:
 
     def test_run_command_non_streaming_spinner_lifecycle(self, orchestrator):
         """Test spinner lifecycle in run_command with non-streaming mode"""
-        from unittest.mock import patch, MagicMock
 
         # Mock the API client and spinner
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner that supports context manager
             mock_spinner = MagicMock()
             mock_spinner.__enter__ = MagicMock(return_value=mock_spinner)
@@ -117,7 +117,7 @@ class TestSpinnerIntegrationWithCommands:
             mock_command.name = "daily"
             mock_command.instructions = "Test instructions"
 
-            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+            with patch.object(orchestrator, "find_command", return_value=mock_command):
                 # Call run_command without streaming
                 result = orchestrator.run_command("daily", stream=False)
 
@@ -133,12 +133,12 @@ class TestSpinnerIntegrationWithCommands:
 
     def test_run_command_streaming_spinner_fail_on_error(self, orchestrator):
         """Test spinner shows failure when command errors in streaming mode"""
-        from unittest.mock import patch, MagicMock
 
         # Mock the API client and spinner
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
@@ -151,7 +151,7 @@ class TestSpinnerIntegrationWithCommands:
             mock_command.name = "daily"
             mock_command.instructions = "Test instructions"
 
-            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+            with patch.object(orchestrator, "find_command", return_value=mock_command):
                 # Call run_command and expect exception
                 with pytest.raises(Exception, match="API error"):
                     orchestrator.run_command("daily", stream=True)
@@ -164,14 +164,14 @@ class TestSpinnerIntegrationWithCommands:
 
     def test_run_command_different_command_types(self, orchestrator):
         """Test spinner integration with different command types"""
-        from unittest.mock import patch, MagicMock
 
         commands_to_test = ["daily", "email", "priorities", "custom_command"]
 
         for command_name in commands_to_test:
-            with patch.object(orchestrator, 'api_client') as mock_api, \
-                 patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
-
+            with (
+                patch.object(orchestrator, "api_client") as mock_api,
+                patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+            ):
                 # Setup mock spinner
                 mock_spinner = MagicMock()
                 mock_spinner_factory.return_value = mock_spinner
@@ -184,7 +184,7 @@ class TestSpinnerIntegrationWithCommands:
                 mock_command.name = command_name
                 mock_command.instructions = f"Test instructions for {command_name}"
 
-                with patch.object(orchestrator, 'find_command', return_value=mock_command):
+                with patch.object(orchestrator, "find_command", return_value=mock_command):
                     # Call run_command with streaming
                     orchestrator.run_command(command_name, stream=True)
 
@@ -197,17 +197,18 @@ class TestSpinnerIntegrationWithCommands:
 # Test Spinner Integration with Chat
 # =============================================================================
 
+
 class TestSpinnerIntegrationWithChat:
     """Test spinner integration with actual orchestrator chat flow"""
 
     def test_chat_streaming_spinner_lifecycle(self, orchestrator):
         """Test spinner lifecycle in chat with streaming enabled"""
-        from unittest.mock import patch, MagicMock
 
         # Mock the API client and spinner
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.chat_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
@@ -219,7 +220,7 @@ class TestSpinnerIntegrationWithChat:
             mock_agent = MagicMock()
             mock_agent.name = "Ops"
 
-            with patch.object(orchestrator, 'find_agent', return_value=mock_agent):
+            with patch.object(orchestrator, "find_agent", return_value=mock_agent):
                 # Call chat with streaming
                 result = orchestrator.chat("What should I do today?", stream=True)
 
@@ -237,12 +238,12 @@ class TestSpinnerIntegrationWithChat:
 
     def test_chat_non_streaming_spinner_lifecycle(self, orchestrator):
         """Test spinner lifecycle in chat with non-streaming mode"""
-        from unittest.mock import patch, MagicMock
 
         # Mock the API client and spinner
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.chat_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner that supports context manager
             mock_spinner = MagicMock()
             mock_spinner.__enter__ = MagicMock(return_value=mock_spinner)
@@ -256,7 +257,7 @@ class TestSpinnerIntegrationWithChat:
             mock_agent = MagicMock()
             mock_agent.name = "Ops"
 
-            with patch.object(orchestrator, 'find_agent', return_value=mock_agent):
+            with patch.object(orchestrator, "find_agent", return_value=mock_agent):
                 # Call chat without streaming
                 result = orchestrator.chat("What should I do today?", stream=False)
 
@@ -272,14 +273,14 @@ class TestSpinnerIntegrationWithChat:
 
     def test_chat_with_different_agents(self, orchestrator):
         """Test spinner integration with different agent types"""
-        from unittest.mock import patch, MagicMock
 
         agents_to_test = ["Ops", "Coach", "Strategy", "Health"]
 
         for agent_name in agents_to_test:
-            with patch.object(orchestrator, 'api_client') as mock_api, \
-                 patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
-
+            with (
+                patch.object(orchestrator, "api_client") as mock_api,
+                patch("Tools.thanos_orchestrator.chat_spinner") as mock_spinner_factory,
+            ):
                 # Setup mock spinner
                 mock_spinner = MagicMock()
                 mock_spinner_factory.return_value = mock_spinner
@@ -291,7 +292,7 @@ class TestSpinnerIntegrationWithChat:
                 mock_agent = MagicMock()
                 mock_agent.name = agent_name
 
-                with patch.object(orchestrator, 'find_agent', return_value=mock_agent):
+                with patch.object(orchestrator, "find_agent", return_value=mock_agent):
                     # Call chat with streaming
                     orchestrator.chat(f"Test message for {agent_name}", stream=True)
 
@@ -301,12 +302,12 @@ class TestSpinnerIntegrationWithChat:
 
     def test_chat_without_agent_detection(self, orchestrator):
         """Test spinner with chat when no specific agent is detected"""
-        from unittest.mock import patch, MagicMock
 
         # Mock the API client and spinner
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.chat_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
@@ -315,7 +316,7 @@ class TestSpinnerIntegrationWithChat:
             mock_api.chat_stream.return_value = iter(["response"])
 
             # Mock find_agent to return None (no agent detected)
-            with patch.object(orchestrator, 'find_agent', return_value=None):
+            with patch.object(orchestrator, "find_agent", return_value=None):
                 # Call chat with streaming
                 orchestrator.chat("Generic message", stream=True)
 
@@ -325,12 +326,12 @@ class TestSpinnerIntegrationWithChat:
 
     def test_chat_streaming_spinner_fail_on_error(self, orchestrator):
         """Test spinner shows failure when chat errors in streaming mode"""
-        from unittest.mock import patch, MagicMock
 
         # Mock the API client and spinner
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.chat_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
@@ -342,7 +343,7 @@ class TestSpinnerIntegrationWithChat:
             mock_agent = MagicMock()
             mock_agent.name = "Ops"
 
-            with patch.object(orchestrator, 'find_agent', return_value=mock_agent):
+            with patch.object(orchestrator, "find_agent", return_value=mock_agent):
                 # Call chat and expect exception
                 with pytest.raises(Exception, match="Chat API error"):
                     orchestrator.chat("What should I do?", stream=True)
@@ -358,17 +359,18 @@ class TestSpinnerIntegrationWithChat:
 # Test Spinner Behavior in Different Environments
 # =============================================================================
 
+
 class TestSpinnerEnvironmentBehavior:
     """Test spinner behavior in different TTY/non-TTY environments"""
 
     def test_spinner_in_tty_environment(self, orchestrator):
         """Test spinner behaves correctly in TTY environment"""
-        from unittest.mock import patch, MagicMock
 
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory, \
-             patch('sys.stdout.isatty', return_value=True):
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+            patch("sys.stdout.isatty", return_value=True),
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
@@ -381,7 +383,7 @@ class TestSpinnerEnvironmentBehavior:
             mock_command.name = "daily"
             mock_command.instructions = "Test"
 
-            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+            with patch.object(orchestrator, "find_command", return_value=mock_command):
                 # Call run_command in TTY environment
                 orchestrator.run_command("daily", stream=True)
 
@@ -391,12 +393,12 @@ class TestSpinnerEnvironmentBehavior:
 
     def test_spinner_in_non_tty_environment(self, orchestrator):
         """Test spinner behaves correctly in non-TTY environment (pipes/redirects)"""
-        from unittest.mock import patch, MagicMock
 
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory, \
-             patch('sys.stdout.isatty', return_value=False):
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+            patch("sys.stdout.isatty", return_value=False),
+        ):
             # Setup mock spinner - it should still be created but won't show animation
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
@@ -409,7 +411,7 @@ class TestSpinnerEnvironmentBehavior:
             mock_command.name = "daily"
             mock_command.instructions = "Test"
 
-            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+            with patch.object(orchestrator, "find_command", return_value=mock_command):
                 # Call run_command in non-TTY environment
                 orchestrator.run_command("daily", stream=True)
 
@@ -423,33 +425,47 @@ class TestSpinnerEnvironmentBehavior:
 # Test Complete Integration Scenarios
 # =============================================================================
 
+
 class TestCompleteIntegrationScenarios:
     """Test complete end-to-end integration scenarios"""
 
     def test_complete_run_command_flow_with_spinner(self, orchestrator):
         """Test complete run_command flow from start to finish with spinner"""
-        from unittest.mock import patch, MagicMock
 
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
 
             # Setup realistic API streaming response
-            mock_api.chat_stream.return_value = iter([
-                "Here ", "are ", "your ", "priorities ", "for ", "today:\n",
-                "1. ", "Complete ", "project ", "review\n",
-                "2. ", "Respond ", "to ", "emails\n"
-            ])
+            mock_api.chat_stream.return_value = iter(
+                [
+                    "Here ",
+                    "are ",
+                    "your ",
+                    "priorities ",
+                    "for ",
+                    "today:\n",
+                    "1. ",
+                    "Complete ",
+                    "project ",
+                    "review\n",
+                    "2. ",
+                    "Respond ",
+                    "to ",
+                    "emails\n",
+                ]
+            )
 
             # Mock find_command
             mock_command = MagicMock()
             mock_command.name = "daily"
             mock_command.instructions = "Provide daily priorities"
 
-            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+            with patch.object(orchestrator, "find_command", return_value=mock_command):
                 # Execute complete flow
                 result = orchestrator.run_command("daily", stream=True)
 
@@ -467,26 +483,37 @@ class TestCompleteIntegrationScenarios:
 
     def test_complete_chat_flow_with_spinner_and_agent(self, orchestrator):
         """Test complete chat flow from start to finish with spinner and agent detection"""
-        from unittest.mock import patch, MagicMock
 
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.chat_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner
             mock_spinner = MagicMock()
             mock_spinner_factory.return_value = mock_spinner
 
             # Setup realistic API streaming response
-            mock_api.chat_stream.return_value = iter([
-                "Based ", "on ", "your ", "priorities, ",
-                "I ", "recommend ", "focusing ", "on ", "the ", "project ", "review."
-            ])
+            mock_api.chat_stream.return_value = iter(
+                [
+                    "Based ",
+                    "on ",
+                    "your ",
+                    "priorities, ",
+                    "I ",
+                    "recommend ",
+                    "focusing ",
+                    "on ",
+                    "the ",
+                    "project ",
+                    "review.",
+                ]
+            )
 
             # Mock find_agent to detect Ops agent
             mock_agent = MagicMock()
             mock_agent.name = "Ops"
 
-            with patch.object(orchestrator, 'find_agent', return_value=mock_agent):
+            with patch.object(orchestrator, "find_agent", return_value=mock_agent):
                 # Execute complete chat flow
                 result = orchestrator.chat("What should I focus on today?", stream=True)
 
@@ -504,11 +531,11 @@ class TestCompleteIntegrationScenarios:
 
     def test_error_recovery_with_spinner(self, orchestrator):
         """Test that system recovers gracefully from spinner errors"""
-        from unittest.mock import patch, MagicMock
 
-        with patch.object(orchestrator, 'api_client') as mock_api, \
-             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
-
+        with (
+            patch.object(orchestrator, "api_client") as mock_api,
+            patch("Tools.thanos_orchestrator.command_spinner") as mock_spinner_factory,
+        ):
             # Setup mock spinner that has issues
             mock_spinner = MagicMock()
             mock_spinner.start.side_effect = Exception("Spinner start error")
@@ -522,7 +549,7 @@ class TestCompleteIntegrationScenarios:
             mock_command.name = "daily"
             mock_command.instructions = "Test"
 
-            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+            with patch.object(orchestrator, "find_command", return_value=mock_command):
                 # System should still work even if spinner fails
                 # (spinner errors shouldn't break the actual command execution)
                 # This would raise an exception if not handled properly
