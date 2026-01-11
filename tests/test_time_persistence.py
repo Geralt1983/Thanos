@@ -350,9 +350,10 @@ class TestSystemPromptTimeContext:
         return base_dir
 
     @pytest.fixture
-    def mock_api_client(self, mocker):
+    def mock_api_client(self):
         """Create a mock API client."""
-        return mocker.Mock()
+        from unittest.mock import Mock
+        return Mock()
 
     def test_system_prompt_includes_temporal_context(self, temp_base_dir, mock_api_client):
         """Test that _build_system_prompt includes temporal context section."""
