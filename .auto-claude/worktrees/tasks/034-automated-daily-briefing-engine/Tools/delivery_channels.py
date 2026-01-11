@@ -421,6 +421,82 @@ class NotificationChannel(DeliveryChannel):
         return shutil.which(command) is not None
 
 
+class EmailChannel(DeliveryChannel):
+    """
+    Delivery channel for sending briefings via email.
+
+    This is a placeholder for future email delivery integration.
+    When implemented, this channel will support:
+    - SMTP server configuration
+    - API-based email services (SendGrid, Mailgun, AWS SES)
+    - HTML and plain text email formatting
+    - Attachment support for detailed briefings
+    - Recipient configuration (to, cc, bcc)
+    - Email templates with customizable styling
+
+    Structure is ready for integration with:
+    - Python smtplib for direct SMTP
+    - Third-party email service APIs
+    - OAuth authentication for Gmail/Outlook
+    """
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize EmailChannel.
+
+        Args:
+            config: Configuration with email settings.
+                   Future structure will include:
+                   {
+                       'enabled': False,
+                       'smtp_server': 'smtp.gmail.com',
+                       'smtp_port': 587,
+                       'use_tls': True,
+                       'from_address': 'briefings@example.com',
+                       'to_address': 'user@example.com',
+                       'subject_pattern': '{type} Briefing - {date}',
+                       'format': 'html',  # 'html' or 'text'
+                       'service': 'smtp'  # 'smtp', 'sendgrid', 'mailgun', 'ses'
+                   }
+        """
+        super().__init__(config)
+        self.from_address = self.config.get('from_address', '')
+        self.to_address = self.config.get('to_address', '')
+        self.subject_pattern = self.config.get('subject_pattern', '{type} Briefing - {date}')
+        self.email_format = self.config.get('format', 'html')
+        self.service = self.config.get('service', 'smtp')
+
+    def deliver(self, content: str, briefing_type: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Send briefing via email.
+
+        This method is not yet implemented. When implemented, it will:
+        1. Format the briefing content as HTML or plain text
+        2. Generate email subject from subject_pattern
+        3. Connect to configured email service (SMTP or API)
+        4. Send email to configured recipient(s)
+        5. Handle authentication and delivery errors
+        6. Log delivery status
+
+        Args:
+            content: The briefing content to send.
+            briefing_type: Type of briefing ('morning', 'evening', etc.).
+            metadata: Optional metadata with 'date' field.
+
+        Returns:
+            True if email was sent successfully, False otherwise.
+
+        Raises:
+            NotImplementedError: This feature is not yet implemented.
+        """
+        raise NotImplementedError(
+            "EmailChannel is not yet implemented. "
+            "This is a placeholder for future email delivery integration. "
+            "To implement, add email sending logic using smtplib or an email service API. "
+            "See the class docstring for planned features and configuration structure."
+        )
+
+
 class StateSyncChannel(DeliveryChannel):
     """
     Delivery channel that updates State/Today.md with briefing content.
@@ -602,7 +678,7 @@ def create_delivery_channel(channel_type: str, config: Optional[Dict[str, Any]] 
     Factory function to create delivery channel instances.
 
     Args:
-        channel_type: Type of channel ('cli', 'file', 'notification', 'state_sync').
+        channel_type: Type of channel ('cli', 'file', 'notification', 'state_sync', 'email').
         config: Channel-specific configuration.
 
     Returns:
@@ -617,12 +693,17 @@ def create_delivery_channel(channel_type: str, config: Optional[Dict[str, Any]] 
         >>> state_channel = create_delivery_channel('state_sync', {
         ...     'state_file': 'State/Today.md'
         ... })
+        >>> email_channel = create_delivery_channel('email', {
+        ...     'from_address': 'briefings@example.com',
+        ...     'to_address': 'user@example.com'
+        ... })
     """
     channels = {
         'cli': CLIChannel,
         'file': FileChannel,
         'notification': NotificationChannel,
         'state_sync': StateSyncChannel,
+        'email': EmailChannel,
     }
 
     channel_class = channels.get(channel_type.lower())

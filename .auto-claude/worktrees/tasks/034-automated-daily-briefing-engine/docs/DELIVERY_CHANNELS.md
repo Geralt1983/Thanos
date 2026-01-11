@@ -28,6 +28,7 @@ All delivery channels inherit from the abstract `DeliveryChannel` base class, wh
 2. **FileChannel** - Save briefings to filesystem
 3. **NotificationChannel** - Desktop notifications (macOS/Linux)
 4. **StateSyncChannel** - Update State/Today.md with briefing content
+5. **EmailChannel** - Email delivery (placeholder for future implementation)
 
 ---
 
@@ -212,6 +213,42 @@ Updates State/Today.md with briefing content, intelligently merging sections whi
 
 **See Also:** [StateSyncChannel Detailed Documentation](./STATE_SYNC_CHANNEL.md)
 
+### 5. EmailChannel (Placeholder)
+
+🚧 **NOT YET IMPLEMENTED** - This is a placeholder for future email delivery integration.
+
+Sends briefings via email to configured recipients.
+
+**Planned Features:**
+- SMTP server integration
+- API-based email services (SendGrid, Mailgun, AWS SES)
+- HTML and plain text formatting
+- Customizable email templates
+- Multiple recipient support
+- Attachment support for detailed briefings
+
+**Configuration:**
+```json
+{
+  "email": {
+    "enabled": false,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "use_tls": true,
+    "from_address": "briefings@example.com",
+    "to_address": "user@example.com",
+    "subject_pattern": "{type} Briefing - {date}",
+    "format": "html",
+    "service": "smtp"
+  }
+}
+```
+
+**Current Status:**
+Attempting to use EmailChannel will raise `NotImplementedError` with a helpful message. The configuration structure is defined and ready for future implementation.
+
+**See Also:** [EmailChannel Implementation Guide](./EMAIL_CHANNEL_PLACEHOLDER.md)
+
 ---
 
 ## Configuration
@@ -239,6 +276,17 @@ The delivery channels are configured in `config/briefing_schedule.json`:
     "state_sync": {
       "enabled": true,
       "state_file": "State/Today.md"
+    },
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "use_tls": true,
+      "from_address": "",
+      "to_address": "",
+      "subject_pattern": "{type} Briefing - {date}",
+      "format": "html",
+      "service": "smtp"
     }
   }
 }
