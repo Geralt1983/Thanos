@@ -111,6 +111,17 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/jeremy/Projects/Thanos/.claude/hooks/smart-swarm-init.sh"
+          }
+        ]
+      }
     ]
   },
   "includeCoAuthoredBy": true,
