@@ -25,7 +25,17 @@ regex patterns or trie-based matcher to achieve O(m) complexity.
   - 92 keywords across 4 agents (ops, coach, strategy, health)
   - Scoring: trigger=10, high=5, medium=2, low=1
   - KeywordMatcher implementation with O(m) complexity
-- ⏳ **Subtask 1.3**: Run baseline performance measurements (pending)
+- ✅ **Subtask 1.3**: Run baseline performance measurements (completed)
+  - Comprehensive benchmarks executed with 1000 iterations per test
+  - **Baseline Performance (Optimized KeywordMatcher):**
+    - Short messages (1-5 words): 3.95 μs mean, 3.79 μs median
+    - Medium messages (10-20 words): 5.47 μs mean, 5.29 μs median
+    - Long messages (40+ words): 17.88 μs mean, 16.79 μs median
+    - Keyword density variations: 7.47 μs mean, 7.75 μs median
+    - Edge cases: 27.47 μs mean, 45.42 μs median
+    - **Overall mean across all tests: 12.45 μs (0.012 ms)**
+  - Configuration: 92 keywords across 4 agents (ops=26, coach=24, strategy=20, health=22)
+  - Results saved to: benchmark_results.json
 
 ### Current Implementation Analysis
 The find_agent() method (lines 247-331) uses nested loops to check keywords:
@@ -47,4 +57,4 @@ The find_agent() method (lines 247-331) uses nested loops to check keywords:
 - Estimated speedup: 5-10x for typical messages
 
 ---
-Last Updated: 2026-01-11 (Subtask 1.2 completed)
+Last Updated: 2026-01-11 (Subtask 1.3 completed - Baseline benchmarks recorded)
