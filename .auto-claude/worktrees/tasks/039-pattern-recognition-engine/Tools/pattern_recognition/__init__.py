@@ -41,6 +41,7 @@ from .insight_generator import (
     rank_insights,
     filter_insights_by_confidence,
     filter_insights_by_category,
+    select_top_insights,
     calculate_recency_score,
     calculate_significance_score,
 )
@@ -78,6 +79,7 @@ __all__ = [
     "rank_insights",
     "filter_insights_by_confidence",
     "filter_insights_by_category",
+    "select_top_insights",
     "calculate_recency_score",
     "calculate_significance_score",
 ]
