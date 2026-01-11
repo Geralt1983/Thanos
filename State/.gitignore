@@ -1,0 +1,6 @@
+# OAuth credentials and sensitive authentication data
+calendar_credentials.json
+
+# Any other credential files that might be added
+*_credentials.json
+*.token
