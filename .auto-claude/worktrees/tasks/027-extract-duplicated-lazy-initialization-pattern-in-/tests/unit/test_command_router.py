@@ -1082,3 +1082,249 @@ class TestMemOSLazyInitialization:
                     assert result == mock_memos_instance
                     assert router._memos_initialized is True
                     assert router._memos == mock_memos_instance
+
+
+# ========================================================================
+# Adapter Lazy Initialization Tests (_get_workos, _get_oura, _get_adapter_manager)
+# ========================================================================
+
+
+class TestWorkOSLazyInitialization:
+    """Test _get_workos() lazy initialization with various scenarios"""
+
+    def test_get_workos_successful_initialization(self, router):
+        """Test _get_workos() successfully initializes WorkOSAdapter"""
+        mock_workos_instance = Mock(name="WorkOSAdapter")
+
+        with patch("Tools.command_router.WORKOS_AVAILABLE", True):
+            with patch("Tools.command_router.WorkOSAdapter", return_value=mock_workos_instance):
+                result = router._get_workos()
+                assert result == mock_workos_instance
+                assert router._workos == mock_workos_instance
+                assert router._workos_initialized is True
+
+    def test_get_workos_idempotency(self, router):
+        """Test _get_workos() returns same instance on multiple calls"""
+        mock_workos_instance = Mock(name="WorkOSAdapter")
+
+        with patch("Tools.command_router.WORKOS_AVAILABLE", True):
+            with patch("Tools.command_router.WorkOSAdapter", return_value=mock_workos_instance) as mock_adapter:
+                result1 = router._get_workos()
+                result2 = router._get_workos()
+                result3 = router._get_workos()
+
+                assert result1 == result2 == result3 == mock_workos_instance
+                assert mock_adapter.call_count == 1  # Only initialized once
+
+    def test_get_workos_unavailable(self, router):
+        """Test _get_workos() returns None when WORKOS_AVAILABLE is False"""
+        with patch("Tools.command_router.WORKOS_AVAILABLE", False):
+            result = router._get_workos()
+            assert result is None
+            assert router._workos_initialized is False
+
+    def test_get_workos_initialization_exception(self, router):
+        """Test _get_workos() handles initialization exceptions gracefully"""
+        with patch("Tools.command_router.WORKOS_AVAILABLE", True):
+            with patch("Tools.command_router.WorkOSAdapter", side_effect=RuntimeError("DB connection failed")):
+                result = router._get_workos()
+                assert result is None
+                assert router._workos is None
+                assert router._workos_initialized is False
+
+    def test_get_workos_missing_database_url(self, router):
+        """Test _get_workos() handles missing DATABASE_URL gracefully"""
+        with patch("Tools.command_router.WORKOS_AVAILABLE", True):
+            with patch("Tools.command_router.WorkOSAdapter", side_effect=ValueError("DATABASE_URL not set")):
+                result = router._get_workos()
+                assert result is None
+                assert router._workos is None
+
+    def test_get_workos_preserves_instance(self, router):
+        """Test _get_workos() preserves instance across calls"""
+        mock_instance = Mock(name="WorkOSAdapter")
+
+        with patch("Tools.command_router.WORKOS_AVAILABLE", True):
+            with patch("Tools.command_router.WorkOSAdapter", return_value=mock_instance):
+                result1 = router._get_workos()
+                result2 = router._get_workos()
+
+                assert result1 is result2
+                assert router._workos_initialized is True
+
+
+class TestOuraLazyInitialization:
+    """Test _get_oura() lazy initialization with various scenarios"""
+
+    def test_get_oura_successful_initialization(self, router):
+        """Test _get_oura() successfully initializes OuraAdapter"""
+        mock_oura_instance = Mock(name="OuraAdapter")
+
+        with patch("Tools.command_router.OURA_AVAILABLE", True):
+            with patch("Tools.command_router.OuraAdapter", return_value=mock_oura_instance):
+                result = router._get_oura()
+                assert result == mock_oura_instance
+                assert router._oura == mock_oura_instance
+                assert router._oura_initialized is True
+
+    def test_get_oura_idempotency(self, router):
+        """Test _get_oura() returns same instance on multiple calls"""
+        mock_oura_instance = Mock(name="OuraAdapter")
+
+        with patch("Tools.command_router.OURA_AVAILABLE", True):
+            with patch("Tools.command_router.OuraAdapter", return_value=mock_oura_instance) as mock_adapter:
+                result1 = router._get_oura()
+                result2 = router._get_oura()
+                result3 = router._get_oura()
+
+                assert result1 == result2 == result3 == mock_oura_instance
+                assert mock_adapter.call_count == 1  # Only initialized once
+
+    def test_get_oura_unavailable(self, router):
+        """Test _get_oura() returns None when OURA_AVAILABLE is False"""
+        with patch("Tools.command_router.OURA_AVAILABLE", False):
+            result = router._get_oura()
+            assert result is None
+            assert router._oura_initialized is False
+
+    def test_get_oura_initialization_exception(self, router):
+        """Test _get_oura() handles initialization exceptions gracefully"""
+        with patch("Tools.command_router.OURA_AVAILABLE", True):
+            with patch("Tools.command_router.OuraAdapter", side_effect=RuntimeError("API token invalid")):
+                result = router._get_oura()
+                assert result is None
+                assert router._oura is None
+                assert router._oura_initialized is False
+
+    def test_get_oura_missing_token(self, router):
+        """Test _get_oura() handles missing OURA_PERSONAL_ACCESS_TOKEN gracefully"""
+        with patch("Tools.command_router.OURA_AVAILABLE", True):
+            with patch("Tools.command_router.OuraAdapter", side_effect=ValueError("OURA_PERSONAL_ACCESS_TOKEN not set")):
+                result = router._get_oura()
+                assert result is None
+                assert router._oura is None
+
+    def test_get_oura_preserves_instance(self, router):
+        """Test _get_oura() preserves instance across calls"""
+        mock_instance = Mock(name="OuraAdapter")
+
+        with patch("Tools.command_router.OURA_AVAILABLE", True):
+            with patch("Tools.command_router.OuraAdapter", return_value=mock_instance):
+                result1 = router._get_oura()
+                result2 = router._get_oura()
+
+                assert result1 is result2
+                assert router._oura_initialized is True
+
+
+class TestAdapterManagerLazyInitialization:
+    """Test _get_adapter_manager() lazy initialization with various scenarios"""
+
+    def test_get_adapter_manager_successful_initialization(self, router):
+        """Test _get_adapter_manager() successfully initializes AdapterManager"""
+        mock_manager_instance = Mock(name="AdapterManager")
+
+        async def mock_get_default_manager():
+            await asyncio.sleep(0.001)
+            return mock_manager_instance
+
+        with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", True):
+            with patch("Tools.command_router.get_default_manager", side_effect=mock_get_default_manager):
+                result = router._get_adapter_manager()
+                assert result == mock_manager_instance
+                assert router._adapter_manager == mock_manager_instance
+                assert router._adapter_manager_initialized is True
+
+    def test_get_adapter_manager_idempotency(self, router):
+        """Test _get_adapter_manager() returns same instance on multiple calls"""
+        mock_manager_instance = Mock(name="AdapterManager")
+
+        async def mock_get_default_manager():
+            await asyncio.sleep(0.001)
+            return mock_manager_instance
+
+        with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", True):
+            with patch("Tools.command_router.get_default_manager", side_effect=mock_get_default_manager) as mock_get:
+                result1 = router._get_adapter_manager()
+                result2 = router._get_adapter_manager()
+                result3 = router._get_adapter_manager()
+
+                assert result1 == result2 == result3 == mock_manager_instance
+                assert mock_get.call_count == 1  # Only initialized once
+
+    def test_get_adapter_manager_unavailable(self, router):
+        """Test _get_adapter_manager() returns None when ADAPTER_MANAGER_AVAILABLE is False"""
+        with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", False):
+            result = router._get_adapter_manager()
+            assert result is None
+            assert router._adapter_manager_initialized is False
+
+    def test_get_adapter_manager_initialization_exception(self, router):
+        """Test _get_adapter_manager() handles initialization exceptions gracefully"""
+
+        async def failing_get_default_manager():
+            await asyncio.sleep(0.001)
+            raise RuntimeError("Adapter initialization failed")
+
+        with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", True):
+            with patch("Tools.command_router.get_default_manager", side_effect=failing_get_default_manager):
+                result = router._get_adapter_manager()
+                assert result is None
+                assert router._adapter_manager is None
+                assert router._adapter_manager_initialized is False
+
+    def test_get_adapter_manager_with_running_event_loop(self, router):
+        """Test _get_adapter_manager() handles running event loop gracefully"""
+
+        async def test_with_running_loop():
+            with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", True):
+                # Inside running loop, should return None (graceful degradation)
+                result = router._get_adapter_manager()
+                return result
+
+        # Run in event loop
+        result = asyncio.run(test_with_running_loop())
+        assert result is None
+
+    def test_get_adapter_manager_no_event_loop(self, router):
+        """Test _get_adapter_manager() creates event loop when needed"""
+        mock_manager_instance = Mock(name="AdapterManager")
+
+        async def mock_get_default_manager():
+            await asyncio.sleep(0.001)
+            return mock_manager_instance
+
+        with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", True):
+            with patch("Tools.command_router.get_default_manager", side_effect=mock_get_default_manager):
+                result = router._get_adapter_manager()
+                assert result == mock_manager_instance
+                assert router._adapter_manager_initialized is True
+
+    def test_get_adapter_manager_preserves_instance(self, router):
+        """Test _get_adapter_manager() preserves instance across calls"""
+        mock_instance = Mock(name="AdapterManager")
+
+        async def mock_get_default_manager():
+            await asyncio.sleep(0.001)
+            return mock_instance
+
+        with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", True):
+            with patch("Tools.command_router.get_default_manager", side_effect=mock_get_default_manager):
+                result1 = router._get_adapter_manager()
+                result2 = router._get_adapter_manager()
+
+                assert result1 is result2
+                assert router._adapter_manager_initialized is True
+
+    def test_get_adapter_manager_exception_in_async_init(self, router):
+        """Test _get_adapter_manager() handles async exceptions gracefully"""
+
+        async def mock_get_default_manager():
+            await asyncio.sleep(0.001)
+            raise Exception("Database connection failed")
+
+        with patch("Tools.command_router.ADAPTER_MANAGER_AVAILABLE", True):
+            with patch("Tools.command_router.get_default_manager", side_effect=mock_get_default_manager):
+                result = router._get_adapter_manager()
+                assert result is None
+                assert router._adapter_manager is None
