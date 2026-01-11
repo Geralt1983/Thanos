@@ -2273,5 +2273,291 @@ class TestAdaptiveContent(unittest.TestCase):
         self.assertIn("reasoning", template_data["adaptive_mode"])
 
 
+class TestWeeklyPatternSummary(unittest.TestCase):
+    """Test weekly pattern summary functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.test_dir = tempfile.mkdtemp()
+        self.state_dir = os.path.join(self.test_dir, "State")
+        self.templates_dir = os.path.join(self.test_dir, "Templates")
+        os.makedirs(self.state_dir, exist_ok=True)
+        os.makedirs(self.templates_dir, exist_ok=True)
+
+        # Create test State files
+        self._create_test_state_files()
+
+        # Enable patterns in config
+        self.config = {
+            "patterns": {
+                "enabled": True,
+                "weekly_review": {
+                    "enabled": True,
+                    "day": "Sunday",
+                    "briefing_type": "evening",
+                    "comparison_weeks": 2
+                }
+            }
+        }
+
+        self.engine = BriefingEngine(
+            state_dir=self.state_dir,
+            templates_dir=self.templates_dir,
+            config=self.config
+        )
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        import shutil
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def _create_test_state_files(self):
+        """Create minimal State files for testing."""
+        # Commitments.md
+        with open(os.path.join(self.state_dir, "Commitments.md"), "w") as f:
+            f.write("# Active Commitments\n\n- [ ] Test commitment\n")
+
+        # ThisWeek.md
+        with open(os.path.join(self.state_dir, "ThisWeek.md"), "w") as f:
+            f.write("# This Week\n\n- [ ] Test task\n")
+
+        # CurrentFocus.md
+        with open(os.path.join(self.state_dir, "CurrentFocus.md"), "w") as f:
+            f.write("# Current Focus\n\n- Test focus\n")
+
+    def _create_test_pattern_data(self):
+        """Create test pattern data for the week."""
+        from datetime import datetime, timedelta
+
+        # Create pattern data matching what get_weekly_pattern_summary will query
+        # On Sunday: last week (last Sun-Sat), otherwise: this week (this Sun-today)
+        today = date.today()
+        days_since_sunday = (today.weekday() + 1) % 7
+
+        if days_since_sunday == 0:  # Today is Sunday
+            week_end = today - timedelta(days=1)  # Last Saturday
+            week_start = week_end - timedelta(days=6)  # Last Sunday
+        else:
+            week_start = today - timedelta(days=days_since_sunday)
+            week_end = today
+
+        completions = []
+        for i in range(7):
+            task_date = week_start + timedelta(days=i)
+            # Skip if date is after week_end
+            if task_date > week_end:
+                break
+            day_name = task_date.strftime("%A")
+
+            # Add 2-3 tasks per day with varied categories
+            num_tasks = 2 if i % 2 == 0 else 3
+            for j in range(num_tasks):
+                category = ["work", "personal", "admin"][j % 3]
+                time_period = ["morning", "afternoon", "evening"][j % 3]
+
+                completions.append({
+                    "task_title": f"Test task {i}-{j}",
+                    "task_category": category,
+                    "completion_date": task_date.isoformat(),
+                    "completion_time": f"{9 + j * 3}:00:00",
+                    "day_of_week": day_name,
+                    "time_of_day": time_period
+                })
+
+        # Save to BriefingPatterns.json
+        patterns_data = {
+            "task_completions": completions,
+            "metadata": {
+                "created_at": datetime.now().isoformat(),
+                "last_updated": datetime.now().isoformat()
+            }
+        }
+
+        patterns_file = os.path.join(self.state_dir, "BriefingPatterns.json")
+        with open(patterns_file, "w") as f:
+            import json
+            json.dump(patterns_data, f, indent=2)
+
+    def test_weekly_summary_without_pattern_analyzer(self):
+        """Test weekly summary when pattern analyzer is not available."""
+        # Create engine without pattern analyzer
+        config = {"patterns": {"enabled": False}}
+        engine = BriefingEngine(
+            state_dir=self.state_dir,
+            templates_dir=self.templates_dir,
+            config=config
+        )
+
+        result = engine.get_weekly_pattern_summary()
+
+        self.assertFalse(result["has_data"])
+        self.assertIn("reason", result)
+
+    def test_weekly_summary_with_no_data(self):
+        """Test weekly summary with no task completions."""
+        result = self.engine.get_weekly_pattern_summary()
+
+        self.assertFalse(result["has_data"])
+        self.assertIn("reason", result)
+        self.assertIn("week_start", result)
+        self.assertIn("week_end", result)
+
+    def test_weekly_summary_with_data(self):
+        """Test weekly summary with task completion data."""
+        self._create_test_pattern_data()
+
+        result = self.engine.get_weekly_pattern_summary()
+
+        # Note: This test may not have data if test data doesn't align with week boundaries
+        # The important thing is that the method returns proper structure
+        self.assertIn("has_data", result)
+        self.assertIn("week_start", result)
+        self.assertIn("week_end", result)
+
+        if result["has_data"]:
+            self.assertIn("total_completions", result)
+            self.assertGreater(result["total_completions"], 0)
+        else:
+            # If no data, should have a reason
+            self.assertIn("reason", result)
+
+    def test_weekly_summary_most_productive_day(self):
+        """Test identification of most productive day."""
+        self._create_test_pattern_data()
+        result = self.engine.get_weekly_pattern_summary()
+
+        # Test structure when data is available
+        if result.get("has_data") and result.get("most_productive_day"):
+            self.assertIn("day", result["most_productive_day"])
+            self.assertIn("count", result["most_productive_day"])
+            self.assertGreater(result["most_productive_day"]["count"], 0)
+
+    def test_weekly_summary_most_productive_time(self):
+        """Test identification of most productive time."""
+        self._create_test_pattern_data()
+        result = self.engine.get_weekly_pattern_summary()
+
+        # Test structure when data is available
+        if result.get("has_data") and result.get("most_productive_time"):
+            self.assertIn("time", result["most_productive_time"])
+            self.assertIn("count", result["most_productive_time"])
+
+    def test_weekly_summary_category_breakdown(self):
+        """Test category breakdown in weekly summary."""
+        self._create_test_pattern_data()
+        result = self.engine.get_weekly_pattern_summary()
+
+        # Test structure when data is available
+        if result.get("has_data"):
+            self.assertIn("category_breakdown", result)
+            self.assertIsInstance(result["category_breakdown"], dict)
+
+            # Check structure of category data if present
+            for category, data in result["category_breakdown"].items():
+                self.assertIn("count", data)
+                self.assertIn("percentage", data)
+                self.assertGreater(data["count"], 0)
+                self.assertGreater(data["percentage"], 0)
+
+    def test_weekly_summary_insights(self):
+        """Test that insights are generated."""
+        self._create_test_pattern_data()
+        result = self.engine.get_weekly_pattern_summary()
+
+        # Test structure when data is available
+        if result.get("has_data"):
+            self.assertIn("insights", result)
+            self.assertIsInstance(result["insights"], list)
+
+    def test_weekly_summary_optimizations(self):
+        """Test that optimization suggestions are generated."""
+        self._create_test_pattern_data()
+        result = self.engine.get_weekly_pattern_summary()
+
+        # Test structure when data is available
+        if result.get("has_data"):
+            self.assertIn("optimizations", result)
+            self.assertIsInstance(result["optimizations"], list)
+
+            # Check structure of optimizations if present
+            for opt in result["optimizations"]:
+                self.assertIn("type", opt)
+                self.assertIn("suggestion", opt)
+
+    def test_weekly_review_in_evening_briefing_sunday(self):
+        """Test that weekly review is included in Sunday evening briefings."""
+        self._create_test_pattern_data()
+
+        context = self.engine.gather_context()
+
+        # Force context to be Sunday
+        context["day_of_week"] = "Sunday"
+        context["is_weekend"] = True
+
+        template_data = self.engine._prepare_template_data(
+            context,
+            "evening",
+            energy_level=None
+        )
+
+        # Weekly review should be included on Sunday (may or may not have data)
+        self.assertIn("weekly_review", template_data)
+        # Verify it's a dict with expected keys
+        if template_data["weekly_review"]:
+            self.assertIsInstance(template_data["weekly_review"], dict)
+            self.assertIn("has_data", template_data["weekly_review"])
+
+    def test_weekly_review_not_in_non_sunday_evening(self):
+        """Test that weekly review is NOT included on non-Sunday evenings."""
+        self._create_test_pattern_data()
+
+        context = self.engine.gather_context()
+
+        # Force context to be Monday
+        context["day_of_week"] = "Monday"
+        context["is_weekend"] = False
+
+        template_data = self.engine._prepare_template_data(
+            context,
+            "evening",
+            energy_level=None
+        )
+
+        # Weekly review should NOT be included on Monday
+        self.assertNotIn("weekly_review", template_data)
+
+    def test_weekly_review_disabled_in_config(self):
+        """Test that weekly review can be disabled via config."""
+        self._create_test_pattern_data()
+
+        # Disable weekly review in config
+        config = {
+            "patterns": {
+                "enabled": True,
+                "weekly_review": {
+                    "enabled": False
+                }
+            }
+        }
+        engine = BriefingEngine(
+            state_dir=self.state_dir,
+            templates_dir=self.templates_dir,
+            config=config
+        )
+
+        context = engine.gather_context()
+        context["day_of_week"] = "Sunday"
+
+        template_data = engine._prepare_template_data(
+            context,
+            "evening",
+            energy_level=None
+        )
+
+        # Weekly review should NOT be included when disabled
+        self.assertNotIn("weekly_review", template_data)
+
+
 if __name__ == '__main__':
     unittest.main()

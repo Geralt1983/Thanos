@@ -1,0 +1,172 @@
+{
+  "$schema": "./briefing_config.schema.json",
+  "version": "1.0.0",
+  "description": "Comprehensive configuration for automated daily briefing system",
+
+  "briefings": {
+    "morning": {
+      "enabled": true,
+      "time": "07:00",
+      "timezone": "local",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": true,
+        "sunday": true
+      },
+      "template": "briefing_morning.md",
+      "delivery_channels": ["cli", "file"]
+    },
+    "evening": {
+      "enabled": false,
+      "time": "19:00",
+      "timezone": "local",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": false,
+        "sunday": true
+      },
+      "template": "briefing_evening.md",
+      "delivery_channels": ["cli", "file"]
+    }
+  },
+
+  "delivery": {
+    "cli": {
+      "enabled": true,
+      "color": true,
+      "emoji": true,
+      "width": 80
+    },
+    "file": {
+      "enabled": true,
+      "output_dir": "History/DailyBriefings",
+      "filename_pattern": "{date}_{type}_briefing.md",
+      "create_directory": true,
+      "overwrite": true
+    },
+    "notification": {
+      "enabled": false,
+      "summary_only": true,
+      "sound": false,
+      "urgency": "normal"
+    },
+    "state_sync": {
+      "enabled": false,
+      "target_file": "State/Today.md",
+      "preserve_other_sections": true,
+      "add_timestamp": true
+    },
+    "email": {
+      "enabled": false,
+      "service": "smtp",
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "use_tls": true,
+      "from_address": "",
+      "to_address": "",
+      "subject_pattern": "{type} Briefing - {date}",
+      "format": "html",
+      "_comment": "Email delivery is not yet implemented. This is a placeholder for future integration."
+    }
+  },
+
+  "content": {
+    "max_priorities": 3,
+    "include_quick_wins": true,
+    "include_calendar": true,
+    "include_energy_prompts": false,
+    "weekend_mode": {
+      "enabled": true,
+      "exclude_work_tasks": true,
+      "focus_on_personal": true,
+      "relaxed_tone": true
+    },
+    "sections": {
+      "enabled": [
+        "priorities",
+        "commitments",
+        "tasks",
+        "focus",
+        "quick_wins",
+        "calendar",
+        "health"
+      ],
+      "order": [
+        "health",
+        "priorities",
+        "calendar",
+        "commitments",
+        "tasks",
+        "focus",
+        "quick_wins"
+      ],
+      "custom": []
+    }
+  },
+
+  "health": {
+    "enabled": false,
+    "prompt_for_energy": true,
+    "prompt_for_sleep": true,
+    "prompt_for_medication": false,
+    "evening_reflection": true,
+    "health_log_file": "State/HealthLog.json",
+    "energy_scale": {
+      "min": 1,
+      "max": 10
+    },
+    "medication": {
+      "name": "Vyvanse",
+      "peak_hours_after": 2,
+      "peak_duration_hours": 2
+    }
+  },
+
+  "scheduler": {
+    "check_interval_minutes": 1,
+    "prevent_duplicate_runs": true,
+    "run_state_file": "State/.briefing_runs.json",
+    "log_file": "logs/briefing_scheduler.log",
+    "log_level": "INFO",
+    "error_notification": true
+  },
+
+  "templates": {
+    "templates_dir": "Templates",
+    "custom_variables": {},
+    "fallback_behavior": "default"
+  },
+
+  "patterns": {
+    "enabled": false,
+    "minimum_days_required": 14,
+    "lookback_days": 90,
+    "patterns_file": "State/BriefingPatterns.json",
+    "influence_level": "medium",
+    "weekly_review": {
+      "enabled": true,
+      "day": "Sunday",
+      "briefing_type": "evening",
+      "include_pattern_changes": true,
+      "include_optimizations": true,
+      "comparison_weeks": 2
+    }
+  },
+
+  "advanced": {
+    "state_dir": "State",
+    "use_llm_enhancement": false,
+    "llm_model": "gpt-4o-mini",
+    "llm_temperature": 0.7,
+    "cache_enabled": false,
+    "cache_ttl_minutes": 60
+  }
+}
