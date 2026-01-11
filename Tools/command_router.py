@@ -519,8 +519,7 @@ class CommandRouter:
                 f"Store as decision{Colors.RESET}"
             )
             print(
-                f"{Colors.DIM}         /remember pattern: <text>  - "
-                f"Store as pattern{Colors.RESET}"
+                f"{Colors.DIM}         /remember pattern: <text>  - Store as pattern{Colors.RESET}"
             )
             print(
                 f"{Colors.DIM}         /remember <text>           - "
