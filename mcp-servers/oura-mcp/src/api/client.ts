@@ -1,6 +1,15 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { getOAuthClient, OuraOAuthClient } from "./oauth.js";
 import { getRateLimiter, RateLimiter } from "./rate-limiter.js";
+import type {
+  DailySleep,
+  DailyReadiness,
+  DailyActivity,
+  HeartRateData,
+  OuraAPIResponse,
+  APIRequestOptions,
+  OuraAPIError,
+} from "./types.js";
 
 // =============================================================================
 // CONSTANTS
@@ -10,132 +19,6 @@ const OURA_API_BASE_URL = "https://api.ouraring.com/v2";
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
 const DEBUG = process.env.DEBUG_API_CALLS === "true";
-
-// =============================================================================
-// TYPES
-// =============================================================================
-
-/**
- * Daily sleep data from Oura API
- */
-export interface DailySleep {
-  id: string;
-  day: string; // YYYY-MM-DD
-  score: number | null;
-  contributors: {
-    deep_sleep: number | null;
-    efficiency: number | null;
-    latency: number | null;
-    rem_sleep: number | null;
-    restfulness: number | null;
-    timing: number | null;
-    total_sleep: number | null;
-  };
-  total_sleep_duration: number | null; // seconds
-  time_in_bed: number | null; // seconds
-  awake_time: number | null; // seconds
-  light_sleep_duration: number | null; // seconds
-  deep_sleep_duration: number | null; // seconds
-  rem_sleep_duration: number | null; // seconds
-  restless_periods: number | null;
-  efficiency: number | null; // percentage
-  latency: number | null; // seconds
-  timing: {
-    bedtime_start: string | null; // ISO 8601
-    bedtime_end: string | null; // ISO 8601
-  };
-}
-
-/**
- * Daily readiness data from Oura API
- */
-export interface DailyReadiness {
-  id: string;
-  day: string; // YYYY-MM-DD
-  score: number | null;
-  contributors: {
-    activity_balance: number | null;
-    body_temperature: number | null;
-    hrv_balance: number | null;
-    previous_day_activity: number | null;
-    previous_night: number | null;
-    recovery_index: number | null;
-    resting_heart_rate: number | null;
-    sleep_balance: number | null;
-  };
-  temperature_deviation: number | null;
-  temperature_trend_deviation: number | null;
-}
-
-/**
- * Daily activity data from Oura API
- */
-export interface DailyActivity {
-  id: string;
-  day: string; // YYYY-MM-DD
-  score: number | null;
-  active_calories: number | null;
-  average_met_minutes: number | null;
-  contributors: {
-    meet_daily_targets: number | null;
-    move_every_hour: number | null;
-    recovery_time: number | null;
-    stay_active: number | null;
-    training_frequency: number | null;
-    training_volume: number | null;
-  };
-  equivalent_walking_distance: number | null; // meters
-  high_activity_met_minutes: number | null;
-  high_activity_time: number | null; // seconds
-  inactivity_alerts: number | null;
-  low_activity_met_minutes: number | null;
-  low_activity_time: number | null; // seconds
-  medium_activity_met_minutes: number | null;
-  medium_activity_time: number | null; // seconds
-  meters_to_target: number | null;
-  non_wear_time: number | null; // seconds
-  resting_time: number | null; // seconds
-  sedentary_met_minutes: number | null;
-  sedentary_time: number | null; // seconds
-  steps: number | null;
-  target_calories: number | null;
-  target_meters: number | null;
-  total_calories: number | null;
-}
-
-/**
- * Heart rate data from Oura API
- */
-export interface HeartRateData {
-  bpm: number;
-  source: string;
-  timestamp: string; // ISO 8601
-}
-
-/**
- * Paginated API response wrapper
- */
-interface OuraAPIResponse<T> {
-  data: T[];
-  next_token: string | null;
-}
-
-/**
- * API request options
- */
-export interface APIRequestOptions {
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string; // YYYY-MM-DD
-  nextToken?: string;
-}
-
-/**
- * API error response
- */
-interface OuraAPIError {
-  detail?: string;
-  message?: string;
-}
 
 // =============================================================================
 // OURA API CLIENT
