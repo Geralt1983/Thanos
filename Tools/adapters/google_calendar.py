@@ -55,6 +55,7 @@ class GoogleCalendarAdapter(BaseAdapter):
 
         self._credentials: Optional[Credentials] = None
         self._service = None
+        self._pending_state: Optional[str] = None  # Track OAuth state for validation
 
         # Load existing credentials if available
         self._load_credentials()
@@ -79,9 +80,10 @@ class GoogleCalendarAdapter(BaseAdapter):
             self._credentials = Credentials.from_authorized_user_file(
                 str(creds_path), self.SCOPES
             )
-        except Exception as e:
+        except Exception:
             # Credentials file is corrupted or invalid
             # We'll need to re-authenticate
+            # Silently ignore and allow re-authentication
             pass
 
     def _save_credentials(self) -> None:
@@ -120,8 +122,11 @@ class GoogleCalendarAdapter(BaseAdapter):
         try:
             self._credentials.refresh(Request())
             self._save_credentials()
+            # Clear cached service to use refreshed credentials
+            self._service = None
             return True
         except Exception:
+            # Token refresh failed - credentials may have been revoked
             return False
 
     def _get_service(self):
@@ -170,6 +175,67 @@ class GoogleCalendarAdapter(BaseAdapter):
 
         return self._credentials.valid
 
+    def revoke_credentials(self) -> ToolResult:
+        """
+        Revoke and clear stored credentials.
+
+        This will:
+        1. Revoke the access token with Google (if possible)
+        2. Delete the stored credentials file
+        3. Clear in-memory credentials
+
+        Returns:
+            ToolResult indicating success or failure
+        """
+        revoked = False
+        errors = []
+
+        # Try to revoke the token with Google
+        if self._credentials and self._credentials.token:
+            try:
+                import httpx
+                response = httpx.post(
+                    "https://oauth2.googleapis.com/revoke",
+                    params={"token": self._credentials.token},
+                    headers={"content-type": "application/x-www-form-urlencoded"},
+                )
+                if response.status_code == 200:
+                    revoked = True
+            except Exception as e:
+                errors.append(f"Failed to revoke token with Google: {str(e)}")
+
+        # Delete credentials file
+        creds_path = self._get_credentials_path()
+        if creds_path.exists():
+            try:
+                creds_path.unlink()
+            except Exception as e:
+                errors.append(f"Failed to delete credentials file: {str(e)}")
+
+        # Clear in-memory credentials
+        self._credentials = None
+        self._service = None
+        self._pending_state = None
+
+        if errors:
+            return ToolResult.ok(
+                {
+                    "status": "partially_revoked",
+                    "revoked_with_google": revoked,
+                    "local_credentials_cleared": True,
+                    "warnings": errors,
+                }
+            )
+        else:
+            return ToolResult.ok(
+                {
+                    "status": "revoked",
+                    "revoked_with_google": revoked,
+                    "local_credentials_cleared": True,
+                    "message": "Google Calendar credentials have been revoked and cleared.",
+                }
+            )
+
     def get_authorization_url(self) -> tuple[str, str]:
         """
         Generate OAuth 2.0 authorization URL.
@@ -207,6 +273,9 @@ class GoogleCalendarAdapter(BaseAdapter):
             prompt="consent",  # Force consent screen to get refresh token
         )
 
+        # Store state for validation during callback
+        self._pending_state = state
+
         return authorization_url, state
 
     def complete_authorization(self, authorization_response: str, state: str) -> ToolResult:
@@ -224,6 +293,13 @@ class GoogleCalendarAdapter(BaseAdapter):
             return ToolResult.fail(
                 "Google Calendar OAuth credentials not configured. "
                 "Set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET environment variables."
+            )
+
+        # Validate state parameter to prevent CSRF attacks
+        if self._pending_state and state != self._pending_state:
+            return ToolResult.fail(
+                "Invalid state parameter. This may indicate a security issue. "
+                "Please restart the authorization flow."
             )
 
         try:
@@ -252,6 +328,7 @@ class GoogleCalendarAdapter(BaseAdapter):
 
             # Clear any cached service to force rebuild with new credentials
             self._service = None
+            self._pending_state = None  # Clear pending state after successful auth
 
             return ToolResult.ok(
                 {
@@ -262,11 +339,13 @@ class GoogleCalendarAdapter(BaseAdapter):
                         if self._credentials.expiry
                         else None
                     ),
+                    "has_refresh_token": bool(self._credentials.refresh_token),
                 }
             )
 
         except Exception as e:
-            return ToolResult.fail(f"Authorization failed: {e}")
+            self._pending_state = None  # Clear pending state on error
+            return ToolResult.fail(f"Authorization failed: {str(e)}")
 
     def list_tools(self) -> list[dict[str, Any]]:
         """
@@ -302,6 +381,11 @@ class GoogleCalendarAdapter(BaseAdapter):
                 "description": "Check if Google Calendar is authenticated and credentials are valid",
                 "parameters": {},
             },
+            {
+                "name": "revoke_auth",
+                "description": "Revoke and clear Google Calendar credentials. Requires re-authentication to use calendar features again.",
+                "parameters": {},
+            },
         ]
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
@@ -322,6 +406,8 @@ class GoogleCalendarAdapter(BaseAdapter):
                 return await self._tool_complete_auth(arguments)
             elif tool_name == "check_auth":
                 return await self._tool_check_auth()
+            elif tool_name == "revoke_auth":
+                return await self._tool_revoke_auth()
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
@@ -384,6 +470,10 @@ class GoogleCalendarAdapter(BaseAdapter):
                     "message": "Not authenticated. Use the 'authorize' tool to connect Google Calendar.",
                 }
             )
+
+    async def _tool_revoke_auth(self) -> ToolResult:
+        """Tool: Revoke credentials."""
+        return self.revoke_credentials()
 
     async def close(self):
         """
