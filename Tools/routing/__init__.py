@@ -21,7 +21,9 @@ Usage:
 """
 
 from .persona_router import PersonaRouter
+from .command_registry import CommandRegistry
 
 __all__ = [
     "PersonaRouter",
+    "CommandRegistry",
 ]
