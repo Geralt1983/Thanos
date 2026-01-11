@@ -421,12 +421,188 @@ class NotificationChannel(DeliveryChannel):
         return shutil.which(command) is not None
 
 
+class StateSyncChannel(DeliveryChannel):
+    """
+    Delivery channel that updates State/Today.md with briefing content.
+
+    Intelligently merges briefing content into State/Today.md by:
+    - Creating the file if it doesn't exist
+    - Preserving existing content in other sections
+    - Updating specific sections (## Morning Brief, ## Evening Brief)
+    - Adding timestamps to track when each section was last updated
+    """
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize StateSyncChannel.
+
+        Args:
+            config: Configuration with optional 'state_file' path.
+                   Example: {
+                       'state_file': 'State/Today.md'
+                   }
+        """
+        super().__init__(config)
+        self.state_file = self.config.get('state_file', 'State/Today.md')
+
+    def deliver(self, content: str, briefing_type: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Update State/Today.md with briefing content.
+
+        Args:
+            content: The briefing content to write.
+            briefing_type: Type of briefing ('morning', 'evening', etc.).
+            metadata: Optional metadata with 'date' field.
+
+        Returns:
+            True if file was updated successfully, False otherwise.
+        """
+        try:
+            # Determine section name based on briefing type
+            section_name = f"## {briefing_type.capitalize()} Brief"
+
+            # Read existing content or create new
+            existing_content = self._read_existing_content()
+
+            # Parse existing sections
+            sections = self._parse_sections(existing_content)
+
+            # Prepare new section content with timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+            section_content = f"{section_name}\n"
+            section_content += f"*Updated: {timestamp}*\n\n"
+            section_content += content.strip() + "\n"
+
+            # Update or add the section
+            sections[section_name] = section_content
+
+            # Rebuild the file content
+            new_content = self._rebuild_content(sections)
+
+            # Write to file
+            file_path = Path(self.state_file)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+
+            self.log_delivery(briefing_type, True, f"Updated {self.state_file}")
+            return True
+
+        except Exception as e:
+            self.log_delivery(briefing_type, False, f"Error: {e}")
+            return False
+
+    def _read_existing_content(self) -> str:
+        """
+        Read existing content from State/Today.md.
+
+        Returns:
+            Existing file content or empty string if file doesn't exist.
+        """
+        file_path = Path(self.state_file)
+        if file_path.exists():
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            except Exception as e:
+                self.logger.warning(f"Could not read {self.state_file}: {e}")
+                return ""
+        return ""
+
+    def _parse_sections(self, content: str) -> Dict[str, str]:
+        """
+        Parse markdown content into sections.
+
+        Args:
+            content: Markdown content to parse.
+
+        Returns:
+            Dictionary mapping section headers to their content.
+        """
+        sections = {}
+
+        if not content.strip():
+            return sections
+
+        lines = content.split('\n')
+        current_section = None
+        current_content = []
+
+        for line in lines:
+            # Check if this is a level-2 header (section)
+            if line.startswith('## '):
+                # Save previous section if exists
+                if current_section:
+                    sections[current_section] = '\n'.join(current_content).strip() + '\n'
+
+                # Start new section
+                current_section = line
+                current_content = [line]
+            else:
+                # Add to current section
+                if current_section:
+                    current_content.append(line)
+                else:
+                    # Content before any section (e.g., file header)
+                    if '# header' not in sections:
+                        sections['# header'] = ''
+                    sections['# header'] += line + '\n'
+
+        # Save last section
+        if current_section:
+            sections[current_section] = '\n'.join(current_content).strip() + '\n'
+
+        return sections
+
+    def _rebuild_content(self, sections: Dict[str, str]) -> str:
+        """
+        Rebuild file content from sections.
+
+        Args:
+            sections: Dictionary of section headers to content.
+
+        Returns:
+            Reconstructed file content.
+        """
+        parts = []
+
+        # Add header if exists
+        if '# header' in sections:
+            parts.append(sections['# header'].strip())
+            del sections['# header']
+        else:
+            # Add default header if file is being created
+            if not sections:
+                parts.append("# Today")
+                parts.append(f"*Date: {datetime.now().strftime('%Y-%m-%d')}*\n")
+
+        # Define section order for briefings
+        section_order = ['## Morning Brief', '## Evening Brief']
+
+        # Add sections in order
+        for section_header in section_order:
+            if section_header in sections:
+                if parts and parts[-1].strip():
+                    parts.append('')  # Add blank line between sections
+                parts.append(sections[section_header].strip())
+                del sections[section_header]
+
+        # Add any remaining sections
+        for section_content in sections.values():
+            if parts and parts[-1].strip():
+                parts.append('')  # Add blank line between sections
+            parts.append(section_content.strip())
+
+        return '\n'.join(parts) + '\n'
+
+
 def create_delivery_channel(channel_type: str, config: Optional[Dict[str, Any]] = None) -> Optional[DeliveryChannel]:
     """
     Factory function to create delivery channel instances.
 
     Args:
-        channel_type: Type of channel ('cli', 'file', 'notification').
+        channel_type: Type of channel ('cli', 'file', 'notification', 'state_sync').
         config: Channel-specific configuration.
 
     Returns:
@@ -438,11 +614,15 @@ def create_delivery_channel(channel_type: str, config: Optional[Dict[str, Any]] 
         ...     'output_dir': 'History/DailyBriefings',
         ...     'filename_pattern': '{date}_{type}_briefing.md'
         ... })
+        >>> state_channel = create_delivery_channel('state_sync', {
+        ...     'state_file': 'State/Today.md'
+        ... })
     """
     channels = {
         'cli': CLIChannel,
         'file': FileChannel,
         'notification': NotificationChannel,
+        'state_sync': StateSyncChannel,
     }
 
     channel_class = channels.get(channel_type.lower())
