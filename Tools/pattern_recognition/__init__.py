@@ -68,6 +68,13 @@ from .pattern_storage import (
     store_all_patterns,
 )
 
+from .pattern_queries import (
+    get_patterns_by_category,
+    get_recent_insights,
+    get_patterns_related_to,
+    get_pattern_context_for_persona,
+)
+
 __all__ = [
     # Models
     "TaskCompletionPattern",
@@ -122,4 +129,9 @@ __all__ = [
     "link_patterns",
     "track_pattern_evolution",
     "store_all_patterns",
+    # Pattern Queries
+    "get_patterns_by_category",
+    "get_recent_insights",
+    "get_patterns_related_to",
+    "get_pattern_context_for_persona",
 ]
