@@ -100,7 +100,19 @@ The find_agent() method (lines 247-331) uses nested loops to check keywords:
   - Conclusion: Both implementations are sub-millisecond; architectural benefits justify the trade-off
   - Total keywords: 94, Pattern length: 951 characters
   - O(m) complexity verified for edge cases where regex excels
-- ⏳ **Subtask 3.4**: Validate backward compatibility (pending)
+- ✅ **Subtask 3.4**: Validate backward compatibility (completed)
+  - Fixed KeywordMatcher to exactly match legacy O(n*m) behavior
+  - Changes made:
+    1. Removed word boundaries (\b) - uses substring matching like Python's 'in' operator
+    2. Counts overlapping keywords (e.g., both "task" and "tasks" match in same message)
+    3. Initializes all agents to 0 for consistency with legacy behavior
+    4. Preserves agent order for deterministic results when all scores are 0
+  - Created comprehensive backward compatibility test suite
+  - File: tests/unit/test_backward_compatibility.py (556 lines)
+  - File: tests/unit/run_backward_compat_test.py (standalone runner, 409 lines)
+  - Test coverage: 69 test cases across all agents, priorities, edge cases, real-world messages
+  - Result: ALL 69 TESTS PASS ✓
+  - KeywordMatcher produces identical scores and agent selection to legacy implementation
 
 ### Expected Performance Gains
 - ✅ ACHIEVED: Reduced from 40+ substring searches to single regex finditer() call
@@ -108,4 +120,4 @@ The find_agent() method (lines 247-331) uses nested loops to check keywords:
 - Performance metrics: ~4μs for short messages, ~35μs for medium, ~230μs for long
 
 ---
-Last Updated: 2026-01-11
+Last Updated: 2026-01-11 (Subtask 3.4 completed)
