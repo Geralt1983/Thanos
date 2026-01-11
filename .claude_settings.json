@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Glob(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Grep(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/.auto-claude/specs/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/.auto-claude/specs/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/.auto-claude/specs/022-pre-compile-agent-keyword-patterns-for-o-1-intent-/**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Glob(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Grep(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}

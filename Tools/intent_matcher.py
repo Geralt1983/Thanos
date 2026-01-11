@@ -96,6 +96,12 @@ class KeywordMatcher:
         Creates a pattern like:
         \\b(overwhelmed|task|schedule|...)\\b
 
+        Uses word boundaries (\\b) for proper matching that prevents false positives
+        like matching 'task' in 'multitask' or 'focus' in 'refocus'.
+
+        For multi-word phrases like 'what should i do', the word boundaries apply
+        to the first and last words, while internal spaces are literal matches.
+
         With a mapping from each keyword back to (agent, weight) for scoring.
         """
         pattern_parts = []
@@ -135,13 +141,17 @@ class KeywordMatcher:
         pattern_parts.sort(key=len, reverse=True)
 
         # Build alternation pattern with word boundaries
-        # Use lookahead/lookbehind for multi-word phrases
+        # The \b ensures we don't match keywords in the middle of other words
+        # For example: \b(task)\b won't match 'multitask', only standalone 'task'
+        # For multi-word phrases: \b(what\ should\ i\ do)\b ensures both
+        # 'what' and 'do' are at word boundaries (spaces are literal in the middle)
         alternation = '|'.join(pattern_parts)
 
-        # Use word boundary for single words, but be careful with multi-word phrases
-        # For multi-word phrases, we rely on the fact that spaces are already escaped
-        # and we just need to ensure we're not matching in the middle of words
-        pattern_str = f'(?:^|\\s)({alternation})(?=\\s|$|[.,!?;:])'
+        # Build the final pattern with word boundaries
+        # \b is a zero-width assertion that matches:
+        # - Between a \w (word char: alphanumeric or _) and \W (non-word char)
+        # - At the start/end of string if it borders a word character
+        pattern_str = fr'\b({alternation})\b'
 
         self._pattern = re.compile(pattern_str, re.IGNORECASE)
 

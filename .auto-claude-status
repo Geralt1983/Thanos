@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "022-pre-compile-agent-keyword-patterns-for-o-1-intent-",
+  "state": "building",
+  "subtasks": {
+    "completed": 0,
+    "total": 0,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "",
+    "id": 0,
+    "total": 0
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 6,
+    "started_at": "2026-01-10T19:04:24.361540"
+  },
+  "last_update": "2026-01-10T19:42:37.528759"
+}
