@@ -7,12 +7,15 @@ for calendar integration, event management, and scheduling intelligence.
 
 import json
 import os
+import random
 import re
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -49,6 +52,13 @@ class GoogleCalendarAdapter(BaseAdapter):
 
     # Filter configuration location
     FILTERS_CONFIG_FILE = "config/calendar_filters.json"
+
+    # Retry configuration for API calls
+    MAX_RETRIES = 3
+    INITIAL_BACKOFF = 1.0  # seconds
+    MAX_BACKOFF = 32.0  # seconds
+    BACKOFF_MULTIPLIER = 2.0
+    JITTER_RANGE = 0.1  # +/- 10% random jitter
 
     def __init__(
         self,
@@ -158,6 +168,222 @@ class GoogleCalendarAdapter(BaseAdapter):
         except Exception:
             # Token refresh failed - credentials may have been revoked
             return False
+
+    def _execute_api_call_with_retry(self, api_call: Callable, operation_name: str = "API call") -> Any:
+        """
+        Execute a Google Calendar API call with retry logic and comprehensive error handling.
+
+        This method implements exponential backoff with jitter for transient failures
+        and provides detailed error messages for different failure scenarios.
+
+        Args:
+            api_call: A callable that executes the API request (e.g., lambda: service.events().list().execute())
+            operation_name: Human-readable name of the operation for error messages
+
+        Returns:
+            The result of the API call
+
+        Raises:
+            ValueError: For authentication, permission, or configuration errors that cannot be retried
+            RuntimeError: For API errors that persisted after all retries
+
+        Error Categories:
+            - Authentication errors (401): Credentials expired or invalid - requires re-authentication
+            - Permission errors (403): Insufficient permissions or access denied
+            - Quota errors (429, 403 with quota reason): API quota exceeded - retried with backoff
+            - Invalid data errors (400): Malformed request data - not retried
+            - Network errors: Connection failures, timeouts - retried with backoff
+            - Server errors (500-599): Transient server issues - retried with backoff
+        """
+        last_error = None
+        backoff = self.INITIAL_BACKOFF
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                # Execute the API call
+                result = api_call()
+                return result
+
+            except HttpError as e:
+                last_error = e
+                error_details = self._parse_http_error(e)
+                status_code = error_details["status_code"]
+                error_reason = error_details["reason"]
+
+                # Authentication errors - credentials expired or invalid
+                if status_code == 401:
+                    # Try to refresh credentials
+                    if self._refresh_credentials():
+                        # Credentials refreshed, retry immediately
+                        continue
+                    else:
+                        # Refresh failed - need to re-authenticate
+                        raise ValueError(
+                            f"{operation_name} failed: Authentication expired. "
+                            "Please re-authenticate using the 'authorize' tool."
+                        ) from e
+
+                # Permission errors - insufficient access
+                elif status_code == 403:
+                    # Check if this is a quota/rate limit error
+                    if error_reason in ["rateLimitExceeded", "quotaExceeded", "userRateLimitExceeded"]:
+                        # Quota error - retry with backoff
+                        if attempt < self.MAX_RETRIES - 1:
+                            sleep_time = self._calculate_backoff(backoff, attempt)
+                            time.sleep(sleep_time)
+                            backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
+                            continue
+                        else:
+                            raise RuntimeError(
+                                f"{operation_name} failed: API quota exceeded. "
+                                f"Reason: {error_reason}. Please try again later."
+                            ) from e
+                    else:
+                        # Permission denied - not retryable
+                        raise ValueError(
+                            f"{operation_name} failed: Permission denied. "
+                            f"Reason: {error_reason}. Please check calendar access permissions."
+                        ) from e
+
+                # Bad request - invalid data
+                elif status_code == 400:
+                    raise ValueError(
+                        f"{operation_name} failed: Invalid request data. "
+                        f"Details: {error_details['message']}"
+                    ) from e
+
+                # Not found errors
+                elif status_code == 404:
+                    raise ValueError(
+                        f"{operation_name} failed: Resource not found. "
+                        f"Details: {error_details['message']}"
+                    ) from e
+
+                # Rate limiting (too many requests)
+                elif status_code == 429:
+                    # Retry with exponential backoff
+                    if attempt < self.MAX_RETRIES - 1:
+                        sleep_time = self._calculate_backoff(backoff, attempt)
+                        time.sleep(sleep_time)
+                        backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"{operation_name} failed: Rate limit exceeded. "
+                            "Please try again later."
+                        ) from e
+
+                # Server errors (5xx) - transient, retry
+                elif 500 <= status_code < 600:
+                    if attempt < self.MAX_RETRIES - 1:
+                        sleep_time = self._calculate_backoff(backoff, attempt)
+                        time.sleep(sleep_time)
+                        backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"{operation_name} failed: Server error (status {status_code}). "
+                            f"Details: {error_details['message']}"
+                        ) from e
+
+                # Other HTTP errors - don't retry
+                else:
+                    raise RuntimeError(
+                        f"{operation_name} failed: HTTP {status_code}. "
+                        f"Details: {error_details['message']}"
+                    ) from e
+
+            except RefreshError as e:
+                # Credential refresh failed
+                raise ValueError(
+                    f"{operation_name} failed: Unable to refresh credentials. "
+                    "Please re-authenticate using the 'authorize' tool."
+                ) from e
+
+            except ConnectionError as e:
+                last_error = e
+                # Network connection error - retry with backoff
+                if attempt < self.MAX_RETRIES - 1:
+                    sleep_time = self._calculate_backoff(backoff, attempt)
+                    time.sleep(sleep_time)
+                    backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
+                    continue
+                else:
+                    raise RuntimeError(
+                        f"{operation_name} failed: Network connection error. "
+                        f"Details: {str(e)}"
+                    ) from e
+
+            except TimeoutError as e:
+                last_error = e
+                # Timeout error - retry with backoff
+                if attempt < self.MAX_RETRIES - 1:
+                    sleep_time = self._calculate_backoff(backoff, attempt)
+                    time.sleep(sleep_time)
+                    backoff = min(backoff * self.BACKOFF_MULTIPLIER, self.MAX_BACKOFF)
+                    continue
+                else:
+                    raise RuntimeError(
+                        f"{operation_name} failed: Request timeout. "
+                        "Please check your network connection."
+                    ) from e
+
+            except Exception as e:
+                # Unexpected error - don't retry
+                raise RuntimeError(
+                    f"{operation_name} failed: Unexpected error. "
+                    f"Details: {str(e)}"
+                ) from e
+
+        # All retries exhausted
+        raise RuntimeError(
+            f"{operation_name} failed after {self.MAX_RETRIES} attempts. "
+            f"Last error: {str(last_error)}"
+        )
+
+    def _parse_http_error(self, error: HttpError) -> dict[str, Any]:
+        """
+        Parse HttpError to extract useful error information.
+
+        Args:
+            error: The HttpError exception
+
+        Returns:
+            Dictionary with status_code, reason, and message
+        """
+        status_code = error.resp.status
+        error_content = {}
+
+        try:
+            error_content = json.loads(error.content.decode("utf-8"))
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        # Extract error details from the response
+        error_info = error_content.get("error", {})
+        reason = error_info.get("errors", [{}])[0].get("reason", "unknown")
+        message = error_info.get("message", str(error))
+
+        return {
+            "status_code": status_code,
+            "reason": reason,
+            "message": message,
+        }
+
+    def _calculate_backoff(self, base_backoff: float, attempt: int) -> float:
+        """
+        Calculate backoff time with exponential increase and random jitter.
+
+        Args:
+            base_backoff: Base backoff time in seconds
+            attempt: Current retry attempt number (0-indexed)
+
+        Returns:
+            Backoff time in seconds with jitter applied
+        """
+        # Add random jitter to prevent thundering herd
+        jitter = base_backoff * self.JITTER_RANGE * (2 * random.random() - 1)
+        return base_backoff + jitter
 
     def _load_filter_config(self) -> dict[str, Any]:
         """
@@ -1284,7 +1510,14 @@ class GoogleCalendarAdapter(BaseAdapter):
             else:
                 return ToolResult.fail(f"Unknown tool: {tool_name}")
 
+        except ValueError as e:
+            # Configuration, authentication, or validation errors from retry wrapper
+            return ToolResult.fail(str(e))
+        except RuntimeError as e:
+            # API errors that persisted after retries from retry wrapper
+            return ToolResult.fail(str(e))
         except HttpError as e:
+            # Fallback for any unwrapped API calls (should not occur in normal operation)
             return ToolResult.fail(f"Google Calendar API error: {e}")
         except Exception as e:
             return ToolResult.fail(f"Error executing {tool_name}: {e}")
@@ -1379,7 +1612,10 @@ class GoogleCalendarAdapter(BaseAdapter):
             }
 
             # Fetch all calendars from Google Calendar API
-            calendar_list_result = service.calendarList().list().execute()
+            calendar_list_result = self._execute_api_call_with_retry(
+                lambda: service.calendarList().list().execute(),
+                operation_name="List calendars"
+            )
             calendars = calendar_list_result.get("items", [])
 
             # Apply filters
@@ -1516,7 +1752,10 @@ class GoogleCalendarAdapter(BaseAdapter):
             request_params = {k: v for k, v in request_params.items() if v is not None}
 
             # Fetch events from Google Calendar API
-            events_result = service.events().list(**request_params).execute()
+            events_result = self._execute_api_call_with_retry(
+                lambda: service.events().list(**request_params).execute(),
+                operation_name="List events"
+            )
             raw_events = events_result.get("items", [])
 
             # Process and format events
@@ -1689,14 +1928,17 @@ class GoogleCalendarAdapter(BaseAdapter):
             time_max = today_end.isoformat()
 
             # Fetch events from Google Calendar API
-            events_result = service.events().list(
-                calendarId=calendar_id,
-                timeMin=time_min,
-                timeMax=time_max,
-                maxResults=250,
-                singleEvents=True,
-                orderBy="startTime",
-            ).execute()
+            events_result = self._execute_api_call_with_retry(
+                lambda: service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    maxResults=250,
+                    singleEvents=True,
+                    orderBy="startTime",
+                ).execute(),
+                operation_name="Get today's events"
+            )
 
             raw_events = events_result.get("items", [])
 
@@ -2017,14 +2259,17 @@ class GoogleCalendarAdapter(BaseAdapter):
             time_min = range_start.isoformat()
             time_max = range_end.isoformat()
 
-            events_result = service.events().list(
-                calendarId=calendar_id,
-                timeMin=time_min,
-                timeMax=time_max,
-                maxResults=2500,  # Higher limit for comprehensive conflict detection
-                singleEvents=True,
-                orderBy="startTime",
-            ).execute()
+            events_result = self._execute_api_call_with_retry(
+                lambda: service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    maxResults=2500,  # Higher limit for comprehensive conflict detection
+                    singleEvents=True,
+                    orderBy="startTime",
+                ).execute(),
+                operation_name="Find conflicts"
+            )
 
             raw_events = events_result.get("items", [])
 
@@ -2401,14 +2646,17 @@ class GoogleCalendarAdapter(BaseAdapter):
             time_min = search_start.isoformat()
             time_max = search_end.isoformat()
 
-            events_result = service.events().list(
-                calendarId=calendar_id,
-                timeMin=time_min,
-                timeMax=time_max,
-                maxResults=100,  # Should be sufficient for conflict checking
-                singleEvents=True,
-                orderBy="startTime",
-            ).execute()
+            events_result = self._execute_api_call_with_retry(
+                lambda: service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    maxResults=100,  # Should be sufficient for conflict checking
+                    singleEvents=True,
+                    orderBy="startTime",
+                ).execute(),
+                operation_name="Check availability"
+            )
 
             raw_events = events_result.get("items", [])
 
@@ -2760,17 +3008,18 @@ class GoogleCalendarAdapter(BaseAdapter):
             api_end = range_end.astimezone(ZoneInfo("UTC")).isoformat()
 
             # Fetch all events in the date range
-            events_result = (
-                service.events()
-                .list(
-                    calendarId=calendar_id,
-                    timeMin=api_start,
-                    timeMax=api_end,
-                    singleEvents=True,
-                    orderBy="startTime",
-                    maxResults=2500,
-                )
-                .execute()
+            events_result = self._execute_api_call_with_retry(
+                lambda: service.events()
+                    .list(
+                        calendarId=calendar_id,
+                        timeMin=api_start,
+                        timeMax=api_end,
+                        singleEvents=True,
+                        orderBy="startTime",
+                        maxResults=2500,
+                    )
+                    .execute(),
+                operation_name="Analyze schedule"
             )
 
             events = events_result.get("items", [])
@@ -3294,10 +3543,11 @@ class GoogleCalendarAdapter(BaseAdapter):
             event_body["visibility"] = visibility
 
             # Create the event using Google Calendar API
-            created_event = (
-                service.events()
-                .insert(calendarId=calendar_id, body=event_body, sendUpdates="all")
-                .execute()
+            created_event = self._execute_api_call_with_retry(
+                lambda: service.events()
+                    .insert(calendarId=calendar_id, body=event_body, sendUpdates="all")
+                    .execute(),
+                operation_name="Create event"
             )
 
             # Format the response with all relevant event details
@@ -3598,10 +3848,11 @@ class GoogleCalendarAdapter(BaseAdapter):
                 event_body["location"] = location
 
             # Create the event using Google Calendar API
-            created_event = (
-                service.events()
-                .insert(calendarId=calendar_id, body=event_body, sendUpdates="none")
-                .execute()
+            created_event = self._execute_api_call_with_retry(
+                lambda: service.events()
+                    .insert(calendarId=calendar_id, body=event_body, sendUpdates="none")
+                    .execute(),
+                operation_name="Create time block"
             )
 
             # Format the response with all relevant event details
@@ -3702,17 +3953,15 @@ class GoogleCalendarAdapter(BaseAdapter):
 
             # Retrieve the existing event to check metadata and get current values
             try:
-                existing_event = service.events().get(
-                    calendarId=calendar_id,
-                    eventId=event_id
-                ).execute()
-            except HttpError as e:
-                if e.resp.status == 404:
-                    return ToolResult.fail(f"Event not found: {event_id}")
-                elif e.resp.status == 403:
-                    return ToolResult.fail(f"Permission denied. Check that you have access to calendar: {calendar_id}")
-                else:
-                    raise
+                existing_event = self._execute_api_call_with_retry(
+                    lambda: service.events().get(
+                        calendarId=calendar_id,
+                        eventId=event_id
+                    ).execute(),
+                    operation_name="Get event"
+                )
+            except (ValueError, RuntimeError) as e:
+                return ToolResult.fail(str(e))
 
             # Safety check: verify event was created by Thanos
             extended_props = existing_event.get("extendedProperties", {})
@@ -3849,10 +4098,11 @@ class GoogleCalendarAdapter(BaseAdapter):
                 update_body["extendedProperties"] = extended_props
 
             # Update the event using Google Calendar API
-            updated_event = (
-                service.events()
-                .update(calendarId=calendar_id, eventId=event_id, body=update_body, sendUpdates="all")
-                .execute()
+            updated_event = self._execute_api_call_with_retry(
+                lambda: service.events()
+                    .update(calendarId=calendar_id, eventId=event_id, body=update_body, sendUpdates="all")
+                    .execute(),
+                operation_name="Update event"
             )
 
             # Format the response
@@ -3952,17 +4202,15 @@ class GoogleCalendarAdapter(BaseAdapter):
 
             # Retrieve the existing event to check metadata and get details
             try:
-                existing_event = service.events().get(
-                    calendarId=calendar_id,
-                    eventId=event_id
-                ).execute()
-            except HttpError as e:
-                if e.resp.status == 404:
-                    return ToolResult.fail(f"Event not found: {event_id}")
-                elif e.resp.status == 403:
-                    return ToolResult.fail(f"Permission denied. Check that you have access to calendar: {calendar_id}")
-                else:
-                    raise
+                existing_event = self._execute_api_call_with_retry(
+                    lambda: service.events().get(
+                        calendarId=calendar_id,
+                        eventId=event_id
+                    ).execute(),
+                    operation_name="Get event"
+                )
+            except (ValueError, RuntimeError) as e:
+                return ToolResult.fail(str(e))
 
             # Safety check: verify event was created by Thanos
             extended_props = existing_event.get("extendedProperties", {})
@@ -4011,11 +4259,14 @@ class GoogleCalendarAdapter(BaseAdapter):
                 event_details["thanos_metadata"] = private_props
 
             # Delete the event using Google Calendar API
-            service.events().delete(
-                calendarId=calendar_id,
-                eventId=event_id,
-                sendUpdates=send_updates
-            ).execute()
+            self._execute_api_call_with_retry(
+                lambda: service.events().delete(
+                    calendarId=calendar_id,
+                    eventId=event_id,
+                    sendUpdates=send_updates
+                ).execute(),
+                operation_name="Delete event"
+            )
 
             # Build success message
             message = f"Successfully deleted event: {event_summary}"
@@ -4519,17 +4770,17 @@ class GoogleCalendarAdapter(BaseAdapter):
         time_max = day_end.isoformat()
 
         # Fetch events from Google Calendar API
-        try:
-            events_result = service.events().list(
+        events_result = self._execute_api_call_with_retry(
+            lambda: service.events().list(
                 calendarId=calendar_id,
                 timeMin=time_min,
                 timeMax=time_max,
                 maxResults=250,
                 singleEvents=True,
                 orderBy="startTime",
-            ).execute()
-        except HttpError as e:
-            raise ValueError(f"Google Calendar API error: {e}")
+            ).execute(),
+            operation_name="Get daily metrics"
+        )
 
         raw_events = events_result.get("items", [])
 
@@ -4824,7 +5075,10 @@ class GoogleCalendarAdapter(BaseAdapter):
 
             # Simple API call to verify connectivity
             # Get the user's calendar list (lightweight operation)
-            service.calendarList().list(maxResults=1).execute()
+            self._execute_api_call_with_retry(
+                lambda: service.calendarList().list(maxResults=1).execute(),
+                operation_name="Health check"
+            )
 
             return ToolResult.ok(
                 {
@@ -4835,7 +5089,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                 }
             )
 
-        except HttpError as e:
-            return ToolResult.fail(f"API error: {e}")
+        except (ValueError, RuntimeError) as e:
+            return ToolResult.fail(str(e))
         except Exception as e:
             return ToolResult.fail(f"Health check failed: {e}")
