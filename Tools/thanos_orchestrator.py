@@ -276,6 +276,11 @@ You manage his entire life: work, family, health, and goals.
 You are proactive, direct, and warm but honest.
 You track patterns and surface them.""")
 
+        # Add temporal context (always fresh, never cached)
+        time_context = self._build_time_context()
+        if time_context:
+            parts.append(time_context)
+
         # Add core context
         if include_context and "CORE" in self.context:
             parts.append("\n## About Jeremy\n" + self.context["CORE"])

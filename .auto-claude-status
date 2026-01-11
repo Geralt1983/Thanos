@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "spec": "032-fix-time-persistence-issue-in-thanos-the-assistant",
+  "state": "building",
+  "subtasks": {
+    "completed": 6,
+    "total": 17,
+    "in_progress": 1,
+    "failed": 0
+  },
+  "phase": {
+    "current": "System Prompt Integration",
+    "id": null,
+    "total": 2
+  },
+  "workers": {
+    "active": 0,
+    "max": 1
+  },
+  "session": {
+    "number": 5,
+    "started_at": "2026-01-10T22:03:13.175282"
+  },
+  "last_update": "2026-01-10T22:14:58.829195"
+}

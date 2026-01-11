@@ -1,5 +1,9 @@
 {
-  "last_interaction": null,
-  "session_started": null,
-  "interaction_count_today": 0
+  "session_started": "2026-01-10T22:02:28.077623-05:00",
+  "interaction_count_today": 2,
+  "last_interaction": {
+    "timestamp": "2026-01-10T22:04:10.771347-05:00",
+    "type": "chat",
+    "agent": "ops"
+  }
 }
