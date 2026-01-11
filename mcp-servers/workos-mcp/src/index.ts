@@ -23,6 +23,13 @@ import {
 } from "./cache/cache.js";
 import { syncAll, syncSingleTask, removeCachedTask } from "./cache/sync.js";
 
+// Domain module imports
+import { taskTools, handleTaskTool } from "./domains/tasks/index.js";
+import { habitTools, handleHabitTool } from "./domains/habits/index.js";
+import { energyTools, handleEnergyTool } from "./domains/energy/index.js";
+import { brainDumpTools, handleBrainDumpTool } from "./domains/brain-dump/index.js";
+import { personalTasksTools, handlePersonalTasksTool } from "./domains/personal-tasks/index.js";
+
 // =============================================================================
 // DATABASE CONNECTION
 // =============================================================================
