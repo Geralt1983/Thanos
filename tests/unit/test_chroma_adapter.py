@@ -261,11 +261,12 @@ class TestChromaAdapterStoreBatch:
 
     @pytest.mark.asyncio
     async def test_store_batch_no_embeddings(self):
-        """Test store_batch fails when no embeddings generated."""
+        """Test store_batch fails when batch embedding generation fails."""
         from Tools.adapters.chroma_adapter import ChromaAdapter
 
         adapter = object.__new__(ChromaAdapter)
-        adapter._generate_embedding = MagicMock(return_value=None)
+        # Mock batch method to return None (simulating API failure)
+        adapter._generate_embeddings_batch = MagicMock(return_value=None)
 
         result = await adapter._store_batch({
             "items": [{"content": "item1"}, {"content": "item2"}]
@@ -273,14 +274,17 @@ class TestChromaAdapterStoreBatch:
 
         assert result.success is False
         assert "Could not generate embeddings" in result.error
+        # Verify batch method was called once with both texts
+        adapter._generate_embeddings_batch.assert_called_once_with(["item1", "item2"])
 
     @pytest.mark.asyncio
     async def test_store_batch_success(self):
-        """Test store_batch stores multiple items."""
+        """Test store_batch stores multiple items using batch embeddings."""
         from Tools.adapters.chroma_adapter import ChromaAdapter
 
         adapter = object.__new__(ChromaAdapter)
-        adapter._generate_embedding = MagicMock(return_value=[0.1] * 1536)
+        # Mock batch method to return list of embeddings (one per item)
+        adapter._generate_embeddings_batch = MagicMock(return_value=[[0.1] * 1536, [0.1] * 1536])
 
         mock_collection = MagicMock()
         adapter._get_collection = MagicMock(return_value=mock_collection)
@@ -296,15 +300,18 @@ class TestChromaAdapterStoreBatch:
         assert result.success is True
         assert result.data["stored"] == 2
         assert len(result.data["ids"]) == 2
+        # Verify batch method was called once with both texts
+        adapter._generate_embeddings_batch.assert_called_once_with(["item1", "item2"])
 
     @pytest.mark.asyncio
-    async def test_store_batch_skips_failed_embeddings(self):
-        """Test store_batch skips items with failed embeddings."""
+    async def test_store_batch_skips_items_without_content(self):
+        """Test store_batch skips items without content before batch processing."""
         from Tools.adapters.chroma_adapter import ChromaAdapter
 
         adapter = object.__new__(ChromaAdapter)
-        # First item succeeds, second fails
-        adapter._generate_embedding = MagicMock(side_effect=[[0.1] * 1536, None, [0.2] * 1536])
+        # Mock batch method to return embeddings only for items with content
+        # Only item1 and item3 have content, so batch receives 2 texts
+        adapter._generate_embeddings_batch = MagicMock(return_value=[[0.1] * 1536, [0.2] * 1536])
 
         mock_collection = MagicMock()
         adapter._get_collection = MagicMock(return_value=mock_collection)
@@ -312,13 +319,15 @@ class TestChromaAdapterStoreBatch:
         result = await adapter._store_batch({
             "items": [
                 {"content": "item1"},
-                {"content": "item2"},
+                {"content": ""},  # Empty content - filtered out
                 {"content": "item3"}
             ]
         })
 
         assert result.success is True
-        assert result.data["stored"] == 2  # Only 2 succeeded
+        assert result.data["stored"] == 2  # Only 2 items with content
+        # Verify batch method was called once with only non-empty content
+        adapter._generate_embeddings_batch.assert_called_once_with(["item1", "item3"])
 
 
 class TestChromaAdapterSemanticSearch:
@@ -736,18 +745,21 @@ class TestChromaAdapterGenerateEmbedding:
         assert result is None
 
     def test_generate_embedding_success(self):
-        """Test _generate_embedding returns embedding."""
+        """Test _generate_embedding returns embedding via batch delegation."""
         from Tools.adapters.chroma_adapter import ChromaAdapter
 
         adapter = object.__new__(ChromaAdapter)
         mock_response = MagicMock()
-        mock_response.data = [MagicMock(embedding=[0.1] * 1536)]
+        # Mock OpenAI API response with index field (required by batch method)
+        mock_response.data = [MagicMock(embedding=[0.1] * 1536, index=0)]
         adapter._openai_client = MagicMock()
         adapter._openai_client.embeddings.create.return_value = mock_response
 
         result = adapter._generate_embedding("test text")
 
         assert result == [0.1] * 1536
+        # Verify it calls batch API with single-item list
+        adapter._openai_client.embeddings.create.assert_called_once()
 
     def test_generate_embedding_exception(self):
         """Test _generate_embedding handles exception."""
