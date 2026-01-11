@@ -47,9 +47,72 @@ The infrastructure is already built - we just need to add optional session param
 
 ---
 
-### ⏳ Subtask 1.2: Research Neo4j async session best practices
-**Status:** Pending
+### ✅ Subtask 1.2: Research Neo4j async session best practices
+**Status:** Completed
+**Date:** 2026-01-11
 **Dependencies:** 1.1 ✅
+
+**Key Findings:**
+
+1. **Official Neo4j Guidance on Sessions:**
+   - Sessions are "cheap to create" - designed to be created/destroyed frequently
+   - **Driver provides connection pooling** - sessions borrow from pool
+   - Session creation overhead: API/object instantiation (~1-5ms), NOT connection overhead
+   - Sessions NOT concurrency-safe - never share between coroutines
+   - ✅ **Reuse sessions for causally consistent operations** (automatic bookmark chaining)
+
+2. **Transaction Patterns:**
+   - **Auto-commit** (`session.run()`): Fastest, no retry, one statement only
+   - **Managed** (`execute_read/write()`): Auto-retry, idempotent, production recommended
+   - **Explicit** (`begin_transaction()`): Full control, manual retry, atomic batches
+   - 🎯 **"Group all queries into a single transaction for better throughput"**
+
+3. **Performance Recommendations:**
+   - Always specify `database=` parameter (avoids extra server round-trip) ✅ Already doing
+   - Group related operations in one transaction: **66-80% overhead reduction**
+   - Use lazy loading (iteration) over eager loading (`.data()`)
+   - Leverage concurrency with async/await for independent operations
+
+4. **Session Reuse Pattern (Officially Supported):**
+   ```python
+   # Causal consistency: "Reuse same session - automatically chains bookmarks"
+   async with driver.session(database="neo4j") as session:
+       await session.run("CREATE (d:Decision)")  # Auto-commit tx 1
+       await session.run("CREATE (e:Entity)")     # Auto-commit tx 2
+       await session.run("CREATE (d)-[:LINK]->(e)")  # Auto-commit tx 3
+       # All causally consistent via automatic bookmark chaining
+   ```
+
+5. **Transaction Batching (Officially Recommended):**
+   ```python
+   # Atomic batch: "Group queries into single transaction"
+   async with driver.session() as session:
+       async with await session.begin_transaction() as tx:
+           await tx.run("CREATE (d:Decision)")
+           await tx.run("CREATE (e:Entity)")
+           await tx.run("CREATE (d)-[:LINK]->(e)")
+           # All operations in ONE transaction
+   ```
+
+**Critical Insight:**
+Our approach is NOT traditional "session pooling" but **"session reuse for batch operations"**:
+- ✅ Supported by Neo4j documentation ("reuse same session for causal consistency")
+- ✅ Reduces overhead ("group queries into single transaction")
+- ✅ Compatible with driver's connection pooling
+- ✅ Maintains causal consistency via bookmark chaining
+
+**Validation of Our Implementation:**
+| Our `Neo4jSessionContext` | Neo4j Recommendation | Status |
+|---------------------------|---------------------|--------|
+| `async with session_context()` | `async with driver.session()` | ✅ Aligned |
+| Optional `batch_transaction=True` | `begin_transaction()` for atomicity | ✅ Aligned |
+| Automatic cleanup in `__aexit__` | "Always close sessions" | ✅ Aligned |
+| Session reuse for related ops | "Reuse for causal consistency" | ✅ Aligned |
+
+**Detailed Research:** See `neo4j-async-best-practices.md`
+
+**Recommendation:**
+Our implementation is **fully compatible** with Neo4j best practices. Proceed to subtask 1.3 to finalize design strategy.
 
 ---
 
