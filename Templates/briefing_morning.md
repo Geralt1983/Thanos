@@ -2,6 +2,20 @@
 
 Good morning! Here's your personalized briefing for today.
 
+{% if health_state %}
+---
+
+## 🏥 Health State
+**Current Energy:** {{ health_state.energy_level }}/10{% if health_state.sleep_hours %} | **Sleep:** {{ health_state.sleep_hours }} hours{% endif %}{% if health_state.vyvanse_time %} | **Vyvanse:** {{ health_state.vyvanse_time }}{% endif %}
+
+{% if health_state.trend %}
+**7-Day Trend:**
+- Average Energy: {{ health_state.trend.avg_energy|round(1) }}/10
+- Average Sleep: {{ health_state.trend.avg_sleep|round(1) }} hours
+{% if health_state.trend.best_day %}- Your best day: {{ health_state.trend.best_day }} ({{ health_state.trend.best_energy }}/10)
+{% endif %}{% endif %}
+{% endif %}
+
 ---
 
 ## 🎯 Top 3 Priorities

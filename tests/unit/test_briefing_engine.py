@@ -1022,5 +1022,154 @@ class TestTemplateRendering(unittest.TestCase):
         self.assertIn("test_value", briefing)
 
 
+class TestHealthStatePrompting(unittest.TestCase):
+    """Test suite for health state prompting functionality."""
+
+    def setUp(self):
+        """Set up test fixtures before each test."""
+        # Create temporary directory for State files
+        self.temp_dir = tempfile.mkdtemp()
+        self.state_dir = Path(self.temp_dir) / "State"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize engine with test state directory
+        self.engine = BriefingEngine(state_dir=str(self.state_dir))
+
+    def tearDown(self):
+        """Clean up after each test."""
+        shutil.rmtree(self.temp_dir)
+
+    def test_prompt_for_health_state_skip_prompts(self):
+        """Test that health prompts are skipped when skip_prompts=True."""
+        result = self.engine.prompt_for_health_state(skip_prompts=True)
+        self.assertIsNone(result)
+
+    def test_prompt_for_health_state_skip_with_default_energy(self):
+        """Test that default energy is returned when skip_prompts=True with default_energy."""
+        result = self.engine.prompt_for_health_state(skip_prompts=True, default_energy=7)
+        self.assertIsNotNone(result)
+        self.assertEqual(result['energy_level'], 7)
+        self.assertFalse(result['from_prompts'])
+
+    def test_get_health_trend_no_data(self):
+        """Test that health trend returns None when no data available."""
+        trend = self.engine._get_health_trend()
+        self.assertIsNone(trend)
+
+    def test_get_health_trend_with_data(self):
+        """Test health trend calculation with existing data."""
+        if self.engine.health_tracker is None:
+            self.skipTest("HealthStateTracker not available")
+
+        # Create some test health data
+        from datetime import timedelta
+        for i in range(7):
+            entry_date = self.engine.today - timedelta(days=i)
+            self.engine.health_tracker.log_entry(
+                energy_level=7 - (i % 3),
+                sleep_hours=7.5 + (i % 2),
+                entry_date=entry_date
+            )
+
+        # Get trend
+        trend = self.engine._get_health_trend()
+        self.assertIsNotNone(trend)
+        self.assertIn('avg_energy', trend)
+        self.assertIn('avg_sleep', trend)
+        self.assertIn('sample_size', trend)
+        self.assertIn('best_day', trend)
+        self.assertIn('best_energy', trend)
+
+        # Verify values are reasonable
+        self.assertGreater(trend['avg_energy'], 0)
+        self.assertLess(trend['avg_energy'], 11)
+        self.assertGreater(trend['avg_sleep'], 0)
+        self.assertEqual(trend['sample_size'], 7)
+
+    def test_health_tracker_initialization(self):
+        """Test that health tracker is initialized if available."""
+        if self.engine.health_tracker is None:
+            self.skipTest("HealthStateTracker not available")
+
+        from Tools.health_state_tracker import HealthStateTracker
+        self.assertIsInstance(self.engine.health_tracker, HealthStateTracker)
+        self.assertEqual(str(self.engine.health_tracker.state_dir), str(self.state_dir))
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_morning_briefing_with_health_state(self):
+        """Test that morning briefing includes health state when provided."""
+        # Create minimal templates
+        templates_dir = Path(self.temp_dir) / "Templates"
+        templates_dir.mkdir(parents=True, exist_ok=True)
+
+        template_content = """# Morning Briefing
+{% if health_state %}
+Energy: {{ health_state.energy_level }}/10
+{% endif %}
+Priorities: {{ top_priorities|length }}"""
+
+        (templates_dir / "briefing_morning.md").write_text(template_content)
+
+        # Create engine with templates
+        engine = BriefingEngine(
+            state_dir=str(self.state_dir),
+            templates_dir=str(templates_dir)
+        )
+
+        # Create minimal state files
+        (self.state_dir / "Commitments.md").write_text("# Commitments\n")
+        (self.state_dir / "ThisWeek.md").write_text("# This Week\n")
+        (self.state_dir / "CurrentFocus.md").write_text("# Current Focus\n")
+
+        # Render with health state
+        health_state = {
+            'energy_level': 8,
+            'sleep_hours': 7.5,
+            'from_prompts': True
+        }
+        briefing = engine.render_briefing(
+            briefing_type="morning",
+            health_state=health_state
+        )
+
+        self.assertIn("Energy: 8/10", briefing)
+
+    @unittest.skipIf(not JINJA2_AVAILABLE, "Jinja2 not available")
+    def test_morning_briefing_without_health_state(self):
+        """Test that morning briefing works without health state."""
+        # Create minimal templates
+        templates_dir = Path(self.temp_dir) / "Templates"
+        templates_dir.mkdir(parents=True, exist_ok=True)
+
+        template_content = """# Morning Briefing
+{% if health_state %}
+Energy: {{ health_state.energy_level }}/10
+{% endif %}
+Priorities: {{ top_priorities|length }}"""
+
+        (templates_dir / "briefing_morning.md").write_text(template_content)
+
+        # Create engine with templates
+        engine = BriefingEngine(
+            state_dir=str(self.state_dir),
+            templates_dir=str(templates_dir)
+        )
+
+        # Create minimal state files
+        (self.state_dir / "Commitments.md").write_text("# Commitments\n")
+        (self.state_dir / "ThisWeek.md").write_text("# This Week\n")
+        (self.state_dir / "CurrentFocus.md").write_text("# Current Focus\n")
+
+        # Render without health state
+        briefing = engine.render_briefing(
+            briefing_type="morning",
+            health_state=None
+        )
+
+        # Should not include energy line
+        self.assertNotIn("Energy:", briefing)
+        self.assertIn("Priorities:", briefing)
+
+
 if __name__ == '__main__':
     unittest.main()
