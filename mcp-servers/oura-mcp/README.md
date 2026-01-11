@@ -7,11 +7,13 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that in
 
 ## ✨ Features
 
-- **OAuth Authentication** - Secure authentication with Oura Ring API
+- **Personal Access Token Auth** - Simple, secure authentication with Oura Ring API
+- **4 MCP Tools** - Readiness, sleep, trends, and health check diagnostics
 - **Comprehensive Health Metrics** - Access sleep, readiness, activity, and HRV data
 - **Smart Caching** - SQLite cache reduces API calls and improves performance
 - **Rate Limiting** - Respects Oura API limits (5000 requests/day)
 - **Graceful Degradation** - Returns cached data when API is unavailable
+- **Health Diagnostics** - Built-in health check tool for troubleshooting
 - **Type-Safe** - Full TypeScript support with Zod validation
 
 ## 🚀 Quick Start
@@ -43,12 +45,17 @@ cp .env.example .env
 2. Configure your Oura API credentials in `.env`:
 
 ```bash
-OURA_CLIENT_ID=your_client_id_here
-OURA_CLIENT_SECRET=your_client_secret_here
-OURA_ACCESS_TOKEN=your_access_token_here
+# Required: Oura Personal Access Token
+OURA_API_KEY=your_oura_personal_access_token_here
+
+# Optional: Custom cache directory (defaults to ~/.oura-cache)
+# OURA_CACHE_DIR=/path/to/cache
+
+# Optional: Enable sync debugging
+# DEBUG_SYNC=true
 ```
 
-See the [OAuth Setup Guide](#oauth-setup-guide) below for detailed instructions on obtaining these credentials.
+See the [Personal Access Token Setup](#personal-access-token-setup) below for detailed instructions on obtaining your token.
 
 ### Running the Server
 
@@ -62,47 +69,46 @@ npm run dev
 
 The server will start and listen for MCP protocol requests over stdio.
 
-## 🔑 OAuth Setup Guide
+## 🔑 Personal Access Token Setup
 
-### Step 1: Create an Oura Application
+### Step 1: Navigate to Oura Cloud
 
-1. Go to [Oura Cloud OAuth Applications](https://cloud.ouraring.com/oauth/applications)
+1. Go to [Oura Cloud](https://cloud.ouraring.com/)
 2. Log in with your Oura account
-3. Click "Create a new OAuth application"
-4. Fill in the application details:
-   - **Name**: Thanos Oura MCP Server (or any name you prefer)
-   - **Redirect URI**: `http://localhost:3000/callback` (for local testing)
-   - **Scopes**: Select all scopes (daily, heartrate, workout, session, tag, personal, sleep)
 
-5. Click "Create application"
+### Step 2: Create Personal Access Token
 
-### Step 2: Get Your Credentials
+1. Click on your profile icon (top right)
+2. Select **Personal Access Tokens** from the dropdown menu
+3. Click **Create A New Personal Access Token**
+4. Give it a descriptive name (e.g., "Thanos MCP Server")
+5. The token will be generated and displayed **only once** - copy it immediately!
 
-After creating the application, you'll see:
-- **Client ID**: Copy this to `OURA_CLIENT_ID` in your `.env` file
-- **Client Secret**: Copy this to `OURA_CLIENT_SECRET` in your `.env` file
+### Step 3: Configure Environment
 
-### Step 3: Generate an Access Token
+Paste your token into the `.env` file:
 
-For development and testing, you can generate a personal access token:
+```bash
+OURA_API_KEY=your_copied_token_here
+```
 
-1. In your Oura application settings, look for "Personal Access Token"
-2. Click "Create Personal Access Token"
-3. Select the required scopes (daily, heartrate, workout, session, tag, personal, sleep)
-4. Copy the generated token to `OURA_ACCESS_TOKEN` in your `.env` file
+**Important Security Notes**:
+- Personal Access Tokens provide read-only access to your health data
+- Tokens don't expire unless you revoke them
+- Never commit your `.env` file to version control
+- Keep your token secure - treat it like a password
+- You can revoke tokens anytime at https://cloud.ouraring.com/
 
-**Note**: Personal access tokens don't expire but have the same rate limits as OAuth tokens. For production use, implement the full OAuth flow with refresh tokens.
+### Why Personal Access Tokens?
 
-### Step 4: (Optional) OAuth Flow for Refresh Tokens
+This server uses Personal Access Tokens instead of OAuth for simplicity:
+- ✅ No complex OAuth flow needed
+- ✅ Read-only access (can't modify your data)
+- ✅ Easy to set up and test
+- ✅ Same rate limits as OAuth (5000 requests/day)
+- ✅ No token refresh needed (doesn't expire)
 
-For automatic token renewal, implement the OAuth authorization flow:
-
-1. Direct users to: `https://cloud.ouraring.com/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=YOUR_REDIRECT_URI`
-2. User authorizes the application
-3. Exchange the authorization code for an access token and refresh token
-4. Store both tokens in your `.env` file
-
-The server will automatically handle token refresh when needed.
+For production applications with multiple users, OAuth with refresh tokens would be more appropriate.
 
 ## 🛠️ Available Tools
 
