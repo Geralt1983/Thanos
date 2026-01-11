@@ -209,8 +209,11 @@ class StateReader:
         Reads the TimeState.json file and extracts the last interaction
         timestamp for calculating elapsed time between interactions.
 
+        Handles corrupted TimeState.json files gracefully by returning None,
+        allowing the system to treat it as a first interaction.
+
         Returns:
-            datetime of last interaction, or None if not found/unavailable
+            datetime of last interaction, or None if not found/unavailable/corrupted
         """
         path = self.state_dir / "TimeState.json"
         if not path.exists():
@@ -223,7 +226,12 @@ class StateReader:
             if timestamp_str:
                 return datetime.fromisoformat(timestamp_str)
             return None
-        except Exception:
+        except (json.JSONDecodeError, OSError, ValueError, TypeError, AttributeError):
+            # Handle corrupted/unreadable files or invalid data gracefully:
+            # - JSONDecodeError: corrupted JSON syntax
+            # - OSError: file read errors
+            # - ValueError: invalid datetime format
+            # - TypeError/AttributeError: unexpected data structure
             return None
 
     def calculate_elapsed_time(self) -> Optional[timedelta]:
