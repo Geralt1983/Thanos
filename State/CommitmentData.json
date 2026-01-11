@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated_at": "2026-01-11T18:13:43.377663",
+  "updated_at": "2026-01-11T18:40:57.703965",
   "commitments": [
     {
       "id": "example-commitment-001",
@@ -10,10 +10,16 @@
       "created_date": "2026-01-11T00:00:00.000000",
       "due_date": null,
       "recurrence_pattern": "daily",
-      "streak_count": 0,
-      "longest_streak": 0,
-      "completion_rate": 0.0,
-      "completion_history": [],
+      "streak_count": 1,
+      "longest_streak": 1,
+      "completion_rate": 100.0,
+      "completion_history": [
+        {
+          "timestamp": "2026-01-11T18:39:11.251224",
+          "status": "completed",
+          "notes": "Test completion"
+        }
+      ],
       "follow_up_schedule": {
         "enabled": true,
         "next_check": null,
@@ -34,11 +40,39 @@
       }
     },
     {
-      "id": "f4f3956d-17c7-4443-add5-572375f71104",
-      "title": "Daily meditation",
+      "id": "20af6eba-320a-4c56-846c-3aabee20f585",
+      "title": "Test command implementation",
+      "type": "task",
+      "status": "in_progress",
+      "created_date": "2026-01-11T18:35:04.852027",
+      "due_date": "2026-01-12",
+      "recurrence_pattern": "none",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": "2026-01-12",
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "Testing the new commitment_add command",
+      "domain": "work",
+      "priority": 2,
+      "tags": [
+        "testing",
+        "implementation"
+      ],
+      "metadata": {}
+    },
+    {
+      "id": "23120e23-eb07-4ba0-8862-38683b0bccc4",
+      "title": "Morning workout",
       "type": "habit",
-      "status": "CommitmentStatus.MISSED",
-      "created_date": "2026-01-11T18:13:43.372370",
+      "status": "completed",
+      "created_date": "2026-01-11T18:35:22.919152",
       "due_date": null,
       "recurrence_pattern": "daily",
       "streak_count": 1,
@@ -46,24 +80,9 @@
       "completion_rate": 100.0,
       "completion_history": [
         {
-          "timestamp": "2026-01-11T18:13:43.374069",
+          "timestamp": "2026-01-11T18:40:24.969535",
           "status": "completed",
-          "notes": "Completed 10-minute session"
-        },
-        {
-          "timestamp": "2026-01-10T18:13:43.375086",
-          "status": "missed",
-          "notes": "Forgot - overslept"
-        },
-        {
-          "timestamp": "2026-01-09T18:13:43.375102",
-          "status": "missed",
-          "notes": "Too busy"
-        },
-        {
-          "timestamp": "2026-01-08T18:13:43.375105",
-          "status": "missed",
-          "notes": "Low energy"
+          "notes": "Great workout session!"
         }
       ],
       "follow_up_schedule": {
@@ -77,40 +96,38 @@
       "domain": "health",
       "priority": 1,
       "tags": [
-        "mindfulness",
+        "fitness",
         "morning"
       ],
       "metadata": {}
     },
     {
-      "id": "7fa545d1-3153-47f8-935c-a63ae1ee03c4",
-      "title": "Submit report",
-      "type": "task",
-      "status": "CommitmentStatus.MISSED",
-      "created_date": "2026-01-11T18:13:43.376731",
-      "due_date": "2026-01-10T18:13:43.376699",
+      "id": "d4c427ac-4ea3-4532-a224-677f68dcf39c",
+      "title": "Master Python programming",
+      "type": "goal",
+      "status": "pending",
+      "created_date": "2026-01-11T18:35:28.851388",
+      "due_date": "2026-01-25",
       "recurrence_pattern": "none",
       "streak_count": 0,
       "longest_streak": 0,
       "completion_rate": 0.0,
-      "completion_history": [
-        {
-          "timestamp": "2026-01-11T18:13:43.377614",
-          "status": "missed",
-          "notes": "Missed deadline"
-        }
-      ],
+      "completion_history": [],
       "follow_up_schedule": {
         "enabled": true,
-        "next_check": "2026-01-10T18:13:43.376699",
+        "next_check": "2026-01-25",
         "frequency_hours": 24,
         "escalation_count": 0,
         "last_reminded": null
       },
       "notes": "",
-      "domain": "work",
+      "domain": "learning",
       "priority": 1,
-      "tags": [],
+      "tags": [
+        "python",
+        "advanced",
+        "programming"
+      ],
       "metadata": {}
     }
   ]
