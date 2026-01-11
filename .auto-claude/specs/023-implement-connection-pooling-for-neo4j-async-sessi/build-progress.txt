@@ -663,3 +663,598 @@ Subtask 1.3: Design detailed session pooling strategy with:
 - Performance expectations
 
 =============================================================================
+
+Subtask 1.3: Design session pooling strategy
+Status: COMPLETED
+Date: 2026-01-11
+
+=============================================================================
+SESSION POOLING STRATEGY - FINAL DESIGN DECISION
+=============================================================================
+
+CHOSEN APPROACH: Async Context Manager Pattern with Optional Session Parameter
+--------------------------------------------------------------------------------
+
+After evaluating three primary approaches, the chosen strategy is a HYBRID
+APPROACH that combines the best aspects of all three options:
+
+APPROACH EVALUATION:
+--------------------
+
+Option 1: Context-based session reuse (contextvars)
+  ❌ Rejected - Reasons:
+     - Implicit behavior makes debugging harder
+     - Hidden state can lead to unexpected session sharing
+     - More complex to reason about in async contexts
+     - Risk of session leakage across unrelated operations
+  ✅ Benefit (not chosen):
+     - No API changes needed
+     - Transparent to callers
+
+Option 2: Transaction batching only
+  ❌ Rejected as sole approach - Reasons:
+     - Too restrictive - forces all operations into transactions
+     - Not all workflows need atomic guarantees
+     - Removes flexibility for independent retry of operations
+  ✅ Benefits (incorporated into hybrid):
+     - Atomic guarantees when needed
+     - Maximum performance for related operations
+
+Option 3: Async context manager pattern
+  ✅ SELECTED as foundation - Reasons:
+     - Explicit and clear - no hidden state
+     - Follows Neo4j driver recommendations
+     - Automatic resource cleanup via __aexit__
+     - Exception-safe by design
+     - Pythonic and familiar pattern
+     - Flexible for various usage patterns
+  ✅ Additional benefits:
+     - Enables both session reuse AND transaction batching
+     - Backward compatible when combined with optional parameters
+     - Easy to test and verify
+
+FINAL DESIGN: Hybrid Approach
+------------------------------
+Combines async context manager pattern with optional session parameters and
+transaction batching support.
+
+=============================================================================
+DETAILED DESIGN SPECIFICATION
+=============================================================================
+
+COMPONENT 1: Optional Session Parameter on All Adapter Methods
+---------------------------------------------------------------
+
+APPROACH:
+All Neo4j adapter methods will be refactored to accept an optional session
+parameter while maintaining full backward compatibility.
+
+SIGNATURE PATTERN:
+```python
+async def _operation_name(
+    self,
+    args: Dict[str, Any],
+    session: Optional[Any] = None  # AsyncSession from neo4j
+) -> ToolResult:
+```
+
+BEHAVIOR:
+- If session=None (default): Create session per operation (CURRENT BEHAVIOR)
+- If session provided: Reuse provided session (NEW OPTIMIZATION)
+
+BACKWARD COMPATIBILITY:
+✅ All existing calls work unchanged (session defaults to None)
+✅ No breaking changes to public API
+✅ Gradual migration path for callers
+
+AFFECTED METHODS (15 total):
+1. _create_commitment
+2. _complete_commitment
+3. _get_commitments
+4. _record_decision
+5. _get_decisions
+6. _record_pattern
+7. _get_patterns
+8. _start_session
+9. _end_session
+10. _link_nodes
+11. _find_related
+12. _query_graph
+13. _create_entity
+14. _get_entity_context
+15. health_check
+
+COMPONENT 2: Session Context Manager
+-------------------------------------
+
+Create a dedicated async context manager class for managing session lifecycle
+and supporting nested operations.
+
+CLASS DESIGN:
+```python
+class Neo4jSessionContext:
+    """
+    Async context manager for Neo4j session lifecycle management.
+
+    Provides:
+    - Automatic session creation/cleanup
+    - Support for session reuse across operations
+    - Exception-safe resource handling
+    - Optional transaction batching
+    """
+
+    def __init__(
+        self,
+        adapter: 'Neo4jAdapter',
+        database: str = "neo4j",
+        batch_transaction: bool = False
+    ):
+        """
+        Initialize session context.
+
+        Args:
+            adapter: Neo4jAdapter instance
+            database: Neo4j database name (avoids extra round-trip)
+            batch_transaction: If True, wrap all operations in single transaction
+        """
+        self._adapter = adapter
+        self._database = database
+        self._batch_transaction = batch_transaction
+        self._session = None
+        self._transaction = None
+
+    async def __aenter__(self):
+        """Create session and optionally begin transaction."""
+        self._session = self._adapter._driver.session(database=self._database)
+
+        if self._batch_transaction:
+            # Start explicit transaction for atomic batch
+            self._transaction = await self._session.begin_transaction()
+            return self._transaction
+
+        return self._session
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Cleanup session and handle transaction commit/rollback."""
+        try:
+            if self._transaction:
+                if exc_type is None:
+                    # No exception - commit transaction
+                    await self._transaction.commit()
+                else:
+                    # Exception occurred - rollback transaction
+                    await self._transaction.rollback()
+        finally:
+            # Always close session
+            if self._session:
+                await self._session.close()
+
+        # Don't suppress exceptions
+        return False
+```
+
+USAGE PATTERNS:
+
+Pattern A: Session reuse for multiple independent operations
+```python
+async with adapter.session_context() as session:
+    # Each operation is separate transaction
+    await adapter._create_entity(entity_data, session=session)
+    await adapter._link_nodes(link_data, session=session)
+    await adapter._get_entity_context(query_data, session=session)
+
+# Session automatically closed, even on error
+```
+
+Pattern B: Atomic batch with transaction guarantee
+```python
+async with adapter.session_context(batch_transaction=True) as tx:
+    # All operations in single atomic transaction
+    await adapter._create_entity(entity_data, session=tx)
+    await adapter._link_nodes(link_data, session=tx)
+    # If any operation fails, entire batch rolls back
+
+# Transaction committed if successful, rolled back on error
+```
+
+Pattern C: Current behavior (backward compatible)
+```python
+# No session provided - creates session per operation as before
+await adapter._create_entity(entity_data)
+await adapter._link_nodes(link_data)
+```
+
+COMPONENT 3: High-Level Batch Operation Methods
+------------------------------------------------
+
+Create convenience methods for common multi-operation workflows that use
+session context internally.
+
+EXAMPLE BATCH METHODS:
+
+```python
+async def store_memory_batch(
+    self,
+    vector_data: Dict[str, Any],
+    decision_data: Dict[str, Any],
+    entity_data: Dict[str, Any],
+    link_data: List[Dict[str, Any]]
+) -> ToolResult:
+    """
+    Store a complete memory with all related operations in one session.
+
+    This is the high-impact optimization mentioned in the spec:
+    - Vector storage
+    - Decision recording
+    - Entity creation
+    - Relationship linking
+
+    Reduces 4 sessions to 1 (75% reduction).
+    """
+    async with self.session_context() as session:
+        # Operation 1: Store vector (assume vector adapter called first)
+
+        # Operation 2: Record decision
+        decision_result = await self._record_decision(
+            decision_data,
+            session=session
+        )
+
+        # Operation 3: Create entity
+        entity_result = await self._create_entity(
+            entity_data,
+            session=session
+        )
+
+        # Operation 4+: Link relationships
+        for link in link_data:
+            await self._link_nodes(link, session=session)
+
+        return ToolResult.ok({
+            "decision": decision_result.result,
+            "entity": entity_result.result,
+            "links_created": len(link_data)
+        })
+
+async def create_commitment_with_context(
+    self,
+    commitment_data: Dict[str, Any],
+    session_id: Optional[str] = None,
+    entity_ids: Optional[List[str]] = None
+) -> ToolResult:
+    """
+    Create commitment and link it to session/entities in one session.
+
+    Reduces 2-N sessions to 1.
+    """
+    async with self.session_context() as session:
+        # Create commitment
+        commitment_result = await self._create_commitment(
+            commitment_data,
+            session=session
+        )
+        commitment_id = commitment_result.result["id"]
+
+        # Link to session if provided
+        if session_id:
+            await self._link_nodes({
+                "from_type": "Commitment",
+                "from_id": commitment_id,
+                "to_type": "Session",
+                "to_id": session_id,
+                "relationship_type": "MADE_IN"
+            }, session=session)
+
+        # Link to entities if provided
+        if entity_ids:
+            for entity_id in entity_ids:
+                await self._link_nodes({
+                    "from_type": "Commitment",
+                    "from_id": commitment_id,
+                    "to_type": "Entity",
+                    "to_id": entity_id,
+                    "relationship_type": "INVOLVES"
+                }, session=session)
+
+        return commitment_result
+```
+
+COMPONENT 4: Database Parameter Optimization
+---------------------------------------------
+
+CHANGE: Always specify database parameter in session creation
+
+CURRENT PATTERN:
+```python
+async with self._driver.session() as session:
+```
+
+NEW PATTERN:
+```python
+async with self._driver.session(database="neo4j") as session:
+```
+
+RATIONALE:
+Per Neo4j docs: "If no database is provided, the driver has to send an extra
+request to the server to figure out what the default database is."
+
+IMPACT: Eliminates one network round-trip per session creation
+
+IMPLEMENTATION:
+- Add database parameter to Neo4jAdapter.__init__ (default: "neo4j")
+- Use database parameter in all session creation
+- Make configurable via environment variable
+
+=============================================================================
+TRANSACTION STRATEGY
+=============================================================================
+
+The design supports THREE transaction patterns based on use case:
+
+PATTERN 1: Multiple Managed Transactions (Default for session reuse)
+---------------------------------------------------------------------
+Use Case: Independent operations that don't need atomicity
+Benefits:
+- Each operation retried independently on failure
+- Partial success possible (some ops succeed, others fail)
+- Good for: Bulk operations where independence is acceptable
+
+Implementation:
+```python
+async with adapter.session_context() as session:
+    # Transaction 1
+    await session.execute_write(operation_1_callback, data1)
+    # Transaction 2
+    await session.execute_write(operation_2_callback, data2)
+```
+
+PATTERN 2: Single Transaction Batch (Atomic operations)
+--------------------------------------------------------
+Use Case: Related operations that must all succeed or all fail
+Benefits:
+- Atomic guarantee - all or nothing
+- Entire batch retried as unit on transient failure
+- Good for: Data consistency critical operations
+
+Implementation:
+```python
+async with adapter.session_context(batch_transaction=True) as tx:
+    await tx.run(query1, params1)
+    await tx.run(query2, params2)
+    # All queries commit together or rollback together
+```
+
+PATTERN 3: Auto-Commit (Maximum throughput)
+--------------------------------------------
+Use Case: High-performance scenarios where retry handled elsewhere
+Benefits:
+- Highest throughput
+- Lowest latency
+- Good for: Monitoring, logging, non-critical operations
+
+Implementation:
+```python
+async with adapter.session_context() as session:
+    await session.run(query1, params1)  # Auto-commit
+    await session.run(query2, params2)  # Auto-commit
+```
+
+RECOMMENDATION PER OPERATION TYPE:
+----------------------------------
+- Read operations: Pattern 3 (auto-commit) or Pattern 1 (managed)
+- Write operations: Pattern 1 (managed) for reliability
+- Atomic workflows: Pattern 2 (single transaction)
+- Bulk operations: Pattern 1 (independent retry)
+
+=============================================================================
+ERROR HANDLING STRATEGY
+=============================================================================
+
+PRINCIPLE: Preserve existing error handling while ensuring cleanup
+
+CONTEXT MANAGER ERROR HANDLING:
+```python
+async def __aexit__(self, exc_type, exc_val, exc_tb):
+    try:
+        if self._transaction:
+            if exc_type is None:
+                await self._transaction.commit()
+            else:
+                await self._transaction.rollback()
+    finally:
+        if self._session:
+            await self._session.close()
+
+    # Return False to propagate exception
+    return False
+```
+
+GUARANTEES:
+✅ Session always closed, even on exception
+✅ Transaction rolled back on error
+✅ Exceptions propagate to caller
+✅ No session leaks
+✅ Connection returned to driver pool
+
+ADAPTER METHOD ERROR HANDLING:
+```python
+async def _operation(self, args: Dict[str, Any], session=None) -> ToolResult:
+    should_close = False
+    if session is None:
+        session = self._driver.session(database=self._database)
+        should_close = True
+
+    try:
+        # Operation logic
+        result = await session.run(query, params)
+        return ToolResult.ok(data)
+
+    except Exception as e:
+        return ToolResult.error(f"Operation failed: {e}")
+
+    finally:
+        if should_close:
+            await session.close()
+```
+
+GUARANTEES:
+✅ Sessions created internally are always closed
+✅ Sessions provided externally are NOT closed (caller's responsibility)
+✅ Errors returned as ToolResult.error (existing pattern)
+✅ Exception details preserved
+
+=============================================================================
+MIGRATION PATH FOR EXISTING CODE
+=============================================================================
+
+PHASE 1: Add Infrastructure (Non-Breaking)
+-------------------------------------------
+- Add Neo4jSessionContext class
+- Add session parameter to all methods (optional, default None)
+- Add session_context() helper method
+- Add database parameter to adapter init
+
+✅ All existing code works unchanged
+
+PHASE 2: Add Batch Methods (Additive)
+--------------------------------------
+- Create store_memory_batch()
+- Create create_commitment_with_context()
+- Create other high-value batch methods
+
+✅ All existing code works unchanged
+✅ New code can use batch methods for optimization
+
+PHASE 3: Gradual Adoption (Optional)
+-------------------------------------
+- Update high-traffic code paths to use session context
+- Update workflows with multiple operations
+- Measure performance improvements
+
+✅ Existing code still works
+✅ Performance improves incrementally
+
+PHASE 4: Documentation & Best Practices
+----------------------------------------
+- Document when to use session reuse
+- Document when to use batch transactions
+- Provide examples and benchmarks
+
+=============================================================================
+PERFORMANCE EXPECTATIONS
+=============================================================================
+
+BASELINE (Current):
+-------------------
+- Session creation overhead: ~1-2ms per session
+- Connection from pool: ~0.1ms (driver handles this)
+- Network round-trip (no database specified): +1 round-trip
+- Transaction overhead: Small but accumulates
+
+HIGH-IMPACT OPTIMIZATION SCENARIOS:
+-----------------------------------
+
+Scenario 1: Memory Storage Workflow (spec example)
+Current: 4 sessions (vector + decision + entity + links)
+Optimized: 1 session
+Reduction: 75% fewer sessions
+Expected: ~3-6ms saved per memory storage
+
+Scenario 2: Commitment with Context
+Current: 2-N sessions (commitment + N links)
+Optimized: 1 session
+Reduction: 50-90% fewer sessions
+Expected: ~1-10ms saved depending on N
+
+Scenario 3: Bulk Entity Creation
+Current: N sessions
+Optimized: 1 session
+Reduction: (N-1)/N * 100%
+Expected: Significant for N > 10
+
+ADDITIONAL OPTIMIZATIONS:
+-------------------------
+- Database parameter: -1 network round-trip per session
+- Transaction batching: Reduces transaction overhead
+- Causal consistency: Free via session bookmarking
+
+MEASUREMENT PLAN:
+-----------------
+Phase 4.4 will create benchmarks to measure:
+1. Single operation baseline
+2. Multi-operation with separate sessions (current)
+3. Multi-operation with session reuse (optimized)
+4. Multi-operation with transaction batching (atomic)
+
+Target: 50-75% reduction in overhead for multi-operation workflows
+
+=============================================================================
+DESIGN RATIONALE SUMMARY
+=============================================================================
+
+WHY THIS DESIGN:
+----------------
+
+1. BACKWARD COMPATIBLE
+   ✅ Zero breaking changes
+   ✅ All existing code works unchanged
+   ✅ Gradual migration path
+
+2. FLEXIBLE
+   ✅ Supports session reuse
+   ✅ Supports transaction batching
+   ✅ Supports current behavior
+   ✅ Caller chooses what they need
+
+3. EXPLICIT & CLEAR
+   ✅ No hidden state (vs contextvars)
+   ✅ Pythonic patterns
+   ✅ Easy to understand and debug
+
+4. SAFE
+   ✅ Automatic cleanup via context managers
+   ✅ Exception-safe by design
+   ✅ No session leaks
+   ✅ Proper transaction handling
+
+5. PERFORMANT
+   ✅ Reduces session creation overhead
+   ✅ Enables transaction batching
+   ✅ Eliminates unnecessary round-trips
+   ✅ Provides causal consistency
+
+6. FOLLOWS BEST PRACTICES
+   ✅ Aligns with Neo4j driver recommendations
+   ✅ Uses managed transactions for reliability
+   ✅ Supports all Neo4j transaction patterns
+   ✅ Properly handles concurrency constraints
+
+RISKS MITIGATED:
+----------------
+- Session leaks: Context manager ensures cleanup
+- Breaking changes: Optional parameters maintain compatibility
+- Complexity: Progressive enhancement, simple base case
+- Transaction conflicts: Flexible patterns for different needs
+- Concurrency issues: Sessions not shared across async tasks
+
+=============================================================================
+NEXT PHASE: IMPLEMENTATION
+=============================================================================
+
+Subtask 2.1: Create Neo4jSessionContext class
+  - Implement async context manager
+  - Add support for session and transaction modes
+  - Implement cleanup logic
+  - Add error handling
+
+Subtask 2.2: Add session pooling to Neo4jAdapter
+  - Add database parameter to __init__
+  - Create session_context() helper method
+  - Update session creation to use database parameter
+
+Subtask 2.3: Implement transaction batching support
+  - Add batch_transaction mode to context manager
+  - Test atomic guarantees
+  - Verify rollback behavior
+
+=============================================================================
