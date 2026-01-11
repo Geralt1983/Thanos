@@ -23,7 +23,7 @@ class ModelHandler(BaseHandler):
     - Getting current model name for API calls
     """
 
-    def __init__(self, orchestrator, session_manager, context_manager, state_reader, thanos_dir):
+    def __init__(self, orchestrator, session_manager, context_manager, state_reader, thanos_dir, **kwargs):
         """
         Initialize ModelHandler with dependencies.
 
@@ -33,8 +33,9 @@ class ModelHandler(BaseHandler):
             context_manager: ContextManager for context operations
             state_reader: StateReader for state operations
             thanos_dir: Path to Thanos root directory
+            **kwargs: Additional arguments passed to BaseHandler
         """
-        super().__init__(orchestrator, session_manager, context_manager, state_reader, thanos_dir)
+        super().__init__(orchestrator, session_manager, context_manager, state_reader, thanos_dir, **kwargs)
 
         # Model state tracking
         self.current_model = None  # None = use default from config

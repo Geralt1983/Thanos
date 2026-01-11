@@ -3,23 +3,23 @@
   "spec": "036-command-router-modularization",
   "state": "building",
   "subtasks": {
-    "completed": 0,
-    "total": 0,
+    "completed": 8,
+    "total": 24,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Extract Command Handlers",
+    "current": "Refactor Main Router",
     "id": null,
-    "total": 7
+    "total": 6
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 9,
-    "started_at": "2026-01-11T08:04:29.350943"
+    "number": 6,
+    "started_at": "2026-01-11T14:55:32.063282"
   },
-  "last_update": "2026-01-11T08:36:20.844575"
+  "last_update": "2026-01-11T15:09:11.851012"
 }
