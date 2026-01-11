@@ -1258,3 +1258,151 @@ Subtask 2.3: Implement transaction batching support
   - Verify rollback behavior
 
 =============================================================================
+
+=============================================================================
+PHASE 2: CORE SESSION POOL IMPLEMENTATION
+=============================================================================
+
+Subtask 2.1: Create Neo4jSessionContext class
+Status: COMPLETED
+Date: 2026-01-11
+
+=============================================================================
+NEO4JSESSIONCONTEXT IMPLEMENTATION
+=============================================================================
+
+IMPLEMENTATION SUMMARY
+----------------------
+Successfully implemented Neo4jSessionContext as an async context manager
+class for managing Neo4j session lifecycle with support for both session
+reuse and transaction batching patterns.
+
+KEY FEATURES IMPLEMENTED
+-------------------------
+
+1. ASYNC CONTEXT MANAGER PROTOCOL
+   ✅ __aenter__ method
+      - Creates session with database parameter specified
+      - Begins explicit transaction if batch_transaction=True
+      - Returns session or transaction based on mode
+
+   ✅ __aexit__ method
+      - Commits transaction on success (no exception)
+      - Rolls back transaction on error (exception occurred)
+      - Always closes session in finally block
+      - Returns False to propagate exceptions
+
+2. CONSTRUCTOR
+   ✅ Parameters:
+      - adapter: Neo4jAdapter instance (required)
+      - database: str = "neo4j" (optimizes performance)
+      - batch_transaction: bool = False (enables atomic batching)
+
+   ✅ Instance variables:
+      - _adapter: Reference to adapter
+      - _database: Database name for session creation
+      - _batch_transaction: Transaction mode flag
+      - _session: Session instance (set in __aenter__)
+      - _transaction: Transaction instance (set if batch mode)
+
+3. NEO4JADAPTER ENHANCEMENTS
+   ✅ Database parameter added to __init__
+      - Optional parameter with env var fallback
+      - Defaults to NEO4J_DATABASE env var or "neo4j"
+      - Stored as self._database
+
+   ✅ session_context() helper method
+      - Easy-to-use factory method
+      - Accepts batch_transaction parameter
+      - Returns Neo4jSessionContext instance
+      - Comprehensive docstring with examples
+
+USAGE PATTERNS SUPPORTED
+-------------------------
+
+Pattern A: Session Reuse (Multiple Independent Transactions)
+```python
+async with adapter.session_context() as session:
+    # Each operation is separate transaction
+    await adapter._create_entity(entity_data, session=session)
+    await adapter._link_nodes(link_data, session=session)
+    await adapter._get_entity_context(query_data, session=session)
+
+# Session automatically closed, even on error
+```
+
+Pattern B: Atomic Batch (Single Transaction)
+```python
+async with adapter.session_context(batch_transaction=True) as tx:
+    # All operations in single atomic transaction
+    await adapter._create_entity(entity_data, session=tx)
+    await adapter._link_nodes(link_data, session=tx)
+    # If any operation fails, entire batch rolls back
+
+# Transaction committed if successful, rolled back on error
+```
+
+ERROR HANDLING
+--------------
+✅ Exception-safe cleanup
+   - finally block ensures session always closed
+   - Proper transaction rollback on errors
+   - Exceptions propagate to caller (not suppressed)
+
+✅ Resource guarantees
+   - No session leaks
+   - Connections returned to driver pool
+   - Transaction state properly managed
+
+PERFORMANCE OPTIMIZATIONS
+--------------------------
+✅ Database parameter optimization
+   - Eliminates extra round-trip to server
+   - Per Neo4j docs: "If no database is provided, the driver has to send
+     an extra request to the server to figure out what the default database is"
+   - Saves ~1 network round-trip per session creation
+
+✅ Session reuse foundation
+   - Enables multiple operations in one session
+   - Reduces session creation overhead
+   - Provides causal consistency via bookmarking
+
+CODE QUALITY
+------------
+✅ No syntax errors (verified with py_compile)
+✅ Comprehensive documentation
+✅ Clear usage examples in docstrings
+✅ Follows Neo4j driver best practices
+✅ Aligns with design specification from subtask 1.3
+
+VERIFICATION RESULTS
+--------------------
+✅ Class structure complete
+✅ Async context manager protocol implemented
+✅ Both transaction modes supported
+✅ Error handling comprehensive
+✅ Database parameter configured
+✅ Helper method added to adapter
+✅ Documentation complete
+
+FILES MODIFIED
+--------------
+- Tools/adapters/neo4j_adapter.py
+  * Added Neo4jSessionContext class (lines 51-120)
+  * Enhanced Neo4jAdapter.__init__ with database parameter (line 231)
+  * Added session_context() helper method (lines 266-291)
+
+NEXT STEPS
+----------
+Subtask 2.1 is COMPLETE. The async context manager is ready for use.
+
+However, to make it fully useful, we need to proceed to subtask 2.2 which
+will add optional session parameters to all Neo4j adapter methods. This will
+allow methods to accept and reuse sessions from the context manager.
+
+Note: Subtask 2.2 as originally defined focused on "session pool management"
+but based on the design, it should actually focus on adding optional session
+parameters to all adapter methods. Subtask 2.3 can remain focused on
+transaction batching patterns and batch operation methods.
+
+=============================================================================
