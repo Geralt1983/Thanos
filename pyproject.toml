@@ -172,3 +172,20 @@ classmethod-decorators = [
 [tool.ruff.lint.pydocstyle]
 # Use Google-style docstrings (matches existing codebase patterns)
 convention = "google"
+
+# Formatter configuration (Black-compatible)
+[tool.ruff.format]
+# Use double quotes for strings (matches existing codebase style)
+quote-style = "double"
+
+# Use spaces for indentation (4 spaces, Python standard)
+indent-style = "space"
+
+# Use LF (Unix-style) line endings
+line-ending = "lf"
+
+# Preserve quote style in docstrings
+docstring-code-format = true
+
+# Normalize string quotes and other formatting
+skip-magic-trailing-comma = false
