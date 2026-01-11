@@ -1,0 +1,199 @@
+# Python Project Configuration
+# Ruff linting and formatting configuration for Thanos codebase
+#
+# Configuration Strategy:
+# ----------------------
+# This configuration balances code quality with pragmatism:
+#
+# 1. ENABLED RULES: Comprehensive coverage (F, E, W, I, N, D, UP, B, C4, T20, RET, SIM, PTH, ARG)
+#    - Catches common errors, style violations, and potential bugs
+#    - Enforces consistent import organization and naming conventions
+#    - Suggests modern Python idioms and simplifications
+#
+# 2. GLOBAL IGNORES: Style rules that are too strict or conflict with project conventions
+#    - Docstring rules (D212, D415, D205, etc.) - pragmatic docs over strict formatting
+#    - Code style preferences (SIM117, RET505) - readability over rigid rules
+#    - Gradual migration (PTH123) - allow legacy patterns during transition
+#
+# 3. PER-FILE IGNORES: Context-specific exceptions where rules don't apply
+#    - Test files: Allow test-specific patterns (unused vars, long lines, missing docstrings)
+#    - Command handlers: Allow consistent interface patterns (unused args in command_router.py)
+#    - __init__ files: Allow re-export pattern (unused imports are actually public API)
+#    - Conditional imports: Allow imports after feature detection (thanos_orchestrator.py)
+#
+# 4. REMAINING ERRORS (~201):
+#    - 151 auto-fixable with --unsafe-fixes (UP006, UP035: modernize type hints)
+#    - 32 line-too-long violations (E501) - require manual review
+#    - 18 minor issues (docstrings, small bugbear warnings, etc.)
+#
+# Run 'ruff check --unsafe-fixes --fix .' to apply type hint modernization (List→list, Dict→dict)
+
+[tool.ruff]
+# Set line length to 100 characters (balances readability with modern screen sizes)
+line-length = 100
+
+# Target Python 3.9+ (based on codebase analysis: async/await, dataclasses, type hints)
+target-version = "py39"
+
+# Exclude directories that shouldn't be linted
+exclude = [
+    ".auto-claude",
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "*.egg-info",
+    "build",
+    "dist",
+    "node_modules",
+    ".swarm",
+    ".hive-mind",
+    "backups",
+]
+
+# Linting configuration (moved from top-level to fix deprecation warning)
+[tool.ruff.lint]
+# Enable comprehensive rule sets for code quality
+select = [
+    "F",     # Pyflakes - catch common errors (undefined variables, unused imports, etc.)
+    "E",     # pycodestyle errors - PEP 8 style violations
+    "W",     # pycodestyle warnings - additional style issues
+    "I",     # isort - import sorting and organization
+    "N",     # pep8-naming - enforce naming conventions
+    "D",     # pydocstyle - docstring style checking
+    "UP",    # pyupgrade - modernize Python code (use newer syntax)
+    "B",     # flake8-bugbear - find likely bugs and design problems
+    "C4",    # flake8-comprehensions - better list/dict/set comprehensions
+    "T20",   # flake8-print - catch print statements (should use logging)
+    "RET",   # flake8-return - improve return statement clarity
+    "SIM",   # flake8-simplify - suggest code simplifications
+    "PTH",   # flake8-use-pathlib - prefer pathlib over os.path
+    "ARG",   # flake8-unused-arguments - catch unused function arguments
+]
+
+# Ignore specific rules that conflict with project style or are too strict
+ignore = [
+    # Docstring style rules - too strict for this codebase's pragmatic approach
+    "D100",   # Missing docstring in public module - not all modules need docstrings
+    "D101",   # Missing docstring in public class - simple classes (e.g., constants) are self-explanatory
+    "D102",   # Missing docstring in public method - simple property methods are self-explanatory
+    "D104",   # Missing docstring in public package - __init__.py files often don't need them
+    "D107",   # Missing docstring in __init__ - init signature is often self-documenting
+    "D202",   # No blank lines allowed after function docstring - overly prescriptive formatting
+    "D203",   # 1 blank line required before class docstring - conflicts with D211 (no blank line)
+    "D205",   # 1 blank line required between summary and description - overly prescriptive
+    "D212",   # Multi-line docstring summary should start at the first line - prefer summary on first line
+    "D213",   # Multi-line docstring summary should start at the second line - conflicts with D212
+    "D401",   # First line of docstring should be in imperative mood - too strict for descriptive docs
+    "D415",   # First line should end with a period - not always appropriate (e.g., module names)
+
+    # Code style preferences - readability over rigid rules
+    "T201",   # print found - legitimate in CLI tools and scripts
+    "B008",   # Do not perform function calls in argument defaults - needed for FastAPI/dependency injection
+    "B027",   # Empty method in ABC without abstract decorator - intentional for optional override methods
+    "SIM102", # Use single if statement instead of nested - nested can be clearer for complex conditions
+    "SIM108", # Use ternary operator - sometimes if/else is clearer
+    "SIM117", # Use single with statement - nested context managers can be clearer for complex cases
+    "RET505", # Unnecessary else after return - explicit else can improve readability
+
+    # Pathlib migration - legacy code uses os.path, migrate gradually
+    "PTH111", # os.path.expanduser() - Path.expanduser() preferred but not required for compatibility
+    "PTH123", # builtin open() - pathlib.Path.open() preferred but not required for compatibility
+]
+
+# Allow autofix for these rule categories (safe, non-breaking changes)
+fixable = [
+    "F",      # Auto-remove unused imports, fix undefined names where possible
+    "E",      # Auto-fix whitespace issues
+    "W",      # Auto-fix warnings
+    "I",      # Auto-sort imports
+    "UP",     # Auto-upgrade syntax (modernize type hints with --unsafe-fixes)
+    "C4",     # Auto-fix comprehensions
+]
+
+# Never auto-fix these (require manual review to avoid breaking changes)
+unfixable = [
+    "B",      # Bugbear issues need manual review (potential logic changes)
+    "ARG",    # Removing arguments could break interfaces/abstract methods
+]
+
+# Per-file rule ignores for special cases
+[tool.ruff.lint.per-file-ignores]
+# Test files: more lenient rules for testing patterns
+"tests/**/*.py" = [
+    "E501",   # Line too long - test data/fixtures/assertions can be long for readability
+    "E402",   # Module import not at top - tests often need to mock/patch before importing
+    "ARG",    # Unused arguments - pytest fixtures and mock objects often have unused params
+    "F841",   # Unused variable - test setup may assign variables for assertion context
+    "D",      # Docstrings - not critical for test functions (test names are self-documenting)
+    "B011",   # assert False - legitimate in pytest for expected failures
+]
+
+# __init__.py files: allow re-export pattern
+"**/__init__.py" = [
+    "F401",   # Unused imports - often used for module-level exports (public API)
+    "D104",   # Missing docstring in public package - package structure is self-explanatory
+]
+
+# Commands/scripts: allow print for CLI output
+"commands/**/*.py" = [
+    "T201",   # print found - CLI commands legitimately use print() for user output
+]
+
+# Tools/thanos_orchestrator.py: conditional imports after feature detection
+"Tools/thanos_orchestrator.py" = [
+    "E402",   # Module import not at top - intentional: imports after checking MEMOS_AVAILABLE flag
+    "ARG001", # Unused function argument - handle_hook signature matches hook interface
+]
+
+# Tools/command_router.py: command handler methods follow consistent interface
+"Tools/command_router.py" = [
+    "ARG002", # Unused method argument - command handlers follow standard signature (args: str)
+]
+
+# Configuration for import sorting (isort-compatible)
+[tool.ruff.lint.isort]
+# Use double-line spacing between import groups for clarity
+lines-after-imports = 2
+
+# Group imports: stdlib, third-party, first-party, local
+known-first-party = ["Tools", "commands", "tests"]
+
+# Combine "as" imports on the same line
+combine-as-imports = true
+
+# Force imports to the top of the file
+force-sort-within-sections = true
+
+# Naming convention enforcement
+[tool.ruff.lint.pep8-naming]
+# Allow common naming exceptions
+classmethod-decorators = [
+    "classmethod",
+    "pydantic.validator",
+    "pydantic.root_validator",
+]
+
+# Docstring configuration
+[tool.ruff.lint.pydocstyle]
+# Use Google-style docstrings (matches existing codebase patterns)
+convention = "google"
+
+# Formatter configuration (Black-compatible)
+[tool.ruff.format]
+# Use double quotes for strings (matches existing codebase style)
+quote-style = "double"
+
+# Use spaces for indentation (4 spaces, Python standard)
+indent-style = "space"
+
+# Use LF (Unix-style) line endings
+line-ending = "lf"
+
+# Preserve quote style in docstrings
+docstring-code-format = true
+
+# Normalize string quotes and other formatting
+skip-magic-trailing-comma = false

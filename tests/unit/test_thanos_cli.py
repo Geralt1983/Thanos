@@ -13,28 +13,29 @@ Tests cover:
 - Natural language routing
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch, call
 from pathlib import Path
 import sys
-import io
+from unittest.mock import Mock, patch
+
+import pytest
+
 
 # Import after setting up path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import thanos
 from thanos import (
     COMMAND_SHORTCUTS,
     SYSTEM_COMMANDS,
     is_natural_language,
-    print_usage,
     main,
+    print_usage,
 )
 
 
 # ========================================================================
 # Test Constants and Fixtures
 # ========================================================================
+
 
 @pytest.fixture
 def mock_orchestrator():
@@ -43,21 +44,23 @@ def mock_orchestrator():
     orchestrator.chat = Mock()
     orchestrator.route = Mock()
     orchestrator.run_command = Mock()
-    orchestrator.get_usage = Mock(return_value={
-        'total_tokens': 150000,
-        'total_cost_usd': 4.50,
-        'total_calls': 75,
-        'projected_monthly_cost': 45.00
-    })
-    orchestrator.list_commands = Mock(return_value=['pa:daily', 'pa:email', 'pa:tasks'])
+    orchestrator.get_usage = Mock(
+        return_value={
+            "total_tokens": 150000,
+            "total_cost_usd": 4.50,
+            "total_calls": 75,
+            "projected_monthly_cost": 45.00,
+        }
+    )
+    orchestrator.list_commands = Mock(return_value=["pa:daily", "pa:email", "pa:tasks"])
 
     # Mock agents
     mock_agent = Mock()
-    mock_agent.name = 'Ops'
-    mock_agent.role = 'Operations Manager'
-    mock_agent.triggers = ['task', 'todo', 'schedule']
+    mock_agent.name = "Ops"
+    mock_agent.role = "Operations Manager"
+    mock_agent.triggers = ["task", "todo", "schedule"]
 
-    orchestrator.agents = {'ops': mock_agent}
+    orchestrator.agents = {"ops": mock_agent}
     return orchestrator
 
 
@@ -73,6 +76,7 @@ def mock_interactive():
 # Test COMMAND_SHORTCUTS
 # ========================================================================
 
+
 class TestCommandShortcuts:
     """Test command shortcut mapping."""
 
@@ -83,39 +87,40 @@ class TestCommandShortcuts:
 
     def test_daily_shortcuts(self):
         """Test daily-related shortcuts all map to pa:daily."""
-        daily_shortcuts = ['daily', 'morning', 'brief', 'briefing']
+        daily_shortcuts = ["daily", "morning", "brief", "briefing"]
         for shortcut in daily_shortcuts:
             assert shortcut in COMMAND_SHORTCUTS
-            assert COMMAND_SHORTCUTS[shortcut] == 'pa:daily'
+            assert COMMAND_SHORTCUTS[shortcut] == "pa:daily"
 
     def test_email_shortcuts(self):
         """Test email-related shortcuts all map to pa:email."""
-        email_shortcuts = ['email', 'emails', 'inbox']
+        email_shortcuts = ["email", "emails", "inbox"]
         for shortcut in email_shortcuts:
             assert shortcut in COMMAND_SHORTCUTS
-            assert COMMAND_SHORTCUTS[shortcut] == 'pa:email'
+            assert COMMAND_SHORTCUTS[shortcut] == "pa:email"
 
     def test_schedule_shortcuts(self):
         """Test schedule-related shortcuts."""
-        assert COMMAND_SHORTCUTS.get('schedule') == 'pa:schedule'
-        assert COMMAND_SHORTCUTS.get('calendar') == 'pa:schedule'
+        assert COMMAND_SHORTCUTS.get("schedule") == "pa:schedule"
+        assert COMMAND_SHORTCUTS.get("calendar") == "pa:schedule"
 
     def test_task_shortcuts(self):
         """Test task-related shortcuts."""
-        assert COMMAND_SHORTCUTS.get('tasks') == 'pa:tasks'
-        assert COMMAND_SHORTCUTS.get('task') == 'pa:tasks'
+        assert COMMAND_SHORTCUTS.get("tasks") == "pa:tasks"
+        assert COMMAND_SHORTCUTS.get("task") == "pa:tasks"
 
     def test_weekly_shortcuts(self):
         """Test weekly-related shortcuts."""
-        weekly_shortcuts = ['weekly', 'week', 'review']
+        weekly_shortcuts = ["weekly", "week", "review"]
         for shortcut in weekly_shortcuts:
             assert shortcut in COMMAND_SHORTCUTS
-            assert COMMAND_SHORTCUTS[shortcut] == 'pa:weekly'
+            assert COMMAND_SHORTCUTS[shortcut] == "pa:weekly"
 
 
 # ========================================================================
 # Test SYSTEM_COMMANDS
 # ========================================================================
+
 
 class TestSystemCommands:
     """Test system commands set."""
@@ -128,8 +133,17 @@ class TestSystemCommands:
     def test_expected_system_commands(self):
         """Test all expected system commands are present."""
         expected = {
-            'usage', 'agents', 'commands', 'help', '-h', '--help',
-            'interactive', 'i', 'chat', 'agent', 'run'
+            "usage",
+            "agents",
+            "commands",
+            "help",
+            "-h",
+            "--help",
+            "interactive",
+            "i",
+            "chat",
+            "agent",
+            "run",
         }
         assert expected.issubset(SYSTEM_COMMANDS)
 
@@ -137,6 +151,7 @@ class TestSystemCommands:
 # ========================================================================
 # Test is_natural_language
 # ========================================================================
+
 
 class TestIsNaturalLanguage:
     """Test natural language detection function."""
@@ -236,6 +251,7 @@ class TestIsNaturalLanguage:
 # Test print_usage
 # ========================================================================
 
+
 class TestPrintUsage:
     """Test usage printing."""
 
@@ -252,12 +268,13 @@ class TestPrintUsage:
 # Test main() - System Commands
 # ========================================================================
 
+
 class TestMainSystemCommands:
     """Test main() function system command handling."""
 
     def test_no_arguments_prints_usage(self, capsys):
         """Test that no arguments prints usage and exits."""
-        with patch.object(sys, 'argv', ['thanos']):
+        with patch.object(sys, "argv", ["thanos"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 0
@@ -266,21 +283,21 @@ class TestMainSystemCommands:
 
     def test_help_flag(self, capsys):
         """Test --help flag prints usage."""
-        with patch.object(sys, 'argv', ['thanos', '--help']):
+        with patch.object(sys, "argv", ["thanos", "--help"]):
             main()
         captured = capsys.readouterr()
         assert "Thanos CLI" in captured.out
 
     def test_help_short_flag(self, capsys):
         """Test -h flag prints usage."""
-        with patch.object(sys, 'argv', ['thanos', '-h']):
+        with patch.object(sys, "argv", ["thanos", "-h"]):
             main()
         captured = capsys.readouterr()
         assert "Thanos CLI" in captured.out
 
     def test_help_command(self, capsys):
         """Test help command prints usage."""
-        with patch.object(sys, 'argv', ['thanos', 'help']):
+        with patch.object(sys, "argv", ["thanos", "help"]):
             main()
         captured = capsys.readouterr()
         assert "Thanos CLI" in captured.out
@@ -289,30 +306,35 @@ class TestMainSystemCommands:
 class TestMainInteractiveCommand:
     """Test main() interactive command handling."""
 
-    @patch('thanos.ThanosOrchestrator')
-    @patch('Tools.thanos_interactive.ThanosInteractive')
+    @patch("thanos.ThanosOrchestrator")
+    @patch("Tools.thanos_interactive.ThanosInteractive")
     def test_interactive_command(self, mock_interactive_class, mock_orch):
         """Test 'interactive' command launches interactive mode."""
         mock_instance = Mock()
         mock_interactive_class.return_value = mock_instance
 
-        with patch.object(sys, 'argv', ['thanos', 'interactive']):
-            with patch.dict('sys.modules', {'Tools.thanos_interactive': Mock(ThanosInteractive=mock_interactive_class)}):
+        with patch.object(sys, "argv", ["thanos", "interactive"]):
+            with patch.dict(
+                "sys.modules",
+                {"Tools.thanos_interactive": Mock(ThanosInteractive=mock_interactive_class)},
+            ):
                 # We need to re-import to pick up the mock
-                import importlib
-                with patch('thanos.ThanosOrchestrator', mock_orch):
+                with patch("thanos.ThanosOrchestrator", mock_orch):
                     # The import happens inside main(), so we patch it there
                     pass
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_i_alias(self, mock_orch):
         """Test 'i' alias launches interactive mode."""
         mock_interactive_class = Mock()
         mock_instance = Mock()
         mock_interactive_class.return_value = mock_instance
 
-        with patch.object(sys, 'argv', ['thanos', 'i']):
-            with patch.dict(sys.modules, {'Tools.thanos_interactive': Mock(ThanosInteractive=mock_interactive_class)}):
+        with patch.object(sys, "argv", ["thanos", "i"]):
+            with patch.dict(
+                sys.modules,
+                {"Tools.thanos_interactive": Mock(ThanosInteractive=mock_interactive_class)},
+            ):
                 # The import is dynamic, so we need to test differently
                 pass
 
@@ -320,24 +342,24 @@ class TestMainInteractiveCommand:
 class TestMainChatCommand:
     """Test main() chat command handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_chat_command_with_message(self, mock_orch_class):
         """Test 'chat' command with message."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'chat', 'Hello', 'world']):
+        with patch.object(sys, "argv", ["thanos", "chat", "Hello", "world"]):
             main()
 
         mock_orch.chat.assert_called_once_with("Hello world", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_chat_command_without_message(self, mock_orch_class, capsys):
         """Test 'chat' command without message shows usage."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'chat']):
+        with patch.object(sys, "argv", ["thanos", "chat"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
@@ -349,27 +371,27 @@ class TestMainChatCommand:
 class TestMainAgentCommand:
     """Test main() agent command handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_agent_command_with_message(self, mock_orch_class):
         """Test 'agent' command with agent name and message."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'agent', 'coach', 'Help', 'me', 'focus']):
+        with patch.object(sys, "argv", ["thanos", "agent", "coach", "Help", "me", "focus"]):
             main()
 
-        mock_orch.chat.assert_called_once_with("Help me focus", agent='coach', stream=True)
+        mock_orch.chat.assert_called_once_with("Help me focus", agent="coach", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_agent_command_without_enough_args(self, mock_orch_class, capsys):
         """Test 'agent' command without enough args shows usage."""
         mock_orch = Mock()
         mock_agent = Mock()
-        mock_agent.name = 'Ops'
-        mock_orch.agents = {'ops': mock_agent}
+        mock_agent.name = "Ops"
+        mock_orch.agents = {"ops": mock_agent}
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'agent', 'coach']):
+        with patch.object(sys, "argv", ["thanos", "agent", "coach"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
@@ -382,35 +404,35 @@ class TestMainAgentCommand:
 class TestMainRunCommand:
     """Test main() run command handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_run_command_with_args(self, mock_orch_class):
         """Test 'run' command with command name."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'run', 'pa:daily']):
+        with patch.object(sys, "argv", ["thanos", "run", "pa:daily"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:daily', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:daily", "", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_run_command_with_extra_args(self, mock_orch_class):
         """Test 'run' command with additional arguments."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'run', 'pa:tasks', 'high', 'priority']):
+        with patch.object(sys, "argv", ["thanos", "run", "pa:tasks", "high", "priority"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:tasks', 'high priority', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:tasks", "high priority", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_run_command_without_args(self, mock_orch_class, capsys):
         """Test 'run' command without command name shows usage."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'run']):
+        with patch.object(sys, "argv", ["thanos", "run"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
@@ -422,19 +444,19 @@ class TestMainRunCommand:
 class TestMainUsageCommand:
     """Test main() usage command handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_usage_command_success(self, mock_orch_class, capsys):
         """Test 'usage' command displays API usage."""
         mock_orch = Mock()
         mock_orch.get_usage.return_value = {
-            'total_tokens': 150000,
-            'total_cost_usd': 4.50,
-            'total_calls': 75,
-            'projected_monthly_cost': 45.00
+            "total_tokens": 150000,
+            "total_cost_usd": 4.50,
+            "total_calls": 75,
+            "projected_monthly_cost": 45.00,
         }
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'usage']):
+        with patch.object(sys, "argv", ["thanos", "usage"]):
             main()
 
         captured = capsys.readouterr()
@@ -444,14 +466,14 @@ class TestMainUsageCommand:
         assert "75" in captured.out
         assert "$45.00" in captured.out
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_usage_command_error(self, mock_orch_class, capsys):
         """Test 'usage' command handles errors."""
         mock_orch = Mock()
         mock_orch.get_usage.side_effect = Exception("API error")
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'usage']):
+        with patch.object(sys, "argv", ["thanos", "usage"]):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
@@ -463,18 +485,18 @@ class TestMainUsageCommand:
 class TestMainAgentsCommand:
     """Test main() agents command handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_agents_command(self, mock_orch_class, capsys):
         """Test 'agents' command lists available agents."""
         mock_orch = Mock()
         mock_agent = Mock()
-        mock_agent.name = 'Ops'
-        mock_agent.role = 'Operations Manager'
-        mock_agent.triggers = ['task', 'todo', 'schedule', 'calendar']
-        mock_orch.agents = {'ops': mock_agent}
+        mock_agent.name = "Ops"
+        mock_agent.role = "Operations Manager"
+        mock_agent.triggers = ["task", "todo", "schedule", "calendar"]
+        mock_orch.agents = {"ops": mock_agent}
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'agents']):
+        with patch.object(sys, "argv", ["thanos", "agents"]):
             main()
 
         captured = capsys.readouterr()
@@ -483,18 +505,18 @@ class TestMainAgentsCommand:
         assert "Operations Manager" in captured.out
         assert "Triggers:" in captured.out
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_agents_command_empty_triggers(self, mock_orch_class, capsys):
         """Test 'agents' command with agent having no triggers."""
         mock_orch = Mock()
         mock_agent = Mock()
-        mock_agent.name = 'Test'
-        mock_agent.role = 'Test Agent'
+        mock_agent.name = "Test"
+        mock_agent.role = "Test Agent"
         mock_agent.triggers = []
-        mock_orch.agents = {'test': mock_agent}
+        mock_orch.agents = {"test": mock_agent}
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'agents']):
+        with patch.object(sys, "argv", ["thanos", "agents"]):
             main()
 
         captured = capsys.readouterr()
@@ -506,14 +528,14 @@ class TestMainAgentsCommand:
 class TestMainCommandsCommand:
     """Test main() commands command handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_commands_command(self, mock_orch_class, capsys):
         """Test 'commands' command lists available commands."""
         mock_orch = Mock()
-        mock_orch.list_commands.return_value = ['pa:daily', 'pa:email', 'pa:tasks']
+        mock_orch.list_commands.return_value = ["pa:daily", "pa:email", "pa:tasks"]
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'commands']):
+        with patch.object(sys, "argv", ["thanos", "commands"]):
             main()
 
         captured = capsys.readouterr()
@@ -527,158 +549,161 @@ class TestMainCommandsCommand:
 # Test main() - Command Shortcuts
 # ========================================================================
 
+
 class TestMainCommandShortcuts:
     """Test main() command shortcut handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_daily_shortcut(self, mock_orch_class, capsys):
         """Test 'daily' shortcut runs pa:daily."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'daily']):
+        with patch.object(sys, "argv", ["thanos", "daily"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:daily', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:daily", "", stream=True)
         captured = capsys.readouterr()
         assert "Running pa:daily" in captured.out
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_morning_shortcut(self, mock_orch_class, capsys):
         """Test 'morning' shortcut runs pa:daily."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'morning']):
+        with patch.object(sys, "argv", ["thanos", "morning"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:daily', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:daily", "", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_email_shortcut(self, mock_orch_class, capsys):
         """Test 'email' shortcut runs pa:email."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'email']):
+        with patch.object(sys, "argv", ["thanos", "email"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:email', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:email", "", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_tasks_shortcut(self, mock_orch_class, capsys):
         """Test 'tasks' shortcut runs pa:tasks."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'tasks']):
+        with patch.object(sys, "argv", ["thanos", "tasks"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:tasks', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:tasks", "", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_weekly_shortcut(self, mock_orch_class, capsys):
         """Test 'weekly' shortcut runs pa:weekly."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'weekly']):
+        with patch.object(sys, "argv", ["thanos", "weekly"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:weekly', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:weekly", "", stream=True)
 
 
 # ========================================================================
 # Test main() - Explicit Command Patterns
 # ========================================================================
 
+
 class TestMainExplicitCommands:
     """Test main() explicit command pattern handling."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_explicit_command_pattern(self, mock_orch_class):
         """Test explicit pa:daily command runs directly."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'pa:daily']):
+        with patch.object(sys, "argv", ["thanos", "pa:daily"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:daily', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:daily", "", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_explicit_command_with_args(self, mock_orch_class):
         """Test explicit command with additional arguments."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'pa:tasks', 'high', 'priority']):
+        with patch.object(sys, "argv", ["thanos", "pa:tasks", "high", "priority"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:tasks', 'high priority', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:tasks", "high priority", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_custom_command_pattern(self, mock_orch_class):
         """Test custom prefix:name command pattern."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'custom:action']):
+        with patch.object(sys, "argv", ["thanos", "custom:action"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('custom:action', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("custom:action", "", stream=True)
 
 
 # ========================================================================
 # Test main() - Natural Language Routing
 # ========================================================================
 
+
 class TestMainNaturalLanguageRouting:
     """Test main() natural language routing."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_question_routed(self, mock_orch_class, capsys):
         """Test question is routed via orchestrator."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'What', 'should', 'I', 'focus', 'on', 'today?']):
+        with patch.object(sys, "argv", ["thanos", "What", "should", "I", "focus", "on", "today?"]):
             main()
 
         mock_orch.route.assert_called_once_with("What should I focus on today?", stream=True)
         captured = capsys.readouterr()
         assert "🟣" in captured.out  # Visual indicator
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_self_reference_routed(self, mock_orch_class, capsys):
         """Test self-reference statement is routed."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', "I'm", 'overwhelmed']):
+        with patch.object(sys, "argv", ["thanos", "I'm", "overwhelmed"]):
             main()
 
         mock_orch.route.assert_called_once_with("I'm overwhelmed", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_multi_word_sentence_routed(self, mock_orch_class, capsys):
         """Test multi-word sentence is routed."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
         # Note: "help" as first word triggers help command, so use different phrase
-        with patch.object(sys, 'argv', ['thanos', 'plan', 'my', 'day', 'tomorrow']):
+        with patch.object(sys, "argv", ["thanos", "plan", "my", "day", "tomorrow"]):
             main()
 
         mock_orch.route.assert_called_once_with("plan my day tomorrow", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_emotional_message_routed(self, mock_orch_class, capsys):
         """Test emotional message is routed."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'feeling', 'stuck']):
+        with patch.object(sys, "argv", ["thanos", "feeling", "stuck"]):
             main()
 
         mock_orch.route.assert_called_once_with("feeling stuck", stream=True)
@@ -688,57 +713,60 @@ class TestMainNaturalLanguageRouting:
 # Test Edge Cases
 # ========================================================================
 
+
 class TestMainEdgeCases:
     """Test edge cases in main() function."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_case_insensitive_commands(self, mock_orch_class, capsys):
         """Test commands are case insensitive."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
         # DAILY should work same as daily
-        with patch.object(sys, 'argv', ['thanos', 'DAILY']):
+        with patch.object(sys, "argv", ["thanos", "DAILY"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:daily', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:daily", "", stream=True)
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_uppercase_system_command(self, mock_orch_class, capsys):
         """Test uppercase system command works."""
         mock_orch = Mock()
-        mock_orch.list_commands.return_value = ['pa:daily']
+        mock_orch.list_commands.return_value = ["pa:daily"]
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'COMMANDS']):
+        with patch.object(sys, "argv", ["thanos", "COMMANDS"]):
             main()
 
         captured = capsys.readouterr()
         assert "Available Commands" in captured.out
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_shortcut_not_triggered_with_extra_args(self, mock_orch_class, capsys):
         """Test shortcut requires single word (shortcuts only work alone)."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
         # "daily something" should be treated as natural language, not shortcut
-        with patch.object(sys, 'argv', ['thanos', 'daily', 'something']):
+        with patch.object(sys, "argv", ["thanos", "daily", "something"]):
             main()
 
         # Should route as natural language, not run_command with shortcut
         mock_orch.route.assert_called_once()
-        assert mock_orch.run_command.call_count == 0 or \
-               mock_orch.run_command.call_args[0][0] != 'pa:daily'
+        assert (
+            mock_orch.run_command.call_count == 0
+            or mock_orch.run_command.call_args[0][0] != "pa:daily"
+        )
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_colon_not_command_pattern(self, mock_orch_class, capsys):
         """Test that single word with colon but multiple colons is not command."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
         # "a:b:c" has 3 parts, not 2, so shouldn't match command pattern
-        with patch.object(sys, 'argv', ['thanos', 'a:b:c']):
+        with patch.object(sys, "argv", ["thanos", "a:b:c"]):
             main()
 
         # Should be routed as natural language
@@ -749,16 +777,17 @@ class TestMainEdgeCases:
 # Integration-style Tests
 # ========================================================================
 
+
 class TestMainIntegration:
     """Integration-style tests for main() function."""
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_full_workflow_question(self, mock_orch_class, capsys):
         """Test full workflow for a question."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'Should', 'I', 'take', 'this', 'client?']):
+        with patch.object(sys, "argv", ["thanos", "Should", "I", "take", "this", "client?"]):
             main()
 
         # Verify orchestrator was initialized with THANOS_DIR
@@ -771,16 +800,16 @@ class TestMainIntegration:
         captured = capsys.readouterr()
         assert "🟣" in captured.out
 
-    @patch('thanos.ThanosOrchestrator')
+    @patch("thanos.ThanosOrchestrator")
     def test_full_workflow_shortcut(self, mock_orch_class, capsys):
         """Test full workflow for a shortcut."""
         mock_orch = Mock()
         mock_orch_class.return_value = mock_orch
 
-        with patch.object(sys, 'argv', ['thanos', 'brief']):
+        with patch.object(sys, "argv", ["thanos", "brief"]):
             main()
 
-        mock_orch.run_command.assert_called_once_with('pa:daily', '', stream=True)
+        mock_orch.run_command.assert_called_once_with("pa:daily", "", stream=True)
         captured = capsys.readouterr()
         assert "Running pa:daily" in captured.out
 
