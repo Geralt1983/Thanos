@@ -876,3 +876,209 @@ class TestColors:
         assert isinstance(Colors.DIM, str)
         assert isinstance(Colors.RESET, str)
         assert isinstance(Colors.BOLD, str)
+
+
+# ========================================================================
+# MemOS Lazy Initialization Tests (_get_memos)
+# ========================================================================
+
+
+class TestMemOSLazyInitialization:
+    """Test _get_memos() lazy initialization with various scenarios"""
+
+    def test_get_memos_with_existing_instance(self, router):
+        """Test _get_memos() successfully retrieves existing instance"""
+        # Mock MemOS availability and functions
+        mock_memos_instance = Mock(name="MemOS")
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", return_value=mock_memos_instance):
+                # First call should get existing instance
+                result = router._get_memos()
+                assert result == mock_memos_instance
+                assert router._memos == mock_memos_instance
+                assert router._memos_initialized is True
+
+    def test_get_memos_idempotency(self, router):
+        """Test _get_memos() returns same instance on multiple calls"""
+        mock_memos_instance = Mock(name="MemOS")
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", return_value=mock_memos_instance):
+                # Multiple calls should return same instance
+                result1 = router._get_memos()
+                result2 = router._get_memos()
+                result3 = router._get_memos()
+
+                assert result1 == result2 == result3 == mock_memos_instance
+                assert router._memos_initialized is True
+
+    def test_get_memos_fallback_to_init(self, router):
+        """Test _get_memos() falls back to init_memos() when get_memos() fails"""
+        mock_memos_instance = Mock(name="MemOS")
+        mock_init_coro = AsyncMock(return_value=mock_memos_instance)
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", side_effect=RuntimeError("Get failed")):
+                with patch("Tools.command_router.init_memos", return_value=mock_init_coro()):
+                    # Should fall back to init_memos
+                    result = router._get_memos()
+                    assert result == mock_memos_instance
+                    assert router._memos_initialized is True
+
+    def test_get_memos_unavailable(self, router):
+        """Test _get_memos() returns None when MEMOS_AVAILABLE is False"""
+        with patch("Tools.command_router.MEMOS_AVAILABLE", False):
+            result = router._get_memos()
+            assert result is None
+            assert router._memos_initialized is False
+
+    def test_get_memos_both_get_and_init_fail(self, router):
+        """Test _get_memos() returns None when both get_memos() and init_memos() fail"""
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", side_effect=RuntimeError("Get failed")):
+                with patch(
+                    "Tools.command_router.init_memos",
+                    side_effect=RuntimeError("Init failed"),
+                ):
+                    # Should return None and handle gracefully
+                    result = router._get_memos()
+                    assert result is None
+                    assert router._memos is None
+
+    def test_get_memos_init_with_no_event_loop(self, router):
+        """Test _get_memos() async initialization when no event loop exists"""
+        mock_memos_instance = Mock(name="MemOS")
+
+        # Create a fresh coroutine for each test
+        async def mock_init_memos():
+            await asyncio.sleep(0.001)
+            return mock_memos_instance
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", side_effect=RuntimeError("Get failed")):
+                with patch("Tools.command_router.init_memos", side_effect=mock_init_memos):
+                    # Should create event loop and initialize
+                    result = router._get_memos()
+                    assert result == mock_memos_instance
+                    assert router._memos_initialized is True
+
+    def test_get_memos_with_running_event_loop(self, router):
+        """Test _get_memos() handles running event loop gracefully"""
+
+        async def test_with_running_loop():
+            with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+                with patch(
+                    "Tools.command_router.get_memos", side_effect=RuntimeError("Get failed")
+                ):
+                    # Inside running loop, should return None (graceful degradation)
+                    result = router._get_memos()
+                    return result
+
+        # Run in event loop
+        result = asyncio.run(test_with_running_loop())
+        assert result is None
+
+    def test_get_memos_get_existing_exception_handling(self, router):
+        """Test _get_memos() handles exceptions in get_memos() gracefully"""
+        mock_memos_instance = Mock(name="MemOS")
+
+        async def mock_init_memos():
+            await asyncio.sleep(0.001)
+            return mock_memos_instance
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            # get_memos raises exception
+            with patch("Tools.command_router.get_memos", side_effect=Exception("Connection error")):
+                with patch("Tools.command_router.init_memos", side_effect=mock_init_memos):
+                    # Should catch exception and fall back to init
+                    result = router._get_memos()
+                    assert result == mock_memos_instance
+                    assert router._memos_initialized is True
+
+    def test_get_memos_init_exception_handling(self, router):
+        """Test _get_memos() handles exceptions in init_memos() gracefully"""
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", side_effect=RuntimeError("Get failed")):
+                with patch(
+                    "Tools.command_router.init_memos",
+                    side_effect=Exception("Database connection failed"),
+                ):
+                    # Should catch exception and return None
+                    result = router._get_memos()
+                    assert result is None
+                    assert router._memos is None
+
+    def test_get_memos_returns_none_sets_initialized_false(self, router):
+        """Test _get_memos() doesn't mark as initialized when returning None"""
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", side_effect=RuntimeError("Get failed")):
+                with patch(
+                    "Tools.command_router.init_memos",
+                    side_effect=RuntimeError("Init failed"),
+                ):
+                    result = router._get_memos()
+                    assert result is None
+                    # Should not mark as initialized on failure
+                    assert router._memos_initialized is False
+
+    def test_get_memos_multiple_calls_after_failure(self, router):
+        """Test _get_memos() can be called multiple times after initial failure"""
+        call_count = {"count": 0}
+
+        def failing_then_succeeding_get():
+            call_count["count"] += 1
+            if call_count["count"] == 1:
+                raise RuntimeError("First attempt failed")
+            return Mock(name="MemOS")
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", side_effect=failing_then_succeeding_get):
+                # First call fails and falls back to init (which also fails)
+                with patch(
+                    "Tools.command_router.init_memos",
+                    side_effect=RuntimeError("Init failed"),
+                ):
+                    result1 = router._get_memos()
+                    assert result1 is None
+
+                # Reset state to allow retry
+                router._memos = None
+                router._memos_initialized = False
+
+                # Second call should succeed
+                result2 = router._get_memos()
+                assert result2 is not None
+                assert router._memos_initialized is True
+
+    def test_get_memos_preserves_instance_on_subsequent_calls(self, router):
+        """Test _get_memos() preserves instance across multiple calls"""
+        mock_instance = Mock(name="MemOS")
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", return_value=mock_instance) as mock_get:
+                # First call
+                result1 = router._get_memos()
+                # Second call
+                result2 = router._get_memos()
+
+                # Should return same instance
+                assert result1 is result2
+                # get_memos should only be called once (due to idempotency)
+                assert mock_get.call_count == 1
+
+    def test_get_memos_async_initialization_success(self, router):
+        """Test _get_memos() successfully initializes with async init_memos()"""
+        mock_memos_instance = Mock(name="MemOS")
+
+        async def mock_init_memos():
+            await asyncio.sleep(0.001)
+            return mock_memos_instance
+
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            with patch("Tools.command_router.get_memos", side_effect=RuntimeError("Get failed")):
+                with patch("Tools.command_router.init_memos", side_effect=mock_init_memos):
+                    result = router._get_memos()
+                    assert result == mock_memos_instance
+                    assert router._memos_initialized is True
+                    assert router._memos == mock_memos_instance
