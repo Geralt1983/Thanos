@@ -1,16 +1,50 @@
 #!/usr/bin/env python3
 """
-StateHandler - Handles state and context information commands
+StateHandler - Handles state and context information commands in Thanos Interactive Mode.
 
-Manages display of Thanos state, commitments, context window usage, and session
-token usage statistics. Provides comprehensive visibility into conversation state,
-resource utilization, and active commitments.
+This module manages the display of system state, commitments, context window usage,
+and session token usage statistics. It provides comprehensive visibility into
+conversation state, resource utilization, and active work/personal commitments.
 
 Commands:
     /state          - Show current Thanos state from Today.md
     /commitments    - Show active commitments from Commitments.md
     /context        - Show context window usage and availability
     /usage          - Show session token usage and cost statistics
+
+Classes:
+    StateHandler: Handler for all state and context information commands
+
+Dependencies:
+    - BaseHandler: Provides shared utilities and dependency injection
+    - CommandResult: Standard result format for command execution
+    - Colors: ANSI color codes for formatted output
+    - StateReader: Reads state from Today.md and Commitments.md
+    - ContextManager: Tracks context window usage
+
+Architecture:
+    State information is read from markdown files in the Thanos directory:
+    - Today.md contains daily focus, top 3 priorities, commitments, and blockers
+    - Commitments.md contains active work and personal commitments
+    Context and usage statistics are tracked in real-time during conversation.
+
+Example:
+    handler = StateHandler(orchestrator, session_mgr, context_mgr,
+                          state_reader, thanos_dir)
+
+    # Show current Thanos state
+    result = handler.handle_state("")
+
+    # Display token usage stats
+    result = handler.handle_usage("")
+
+    # Check context window
+    result = handler.handle_context("")
+
+See Also:
+    - Tools.command_handlers.base: Base handler infrastructure
+    - Today.md: Daily state and focus
+    - Commitments.md: Active commitments
 """
 
 from Tools.command_handlers.base import BaseHandler, CommandResult, Colors

@@ -1,13 +1,41 @@
 #!/usr/bin/env python3
 """
-AgentHandler - Handles agent management commands
+AgentHandler - Handles agent management commands in Thanos Interactive Mode.
 
-Manages agent switching and listing operations in Thanos Interactive Mode.
-Provides commands for viewing available agents and switching between them.
+This module manages agent switching and listing operations. It provides commands
+for viewing available agents (personas) and switching between them to change the
+conversational context and expertise focus.
 
 Commands:
     /agent [name]   - Switch to a different agent or show current agent
     /agents         - List all available agents with their roles
+
+Classes:
+    AgentHandler: Handler for agent management commands
+
+Dependencies:
+    - BaseHandler: Provides shared utilities and dependency injection
+    - CommandResult: Standard result format for command execution
+    - Colors: ANSI color codes for formatted output
+
+Architecture:
+    This handler integrates with the PersonaRouter for agent detection and the
+    orchestrator's agent configuration to provide seamless agent switching and
+    discovery capabilities.
+
+Example:
+    handler = AgentHandler(orchestrator, session_mgr, context_mgr,
+                          state_reader, thanos_dir)
+
+    # Switch to a specific agent
+    result = handler.handle_agent("dev")  # Switches to dev agent
+
+    # List all available agents
+    result = handler.handle_list_agents("")  # Shows all agents with roles
+
+See Also:
+    - Tools.routing.persona_router: Intelligent agent detection and routing
+    - Tools.command_handlers.base: Base handler infrastructure
 """
 
 from Tools.command_handlers.base import BaseHandler, CommandResult, Colors

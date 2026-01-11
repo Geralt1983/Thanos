@@ -1,11 +1,62 @@
 #!/usr/bin/env python3
 """
-CommandRegistry - Command registration and lookup system
+CommandRegistry - Command registration and lookup system for Thanos Interactive Mode.
 
-Manages command registration, lookup, and metadata for Thanos Interactive Mode.
-Provides a centralized registry for all slash commands and their handlers.
+This module provides a centralized registry for managing slash commands in the
+Thanos interactive mode. It handles command registration, lookup, aliasing, and
+introspection, enabling a clean separation between command routing logic and
+command execution.
 
-Single Responsibility: Command registration and lookup
+Classes:
+    CommandRegistry: Manages registration and lookup of slash commands
+
+Dependencies:
+    - typing: Type hints for better code clarity
+
+Architecture:
+    The CommandRegistry acts as a central dispatch table for all interactive commands:
+    - Commands are registered with: name, handler function, description, and arguments
+    - Supports command aliases (multiple names → same handler)
+    - Case-insensitive command lookup for better UX
+    - Provides introspection for generating help text and debugging
+
+    Commands are organized by handler modules:
+    - AgentHandler: /agent, /agents
+    - SessionHandler: /clear, /save, /sessions, /resume, /branch, /branches, /switch
+    - StateHandler: /state, /commitments, /context, /usage
+    - MemoryHandler: /remember, /recall, /memory
+    - AnalyticsHandler: /patterns
+    - ModelHandler: /model, /m
+    - CoreHandler: /help, /h, /quit, /q, /exit, /run
+
+Example:
+    # Initialize registry
+    registry = CommandRegistry()
+
+    # Register commands
+    registry.register("help", handler.handle_help, "Show help", [])
+    registry.register("h", handler.handle_help, "Show help (alias)", [])
+    registry.register("state", handler.handle_state, "Show state", [])
+
+    # Register multiple commands at once
+    registry.register_batch({
+        "agent": (handler.handle_agent, "Switch agent", ["name"]),
+        "quit": (handler.handle_quit, "Exit", []),
+    })
+
+    # Look up and execute commands
+    handler_info = registry.get("help")
+    if handler_info:
+        handler, description, args = handler_info
+        result = handler("")  # Execute command
+
+    # Get available commands for help text
+    for cmd, desc, args in registry.get_available_commands():
+        print(f"/{cmd} - {desc}")
+
+See Also:
+    - Tools.command_router: Main command routing orchestration
+    - Tools.command_handlers.*: Individual command handler modules
 """
 
 from typing import Callable, Optional

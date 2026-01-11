@@ -1,14 +1,48 @@
 #!/usr/bin/env python3
 """
-CoreHandler - Handles core system commands
+CoreHandler - Handles core system commands in Thanos Interactive Mode.
 
-Manages fundamental system commands in Thanos Interactive Mode.
-Provides commands for help, quitting, and running Thanos commands.
+This module manages fundamental system commands that control the interactive
+mode itself. It provides help information, exit functionality, and the ability
+to run Thanos orchestrator commands directly from interactive mode.
 
 Commands:
     /help           - Show all available commands and usage information
     /quit           - Exit interactive mode
     /run <cmd>      - Run a Thanos command (e.g., /run pa:daily)
+
+Classes:
+    CoreHandler: Handler for core system commands
+
+Dependencies:
+    - BaseHandler: Provides shared utilities and dependency injection
+    - CommandAction: Enum for post-command actions (CONTINUE, QUIT)
+    - CommandResult: Standard result format for command execution
+    - Colors: ANSI color codes for formatted output
+
+Architecture:
+    Core commands provide essential functionality for interactive mode:
+    - /help displays all registered commands with descriptions and shortcuts
+    - /quit triggers graceful shutdown by returning CommandAction.QUIT
+    - /run executes orchestrator commands (from thanos.py) within interactive mode
+
+Example:
+    handler = CoreHandler(orchestrator, session_mgr, context_mgr,
+                         state_reader, thanos_dir)
+
+    # Show help
+    result = handler.handle_help("")
+
+    # Run a Thanos command
+    result = handler.handle_run("pa:daily")
+
+    # Quit interactive mode
+    result = handler.handle_quit("")
+    # Returns CommandResult with action=CommandAction.QUIT
+
+See Also:
+    - Tools.command_handlers.base: Base handler infrastructure
+    - Tools.routing.command_registry: Command registration system
 """
 
 from Tools.command_handlers.base import BaseHandler, CommandAction, CommandResult, Colors
