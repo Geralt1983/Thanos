@@ -27,7 +27,7 @@ class TestSessionReuse:
     async def test_multiple_operations_share_session(self):
         """Verify multiple operations use the same session object."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         # Create adapter with mocked driver
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
@@ -114,7 +114,7 @@ class TestSessionPoolingOverhead:
     async def test_session_pooling_reduces_session_creation(self):
         """Verify pooling creates fewer sessions than individual operations."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -162,7 +162,7 @@ class TestSessionPoolingOverhead:
     async def test_batch_operation_uses_single_session(self):
         """Verify batch operations use only one session for multiple items."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -208,7 +208,7 @@ class TestBatchOperations:
     async def test_create_entities_batch_success(self):
         """Test successful batch entity creation."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -255,7 +255,7 @@ class TestBatchOperations:
     async def test_create_entities_batch_partial_failure_non_atomic(self):
         """Test batch entity creation with partial failure in non-atomic mode."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -298,7 +298,7 @@ class TestBatchOperations:
     async def test_link_nodes_batch_success(self):
         """Test successful batch link creation."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -346,7 +346,7 @@ class TestBatchOperations:
     async def test_store_memory_batch_complete_workflow(self):
         """Test store_memory_batch with complete workflow."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -426,7 +426,7 @@ class TestAtomicTransactions:
     async def test_atomic_batch_commits_on_success(self):
         """Verify atomic batch commits transaction on success."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -457,7 +457,7 @@ class TestAtomicTransactions:
     async def test_atomic_batch_rolls_back_on_failure(self):
         """Verify atomic batch rolls back transaction on failure."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -496,7 +496,7 @@ class TestAtomicTransactions:
     async def test_non_atomic_batch_no_transaction(self):
         """Verify non-atomic batch doesn't use transaction."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -597,7 +597,7 @@ class TestPerformanceComparison:
     async def test_session_reuse_reduces_driver_calls(self):
         """Verify session reuse reduces calls to driver.session()."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 
@@ -629,7 +629,7 @@ class TestPerformanceComparison:
     async def test_batch_operation_overhead_comparison(self):
         """Compare overhead between individual operations and batch operations."""
         from Tools.adapters.neo4j_adapter import Neo4jAdapter
-        from Core.tool_result import ToolResult
+        from Tools.adapters.base import ToolResult
 
         adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
 

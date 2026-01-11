@@ -106,7 +106,7 @@ class TestSessionCreationOverhead:
 
             mock_session = AsyncMock()
             mock_result = Mock()
-            mock_result.single.return_value = {"id": f"entity_{session_create_count}"}
+            mock_result.single = AsyncMock(return_value={"e": {"id": f"entity_{session_create_count}"}})
             mock_session.run = AsyncMock(return_value=mock_result)
 
             # Simulate session creation overhead (5-10ms)
@@ -169,7 +169,7 @@ class TestSessionCreationOverhead:
 
             mock_session = AsyncMock()
             mock_result = Mock()
-            mock_result.single.return_value = {"id": f"entity_{session_create_count}"}
+            mock_result.single = AsyncMock(return_value={"e": {"id": f"entity_{session_create_count}"}})
             mock_session.run = AsyncMock(return_value=mock_result)
 
             # Simulate session creation overhead (5-10ms)
@@ -256,7 +256,11 @@ class TestMultiOperationScenarios:
 
             mock_session = AsyncMock()
             mock_result = Mock()
-            mock_result.single.return_value = {"id": f"node_{session_create_count}"}
+            # Return structure with all possible keys for different operation types
+            node_data = {"id": f"node_{session_create_count}"}
+            mock_result.single = AsyncMock(return_value={
+                "c": node_data, "d": node_data, "e": node_data, "r": node_data
+            })
             mock_session.run = AsyncMock(return_value=mock_result)
 
             # Simulate session creation overhead
@@ -281,17 +285,21 @@ class TestMultiOperationScenarios:
         for i in range(iterations):
             # Operation 1: Create commitment
             commitment_data = {
-                "text": f"Complete task {i}",
+                "content": f"Complete task {i}",
                 "deadline": "2024-12-31",
-                "status": "active"
+                "to_whom": "self",
+                "domain": "work",
+                "priority": 3
             }
             await adapter._create_commitment(commitment_data)
 
             # Operation 2: Record decision
             decision_data = {
-                "decision": f"Choose approach {i}",
+                "content": f"Choose approach {i}",
                 "rationale": "Best option",
-                "alternatives": ["Option A", "Option B"]
+                "alternatives": ["Option A", "Option B"],
+                "domain": "technical",
+                "confidence": 0.8
             }
             await adapter._record_decision(decision_data)
 
@@ -306,7 +314,7 @@ class TestMultiOperationScenarios:
             link_data = {
                 "from_id": f"commitment_{i}",
                 "to_id": f"entity_{i}",
-                "relationship": "ASSIGNED_TO"
+                "relationship": "INVOLVES"
             }
             await adapter._link_nodes(link_data)
 
@@ -343,7 +351,11 @@ class TestMultiOperationScenarios:
 
             mock_session = AsyncMock()
             mock_result = Mock()
-            mock_result.single.return_value = {"id": f"node_{session_create_count}"}
+            # Return structure with all possible keys for different operation types
+            node_data = {"id": f"node_{session_create_count}"}
+            mock_result.single = AsyncMock(return_value={
+                "c": node_data, "d": node_data, "e": node_data, "r": node_data
+            })
             mock_session.run = AsyncMock(return_value=mock_result)
             return mock_session
 
@@ -364,16 +376,20 @@ class TestMultiOperationScenarios:
             async with adapter.session_context() as session:
                 # All 4 operations share the same session
                 commitment_data = {
-                    "text": f"Complete task {i}",
+                    "content": f"Complete task {i}",
                     "deadline": "2024-12-31",
-                    "status": "active"
+                    "to_whom": "self",
+                    "domain": "work",
+                    "priority": 3
                 }
                 await adapter._create_commitment(commitment_data, session=session)
 
                 decision_data = {
-                    "decision": f"Choose approach {i}",
+                    "content": f"Choose approach {i}",
                     "rationale": "Best option",
-                    "alternatives": ["Option A", "Option B"]
+                    "alternatives": ["Option A", "Option B"],
+                    "domain": "technical",
+                    "confidence": 0.8
                 }
                 await adapter._record_decision(decision_data, session=session)
 
@@ -386,7 +402,7 @@ class TestMultiOperationScenarios:
                 link_data = {
                     "from_id": f"commitment_{i}",
                     "to_id": f"entity_{i}",
-                    "relationship": "ASSIGNED_TO"
+                    "relationship": "INVOLVES"
                 }
                 await adapter._link_nodes(link_data, session=session)
 
@@ -439,7 +455,7 @@ class TestBatchOperationPerformance:
 
             mock_session = AsyncMock()
             mock_result = Mock()
-            mock_result.single.return_value = {"id": f"entity_{session_create_count}"}
+            mock_result.single = AsyncMock(return_value={"e": {"id": f"entity_{session_create_count}"}})
             mock_session.run = AsyncMock(return_value=mock_result)
 
             async def enter_with_delay():
@@ -499,7 +515,7 @@ class TestBatchOperationPerformance:
 
             mock_session = AsyncMock()
             mock_result = Mock()
-            mock_result.single.return_value = {"id": f"entity_{session_create_count}"}
+            mock_result.single = AsyncMock(return_value={"e": {"id": f"entity_{session_create_count}"}})
             mock_session.run = AsyncMock(return_value=mock_result)
             return mock_session
 
@@ -577,7 +593,7 @@ class TestScalabilityBenchmarks:
 
                 mock_session = AsyncMock()
                 mock_result = Mock()
-                mock_result.single.return_value = {"id": f"entity_{session_create_count}"}
+                mock_result.single = AsyncMock(return_value={"e": {"id": f"entity_{session_create_count}"}})
                 mock_session.run = AsyncMock(return_value=mock_result)
 
                 async def enter_with_delay():
@@ -633,7 +649,7 @@ class TestScalabilityBenchmarks:
 
                 mock_session = AsyncMock()
                 mock_result = Mock()
-                mock_result.single.return_value = {"id": f"entity_{session_create_count}"}
+                mock_result.single = AsyncMock(return_value={"e": {"id": f"entity_{session_create_count}"}})
                 mock_session.run = AsyncMock(return_value=mock_result)
                 return mock_session
 

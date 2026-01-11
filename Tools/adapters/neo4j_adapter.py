@@ -139,6 +139,7 @@ class Neo4jSessionContext:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Cleanup session and handle transaction commit/rollback."""
+        rollback_error = None
         try:
             if self._transaction:
                 if exc_type is None:
@@ -146,11 +147,22 @@ class Neo4jSessionContext:
                     await self._transaction.commit()
                 else:
                     # Exception occurred - rollback transaction
-                    await self._transaction.rollback()
+                    try:
+                        await self._transaction.rollback()
+                    except Exception as e:
+                        rollback_error = e
         finally:
             # Always close session
             if self._session:
-                await self._session.close()
+                try:
+                    await self._session.close()
+                except Exception as close_error:
+                    if rollback_error:
+                        # Prioritize rollback error, chain close error
+                        raise rollback_error from close_error
+                    raise
+            if rollback_error:
+                raise rollback_error
 
         # Don't suppress exceptions
         return False
