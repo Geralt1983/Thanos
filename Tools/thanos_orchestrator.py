@@ -195,6 +195,75 @@ class ThanosOrchestrator:
                 except Exception as e:
                     print(f"Warning: Failed to load context {file}: {e}")
 
+    def _build_time_context(self) -> str:
+        """Build temporal context section for the system prompt.
+
+        Generates a formatted string containing:
+        - Current time in human-readable format
+        - Last interaction time and elapsed time since then
+        - Session start time (if available)
+        - Interaction count for today
+
+        Returns:
+            Formatted string for the Temporal Context section of the system prompt,
+            or empty string if time state is unavailable.
+        """
+        try:
+            from Tools.state_reader import StateReader
+
+            state_reader = StateReader(self.base_dir / "State")
+            now = datetime.now().astimezone()
+
+            parts = ["## Temporal Context"]
+
+            # Current time - format: "Friday, January 10, 2026 at 4:45 PM EST"
+            current_time = now.strftime("%A, %B %d, %Y at %-I:%M %p %Z")
+            parts.append(f"- Current time: {current_time}")
+
+            # Get last interaction info
+            last_time = state_reader.get_last_interaction_time()
+            if last_time:
+                elapsed = state_reader.calculate_elapsed_time()
+                elapsed_str = state_reader.format_elapsed_time(elapsed)
+                last_time_short = last_time.strftime("%-I:%M %p")
+                parts.append(f"- Last interaction: {elapsed_str} ({last_time_short})")
+            else:
+                parts.append("- Last interaction: This is our first interaction")
+
+            # Get session and interaction count from TimeState.json
+            time_state_path = self.base_dir / "State" / "TimeState.json"
+            if time_state_path.exists():
+                try:
+                    import json
+                    data = json.loads(time_state_path.read_text())
+
+                    # Session started
+                    session_started = data.get("session_started")
+                    if session_started:
+                        session_dt = datetime.fromisoformat(session_started)
+                        session_elapsed = now - session_dt
+                        session_elapsed_str = state_reader.format_elapsed_time(session_elapsed)
+                        session_time_short = session_dt.strftime("%-I:%M %p")
+                        parts.append(f"- Session started: {session_elapsed_str} ({session_time_short})")
+
+                    # Interaction count
+                    interaction_count = data.get("interaction_count_today", 0)
+                    if interaction_count > 0:
+                        parts.append(f"- Interactions today: {interaction_count}")
+                except (json.JSONDecodeError, OSError, ValueError):
+                    # File corrupted or unreadable, skip additional context
+                    pass
+
+            # Add note about time gaps
+            parts.append("")
+            parts.append("Note: Time gaps may indicate the user was away. Consider acknowledging this if relevant.")
+
+            return "\n".join(parts)
+
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to build time context")
+            return ""
+
     def _build_system_prompt(self, agent: Optional[Agent] = None,
                              command: Optional[Command] = None,
                              include_context: bool = True) -> str:
