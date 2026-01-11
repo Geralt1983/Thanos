@@ -2,7 +2,7 @@
   "feature": "Implement connection pooling for Neo4j async sessions",
   "description": "The Neo4j adapter creates a new session for each operation via `async with self._driver.session()`. While the driver has built-in pooling, session creation overhead can be reduced by reusing sessions for related operations within a request context.",
   "created_at": "2026-01-11T00:03:37.687Z",
-  "updated_at": "2026-01-11T04:45:59.554Z",
+  "updated_at": "2026-01-11T04:48:35.895Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "phases": [
@@ -167,7 +167,7 @@
           "subtask_id": "3.5",
           "title": "Add batch operation methods",
           "description": "Create new methods for common batch operations (e.g., store_memory_batch) that execute multiple operations within a single session context",
-          "status": "pending",
+          "status": "completed",
           "estimated_effort": "medium",
           "dependencies": [
             "3.1",
@@ -177,7 +177,8 @@
           ],
           "files_involved": [
             "Tools/adapters/neo4j_adapter.py"
-          ]
+          ],
+          "completion_notes": "Implemented five batch operation methods in Neo4jAdapter (lines 1195-1544): (1) create_entities_batch - batch entity creation with atomic/non-atomic modes, (2) link_nodes_batch - batch relationship creation, (3) record_patterns_batch - batch pattern recording, (4) create_commitments_batch - batch commitment creation, (5) store_memory_batch - high-level memory storage workflow combining commitments, decisions, entities, and links. All methods utilize session_context with optional atomic transaction mode (batch_transaction=True for all-or-nothing, False for partial results). Proper error handling with partial_results metadata on failure. Comprehensive docstrings with usage examples. Syntax validated with py_compile. Committed with descriptive message."
         }
       ]
     },
