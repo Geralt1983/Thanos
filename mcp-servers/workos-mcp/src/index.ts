@@ -5,23 +5,16 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and, gte, ne, desc, asc } from "drizzle-orm";
-import * as schema from "./schema.js";
+
+// Shared utilities
+import { getDb } from "./shared/db.js";
 
 // Cache imports
 import {
   initCache,
-  getCachedTasks,
-  getCachedTasksByClient,
-  getCachedClients,
-  getCachedHabits,
-  getLatestCachedDailyGoal,
-  isCacheStale,
   getCacheStats,
 } from "./cache/cache.js";
-import { syncAll, syncSingleTask, removeCachedTask } from "./cache/sync.js";
+import { syncAll } from "./cache/sync.js";
 
 // Domain module imports
 import { taskTools, handleTaskTool } from "./domains/tasks/index.js";
@@ -29,18 +22,6 @@ import { habitTools, handleHabitTool } from "./domains/habits/index.js";
 import { energyTools, handleEnergyTool } from "./domains/energy/index.js";
 import { brainDumpTools, handleBrainDumpTool } from "./domains/brain-dump/index.js";
 import { personalTasksTools, handlePersonalTasksTool } from "./domains/personal-tasks/index.js";
-
-// =============================================================================
-// DATABASE CONNECTION
-// =============================================================================
-function getDb() {
-  const url = process.env.WORKOS_DATABASE_URL || process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("WORKOS_DATABASE_URL or DATABASE_URL environment variable required");
-  }
-  const sql = neon(url);
-  return drizzle(sql, { schema });
-}
 
 // =============================================================================
 // CACHE LAYER
@@ -66,62 +47,6 @@ async function ensureCache(): Promise<boolean> {
     }
   }
   return true;
-}
-
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-function getESTNow(): Date {
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-}
-
-function getESTTodayStart(): Date {
-  const est = getESTNow();
-  est.setHours(0, 0, 0, 0);
-  return est;
-}
-
-function getESTDateString(date: Date = new Date()): string {
-  return date.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-}
-
-function getYesterdayDateString(): string {
-  const yesterday = getESTNow();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return getESTDateString(yesterday);
-}
-
-function isWeekday(date: Date): boolean {
-  const day = date.getDay();
-  return day !== 0 && day !== 6;
-}
-
-function getExpectedPreviousDate(frequency: string, currentDate: Date): string | null {
-  const prev = new Date(currentDate);
-  prev.setDate(prev.getDate() - 1);
-
-  if (frequency === "daily") {
-    return getESTDateString(prev);
-  } else if (frequency === "weekdays") {
-    // Skip weekends backwards
-    while (!isWeekday(prev)) {
-      prev.setDate(prev.getDate() - 1);
-    }
-    return getESTDateString(prev);
-  } else if (frequency === "weekly") {
-    // For weekly, previous expected is 7 days ago
-    prev.setDate(prev.getDate() - 6); // -1 already done, so -6 more
-    return getESTDateString(prev);
-  }
-  return null;
-}
-
-function calculatePoints(task: schema.Task): number {
-  return task.pointsFinal ?? task.pointsAiGuess ?? task.effortEstimate ?? 2;
-}
-
-function calculateTotalPoints(tasks: schema.Task[]): number {
-  return tasks.reduce((sum, task) => sum + calculatePoints(task), 0);
 }
 
 // =============================================================================
