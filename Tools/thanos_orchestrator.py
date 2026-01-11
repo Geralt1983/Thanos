@@ -430,7 +430,11 @@ You track patterns and surface them.""")
 
     def run_command(self, command_name: str, args: str = "",
                     stream: bool = False) -> str:
-        """Execute a command and return the response."""
+        """Execute a command and return the response.
+
+        After handling the request, updates the last interaction timestamp
+        in TimeState.json for time-awareness across sessions.
+        """
         self._ensure_client()
 
         command = self.find_command(command_name)
@@ -454,13 +458,16 @@ You track patterns and surface them.""")
                 print(chunk, end="", flush=True)
                 result += chunk
             print()
+            self.state_reader.update_last_interaction("command", command_name)
             return result
         else:
-            return self.api_client.chat(
+            result = self.api_client.chat(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 operation=f"command:{command_name}"
             )
+            self.state_reader.update_last_interaction("command", command_name)
+            return result
 
     def chat(self, message: str, agent: Optional[str] = None,
              stream: bool = False) -> str:
