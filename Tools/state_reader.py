@@ -15,7 +15,7 @@ Usage:
 
 from pathlib import Path
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import re
 
@@ -225,6 +225,32 @@ class StateReader:
             return None
         except Exception:
             return None
+
+    def calculate_elapsed_time(self) -> timedelta:
+        """Calculate elapsed time since the last user interaction.
+
+        Uses get_last_interaction_time() to retrieve the last interaction
+        timestamp and calculates the difference from the current time.
+
+        Returns:
+            timedelta representing elapsed time since last interaction,
+            or timedelta(0) if no previous interaction recorded
+        """
+        last_time = self.get_last_interaction_time()
+        if last_time is None:
+            return timedelta(0)
+
+        try:
+            now = datetime.now().astimezone()
+            # Ensure last_time is timezone-aware for comparison
+            if last_time.tzinfo is None:
+                # Assume local timezone if not specified
+                last_time = last_time.astimezone()
+            elapsed = now - last_time
+            # Ensure we don't return negative timedelta (clock skew, etc.)
+            return elapsed if elapsed > timedelta(0) else timedelta(0)
+        except Exception:
+            return timedelta(0)
 
     def update_last_interaction(self, interaction_type: str = "chat",
                                  agent: Optional[str] = None) -> bool:
