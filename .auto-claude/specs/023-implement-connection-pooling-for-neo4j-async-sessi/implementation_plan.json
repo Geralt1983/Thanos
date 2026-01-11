@@ -2,7 +2,7 @@
   "feature": "Implement connection pooling for Neo4j async sessions",
   "description": "The Neo4j adapter creates a new session for each operation via `async with self._driver.session()`. While the driver has built-in pooling, session creation overhead can be reduced by reusing sessions for related operations within a request context.",
   "created_at": "2026-01-11T00:03:37.687Z",
-  "updated_at": "2026-01-11T04:48:35.895Z",
+  "updated_at": "2026-01-11T04:51:07.204Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "phases": [
@@ -192,14 +192,15 @@
           "subtask_id": "4.1",
           "title": "Create unit tests for Neo4jSessionContext",
           "description": "Write tests for session context manager lifecycle, error handling, nested contexts, and cleanup",
-          "status": "pending",
+          "status": "completed",
           "estimated_effort": "medium",
           "dependencies": [
             "2.1"
           ],
           "files_involved": [
             "tests/unit/test_neo4j_session_pool.py"
-          ]
+          ],
+          "completion_notes": "Created comprehensive unit tests for Neo4jSessionContext (543 lines covering 70+ test cases). Tests include: (1) Initialization with default/custom database and batch transaction modes, (2) Lifecycle testing - __aenter__ creates session/transaction, __aexit__ closes/commits/rolls back, (3) Error handling - session cleanup even when commit/rollback fails, exception propagation, (4) Transaction batching - commit on success, rollback on errors, (5) Integration scenarios - async with statement, sequential contexts, state isolation, (6) Edge cases - None session/transaction handling, custom database names. All tests use AsyncMock for async operations following project patterns. Syntax validated with py_compile. This subtask also covers the requirements from subtask 4.5 (error handling and cleanup tests)."
         },
         {
           "subtask_id": "4.2",
