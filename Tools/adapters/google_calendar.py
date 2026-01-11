@@ -21,7 +21,20 @@ from .base import BaseAdapter, ToolResult
 
 
 class GoogleCalendarAdapter(BaseAdapter):
-    """Direct adapter for Google Calendar API with OAuth 2.0 authentication."""
+    """
+    Direct adapter for Google Calendar API with OAuth 2.0 authentication.
+
+    Security Features:
+    - OAuth credentials stored in State/calendar_credentials.json with 0600 permissions
+    - File is automatically gitignored to prevent accidental commits
+    - Supports environment variable fallback for client_id, client_secret, redirect_uri
+    - Automatic token refresh with secure re-storage
+
+    Environment Variables:
+    - GOOGLE_CALENDAR_CLIENT_ID: OAuth 2.0 client ID from Google Cloud Console
+    - GOOGLE_CALENDAR_CLIENT_SECRET: OAuth 2.0 client secret
+    - GOOGLE_CALENDAR_REDIRECT_URI: OAuth redirect URI (optional, defaults to localhost)
+    """
 
     # OAuth 2.0 scopes for Google Calendar
     SCOPES = [
@@ -87,7 +100,18 @@ class GoogleCalendarAdapter(BaseAdapter):
             pass
 
     def _save_credentials(self) -> None:
-        """Save OAuth credentials to storage."""
+        """
+        Save OAuth credentials to storage with secure permissions.
+
+        Security measures:
+        - Credentials stored in State/calendar_credentials.json
+        - File permissions set to 0600 (owner read/write only)
+        - File is gitignored via State/.gitignore
+        - For production deployments, consider additional encryption at rest
+
+        The credentials file contains OAuth 2.0 tokens (access token, refresh token)
+        which must be protected from unauthorized access.
+        """
         if not self._credentials:
             return
 
@@ -101,6 +125,7 @@ class GoogleCalendarAdapter(BaseAdapter):
             f.write(self._credentials.to_json())
 
         # Set restrictive permissions (0600 - owner read/write only)
+        # This prevents other users on the system from reading the credentials
         os.chmod(creds_path, 0o600)
 
     def _refresh_credentials(self) -> bool:

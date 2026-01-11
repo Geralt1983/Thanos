@@ -128,32 +128,33 @@
     "zsh"
   ],
   "stack_commands": [
-    "ar",
-    "clang",
-    "clang++",
-    "cmake",
-    "g++",
-    "gcc",
+    "createdb",
+    "createuser",
+    "dropdb",
+    "dropuser",
+    "initdb",
     "ipython",
     "jupyter",
-    "ld",
-    "make",
-    "meson",
-    "ninja",
-    "nm",
     "node",
     "notebook",
     "npm",
     "npx",
-    "objdump",
     "pdb",
+    "pg_ctl",
+    "pg_dump",
+    "pg_dumpall",
+    "pg_isready",
+    "pg_restore",
     "pip",
     "pip3",
     "pipx",
+    "postgres",
+    "pre-commit",
+    "psql",
     "pudb",
     "python",
     "python3",
-    "strip",
+    "ruff",
     "ts-node",
     "tsc",
     "tsx"
@@ -164,15 +165,18 @@
     "languages": [
       "python",
       "javascript",
-      "typescript",
-      "c",
-      "cpp"
+      "typescript"
     ],
     "package_managers": [
       "pip"
     ],
-    "frameworks": [],
-    "databases": [],
+    "frameworks": [
+      "ruff",
+      "pre-commit"
+    ],
+    "databases": [
+      "postgresql"
+    ],
     "infrastructure": [],
     "cloud_providers": [],
     "code_quality_tools": [],
@@ -185,7 +189,7 @@
     "cargo_aliases": [],
     "shell_scripts": []
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/026-split-massive-mcp-server-index-ts-into-domain-modu",
-  "created_at": "2026-01-10T23:16:58.600601",
-  "project_hash": "90a8e70357cb86e8baeea9b283f69450"
+  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/038-calendar-integration",
+  "created_at": "2026-01-11T10:29:37.496304",
+  "project_hash": "3959ea9a64867b589cd79f9b7613d398"
 }
