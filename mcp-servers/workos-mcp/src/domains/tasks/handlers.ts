@@ -25,8 +25,10 @@ import { syncSingleTask, removeCachedTask } from "../../cache/sync.js";
 let cacheInitialized = false;
 
 /**
- * Ensure cache is initialized
- * @returns Promise<boolean> true if cache is available
+ * Ensure cache is initialized for write-through operations
+ * Initializes SQLite cache and syncs from Neon if empty or stale
+ *
+ * @returns Promise<boolean> true if cache is available, false on initialization failure
  */
 async function ensureCache(): Promise<boolean> {
   if (!cacheInitialized) {
@@ -53,8 +55,12 @@ async function ensureCache(): Promise<boolean> {
 }
 
 /**
- * Handler: workos_get_today_metrics
- * Get today's task completion metrics and progress
+ * Get today's task completion metrics and progress toward daily goals
+ * Calculates earned points, target progress, client diversity, pace status, and current streak
+ *
+ * @param args - Empty object (no arguments required)
+ * @param db - Database instance for querying tasks, clients, and daily goals
+ * @returns Promise resolving to MCP ContentResponse with metrics including completedCount, earnedPoints, targetPoints, percentOfTarget, paceStatus, streak, and clientsTouchedToday
  */
 export async function handleGetTodayMetrics(
   args: Record<string, any>,
@@ -130,8 +136,12 @@ export async function handleGetTodayMetrics(
 }
 
 /**
- * Handler: workos_get_tasks
- * Get tasks with optional filtering by status and client (cache-first)
+ * Get tasks with optional filtering by status and client
+ * Uses cache-first pattern for optimal performance, falling back to Neon on cache miss or staleness
+ *
+ * @param args - { status?: string, clientId?: number, limit?: number } - Optional filters and result limit (default: 50)
+ * @param db - Database instance for querying tasks when cache is unavailable
+ * @returns Promise resolving to MCP ContentResponse with array of tasks including client names
  */
 export async function handleGetTasks(
   args: Record<string, any>,
@@ -213,8 +223,12 @@ export async function handleGetTasks(
 }
 
 /**
- * Handler: workos_get_clients
- * Get all active clients (cache-first)
+ * Get all active clients from the system
+ * Uses cache-first pattern for optimal performance, falling back to Neon on cache miss or staleness
+ *
+ * @param args - Empty object (no arguments required)
+ * @param db - Database instance for querying clients when cache is unavailable
+ * @returns Promise resolving to MCP ContentResponse with array of active clients
  */
 export async function handleGetClients(
   args: Record<string, any>,
@@ -256,8 +270,13 @@ export async function handleGetClients(
 }
 
 /**
- * Handler: workos_create_task
- * Create a new task (write-through: Neon first, then cache)
+ * Create a new task with specified properties
+ * Uses write-through pattern: writes to Neon first, then syncs to cache
+ * Automatically calculates sortOrder to place task at top of its status column
+ *
+ * @param args - { title: string, description?: string, clientId?: number, status?: string, category?: string, valueTier?: string, drainType?: string }
+ * @param db - Database instance for creating the task
+ * @returns Promise resolving to MCP ContentResponse with success status and created task object
  */
 export async function handleCreateTask(
   args: Record<string, any>,
@@ -314,8 +333,13 @@ export async function handleCreateTask(
 }
 
 /**
- * Handler: workos_complete_task
- * Mark a task as complete (write-through: Neon first, then cache)
+ * Mark a task as complete with timestamp
+ * Uses write-through pattern: updates Neon first, then syncs to cache
+ * Sets status to "done" and records completedAt timestamp
+ *
+ * @param args - { taskId: number } - ID of the task to complete
+ * @param db - Database instance for updating the task
+ * @returns Promise resolving to MCP ContentResponse with success status and updated task, or error if task not found
  */
 export async function handleCompleteTask(
   args: Record<string, any>,
@@ -360,8 +384,13 @@ export async function handleCompleteTask(
 }
 
 /**
- * Handler: workos_promote_task
- * Promote a task to active status (write-through: Neon first, then cache)
+ * Promote a task from queued/backlog to active status
+ * Uses write-through pattern: updates Neon first, then syncs to cache
+ * Moves task into active work column for immediate focus
+ *
+ * @param args - { taskId: number } - ID of the task to promote
+ * @param db - Database instance for updating the task
+ * @returns Promise resolving to MCP ContentResponse with success status and updated task, or error if task not found
  */
 export async function handlePromoteTask(
   args: Record<string, any>,
@@ -405,8 +434,12 @@ export async function handlePromoteTask(
 }
 
 /**
- * Handler: workos_get_streak
- * Get the current daily goal streak
+ * Get the current daily goal streak information
+ * Returns the latest daily goal record with current and longest streaks
+ *
+ * @param args - Empty object (no arguments required)
+ * @param db - Database instance for querying daily goals
+ * @returns Promise resolving to MCP ContentResponse with currentStreak and longestStreak values
  */
 export async function handleGetStreak(
   args: Record<string, any>,
@@ -429,8 +462,12 @@ export async function handleGetStreak(
 }
 
 /**
- * Handler: workos_get_client_memory
- * Get memory/notes for a specific client
+ * Get stored memory/notes for a specific client
+ * Returns contextual information and notes about client preferences, history, and important details
+ *
+ * @param args - { clientName: string } - Name of the client to retrieve memory for
+ * @param db - Database instance for querying client memory
+ * @returns Promise resolving to MCP ContentResponse with client memory object or message if not found
  */
 export async function handleGetClientMemory(
   args: Record<string, any>,
@@ -457,8 +494,13 @@ export async function handleGetClientMemory(
 }
 
 /**
- * Handler: workos_daily_summary
  * Get comprehensive daily summary for Life OS morning brief
+ * Provides complete overview of progress, active tasks, points, and queued work
+ * Designed for daily planning and decision-making
+ *
+ * @param args - Empty object (no arguments required)
+ * @param db - Database instance for querying tasks, daily goals, and progress
+ * @returns Promise resolving to MCP ContentResponse with date, progress metrics, active tasks with points, potential total, and up-next queued tasks
  */
 export async function handleDailySummary(
   args: Record<string, any>,
@@ -550,8 +592,13 @@ export async function handleDailySummary(
 }
 
 /**
- * Handler: workos_update_task
- * Update task properties (write-through: Neon first, then cache)
+ * Update task properties with partial updates
+ * Uses write-through pattern: updates Neon first, then syncs to cache
+ * Allows updating any combination of task fields
+ *
+ * @param args - { taskId: number, clientId?: number, title?: string, description?: string, status?: string, valueTier?: string, drainType?: string }
+ * @param db - Database instance for updating the task
+ * @returns Promise resolving to MCP ContentResponse with success status and updated task, or error if task not found or taskId missing
  */
 export async function handleUpdateTask(
   args: Record<string, any>,
@@ -606,8 +653,13 @@ export async function handleUpdateTask(
 }
 
 /**
- * Handler: workos_delete_task
- * Delete a task (write-through: Neon first, then cache)
+ * Delete a task permanently from the system
+ * Uses write-through pattern: deletes from Neon first, then removes from cache
+ * This action cannot be undone
+ *
+ * @param args - { taskId: number } - ID of the task to delete
+ * @param db - Database instance for deleting the task
+ * @returns Promise resolving to MCP ContentResponse with success status and deleted task object, or error if task not found or taskId missing
  */
 export async function handleDeleteTask(
   args: Record<string, any>,

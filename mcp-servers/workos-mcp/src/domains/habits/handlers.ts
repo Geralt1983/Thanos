@@ -23,8 +23,10 @@ import {
 let cacheInitialized = false;
 
 /**
- * Ensure cache is initialized
- * @returns Promise<boolean> true if cache is available
+ * Ensure cache is initialized for habit read operations
+ * Initializes SQLite cache and syncs from Neon if empty or stale
+ *
+ * @returns Promise<boolean> true if cache is available, false on initialization failure
  */
 async function ensureCache(): Promise<boolean> {
   if (!cacheInitialized) {
@@ -51,8 +53,13 @@ async function ensureCache(): Promise<boolean> {
 }
 
 /**
- * Handler: workos_get_habits
  * Get all active habits with their current streaks
+ * Uses cache-first pattern for optimal performance, falling back to Neon on cache miss or staleness
+ * Returns habits sorted by sortOrder with streak information
+ *
+ * @param args - Empty object (no arguments required)
+ * @param db - Database instance for querying habits when cache is unavailable
+ * @returns Promise resolving to MCP ContentResponse with array of active habits including currentStreak and longestStreak
  */
 export async function handleGetHabits(
   args: Record<string, any>,
@@ -85,8 +92,12 @@ export async function handleGetHabits(
 }
 
 /**
- * Handler: workos_create_habit
- * Create a new habit to track
+ * Create a new habit to track with customizable frequency and timing
+ * Sets up habit with optional emoji, category, and completion tracking parameters
+ *
+ * @param args - { name: string, description?: string, emoji?: string, frequency?: "daily" | "weekdays" | "weekly", targetCount?: number, timeOfDay?: "morning" | "afternoon" | "evening" | "anytime", category?: string }
+ * @param db - Database instance for creating the habit
+ * @returns Promise resolving to MCP ContentResponse with success status and created habit object
  */
 export async function handleCreateHabit(
   args: Record<string, any>,
@@ -113,8 +124,13 @@ export async function handleCreateHabit(
 }
 
 /**
- * Handler: workos_complete_habit
- * Mark a habit as completed for today
+ * Mark a habit as completed for today with automatic streak calculation
+ * Records completion, updates current streak based on consecutive completions, and tracks longest streak
+ * Prevents duplicate completions for the same day
+ *
+ * @param args - { habitId: number, note?: string } - ID of habit to complete and optional note
+ * @param db - Database instance for updating habit and recording completion
+ * @returns Promise resolving to MCP ContentResponse with completion record, updated habit, and streak info (previousStreak, newStreak, wasConsecutive)
  */
 export async function handleCompleteHabit(
   args: Record<string, any>,
@@ -208,8 +224,13 @@ export async function handleCompleteHabit(
 }
 
 /**
- * Handler: workos_get_habit_streaks
- * Get habit completion history and streak info
+ * Get habit completion history and streak information
+ * Returns completion records with habit names for specified time period
+ * Optionally filter to a specific habit
+ *
+ * @param args - { habitId?: number, days?: number } - Optional habit filter and lookback period (default: 7 days)
+ * @param db - Database instance for querying habit completions
+ * @returns Promise resolving to MCP ContentResponse with array of completion records including habitName, completedAt, and notes
  */
 export async function handleGetHabitStreaks(
   args: Record<string, any>,
@@ -241,8 +262,13 @@ export async function handleGetHabitStreaks(
 }
 
 /**
- * Handler: workos_habit_checkin
  * Get habits due for check-in based on time of day
+ * Filters active habits by timeOfDay preference and completion status
+ * Provides overview of today's progress with pending and completed counts
+ *
+ * @param args - { timeOfDay?: "morning" | "afternoon" | "evening" | "all", includeCompleted?: boolean } - Time filter and whether to show already-completed habits (defaults: "all", false)
+ * @param db - Database instance for querying habits
+ * @returns Promise resolving to MCP ContentResponse with checkin summary (totalHabits, completedToday, pendingToday) and filtered habits array with streak and completion status
  */
 export async function handleHabitCheckin(
   args: Record<string, any>,
@@ -305,8 +331,13 @@ export async function handleHabitCheckin(
 }
 
 /**
- * Handler: workos_habit_dashboard
  * Get ASCII dashboard showing habit completion grid for the week
+ * Displays visual calendar of habit completions with streak indicators and summary statistics
+ * Supports both compact (ASCII only) and detailed (JSON with ASCII) output formats
+ *
+ * @param args - { days?: number, format?: "compact" | "detailed" } - Lookback period (default: 7) and output format (default: "compact")
+ * @param db - Database instance for querying habits and completions
+ * @returns Promise resolving to MCP ContentResponse with ASCII dashboard showing completion grid, today's progress, week percentage, and active streaks. Detailed format includes full stats and completion map.
  */
 export async function handleHabitDashboard(
   args: Record<string, any>,
@@ -454,8 +485,14 @@ export async function handleHabitDashboard(
 }
 
 /**
- * Handler: workos_recalculate_streaks
- * Recalculate all habit streaks from completion history. Use to fix broken streak data.
+ * Recalculate all habit streaks from completion history
+ * Walks through completion records to rebuild accurate streak counts
+ * Use this to fix broken streak data or after data migrations
+ * Validates streak freshness (breaks streak if last completion was before yesterday)
+ *
+ * @param args - Empty object (no arguments required)
+ * @param db - Database instance for querying completions and updating habits
+ * @returns Promise resolving to MCP ContentResponse with recalculation results showing habitId, name, oldStreak, newStreak, and lastCompletedDate for each habit
  */
 export async function handleRecalculateStreaks(
   args: Record<string, any>,

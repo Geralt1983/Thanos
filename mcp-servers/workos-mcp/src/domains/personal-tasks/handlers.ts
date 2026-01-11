@@ -8,8 +8,13 @@ import { eq, and, asc, desc } from "drizzle-orm";
 // =============================================================================
 
 /**
- * Handler: workos_get_personal_tasks
  * Get personal (non-work) tasks with optional status filtering
+ * Returns tasks with category="personal" sorted by sortOrder and createdAt
+ * Useful for separating personal life tasks from work/client tasks
+ *
+ * @param args - { status?: "active" | "queued" | "backlog" | "done", limit?: number } - Optional status filter and result limit (default: 20)
+ * @param db - Database instance for querying personal tasks
+ * @returns Promise resolving to MCP ContentResponse with array of personal tasks
  */
 export async function handleGetPersonalTasks(
   args: Record<string, any>,

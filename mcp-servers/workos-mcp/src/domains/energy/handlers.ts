@@ -8,8 +8,13 @@ import { desc } from "drizzle-orm";
 // =============================================================================
 
 /**
- * Handler: workos_log_energy
- * Log current energy state (high/medium/low) with optional Oura Ring data
+ * Log current energy state with optional Oura Ring biometric data
+ * Records energy level (high/medium/low) with timestamp and optional wellness metrics
+ * Automatically sets source to "oura" when Oura Ring data is provided
+ *
+ * @param args - { level: "high" | "medium" | "low", note?: string, ouraReadiness?: number, ouraHrv?: number, ouraSleep?: number }
+ * @param db - Database instance for creating the energy state entry
+ * @returns Promise resolving to MCP ContentResponse with success status and created energy state entry
  */
 export async function handleLogEnergy(
   args: Record<string, any>,
@@ -35,8 +40,13 @@ export async function handleLogEnergy(
 }
 
 /**
- * Handler: workos_get_energy
- * Get current/recent energy states
+ * Get current and recent energy states
+ * Returns most recent energy entries with timestamps, levels, sources, and optional Oura metrics
+ * Sorted by most recent first
+ *
+ * @param args - { limit?: number } - Maximum number of entries to return (default: 5)
+ * @param db - Database instance for querying energy states
+ * @returns Promise resolving to MCP ContentResponse with array of energy state entries
  */
 export async function handleGetEnergy(
   args: Record<string, any>,
