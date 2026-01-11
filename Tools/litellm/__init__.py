@@ -25,7 +25,25 @@ Usage:
     for chunk in client.chat_stream("Your prompt"):
         print(chunk, end="", flush=True)
 
-Note: Exports will be added as modules are implemented.
 """
 
-__all__ = []
+# Import all classes and functions from submodules
+from .models import ModelResponse
+from .usage_tracker import UsageTracker
+from .complexity_analyzer import ComplexityAnalyzer
+from .response_cache import ResponseCache
+from .client import LiteLLMClient, get_client, init_client
+
+# Export all public classes and functions
+__all__ = [
+    # Core client
+    "LiteLLMClient",
+    "get_client",
+    "init_client",
+    # Data models
+    "ModelResponse",
+    # Component classes
+    "UsageTracker",
+    "ComplexityAnalyzer",
+    "ResponseCache",
+]
