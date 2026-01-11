@@ -50,6 +50,15 @@ except ImportError:
     ChromaAdapter = None
     CHROMADB_AVAILABLE = False
 
+# Conditional Google Calendar import (requires google-auth, google-auth-oauthlib, google-api-python-client)
+try:
+    from .google_calendar import GoogleCalendarAdapter
+
+    GOOGLE_CALENDAR_AVAILABLE = True
+except ImportError:
+    GoogleCalendarAdapter = None
+    GOOGLE_CALENDAR_AVAILABLE = False
+
 __all__ = [
     "BaseAdapter",
     "ToolResult",
@@ -57,10 +66,12 @@ __all__ = [
     "OuraAdapter",
     "Neo4jAdapter",
     "ChromaAdapter",
+    "GoogleCalendarAdapter",
     "AdapterManager",
     "get_default_manager",
     "NEO4J_AVAILABLE",
     "CHROMADB_AVAILABLE",
+    "GOOGLE_CALENDAR_AVAILABLE",
 ]
 
 logger = logging.getLogger(__name__)
@@ -272,6 +283,14 @@ async def get_default_manager() -> AdapterManager:
                 logger.info("Registered ChromaDB adapter")
             except Exception as e:
                 logger.warning(f"Failed to register ChromaDB adapter: {e}")
+
+        # Register Google Calendar adapter if available
+        if GOOGLE_CALENDAR_AVAILABLE:
+            try:
+                _default_manager.register(GoogleCalendarAdapter())
+                logger.info("Registered Google Calendar adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register Google Calendar adapter: {e}")
 
         _default_manager._initialized = True
 
