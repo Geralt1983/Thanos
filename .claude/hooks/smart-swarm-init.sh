@@ -95,7 +95,7 @@ main() {
     QUEEN_TYPE=$(echo "$CONFIG" | cut -d'|' -f5)
     CATEGORY=$(echo "$CONFIG" | cut -d'|' -f6)
 
-    # Write state file for reference
+    # Write initial state (not yet initialized)
     cat > "$SWARM_STATE_FILE" << EOF
 {
     "useHiveMind": $USE_HIVE_MIND,
@@ -107,21 +107,32 @@ main() {
     "analysis": "$ANALYSIS",
     "startedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
     "workingDir": "$PWD",
-    "initialized": false
+    "initialized": false,
+    "autoInitPending": true
 }
 EOF
 
-    # Output for Claude to see
-    echo "SessionStart:startup hook success: Success"
+    # Output swarm configuration for Claude to auto-initialize via MCP
     echo ""
-    echo "Smart Swarm Configuration Detected:"
-    echo "  Topology: $TOPOLOGY | Agents: $MAX_AGENTS | Strategy: $STRATEGY"
+    echo "SessionStart:smart-swarm hook success: Success"
+    echo ""
+    echo "🚀 SWARM AUTO-INIT REQUIRED"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Configuration detected:"
+    echo "  Topology: $TOPOLOGY"
+    echo "  Max Agents: $MAX_AGENTS"
+    echo "  Strategy: $STRATEGY"
     if [ "$USE_HIVE_MIND" = "true" ]; then
         echo "  Mode: HIVE-MIND (Queen: $QUEEN_TYPE)"
     fi
     [ -n "$CATEGORY" ] && echo "  Category: $CATEGORY"
     echo ""
-    echo "Use MCP tools to initialize: mcp__claude-flow__swarm_init"
+    echo "INSTRUCTION: Initialize swarm NOW using MCP tool:"
+    echo "  mcp__claude-flow__swarm_init(topology: \"$TOPOLOGY\", maxAgents: $MAX_AGENTS, strategy: \"$STRATEGY\")"
+    echo ""
+    echo "After init, spawn coordinator:"
+    echo "  mcp__claude-flow__agent_spawn(type: \"coordinator\", name: \"task-router\")"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
 main
