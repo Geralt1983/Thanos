@@ -1189,6 +1189,361 @@ class Neo4jAdapter(BaseAdapter):
         })
 
     # =========================================================================
+    # Batch Operations
+    # =========================================================================
+
+    async def create_entities_batch(
+        self,
+        entities: List[Dict[str, Any]],
+        atomic: bool = True
+    ) -> ToolResult:
+        """
+        Create multiple entities in a single session context.
+
+        Args:
+            entities: List of entity dictionaries, each containing name, type, domain, notes
+            atomic: If True, wrap all operations in a single transaction (all-or-nothing)
+
+        Returns:
+            ToolResult with list of created entity IDs and count
+
+        Usage:
+            entities = [
+                {"name": "Alice", "type": "person", "domain": "work"},
+                {"name": "Project X", "type": "project", "domain": "work"},
+                {"name": "Bob", "type": "person", "domain": "personal"}
+            ]
+            result = await adapter.create_entities_batch(entities, atomic=True)
+        """
+        if not entities:
+            return ToolResult.fail("No entities provided")
+
+        created = []
+        errors = []
+
+        try:
+            async with self.session_context(batch_transaction=atomic) as session:
+                for entity_data in entities:
+                    try:
+                        result = await self._create_entity(entity_data, session=session)
+                        if result.success:
+                            created.append(result.data)
+                        else:
+                            errors.append({
+                                "entity": entity_data.get("name", "unknown"),
+                                "error": result.error
+                            })
+                            if atomic:
+                                # In atomic mode, fail fast
+                                raise Exception(f"Failed to create entity: {result.error}")
+                    except Exception as e:
+                        if atomic:
+                            raise
+                        errors.append({
+                            "entity": entity_data.get("name", "unknown"),
+                            "error": str(e)
+                        })
+
+            return ToolResult.ok({
+                "created": created,
+                "count": len(created),
+                "errors": errors if errors else None
+            })
+
+        except Exception as e:
+            return ToolResult.fail(
+                f"Batch entity creation failed: {str(e)}",
+                partial_results=created
+            )
+
+    async def link_nodes_batch(
+        self,
+        links: List[Dict[str, Any]],
+        atomic: bool = True
+    ) -> ToolResult:
+        """
+        Create multiple relationships in a single session context.
+
+        Args:
+            links: List of link dictionaries, each containing from_id, relationship, to_id, properties
+            atomic: If True, wrap all operations in a single transaction (all-or-nothing)
+
+        Returns:
+            ToolResult with list of created relationships and count
+
+        Usage:
+            links = [
+                {"from_id": "entity_abc", "relationship": "INVOLVES", "to_id": "commitment_xyz"},
+                {"from_id": "decision_123", "relationship": "LEADS_TO", "to_id": "commitment_xyz"}
+            ]
+            result = await adapter.link_nodes_batch(links, atomic=True)
+        """
+        if not links:
+            return ToolResult.fail("No links provided")
+
+        created = []
+        errors = []
+
+        try:
+            async with self.session_context(batch_transaction=atomic) as session:
+                for link_data in links:
+                    try:
+                        result = await self._link_nodes(link_data, session=session)
+                        if result.success:
+                            created.append(result.data)
+                        else:
+                            errors.append({
+                                "link": f"{link_data.get('from_id')} -> {link_data.get('to_id')}",
+                                "error": result.error
+                            })
+                            if atomic:
+                                # In atomic mode, fail fast
+                                raise Exception(f"Failed to create link: {result.error}")
+                    except Exception as e:
+                        if atomic:
+                            raise
+                        errors.append({
+                            "link": f"{link_data.get('from_id')} -> {link_data.get('to_id')}",
+                            "error": str(e)
+                        })
+
+            return ToolResult.ok({
+                "created": created,
+                "count": len(created),
+                "errors": errors if errors else None
+            })
+
+        except Exception as e:
+            return ToolResult.fail(
+                f"Batch link creation failed: {str(e)}",
+                partial_results=created
+            )
+
+    async def record_patterns_batch(
+        self,
+        patterns: List[Dict[str, Any]],
+        atomic: bool = True
+    ) -> ToolResult:
+        """
+        Record multiple patterns in a single session context.
+
+        Args:
+            patterns: List of pattern dictionaries, each containing description, type, domain, frequency
+            atomic: If True, wrap all operations in a single transaction (all-or-nothing)
+
+        Returns:
+            ToolResult with list of recorded patterns and count
+
+        Usage:
+            patterns = [
+                {"description": "Check email first thing in morning", "type": "behavior", "domain": "work"},
+                {"description": "Exercise after lunch improves focus", "type": "success", "domain": "health"}
+            ]
+            result = await adapter.record_patterns_batch(patterns, atomic=True)
+        """
+        if not patterns:
+            return ToolResult.fail("No patterns provided")
+
+        recorded = []
+        errors = []
+
+        try:
+            async with self.session_context(batch_transaction=atomic) as session:
+                for pattern_data in patterns:
+                    try:
+                        result = await self._record_pattern(pattern_data, session=session)
+                        if result.success:
+                            recorded.append(result.data)
+                        else:
+                            errors.append({
+                                "pattern": pattern_data.get("description", "unknown")[:50],
+                                "error": result.error
+                            })
+                            if atomic:
+                                # In atomic mode, fail fast
+                                raise Exception(f"Failed to record pattern: {result.error}")
+                    except Exception as e:
+                        if atomic:
+                            raise
+                        errors.append({
+                            "pattern": pattern_data.get("description", "unknown")[:50],
+                            "error": str(e)
+                        })
+
+            return ToolResult.ok({
+                "recorded": recorded,
+                "count": len(recorded),
+                "errors": errors if errors else None
+            })
+
+        except Exception as e:
+            return ToolResult.fail(
+                f"Batch pattern recording failed: {str(e)}",
+                partial_results=recorded
+            )
+
+    async def create_commitments_batch(
+        self,
+        commitments: List[Dict[str, Any]],
+        atomic: bool = True
+    ) -> ToolResult:
+        """
+        Create multiple commitments in a single session context.
+
+        Args:
+            commitments: List of commitment dictionaries, each containing content, to_whom, deadline, domain, priority
+            atomic: If True, wrap all operations in a single transaction (all-or-nothing)
+
+        Returns:
+            ToolResult with list of created commitment IDs and count
+
+        Usage:
+            commitments = [
+                {"content": "Finish report", "to_whom": "Boss", "deadline": "2026-01-15", "domain": "work"},
+                {"content": "Call mom", "to_whom": "Mom", "domain": "personal", "priority": 5}
+            ]
+            result = await adapter.create_commitments_batch(commitments, atomic=True)
+        """
+        if not commitments:
+            return ToolResult.fail("No commitments provided")
+
+        created = []
+        errors = []
+
+        try:
+            async with self.session_context(batch_transaction=atomic) as session:
+                for commitment_data in commitments:
+                    try:
+                        result = await self._create_commitment(commitment_data, session=session)
+                        if result.success:
+                            created.append(result.data)
+                        else:
+                            errors.append({
+                                "commitment": commitment_data.get("content", "unknown")[:50],
+                                "error": result.error
+                            })
+                            if atomic:
+                                # In atomic mode, fail fast
+                                raise Exception(f"Failed to create commitment: {result.error}")
+                    except Exception as e:
+                        if atomic:
+                            raise
+                        errors.append({
+                            "commitment": commitment_data.get("content", "unknown")[:50],
+                            "error": str(e)
+                        })
+
+            return ToolResult.ok({
+                "created": created,
+                "count": len(created),
+                "errors": errors if errors else None
+            })
+
+        except Exception as e:
+            return ToolResult.fail(
+                f"Batch commitment creation failed: {str(e)}",
+                partial_results=created
+            )
+
+    async def store_memory_batch(
+        self,
+        memory_data: Dict[str, Any],
+        atomic: bool = True
+    ) -> ToolResult:
+        """
+        Store a complete memory with multiple related graph operations in a single session.
+
+        This is a high-level batch operation that combines commitment creation, decision
+        recording, entity creation, and relationship linking into a single atomic operation.
+
+        Args:
+            memory_data: Dictionary containing:
+                - commitment: Optional commitment data dict
+                - decision: Optional decision data dict
+                - entities: Optional list of entity data dicts
+                - links: Optional list of link data dicts (from_id, relationship, to_id)
+            atomic: If True, wrap all operations in a single transaction (all-or-nothing)
+
+        Returns:
+            ToolResult with created items and their IDs
+
+        Usage:
+            memory_data = {
+                "commitment": {
+                    "content": "Launch new feature",
+                    "to_whom": "Team",
+                    "deadline": "2026-02-01",
+                    "domain": "work"
+                },
+                "decision": {
+                    "content": "Use React for frontend",
+                    "rationale": "Team expertise and ecosystem",
+                    "alternatives": ["Vue", "Angular"],
+                    "domain": "work"
+                },
+                "entities": [
+                    {"name": "Team Lead", "type": "person", "domain": "work"}
+                ],
+                "links": [
+                    # Will be populated with actual IDs after creation
+                ]
+            }
+            result = await adapter.store_memory_batch(memory_data, atomic=True)
+        """
+        result_data = {
+            "commitment": None,
+            "decision": None,
+            "entities": [],
+            "links": []
+        }
+
+        try:
+            async with self.session_context(batch_transaction=atomic) as session:
+                # Create commitment if provided
+                if memory_data.get("commitment"):
+                    commitment_result = await self._create_commitment(
+                        memory_data["commitment"],
+                        session=session
+                    )
+                    if not commitment_result.success:
+                        raise Exception(f"Failed to create commitment: {commitment_result.error}")
+                    result_data["commitment"] = commitment_result.data
+
+                # Record decision if provided
+                if memory_data.get("decision"):
+                    decision_result = await self._record_decision(
+                        memory_data["decision"],
+                        session=session
+                    )
+                    if not decision_result.success:
+                        raise Exception(f"Failed to record decision: {decision_result.error}")
+                    result_data["decision"] = decision_result.data
+
+                # Create entities if provided
+                if memory_data.get("entities"):
+                    for entity_data in memory_data["entities"]:
+                        entity_result = await self._create_entity(entity_data, session=session)
+                        if not entity_result.success:
+                            raise Exception(f"Failed to create entity: {entity_result.error}")
+                        result_data["entities"].append(entity_result.data)
+
+                # Create links if provided
+                if memory_data.get("links"):
+                    for link_data in memory_data["links"]:
+                        link_result = await self._link_nodes(link_data, session=session)
+                        if not link_result.success:
+                            raise Exception(f"Failed to create link: {link_result.error}")
+                        result_data["links"].append(link_result.data)
+
+            return ToolResult.ok(result_data)
+
+        except Exception as e:
+            return ToolResult.fail(
+                f"Memory storage failed: {str(e)}",
+                partial_results=result_data
+            )
+
+    # =========================================================================
     # Lifecycle
     # =========================================================================
 
