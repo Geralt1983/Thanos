@@ -35,6 +35,17 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/jeremy/Projects/Thanos/.claude/hooks/smart-swarm-init.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
@@ -97,17 +108,6 @@
           {
             "type": "command",
             "command": "/opt/homebrew/bin/npx claude-flow@alpha hooks session-end --generate-summary true --persist-state true --export-metrics true"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/jeremy/Projects/Thanos/.claude/hooks/smart-swarm-init.sh"
           }
         ]
       }

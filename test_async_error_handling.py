@@ -57,9 +57,17 @@ def test_successful_write():
         data = json.loads(storage_path.read_text())
         assert len(data["sessions"]) == 2, f"Should have 2 sessions, got {len(data['sessions'])}"
 
-        # Verify backup was created
+        # Note: Backup only created when existing file is backed up
+        # On first write, there's no existing file, so no backup is created
+        # This is correct behavior - backup protects existing data, not new data
+        # Queue another record to trigger a second flush (which will backup the first flush data)
+        writer.queue_write(record1)
+        success = writer.flush(timeout=2.0)
+        assert success, "Second flush should complete successfully"
+
+        # NOW backup should exist (backing up first flush data)
         backup_path = storage_path.with_suffix('.backup.json')
-        assert backup_path.exists(), "Backup file should be created"
+        assert backup_path.exists(), "Backup file should be created on subsequent writes"
 
         # Cleanup
         writer.shutdown(timeout=2.0)
