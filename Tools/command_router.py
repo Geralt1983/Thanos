@@ -41,6 +41,16 @@ except ImportError:
     OURA_AVAILABLE = False
     OuraAdapter = None
 
+# AdapterManager integration (optional - graceful degradation if unavailable)
+try:
+    from Tools.adapters import AdapterManager, get_default_manager
+
+    ADAPTER_MANAGER_AVAILABLE = True
+except ImportError:
+    ADAPTER_MANAGER_AVAILABLE = False
+    AdapterManager = None
+    get_default_manager = None
+
 
 # ANSI color codes (copied from thanos_interactive.py)
 class Colors:
@@ -115,6 +125,10 @@ class CommandRouter:
         # Oura integration (lazy initialization)
         self._oura: Optional[OuraAdapter] = None
         self._oura_initialized = False
+
+        # AdapterManager integration (lazy initialization)
+        self._adapter_manager: Optional[AdapterManager] = None
+        self._adapter_manager_initialized = False
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
@@ -217,6 +231,44 @@ class CommandRouter:
 
         # Step 5: Return instance or None
         return self._oura
+
+    def _get_adapter_manager(self) -> Optional["AdapterManager"]:
+        """
+        Get AdapterManager instance, initializing if needed.
+
+        Uses lazy initialization with graceful degradation - returns None
+        if AdapterManager is unavailable or initialization fails.
+
+        The AdapterManager provides unified access to all adapters (WorkOS,
+        Oura, Neo4j, ChromaDB) through a single interface.
+
+        Returns:
+            AdapterManager instance or None if unavailable
+        """
+        # Step 1: Check availability flag
+        if not ADAPTER_MANAGER_AVAILABLE:
+            return None
+
+        # Step 2: Check if already initialized (idempotency)
+        if not self._adapter_manager_initialized:
+            try:
+                # Step 3: Initialize AdapterManager (async initialization required)
+                # AdapterManager requires get_default_manager() which is async
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Can't use asyncio.run in running loop
+                    # Try to schedule it or skip initialization
+                    self._adapter_manager = None
+                else:
+                    # Run the async initialization
+                    self._adapter_manager = loop.run_until_complete(get_default_manager())
+                    self._adapter_manager_initialized = True
+            except Exception:
+                # Step 4: Graceful failure - adapter will remain None
+                self._adapter_manager = None
+
+        # Step 5: Return instance or None
+        return self._adapter_manager
 
     def _run_async(self, coro):
         """Run async coroutine from sync context."""
