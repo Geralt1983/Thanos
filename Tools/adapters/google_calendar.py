@@ -319,6 +319,36 @@ class GoogleCalendarAdapter(BaseAdapter):
                 if attendee.get("self", False) and attendee.get("response_status") == "declined":
                     return True
 
+        # Check special event type filters (focus_time, out_of_office, working_location, etc.)
+        event_type_filters = event_types.get("event_type_filters", {})
+        event_type = event.get("event_type")  # Google Calendar API eventType field
+
+        # Process each event type filter
+        for filter_name, filter_config in event_type_filters.items():
+            if not filter_config.get("enabled", True):
+                continue
+
+            action = filter_config.get("action", "include")  # "include" or "exclude"
+
+            # Check if this event matches the filter type
+            is_match = False
+            if event_type == filter_name:
+                # Direct match with Google Calendar event type
+                is_match = True
+            elif filter_name == "focus_time" and event_type in ["focusTime", "focus_time"]:
+                is_match = True
+            elif filter_name == "out_of_office" and event_type in ["outOfOffice", "out_of_office"]:
+                is_match = True
+            elif filter_name == "working_location" and event_type in ["workingLocation", "working_location"]:
+                is_match = True
+
+            # Apply the filter action
+            if is_match:
+                if action == "exclude":
+                    return True
+                # If action is "include", we continue processing other filters
+                # The event will only be excluded if it fails other filters
+
         # Summary pattern filters
         summary_patterns = filters.get("summary_patterns", {})
         case_sensitive = summary_patterns.get("case_sensitive", False)
@@ -1390,6 +1420,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                     "visibility": event.get("visibility", "default"),  # default, public, private, confidential
                     "transparency": event.get("transparency", "opaque"),  # opaque (busy), transparent (free)
                     "color_id": event.get("colorId"),
+                    "event_type": event.get("eventType", "default"),  # default, outOfOffice, focusTime, workingLocation
                     "reminders": event.get("reminders"),
                     "conference_data": event.get("conferenceData"),
                 }
@@ -1565,6 +1596,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                         "is_self": event.get("organizer", {}).get("self", False),
                     },
                     "transparency": event.get("transparency", "opaque"),
+                    "event_type": event.get("eventType", "default"),
                     "html_link": event.get("htmlLink"),
                     "created": event.get("created"),
                     "updated": event.get("updated"),
@@ -1871,6 +1903,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                     "transparency": event.get("transparency", "opaque"),
                     "color_id": event.get("colorId"),
+                    "event_type": event.get("eventType", "default"),
                     "conference_data": event.get("conferenceData"),
                     "visibility": event.get("visibility", "default"),
                     "is_recurring": "recurringEventId" in event or "recurrence" in event,
@@ -2257,6 +2290,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                     },
                     "transparency": event.get("transparency", "opaque"),
                     "color_id": event.get("colorId"),
+                    "event_type": event.get("eventType", "default"),
                     "conference_data": event.get("conferenceData"),
                     "visibility": event.get("visibility", "default"),
                 }
@@ -2597,6 +2631,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                         "is_all_day": True,
                         "status": event.get("status", "confirmed"),
                         "transparency": event.get("transparency", "opaque"),
+                        "event_type": event.get("eventType", "default"),
                     })
                 else:
                     start_time = start.get("dateTime")
@@ -2610,6 +2645,7 @@ class GoogleCalendarAdapter(BaseAdapter):
                             "is_all_day": False,
                             "status": event.get("status", "confirmed"),
                             "transparency": event.get("transparency", "opaque"),
+                            "event_type": event.get("eventType", "default"),
                         })
 
             # Apply event filters
