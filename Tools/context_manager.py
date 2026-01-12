@@ -196,3 +196,46 @@ class ContextManager:
 
         # Get the cached encoder instance (may be None if tiktoken unavailable)
         self.encoding = _get_cached_encoder()
+
+    def estimate_tokens(self, text: Optional[str]) -> int:
+        """
+        Estimate the number of tokens in a text string.
+
+        Uses tiktoken encoder if available, otherwise falls back to heuristic
+        estimation (length / 3.5). This provides accurate token counts for
+        context management and trimming decisions.
+
+        Args:
+            text (Optional[str]): The text to estimate tokens for.
+                                 Can be None or empty string.
+
+        Returns:
+            int: Estimated number of tokens in the text.
+                 Returns 0 for None or empty strings.
+
+        Fallback Behavior:
+            - If tiktoken is unavailable: uses heuristic (len/3.5)
+            - If encoding fails: uses heuristic (len/3.5)
+            - The heuristic assumes ~3.5 characters per token on average
+
+        Example:
+            cm = ContextManager()
+            tokens = cm.estimate_tokens("Hello world")  # Returns ~3 tokens
+        """
+        # Handle None and empty strings
+        if not text:
+            return 0
+
+        # Try to use tiktoken encoder if available
+        if self.encoding is not None:
+            try:
+                # Use tiktoken for accurate token counting
+                encoded = self.encoding.encode(text)
+                return len(encoded)
+            except Exception:
+                # If encoding fails, fall through to heuristic estimation
+                pass
+
+        # Fallback: heuristic estimation (characters / 3.5)
+        # This provides a reasonable approximation when tiktoken is unavailable
+        return int(len(text) / 3.5)
