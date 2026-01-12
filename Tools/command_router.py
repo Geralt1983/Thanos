@@ -11,6 +11,8 @@ from enum import Enum
 import os
 from pathlib import Path
 import re
+import subprocess
+import sys
 from typing import Callable, Optional
 
 
@@ -22,6 +24,34 @@ try:
 except ImportError:
     MEMOS_AVAILABLE = False
     MemOS = None
+
+# WorkOS integration (optional - graceful degradation if unavailable)
+try:
+    from Tools.adapters.workos import WorkOSAdapter
+
+    WORKOS_AVAILABLE = True
+except ImportError:
+    WORKOS_AVAILABLE = False
+    WorkOSAdapter = None
+
+# Oura integration (optional - graceful degradation if unavailable)
+try:
+    from Tools.adapters.oura import OuraAdapter
+
+    OURA_AVAILABLE = True
+except ImportError:
+    OURA_AVAILABLE = False
+    OuraAdapter = None
+
+# AdapterManager integration (optional - graceful degradation if unavailable)
+try:
+    from Tools.adapters import AdapterManager, get_default_manager
+
+    ADAPTER_MANAGER_AVAILABLE = True
+except ImportError:
+    ADAPTER_MANAGER_AVAILABLE = False
+    AdapterManager = None
+    get_default_manager = None
 
 
 # ANSI color codes (copied from thanos_interactive.py)
@@ -90,6 +120,18 @@ class CommandRouter:
         self._memos: Optional[MemOS] = None
         self._memos_initialized = False
 
+        # WorkOS integration (lazy initialization)
+        self._workos: Optional[WorkOSAdapter] = None
+        self._workos_initialized = False
+
+        # Oura integration (lazy initialization)
+        self._oura: Optional[OuraAdapter] = None
+        self._oura_initialized = False
+
+        # AdapterManager integration (lazy initialization)
+        self._adapter_manager: Optional[AdapterManager] = None
+        self._adapter_manager_initialized = False
+
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
         self._register_commands()
@@ -135,6 +177,115 @@ class CommandRouter:
                     self._memos = None
 
         return self._memos
+
+    def _get_workos(self) -> Optional["WorkOSAdapter"]:
+        """
+        Get WorkOS adapter instance, initializing if needed.
+
+        Uses lazy initialization with graceful degradation - returns None
+        if WorkOS is unavailable or initialization fails.
+
+        Returns:
+            WorkOSAdapter instance or None if unavailable
+        """
+        # Step 1: Check availability flag
+        if not WORKOS_AVAILABLE:
+            return None
+
+        # Step 2: Check if already initialized (idempotency)
+        if not self._workos_initialized:
+            try:
+                # Step 3: Initialize WorkOS adapter
+                # WorkOS requires DATABASE_URL or WORKOS_DATABASE_URL env var
+                self._workos = WorkOSAdapter()
+                self._workos_initialized = True
+            except Exception:
+                # Step 4: Graceful failure - adapter will remain None
+                self._workos = None
+
+        # Step 5: Return instance or None
+        return self._workos
+
+    def _get_oura(self) -> Optional["OuraAdapter"]:
+        """
+        Get Oura adapter instance, initializing if needed.
+
+        Uses lazy initialization with graceful degradation - returns None
+        if Oura is unavailable or initialization fails.
+
+        Returns:
+            OuraAdapter instance or None if unavailable
+        """
+        # Step 1: Check availability flag
+        if not OURA_AVAILABLE:
+            return None
+
+        # Step 2: Check if already initialized (idempotency)
+        if not self._oura_initialized:
+            try:
+                # Step 3: Initialize Oura adapter
+                # Oura requires OURA_PERSONAL_ACCESS_TOKEN env var
+                self._oura = OuraAdapter()
+                self._oura_initialized = True
+            except Exception:
+                # Step 4: Graceful failure - adapter will remain None
+                self._oura = None
+
+        # Step 5: Return instance or None
+        return self._oura
+
+    def _get_adapter_manager(self) -> Optional["AdapterManager"]:
+        """
+        Get AdapterManager instance, initializing if needed.
+
+        Uses lazy initialization with graceful degradation - returns None
+        if AdapterManager is unavailable or initialization fails.
+
+        The AdapterManager provides unified access to all adapters (WorkOS,
+        Oura, Neo4j, ChromaDB) and optionally MCP bridges.
+
+        Returns:
+            AdapterManager instance or None if unavailable
+        """
+        # Step 1: Check availability flag
+        if not ADAPTER_MANAGER_AVAILABLE:
+            return None
+
+        # Step 2: Check if already initialized (idempotency)
+        if not self._adapter_manager_initialized:
+            try:
+                # Step 3: Initialize AdapterManager (async initialization required)
+                # Check if MCP bridges should be enabled from environment
+                enable_mcp = os.environ.get("MCP_ENABLED", "false").lower() == "true"
+
+                # AdapterManager requires get_default_manager() which is async
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Can't use asyncio.run in running loop
+                    # Try to schedule it or skip initialization
+                    self._adapter_manager = None
+                else:
+                    # Run the async initialization with MCP support
+                    self._adapter_manager = loop.run_until_complete(
+                        get_default_manager(enable_mcp_bridges=enable_mcp)
+                    )
+                    self._adapter_manager_initialized = True
+
+                    # Log initialization
+                    if self._adapter_manager:
+                        adapters = self._adapter_manager.list_adapters()
+                        print(f"✓ Initialized AdapterManager with {len(adapters)} adapters")
+                        if enable_mcp:
+                            mcp_servers = [a for a in adapters if ".mcp" in a]
+                            if mcp_servers:
+                                print(f"  MCP servers: {', '.join(mcp_servers)}")
+            except Exception as e:
+                # Step 4: Graceful failure - adapter will remain None
+                print(f"⚠ AdapterManager initialization failed: {e}")
+                self._adapter_manager = None
+
+        # Step 5: Return instance or None
+        return self._adapter_manager
 
     def _run_async(self, coro):
         """Run async coroutine from sync context."""
@@ -222,6 +373,19 @@ class CommandRouter:
             "patterns": (self._cmd_patterns, "Show conversation patterns", []),
             "model": (self._cmd_model, "Switch AI model", ["name"]),
             "m": (self._cmd_model, "Switch model (alias)", ["name"]),
+            # Commitment commands
+            "commitment:add": (self._cmd_commitment_add, "Add commitment", ["options"]),
+            "commitment:new": (self._cmd_commitment_add, "Add commitment (alias)", ["options"]),
+            "commitment:update": (self._cmd_commitment_update, "Update commitment", ["id", "options"]),
+            "commitment:complete": (self._cmd_commitment_update, "Complete commitment (alias)", ["id"]),
+            "commitment:list": (self._cmd_commitment_list, "List commitments", ["options"]),
+            "commitment:ls": (self._cmd_commitment_list, "List commitments (alias)", ["options"]),
+            # MCP commands
+            "mcp": (self._cmd_mcp, "Show MCP server status", []),
+            "mcp:list": (self._cmd_mcp_list, "List MCP servers and tools", []),
+            "mcp:test": (self._cmd_mcp_test, "Test MCP server connection", ["server"]),
+            "mcp:metrics": (self._cmd_mcp_metrics, "Show MCP performance metrics", ["server"]),
+            "mcp:refresh": (self._cmd_mcp_refresh, "Refresh MCP connections", []),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -395,6 +559,78 @@ class CommandRouter:
             print(f"{Colors.DIM}Error reading commitments: {e}{Colors.RESET}")
             return CommandResult(success=False)
 
+    def _cmd_commitment_add(self, args: str) -> CommandResult:
+        """Add a new commitment (habit, goal, or task)."""
+        # Build command to run commitment_add.py
+        cmd_path = self.thanos_dir / "commands" / "commitment_add.py"
+
+        if not cmd_path.exists():
+            print(f"{Colors.DIM}Error: commitment_add.py not found at {cmd_path}{Colors.RESET}")
+            return CommandResult(success=False)
+
+        # If no args provided, run in interactive mode
+        if not args.strip():
+            cmd = [sys.executable, str(cmd_path), "--interactive"]
+        else:
+            # Parse args and pass to script
+            cmd = [sys.executable, str(cmd_path)] + args.split()
+
+        try:
+            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
+            return CommandResult(success=(result.returncode == 0))
+        except Exception as e:
+            print(f"{Colors.DIM}Error running commitment add: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
+    def _cmd_commitment_update(self, args: str) -> CommandResult:
+        """Update an existing commitment."""
+        # Build command to run commitment_update.py
+        cmd_path = self.thanos_dir / "commands" / "commitment_update.py"
+
+        if not cmd_path.exists():
+            print(f"{Colors.DIM}Error: commitment_update.py not found at {cmd_path}{Colors.RESET}")
+            return CommandResult(success=False)
+
+        if not args.strip():
+            print(f"{Colors.DIM}Usage: /commitment:update <id> [options]{Colors.RESET}")
+            print(f"{Colors.DIM}Examples:{Colors.RESET}")
+            print(f"  /commitment:update abc123 --complete")
+            print(f"  /commitment:update abc123 --missed --notes 'Overslept'")
+            print(f"  /commitment:update abc123 --reschedule +3d")
+            print(f"  /commitment:update abc123 --interactive")
+            return CommandResult(success=False)
+
+        # Parse args and pass to script
+        cmd = [sys.executable, str(cmd_path)] + args.split()
+
+        try:
+            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
+            return CommandResult(success=(result.returncode == 0))
+        except Exception as e:
+            print(f"{Colors.DIM}Error running commitment update: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
+    def _cmd_commitment_list(self, args: str) -> CommandResult:
+        """List commitments with filtering and sorting options."""
+        # Build command to run commitment_list.py
+        cmd_path = self.thanos_dir / "commands" / "commitment_list.py"
+
+        if not cmd_path.exists():
+            print(f"{Colors.DIM}Error: commitment_list.py not found at {cmd_path}{Colors.RESET}")
+            return CommandResult(success=False)
+
+        # Parse args and pass to script (empty args is fine - shows all)
+        cmd = [sys.executable, str(cmd_path)]
+        if args.strip():
+            cmd.extend(args.split())
+
+        try:
+            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
+            return CommandResult(success=(result.returncode == 0))
+        except Exception as e:
+            print(f"{Colors.DIM}Error running commitment list: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
     def _cmd_help(self, args: str) -> CommandResult:
         """Show help information."""
         print(f"""
@@ -421,8 +657,28 @@ class CommandRouter:
   /help          - Show this help
   /quit          - Exit interactive mode
 
+{Colors.CYAN}Commitment Commands:{Colors.RESET}
+  /commitment:add [options]     - Add new commitment (interactive if no options)
+  /commitment:list [filters]    - List commitments with filters
+  /commitment:update <id> [opt] - Update or complete commitment
+
+  Examples:
+    /commitment:add --interactive
+    /commitment:list --overdue
+    /commitment:update abc123 --complete
+    /commitment:update abc123 --reschedule +3d
+
+{Colors.CYAN}MCP Commands:{Colors.RESET}
+  /mcp           - Show MCP server status and overview
+  /mcp:list      - List all MCP servers and available tools
+  /mcp:test <s>  - Test connection to an MCP server
+  /mcp:metrics   - Show detailed performance metrics
+  /mcp:refresh   - Refresh all MCP server connections
+
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
+  /commitment:new = /commitment:add
+  /commitment:ls = /commitment:list
   /r = /resume, /m = /model, /h = /help, /q = /quit
 
 {Colors.DIM}Tip: Use \""" for multi-line input{Colors.RESET}
@@ -1000,3 +1256,265 @@ class CommandRouter:
         """Get the current model full name for API calls."""
         model_alias = self.current_model or self._default_model
         return self._available_models.get(model_alias, self._available_models[self._default_model])
+
+    # ========================================================================
+    # MCP Command Handlers
+    # ========================================================================
+
+    def _cmd_mcp(self, args: str) -> CommandResult:
+        """Show MCP server status and overview."""
+        manager = self._get_adapter_manager()
+        if not manager:
+            print(f"{Colors.DIM}AdapterManager not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        # Check if MCP is enabled
+        enable_mcp = os.environ.get("MCP_ENABLED", "false").lower() == "true"
+        if not enable_mcp:
+            print(f"\n{Colors.CYAN}MCP Status:{Colors.RESET}")
+            print(f"  ⚠ MCP bridges are disabled")
+            print(f"  💡 Set MCP_ENABLED=true in environment to enable")
+            print(f"\n{Colors.DIM}Available adapters: {', '.join(manager.list_adapters())}{Colors.RESET}\n")
+            return CommandResult()
+
+        # Get MCP servers
+        all_adapters = manager.list_adapters()
+        mcp_servers = [a for a in all_adapters if ".mcp" in a]
+
+        print(f"\n{Colors.CYAN}MCP Server Status:{Colors.RESET}\n")
+
+        if not mcp_servers:
+            print(f"  {Colors.DIM}No MCP servers configured{Colors.RESET}")
+            print(f"  💡 Add MCP server configuration to enable third-party servers\n")
+            return CommandResult()
+
+        # Try to import observability for metrics
+        try:
+            from Tools.adapters.mcp_observability import get_all_metrics
+            all_metrics = get_all_metrics()
+        except ImportError:
+            all_metrics = {}
+
+        # Display each MCP server
+        for server in mcp_servers:
+            server_name = server.replace(".mcp", "")
+            print(f"  {Colors.BOLD}{server}:{Colors.RESET}")
+
+            # Show metrics if available
+            if server_name in all_metrics:
+                metrics = all_metrics[server_name]
+                conn_success = metrics["connections"]["successful"]
+                conn_total = metrics["connections"]["total"]
+                tool_success = metrics["tool_calls"]["successful"]
+                tool_total = metrics["tool_calls"]["total"]
+                success_rate = metrics["tool_calls"]["success_rate"]
+
+                print(f"    Connections: {conn_success}/{conn_total}")
+                print(f"    Tool calls: {tool_success}/{tool_total}")
+                print(f"    Success rate: {success_rate:.1%}")
+            else:
+                print(f"    {Colors.DIM}No metrics available{Colors.RESET}")
+
+        print(f"\n{Colors.DIM}Commands:{Colors.RESET}")
+        print(f"{Colors.DIM}  /mcp:list           - List all servers and tools{Colors.RESET}")
+        print(f"{Colors.DIM}  /mcp:test <server>  - Test server connection{Colors.RESET}")
+        print(f"{Colors.DIM}  /mcp:metrics        - Show detailed metrics{Colors.RESET}")
+        print(f"{Colors.DIM}  /mcp:refresh        - Refresh all connections{Colors.RESET}\n")
+        return CommandResult()
+
+    def _cmd_mcp_list(self, args: str) -> CommandResult:
+        """List all MCP servers and their available tools."""
+        manager = self._get_adapter_manager()
+        if not manager:
+            print(f"{Colors.DIM}AdapterManager not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        # Get MCP servers
+        all_adapters = manager.list_adapters()
+        mcp_servers = [a for a in all_adapters if ".mcp" in a]
+
+        if not mcp_servers:
+            print(f"{Colors.DIM}No MCP servers available.{Colors.RESET}")
+            print(f"💡 Set MCP_ENABLED=true to enable MCP bridges")
+            return CommandResult()
+
+        print(f"\n{Colors.CYAN}MCP Servers and Tools:{Colors.RESET}\n")
+
+        for server in mcp_servers:
+            print(f"  {Colors.BOLD}{server}:{Colors.RESET}")
+
+            # Try to get tools for this server
+            try:
+                adapter = manager.get_adapter(server)
+                if adapter and hasattr(adapter, "list_tools"):
+                    result = self._run_async(adapter.list_tools())
+                    if result and result.success and result.data:
+                        tools = result.data
+                        print(f"    Tools: {len(tools)}")
+                        for tool in tools[:10]:  # Show first 10 tools
+                            tool_name = tool.get("name", "unknown")
+                            tool_desc = tool.get("description", "")[:60]
+                            print(f"      • {tool_name}")
+                            if tool_desc:
+                                print(f"        {Colors.DIM}{tool_desc}{Colors.RESET}")
+                        if len(tools) > 10:
+                            print(f"      {Colors.DIM}... and {len(tools) - 10} more{Colors.RESET}")
+                    else:
+                        print(f"    {Colors.DIM}Unable to list tools{Colors.RESET}")
+                else:
+                    print(f"    {Colors.DIM}Tools not available{Colors.RESET}")
+            except Exception as e:
+                print(f"    {Colors.DIM}Error listing tools: {e}{Colors.RESET}")
+
+            print()
+
+        return CommandResult()
+
+    def _cmd_mcp_test(self, args: str) -> CommandResult:
+        """Test connection to an MCP server."""
+        if not args:
+            manager = self._get_adapter_manager()
+            if manager:
+                mcp_servers = [a for a in manager.list_adapters() if ".mcp" in a]
+                print(f"{Colors.DIM}Usage: /mcp:test <server_name>{Colors.RESET}")
+                if mcp_servers:
+                    print(f"{Colors.DIM}Available: {', '.join(mcp_servers)}{Colors.RESET}")
+            return CommandResult(success=False)
+
+        server_name = args.strip()
+        if not server_name.endswith(".mcp"):
+            server_name = f"{server_name}.mcp"
+
+        manager = self._get_adapter_manager()
+        if not manager:
+            print(f"{Colors.DIM}AdapterManager not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        print(f"\n{Colors.CYAN}Testing {server_name}...{Colors.RESET}\n")
+
+        try:
+            adapter = manager.get_adapter(server_name)
+            if not adapter:
+                print(f"  ❌ Server not found: {server_name}")
+                return CommandResult(success=False)
+
+            # Run health check
+            import time
+            start = time.time()
+            result = self._run_async(adapter.health_check())
+            duration = time.time() - start
+
+            if result and result.success:
+                print(f"  ✅ Connection successful ({duration:.2f}s)")
+                if result.data:
+                    status = result.data.get("status", "unknown")
+                    tool_count = result.data.get("tool_count", 0)
+                    print(f"  Status: {status}")
+                    print(f"  Tools available: {tool_count}")
+            else:
+                error = result.error if result else "Unknown error"
+                print(f"  ❌ Connection failed: {error}")
+                return CommandResult(success=False)
+
+        except Exception as e:
+            print(f"  ❌ Error: {e}")
+            return CommandResult(success=False)
+
+        print()
+        return CommandResult()
+
+    def _cmd_mcp_metrics(self, args: str) -> CommandResult:
+        """Show detailed MCP performance metrics."""
+        try:
+            from Tools.adapters.mcp_observability import get_all_metrics
+        except ImportError:
+            print(f"{Colors.DIM}MCP observability module not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        all_metrics = get_all_metrics()
+
+        if not all_metrics:
+            print(f"{Colors.DIM}No MCP metrics available.{Colors.RESET}")
+            return CommandResult()
+
+        # Filter by server name if provided
+        server_filter = args.strip() if args else None
+
+        print(f"\n{Colors.CYAN}MCP Performance Metrics:{Colors.RESET}\n")
+
+        for server_name, metrics in all_metrics.items():
+            # Skip if filtering and doesn't match
+            if server_filter and server_filter not in server_name:
+                continue
+
+            print(f"  {Colors.BOLD}{server_name}:{Colors.RESET}")
+
+            # Connection metrics
+            conn = metrics.get("connections", {})
+            print(f"    Connections:")
+            print(f"      Total: {conn.get('total', 0)}")
+            print(f"      Successful: {conn.get('successful', 0)}")
+            print(f"      Failed: {conn.get('failed', 0)}")
+
+            # Tool call metrics
+            tools = metrics.get("tool_calls", {})
+            print(f"    Tool Calls:")
+            print(f"      Total: {tools.get('total', 0)}")
+            print(f"      Successful: {tools.get('successful', 0)}")
+            print(f"      Failed: {tools.get('failed', 0)}")
+            print(f"      Success rate: {tools.get('success_rate', 0):.1%}")
+
+            # Timing metrics
+            timing = metrics.get("timing", {})
+            if timing:
+                print(f"    Timing:")
+                print(f"      Avg duration: {timing.get('avg_duration', 0):.3f}s")
+                print(f"      Min: {timing.get('min_duration', 0):.3f}s")
+                print(f"      Max: {timing.get('max_duration', 0):.3f}s")
+
+            # Error metrics
+            errors = metrics.get("errors", {})
+            if errors.get("total", 0) > 0:
+                print(f"    Errors: {errors.get('total', 0)}")
+                error_types = errors.get("by_type", {})
+                for error_type, count in list(error_types.items())[:3]:
+                    print(f"      {error_type}: {count}")
+
+            print()
+
+        return CommandResult()
+
+    def _cmd_mcp_refresh(self, args: str) -> CommandResult:
+        """Refresh MCP server connections."""
+        manager = self._get_adapter_manager()
+        if not manager:
+            print(f"{Colors.DIM}AdapterManager not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        mcp_servers = [a for a in manager.list_adapters() if ".mcp" in a]
+        if not mcp_servers:
+            print(f"{Colors.DIM}No MCP servers to refresh.{Colors.RESET}")
+            return CommandResult()
+
+        print(f"\n{Colors.CYAN}Refreshing MCP connections...{Colors.RESET}\n")
+
+        success_count = 0
+        for server in mcp_servers:
+            try:
+                adapter = manager.get_adapter(server)
+                if adapter and hasattr(adapter, "close"):
+                    # Close existing connection
+                    self._run_async(adapter.close())
+
+                    # Test reconnection with health check
+                    result = self._run_async(adapter.health_check())
+                    if result and result.success:
+                        print(f"  ✅ {server} refreshed")
+                        success_count += 1
+                    else:
+                        print(f"  ⚠ {server} refresh failed")
+            except Exception as e:
+                print(f"  ❌ {server} error: {e}")
+
+        print(f"\n{Colors.DIM}Refreshed {success_count}/{len(mcp_servers)} servers{Colors.RESET}\n")
+        return CommandResult()

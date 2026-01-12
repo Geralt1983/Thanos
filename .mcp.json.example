@@ -1,0 +1,99 @@
+{
+  "version": "1.0",
+  "defaults": {
+    "timeout": 30,
+    "enabled": true
+  },
+  "servers": {
+    "workos-mcp": {
+      "name": "workos-mcp",
+      "description": "WorkOS productivity database MCP server",
+      "transport": {
+        "type": "stdio",
+        "command": "node",
+        "args": [
+          "${HOME}/Projects/Thanos/mcp-servers/workos-mcp/dist/index.js"
+        ],
+        "env": {
+          "WORKOS_DATABASE_URL": "${WORKOS_DATABASE_URL}"
+        }
+      },
+      "enabled": true,
+      "priority": 10,
+      "tags": ["productivity", "database", "workos"]
+    },
+    "oura": {
+      "name": "oura",
+      "description": "Oura Ring health metrics MCP server",
+      "transport": {
+        "type": "stdio",
+        "command": "node",
+        "args": [
+          "${HOME}/mcp-servers/oura-mcp/build/index.js"
+        ],
+        "env": {
+          "OURA_PERSONAL_ACCESS_TOKEN": "${OURA_PERSONAL_ACCESS_TOKEN}"
+        }
+      },
+      "enabled": true,
+      "priority": 10,
+      "tags": ["health", "metrics", "oura"]
+    },
+    "context7": {
+      "name": "context7",
+      "description": "Context7 documentation search",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@upstash/context7-mcp"]
+      },
+      "enabled": true,
+      "priority": 5,
+      "tags": ["documentation", "search"]
+    },
+    "sequential-thinking": {
+      "name": "sequential-thinking",
+      "description": "Sequential thinking MCP server",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+      },
+      "enabled": true,
+      "priority": 5,
+      "tags": ["ai", "reasoning"]
+    },
+    "example-http-server": {
+      "name": "example-http-server",
+      "description": "Example HTTP-based MCP server",
+      "transport": {
+        "type": "http",
+        "url": "http://localhost:8000/mcp",
+        "headers": {
+          "Authorization": "Bearer ${API_TOKEN}"
+        },
+        "timeout": 60,
+        "verify_ssl": true
+      },
+      "enabled": false,
+      "priority": 0,
+      "tags": ["example", "http"]
+    },
+    "example-sse-server": {
+      "name": "example-sse-server",
+      "description": "Example SSE-based MCP server",
+      "transport": {
+        "type": "sse",
+        "url": "https://example.com/mcp/events",
+        "headers": {
+          "X-API-Key": "${SSE_API_KEY}"
+        },
+        "timeout": 30,
+        "reconnect_interval": 5
+      },
+      "enabled": false,
+      "priority": 0,
+      "tags": ["example", "sse"]
+    }
+  }
+}
