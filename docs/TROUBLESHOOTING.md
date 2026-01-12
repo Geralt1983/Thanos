@@ -2600,6 +2600,455 @@ export ANTHROPIC_API_KEY="$NEW_ANTHROPIC_KEY"
 - Keep fallback chain functional during rotation
 - Invalidate old keys only after confirming new ones work
 
+## Scenario 6: "No morning context shown at session start"
+
+**Symptoms**:
+- Claude Code session starts without morning brief
+- No context displayed at startup
+- Session continues normally
+
+**Diagnosis**:
+```bash
+# 1. Check hook logs for errors
+tail -20 ~/.claude/logs/hooks.log | grep "morning-brief"
+
+# 2. Verify State directory structure
+ls -la State/
+cat State/Today.md
+
+# 3. Test hook manually
+python Tools/thanos_orchestrator.py hook morning-brief
+
+# 4. Check StateReader functionality
+python -c "from Tools.state_reader import StateReader; print('StateReader OK')"
+```
+
+**Common Causes**:
+1. `State/Today.md` file missing
+2. StateReader module import failure
+3. Corrupted state files
+4. Permission denied on State directory
+5. Hook not configured in Claude Code
+
+**Resolution**:
+```bash
+# 1. Create State directory and Today.md if missing
+mkdir -p State
+cat > State/Today.md <<'EOF'
+# Today
+
+## Focus
+- Main tasks for today
+
+## Notes
+- Important context
+EOF
+
+# 2. Fix permissions
+chmod 755 State
+chmod 644 State/Today.md
+
+# 3. Verify hook works
+python Tools/thanos_orchestrator.py hook morning-brief
+# Should output JSON with context
+
+# 4. Check for errors in hook log
+tail -10 ~/.claude/logs/hooks.log
+```
+
+**Impact**:
+- No functional impact (session works normally)
+- Missing convenience feature only
+- Can continue without morning context
+
+## Scenario 7: "Cache not improving performance"
+
+**Symptoms**:
+- API calls still slow despite cache
+- Expected cache hits not occurring
+- API costs higher than expected with caching enabled
+
+**Diagnosis**:
+```bash
+# 1. Check cache directory exists and has files
+ls -la Memory/cache/
+echo "Cache files: $(ls Memory/cache/*.json 2>/dev/null | wc -l)"
+
+# 2. Test cache file integrity
+corrupted=0
+total=0
+for f in Memory/cache/*.json; do
+    [ -f "$f" ] || continue
+    total=$((total + 1))
+    jq empty "$f" 2>/dev/null || {
+        echo "Corrupted: $f"
+        corrupted=$((corrupted + 1))
+    }
+done
+echo "Corruption rate: $corrupted / $total"
+
+# 3. Check cache file ages
+ls -lt Memory/cache/*.json | head -10
+
+# 4. Verify cache TTL configuration
+# Check ResponseCache initialization in code for ttl_seconds value
+
+# 5. Monitor for cache usage
+# Make same request twice and check timing
+time python -c "from Tools.litellm.client import LiteLLMClient; ..."
+```
+
+**Common Causes**:
+1. Cache TTL too short (entries expire quickly)
+2. High corruption rate preventing cache reads
+3. Cache key mismatch (different parameters/prompts)
+4. Frequent model changes bypass cache
+5. Cache directory permissions prevent reads
+6. Requests always unique (no repeating patterns)
+
+**Resolution**:
+```bash
+# 1. Clear corrupted cache and start fresh
+rm -rf Memory/cache/*.json
+
+# 2. Check cache permissions
+ls -ld Memory/cache/
+chmod 755 Memory/cache/
+
+# 3. Review cache TTL setting
+# For production, consider 24 hours (86400 seconds)
+# Edit code where ResponseCache is instantiated:
+# cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=86400)
+
+# 4. Monitor cache hit patterns
+# Add instrumentation using MonitoredCache class (see Cache Monitoring section)
+
+# 5. Verify requests are actually cacheable
+# Check if prompts and parameters are consistent
+```
+
+**Performance Expectations**:
+- **Cache Hit**: < 10ms response time
+- **Cache Miss**: Full API call latency (1-5 seconds)
+- **Good Hit Rate**: > 50% for production workloads
+- **Poor Hit Rate**: < 20% indicates caching ineffective
+
+## Scenario 8: "Intermittent API failures"
+
+**Symptoms**:
+- Some requests succeed, others fail
+- Errors appear randomly
+- Fallback chain sometimes helps, sometimes doesn't
+
+**Diagnosis**:
+```bash
+# 1. Check for network issues
+ping -c 5 api.anthropic.com
+ping -c 5 api.openai.com
+
+# 2. Test API connectivity
+curl -I https://api.anthropic.com/v1/messages
+curl -I https://api.openai.com/v1/chat/completions
+
+# 3. Review error patterns in logs
+grep -i "error\|fail" ~/.claude/logs/thanos.log | tail -50
+
+# 4. Check for rate limiting patterns
+grep -i "rate limit\|429" ~/.claude/logs/thanos.log | tail -20
+
+# 5. Monitor API status
+# Anthropic: https://status.anthropic.com
+# OpenAI: https://status.openai.com
+```
+
+**Common Causes**:
+1. Network instability (WiFi, VPN, ISP issues)
+2. Intermittent rate limiting (burst usage)
+3. Provider service degradation
+4. DNS resolution issues
+5. Firewall/proxy intermittently blocking requests
+6. Timeout settings too aggressive
+
+**Resolution**:
+```bash
+# 1. Test network stability
+for i in {1..10}; do
+    echo "Test $i:"
+    curl -s -w "Time: %{time_total}s\n" -o /dev/null \
+        -H "x-api-key: $ANTHROPIC_API_KEY" \
+        https://api.anthropic.com/v1/messages
+    sleep 2
+done
+
+# 2. Check DNS resolution
+nslookup api.anthropic.com
+nslookup api.openai.com
+
+# 3. Review firewall/proxy logs if applicable
+# Check corporate network policies
+
+# 4. Add timeout buffer if errors are timeout-related
+# (Would require code change to increase timeout values)
+
+# 5. Enable detailed logging
+export LITELLM_LOG_LEVEL=DEBUG
+# Run application and review detailed logs
+
+# 6. Diversify fallback chain across providers
+# Ensure config/api.json uses multiple providers
+cat config/api.json | jq '.litellm.fallback_chain'
+```
+
+**Prevention**:
+- Use diverse providers in fallback chain
+- Monitor network quality regularly
+- Set up provider status monitoring
+- Configure reasonable timeout values
+- Consider request throttling for burst protection
+
+## Scenario 9: "Inconsistent responses from same prompt"
+
+**Symptoms**:
+- Same prompt returns different responses unexpectedly
+- Response quality varies significantly
+- Cache doesn't seem to return consistent results
+
+**Diagnosis**:
+```bash
+# 1. Check if different models being used
+grep "model" ~/.claude/logs/thanos.log | tail -20
+
+# 2. Review fallback chain activity
+export LITELLM_LOG_LEVEL=DEBUG
+# Make request and observe which model responds
+
+# 3. Check cache for the prompt
+# (Cache key depends on prompt + model + parameters)
+ls -lt Memory/cache/*.json | head -10
+
+# 4. Verify model parameters are consistent
+# Check temperature, max_tokens, etc. in request
+```
+
+**Common Causes**:
+1. Fallback chain switching models due to failures
+2. Cache miss causes new API call with different response
+3. Model parameters (temperature) not deterministic
+4. Different models in fallback have different capabilities
+5. Cache key mismatch due to parameter variations
+6. Cached response expired, new model response cached
+
+**Resolution**:
+```bash
+# 1. Fix primary model to avoid fallbacks
+# Investigate why primary model failing
+grep "fallback" ~/.claude/logs/thanos.log
+
+# 2. Use temperature=0 for deterministic responses
+# (Requires code change or configuration option)
+
+# 3. Clear cache if stale responses
+rm -rf Memory/cache/*.json
+
+# 4. Simplify fallback chain to single model for consistency
+# Edit config/api.json:
+{
+  "litellm": {
+    "fallback_chain": ["claude-sonnet-4-20250514"]
+  }
+}
+
+# 5. Review usage tracking to see which models actually used
+# (Note: Current tracking shows requested model, not actual)
+```
+
+**Understanding**:
+- **Fallback changes models**: Different models = different responses
+- **Cache uses requested model**: Not actual model used
+- **Temperature > 0**: Non-deterministic responses
+- **Parameter changes**: Break cache key matching
+
+**Recommendations**:
+- For consistent responses: Use single reliable model
+- For diverse responses: Embrace fallback variety
+- For debugging: Enable DEBUG logging to see which model responds
+- For cost tracking: Monitor provider dashboards directly
+
+## Scenario 10: "Cannot write session logs"
+
+**Symptoms**:
+- No session files appearing in `History/Sessions/`
+- Hook logs show write errors
+- Session ends normally but no history recorded
+
+**Diagnosis**:
+```bash
+# 1. Check hook logs
+grep "session-end" ~/.claude/logs/hooks.log | tail -20
+
+# 2. Verify directory permissions
+ls -ld History/
+ls -ld History/Sessions/
+
+# 3. Check disk space
+df -h .
+
+# 4. Test manual file creation
+touch History/Sessions/test.md
+rm History/Sessions/test.md
+
+# 5. Test hook manually
+python Tools/thanos_orchestrator.py hook session-end
+ls -lt History/Sessions/ | head -5
+```
+
+**Common Causes**:
+1. Permission denied on `History/Sessions/` directory
+2. Disk full or quota exceeded
+3. Parent `History/` directory missing
+4. Filesystem mounted read-only
+5. StateReader fails to gather context (logs error but continues)
+
+**Resolution**:
+```bash
+# 1. Create directory structure
+mkdir -p History/Sessions
+chmod 755 History
+chmod 755 History/Sessions
+
+# 2. Fix ownership if needed
+# If running as different user:
+# sudo chown -R $USER:$USER History/
+
+# 3. Free up disk space if needed
+df -h .
+# If low, clean cache or other temporary files
+find Memory/cache/ -name "*.json" -mtime +30 -delete
+
+# 4. Verify filesystem is writable
+touch /tmp/test && rm /tmp/test && echo "Filesystem OK"
+
+# 5. Check for SELinux/AppArmor restrictions
+# (If on Linux with mandatory access controls)
+getenforce  # SELinux
+sudo aa-status  # AppArmor
+
+# 6. Test hook end-to-end
+python Tools/thanos_orchestrator.py hook session-end
+ls -lt History/Sessions/*.md | head -1
+cat $(ls -t History/Sessions/*.md | head -1)
+```
+
+**Prevention**:
+```bash
+# Add to initialization/setup script
+mkdir -p History/Sessions Memory/cache State ~/.claude/logs
+chmod -R 755 History Memory State ~/.claude
+
+# Monitor disk space regularly
+df -h . | tail -1 | awk '{if ($5+0 > 90) print "WARNING: Disk usage high: " $5}'
+```
+
+## Scenario 11: "Fallback chain exhausted too quickly"
+
+**Symptoms**:
+- All models in fallback chain fail rapidly
+- Request fails with "all models failed" error
+- Fallback doesn't provide expected resilience
+
+**Diagnosis**:
+```bash
+# 1. Enable debug logging to see fallback progression
+export LITELLM_LOG_LEVEL=DEBUG
+
+# 2. Check fallback chain configuration
+cat config/api.json | jq '.litellm.fallback_chain'
+
+# 3. Test each model individually
+# Anthropic
+curl -X POST https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"claude-sonnet-4-20250514","messages":[{"role":"user","content":"test"}],"max_tokens":10}'
+
+# OpenAI
+curl -X POST https://api.openai.com/v1/chat/completions \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"model":"gpt-4-turbo","messages":[{"role":"user","content":"test"}],"max_tokens":10}'
+
+# 4. Review recent errors
+tail -100 ~/.claude/logs/thanos.log | grep -i "error\|fail"
+```
+
+**Common Causes**:
+1. All API keys invalid or expired simultaneously
+2. Request parameters incompatible with all models
+3. All providers experiencing outages (very rare)
+4. Network blocking all API endpoints
+5. Request too large for all configured models
+6. Billing issues across all providers
+
+**Resolution**:
+```bash
+# 1. Verify each API key individually
+echo "Testing Anthropic..."
+curl -I -H "x-api-key: $ANTHROPIC_API_KEY" https://api.anthropic.com/v1/messages
+echo "Testing OpenAI..."
+curl -I -H "Authorization: Bearer $OPENAI_API_KEY" https://api.openai.com/v1/models
+
+# 2. Check account status on provider dashboards
+# - Anthropic Console: https://console.anthropic.com
+# - OpenAI Platform: https://platform.openai.com
+
+# 3. Review billing and quotas
+# Ensure accounts are active and have available credits
+
+# 4. Simplify request to test
+# Remove special parameters, reduce size
+
+# 5. Try single known-working model
+# Edit config/api.json temporarily:
+{
+  "litellm": {
+    "fallback_chain": ["claude-sonnet-4-20250514"]
+  }
+}
+
+# 6. Check request parameters
+# Ensure max_tokens, temperature within valid ranges
+# Ensure model names are correct and currently available
+```
+
+**Common Request Parameter Issues**:
+```bash
+# Check for these problems:
+# - max_tokens too large (exceeds model limit)
+# - Invalid model names (model deprecated or renamed)
+# - System prompts not supported by all models
+# - Special features (tools, vision) not available on all models
+```
+
+**Emergency Fallback**:
+```json
+{
+  "litellm": {
+    "fallback_chain": [
+      "claude-3-5-haiku-20241022"  // Fastest, most reliable Anthropic model
+    ]
+  }
+}
+```
+
+**Long-term Fix**:
+- Maintain valid API keys across providers
+- Monitor provider status pages
+- Set up billing alerts
+- Test fallback chain regularly
+- Keep model list updated with current model names
+- Use diverse providers to avoid single point of failure
+
 ---
 
 # Best Practices
