@@ -24,7 +24,7 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 
 # Add project root to path
@@ -47,6 +47,196 @@ Context:
 - Includes tasks, habits, daily goals, and metrics
 - Used for backup, analysis, and reporting
 """
+
+
+# =============================================================================
+# DATA RETRIEVAL FUNCTIONS
+# =============================================================================
+
+
+async def retrieve_tasks(adapter: WorkOSAdapter) -> List[Dict[str, Any]]:
+    """
+    Retrieve all tasks from the WorkOS database.
+
+    Fetches tasks across all statuses (active, queued, backlog, done) with
+    client information joined.
+
+    Args:
+        adapter: WorkOSAdapter instance
+
+    Returns:
+        List of task dictionaries with all task fields plus client_name
+    """
+    pool = await adapter._get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT t.*, c.name as client_name
+            FROM tasks t
+            LEFT JOIN clients c ON t.client_id = c.id
+            ORDER BY
+                CASE t.status
+                    WHEN 'active' THEN 1
+                    WHEN 'queued' THEN 2
+                    WHEN 'backlog' THEN 3
+                    WHEN 'done' THEN 4
+                END,
+                t.sort_order ASC NULLS LAST,
+                t.created_at DESC
+            """
+        )
+        return [adapter._row_to_dict(r) for r in rows]
+
+
+async def retrieve_habits(adapter: WorkOSAdapter) -> List[Dict[str, Any]]:
+    """
+    Retrieve all habits with completion data.
+
+    Fetches both active and inactive habits with their streak information
+    and last completion date.
+
+    Args:
+        adapter: WorkOSAdapter instance
+
+    Returns:
+        List of habit dictionaries with completion metadata
+    """
+    pool = await adapter._get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT h.*,
+                   (SELECT MAX(completed_at) FROM habit_completions
+                    WHERE habit_id = h.id) as last_completion
+            FROM habits h
+            ORDER BY h.sort_order ASC NULLS LAST, h.created_at DESC
+            """
+        )
+        return [adapter._row_to_dict(r) for r in rows]
+
+
+async def retrieve_goals(adapter: WorkOSAdapter) -> List[Dict[str, Any]]:
+    """
+    Retrieve daily goals data.
+
+    Fetches all daily goal records including date, streak, points earned,
+    target points, and goal achievement status.
+
+    Args:
+        adapter: WorkOSAdapter instance
+
+    Returns:
+        List of daily goal dictionaries ordered by date descending
+    """
+    pool = await adapter._get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT date, current_streak, earned_points, target_points, goal_met
+            FROM daily_goals
+            ORDER BY date DESC
+            """
+        )
+        return [adapter._row_to_dict(r) for r in rows]
+
+
+async def retrieve_metrics(adapter: WorkOSAdapter) -> Dict[str, Any]:
+    """
+    Retrieve calculated productivity metrics.
+
+    Uses the WorkOSAdapter's get_today_metrics method to get current
+    productivity metrics including points earned, streak, task counts,
+    and goal achievement status.
+
+    Args:
+        adapter: WorkOSAdapter instance
+
+    Returns:
+        Dictionary with metrics fields (completed_count, earned_points,
+        target_points, progress_percentage, streak, active_count,
+        queued_count, goal_met, target_met)
+    """
+    result = await adapter.call_tool("get_today_metrics", {})
+    if result.success:
+        return result.data
+    else:
+        # Return empty metrics on error
+        return {
+            "completed_count": 0,
+            "earned_points": 0,
+            "target_points": 18,
+            "minimum_points": 12,
+            "progress_percentage": 0,
+            "streak": 0,
+            "active_count": 0,
+            "queued_count": 0,
+            "goal_met": False,
+            "target_met": False,
+            "error": result.error,
+        }
+
+
+async def retrieve_all_data(data_type: str) -> Dict[str, Any]:
+    """
+    Retrieve data from WorkOS database based on data type.
+
+    Handles async connection, data retrieval, and proper cleanup.
+    Provides streaming progress updates during retrieval.
+
+    Args:
+        data_type: Type of data to retrieve (tasks/habits/goals/metrics/all)
+
+    Returns:
+        Dictionary with retrieved data organized by type
+
+    Raises:
+        ValueError: If database connection fails
+        Exception: For other errors during data retrieval
+    """
+    adapter = WorkOSAdapter()
+    data = {}
+
+    try:
+        print("🔌 Connecting to database...", flush=True)
+
+        # Retrieve requested data type(s)
+        if data_type in ["tasks", "all"]:
+            print("📥 Retrieving tasks...", flush=True)
+            data["tasks"] = await retrieve_tasks(adapter)
+            print(f"   ✓ Retrieved {len(data['tasks'])} tasks", flush=True)
+
+        if data_type in ["habits", "all"]:
+            print("📥 Retrieving habits...", flush=True)
+            data["habits"] = await retrieve_habits(adapter)
+            print(f"   ✓ Retrieved {len(data['habits'])} habits", flush=True)
+
+        if data_type in ["goals", "all"]:
+            print("📥 Retrieving goals...", flush=True)
+            data["goals"] = await retrieve_goals(adapter)
+            print(f"   ✓ Retrieved {len(data['goals'])} daily goals", flush=True)
+
+        if data_type in ["metrics", "all"]:
+            print("📥 Retrieving metrics...", flush=True)
+            data["metrics"] = await retrieve_metrics(adapter)
+            print(f"   ✓ Retrieved current metrics", flush=True)
+
+        return data
+
+    except ValueError as e:
+        # Database connection error
+        raise ValueError(f"Database connection failed: {e}")
+    except Exception as e:
+        # Other errors during retrieval
+        raise Exception(f"Error retrieving data: {e}")
+    finally:
+        # Always close the adapter
+        await adapter.close()
+        print("🔌 Database connection closed", flush=True)
+
+
+# =============================================================================
+# ARGUMENT PARSING
+# =============================================================================
 
 
 def parse_arguments(args_string: Optional[str] = None) -> argparse.Namespace:
@@ -205,24 +395,22 @@ def execute(args: Optional[str] = None) -> str:
         print("=" * 60)
         print()
 
-        # Placeholder for data retrieval and export
-        # This will be implemented in subsequent subtasks (1.2, 1.3, 1.4, 1.5)
-        print("⚠️  Export functionality not yet implemented.")
+        # Retrieve data from database
+        print("🔄 Starting data retrieval...")
         print()
-        print("This command will export:")
-        if parsed_args.type == "all":
-            print("  • Tasks (active, queued, backlog, done)")
-            print("  • Habits (with completion data)")
-            print("  • Goals (daily goals and streaks)")
-            print("  • Metrics (calculated productivity metrics)")
-        else:
-            print(f"  • {parsed_args.type.title()}")
-        print()
-        print(f"To: {output_dir}")
-        print(f"As: {parsed_args.format.upper()} files")
+        data = asyncio.run(retrieve_all_data(parsed_args.type))
         print()
 
-        summary = f"""## Export Configuration
+        # Check if we got any data
+        total_records = sum(
+            len(v) if isinstance(v, list) else 1
+            for v in data.values()
+        )
+
+        if total_records == 0:
+            print("⚠️  No data found to export.")
+            print()
+            summary = f"""## Export Summary
 
 **Format:** {parsed_args.format.upper()}
 **Data Type:** {parsed_args.type}
@@ -230,22 +418,69 @@ def execute(args: Optional[str] = None) -> str:
 
 ## Status
 
-⚠️ Export functionality is being implemented. This is the command structure only.
+⚠️ No data found to export.
 
 ## Next Steps
 
 The following will be implemented in subsequent phases:
-1. Data retrieval from WorkOS database
-2. CSV export functionality
-3. JSON export functionality
-4. Progress streaming and history saving
+1. CSV export functionality (Subtask 1.3)
+2. JSON export functionality (Subtask 1.4)
+3. Progress streaming and history saving (Subtask 1.5)
+"""
+            save_export_summary(output_dir, summary)
+            return summary
+
+        # Display data retrieval summary
+        print("✅ Data retrieval complete!")
+        print()
+        print("📊 Retrieved data:")
+        for data_type, records in data.items():
+            if isinstance(records, list):
+                print(f"   • {data_type.title()}: {len(records)} records")
+            else:
+                print(f"   • {data_type.title()}: 1 record")
+        print()
+
+        # Placeholder for export functionality (will be implemented in 1.3 and 1.4)
+        print("⚠️  Export to file functionality not yet implemented.")
+        print()
+        print(f"To: {output_dir}")
+        print(f"As: {parsed_args.format.upper()} files")
+        print()
+
+        summary = f"""## Export Summary
+
+**Format:** {parsed_args.format.upper()}
+**Data Type:** {parsed_args.type}
+**Output Directory:** {output_dir}
+
+## Data Retrieved
+
+"""
+        for data_type, records in data.items():
+            if isinstance(records, list):
+                summary += f"- **{data_type.title()}**: {len(records)} records\n"
+            else:
+                summary += f"- **{data_type.title()}**: 1 record\n"
+
+        summary += """
+## Status
+
+✅ Data retrieval complete
+⚠️ Export to file functionality will be implemented in next subtasks
+
+## Next Steps
+
+1. CSV export functionality (Subtask 1.3)
+2. JSON export functionality (Subtask 1.4)
+3. Progress streaming and history saving (Subtask 1.5)
 """
 
         # Save summary
         save_export_summary(output_dir, summary)
 
         print("-" * 60)
-        print("✅ Export command structure ready")
+        print("✅ Data retrieval working correctly")
         print(f"📁 Summary saved to History/Exports/")
         print("-" * 60)
 
@@ -264,6 +499,8 @@ The following will be implemented in subsequent phases:
     except Exception as e:
         error_msg = f"❌ Unexpected error: {e}"
         print(error_msg)
+        import traceback
+        traceback.print_exc()
         return error_msg
 
 
