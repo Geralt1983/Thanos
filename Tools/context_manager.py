@@ -353,3 +353,57 @@ class ContextManager:
 
         # Return trimmed history and indicate that trimming occurred
         return (trimmed_history, True)
+
+    def get_usage_report(
+        self,
+        history: List[Dict[str, str]],
+        system_prompt: str,
+    ) -> Dict[str, Any]:
+        """
+        Generate a usage report for the current context state.
+
+        Calculates token usage statistics for system prompt and conversation history,
+        providing insights into context window utilization.
+
+        Args:
+            history (List[Dict[str, str]]): List of conversation messages.
+            system_prompt (str): The system prompt used for the conversation.
+
+        Returns:
+            Dict[str, Any]: Usage report containing:
+                - system_tokens (int): Tokens used by system prompt
+                - history_tokens (int): Tokens used by conversation history
+                - total_used (int): Total tokens used (system + history)
+                - available (int): Total tokens available for input
+                - usage_percent (float): Percentage of available tokens used
+                - messages_in_context (int): Number of messages in history
+
+        Example:
+            cm = ContextManager()
+            history = [{"role": "user", "content": "Hello"}]
+            report = cm.get_usage_report(history, "You are a helpful assistant.")
+            print(f"Using {report['usage_percent']:.1f}% of context window")
+        """
+        # Calculate tokens for system prompt
+        system_tokens = self.estimate_tokens(system_prompt)
+
+        # Calculate tokens for conversation history
+        history_tokens = self.estimate_messages_tokens(history)
+
+        # Calculate total tokens used
+        total_used = system_tokens + history_tokens
+
+        # Calculate usage percentage
+        usage_percent = (total_used / self.available_tokens) * 100
+
+        # Count messages in context
+        messages_in_context = len(history)
+
+        return {
+            "system_tokens": system_tokens,
+            "history_tokens": history_tokens,
+            "total_used": total_used,
+            "available": self.available_tokens,
+            "usage_percent": usage_percent,
+            "messages_in_context": messages_in_context,
+        }
