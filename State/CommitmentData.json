@@ -1,0 +1,134 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-01-11T18:40:57.703965",
+  "commitments": [
+    {
+      "id": "example-commitment-001",
+      "title": "Example: Daily meditation practice",
+      "type": "habit",
+      "status": "pending",
+      "created_date": "2026-01-11T00:00:00.000000",
+      "due_date": null,
+      "recurrence_pattern": "daily",
+      "streak_count": 1,
+      "longest_streak": 1,
+      "completion_rate": 100.0,
+      "completion_history": [
+        {
+          "timestamp": "2026-01-11T18:39:11.251224",
+          "status": "completed",
+          "notes": "Test completion"
+        }
+      ],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": null,
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "This is an example commitment to demonstrate the data structure. Real commitments will be added by the commitment tracker.",
+      "domain": "health",
+      "priority": 1,
+      "tags": [
+        "mindfulness",
+        "morning-routine"
+      ],
+      "metadata": {
+        "example_field": "Metadata can store any additional information needed",
+        "is_example": true
+      }
+    },
+    {
+      "id": "20af6eba-320a-4c56-846c-3aabee20f585",
+      "title": "Test command implementation",
+      "type": "task",
+      "status": "in_progress",
+      "created_date": "2026-01-11T18:35:04.852027",
+      "due_date": "2026-01-12",
+      "recurrence_pattern": "none",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": "2026-01-12",
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "Testing the new commitment_add command",
+      "domain": "work",
+      "priority": 2,
+      "tags": [
+        "testing",
+        "implementation"
+      ],
+      "metadata": {}
+    },
+    {
+      "id": "23120e23-eb07-4ba0-8862-38683b0bccc4",
+      "title": "Morning workout",
+      "type": "habit",
+      "status": "completed",
+      "created_date": "2026-01-11T18:35:22.919152",
+      "due_date": null,
+      "recurrence_pattern": "daily",
+      "streak_count": 1,
+      "longest_streak": 1,
+      "completion_rate": 100.0,
+      "completion_history": [
+        {
+          "timestamp": "2026-01-11T18:40:24.969535",
+          "status": "completed",
+          "notes": "Great workout session!"
+        }
+      ],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": null,
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "",
+      "domain": "health",
+      "priority": 1,
+      "tags": [
+        "fitness",
+        "morning"
+      ],
+      "metadata": {}
+    },
+    {
+      "id": "d4c427ac-4ea3-4532-a224-677f68dcf39c",
+      "title": "Master Python programming",
+      "type": "goal",
+      "status": "pending",
+      "created_date": "2026-01-11T18:35:28.851388",
+      "due_date": "2026-01-25",
+      "recurrence_pattern": "none",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": "2026-01-25",
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "",
+      "domain": "learning",
+      "priority": 1,
+      "tags": [
+        "python",
+        "advanced",
+        "programming"
+      ],
+      "metadata": {}
+    }
+  ]
+}
