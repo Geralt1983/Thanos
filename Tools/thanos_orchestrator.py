@@ -971,7 +971,7 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
              nested try/except blocks and handled gracefully with fallback behavior
 
     Layer 2: Top-level try/except catches any unexpected errors in the hook logic,
-             logs them via _log_hook_error(), and continues (see line 1059)
+             logs them via _log_hook_error(), and continues (see line 1082)
 
     Layer 3: _log_hook_error() itself has multi-level error handling with stderr
              fallback if log file writing fails

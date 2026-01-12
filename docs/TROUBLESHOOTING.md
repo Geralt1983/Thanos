@@ -604,7 +604,7 @@ The cache automatically detects corruption during read operations using defensiv
 
 **How Detection Works**:
 ```python
-# In ResponseCache.get() - Lines 113-121
+# In ResponseCache.get() - Lines 120-126
 try:
     cached = json.loads(cache_file.read_text())
     cached_time = datetime.fromisoformat(cached["timestamp"])
@@ -799,7 +799,7 @@ Return   Valid fields?
 The `clear_expired()` method provides automatic corruption cleanup as a side effect of expiration cleanup:
 
 ```python
-# In ResponseCache.clear_expired() - Lines 136-146
+# In ResponseCache.clear_expired() - Lines 150-156
 def clear_expired(self):
     """Remove expired cache entries."""
     cutoff = datetime.now() - timedelta(seconds=self.ttl_seconds)
