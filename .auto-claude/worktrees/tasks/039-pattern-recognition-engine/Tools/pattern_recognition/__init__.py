@@ -57,6 +57,24 @@ from .weekly_review_formatter import (
     export_insights_to_markdown_file,
 )
 
+from .pattern_storage import (
+    store_task_pattern,
+    store_health_correlation,
+    store_habit_streak,
+    store_trend,
+    store_insight,
+    link_patterns,
+    track_pattern_evolution,
+    store_all_patterns,
+)
+
+from .pattern_queries import (
+    get_patterns_by_category,
+    get_recent_insights,
+    get_patterns_related_to,
+    get_pattern_context_for_persona,
+)
+
 __all__ = [
     # Models
     "TaskCompletionPattern",
@@ -102,4 +120,18 @@ __all__ = [
     "generate_weekly_insights_summary",
     "format_insights_for_cli_display",
     "export_insights_to_markdown_file",
+    # Pattern Storage
+    "store_task_pattern",
+    "store_health_correlation",
+    "store_habit_streak",
+    "store_trend",
+    "store_insight",
+    "link_patterns",
+    "track_pattern_evolution",
+    "store_all_patterns",
+    # Pattern Queries
+    "get_patterns_by_category",
+    "get_recent_insights",
+    "get_patterns_related_to",
+    "get_pattern_context_for_persona",
 ]

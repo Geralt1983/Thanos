@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "037-energy-aware-task-prioritization",
+  "spec": "020-add-error-handling-and-troubleshooting-section-for",
   "state": "building",
   "subtasks": {
-    "completed": 19,
-    "total": 28,
+    "completed": 0,
+    "total": 18,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "User Override & Feedback",
-    "id": 5,
-    "total": 3
+    "current": "",
+    "id": 0,
+    "total": 0
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 21,
-    "started_at": "2026-01-11T20:10:49.556404"
+    "number": 16,
+    "started_at": "2026-01-11T22:43:33.758507"
   },
-  "last_update": "2026-01-11T21:20:30.173023"
+  "last_update": "2026-01-11T23:35:42.312993"
 }

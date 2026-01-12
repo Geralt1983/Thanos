@@ -14,7 +14,7 @@ Usage:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import json
 import re
@@ -202,6 +202,208 @@ class StateReader:
             return items[:5]  # Limit to 5
         except Exception:
             return []
+
+    def get_commitment_data(self) -> Optional[Dict[str, Any]]:
+        """Load raw commitment data from CommitmentData.json.
+
+        Returns:
+            Dictionary containing commitment data, or None if file doesn't exist
+            or is corrupted
+        """
+        path = self.state_dir / "CommitmentData.json"
+        if not path.exists():
+            return None
+
+        try:
+            content = path.read_text()
+            data = json.loads(content)
+            return data
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def get_commitments(
+        self,
+        commitment_type: Optional[str] = None,
+        status: Optional[str] = None,
+        domain: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        include_completed: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Get commitments with optional filtering.
+
+        Args:
+            commitment_type: Filter by type (habit, goal, task)
+            status: Filter by status (pending, in_progress, completed, missed, cancelled)
+            domain: Filter by domain (work, personal, health, learning, general)
+            tags: Filter by tags (commitment must have all specified tags)
+            include_completed: Whether to include completed commitments (default: False)
+
+        Returns:
+            List of commitment dictionaries matching the filters
+        """
+        data = self.get_commitment_data()
+        if not data:
+            return []
+
+        try:
+            commitments = data.get("commitments", [])
+            results = []
+
+            for commitment in commitments:
+                # Skip completed unless explicitly requested
+                if not include_completed and commitment.get("status") == "completed":
+                    continue
+
+                # Apply filters
+                if commitment_type and commitment.get("type") != commitment_type:
+                    continue
+
+                if status and commitment.get("status") != status:
+                    continue
+
+                if domain and commitment.get("domain") != domain:
+                    continue
+
+                if tags:
+                    commitment_tags = commitment.get("tags", [])
+                    if not all(tag in commitment_tags for tag in tags):
+                        continue
+
+                results.append(commitment)
+
+            return results
+        except Exception:
+            return []
+
+    def get_due_today(self) -> List[Dict[str, Any]]:
+        """Get commitments due today.
+
+        Returns:
+            List of commitments with due_date matching today's date
+        """
+        commitments = self.get_commitments()
+        today = datetime.now().date()
+        due_today = []
+
+        for commitment in commitments:
+            due_date_str = commitment.get("due_date")
+            if not due_date_str:
+                continue
+
+            try:
+                due_date = datetime.fromisoformat(due_date_str).date()
+                if due_date == today:
+                    due_today.append(commitment)
+            except (ValueError, TypeError):
+                continue
+
+        return due_today
+
+    def get_overdue_commitments(self) -> List[Dict[str, Any]]:
+        """Get overdue commitments.
+
+        Returns:
+            List of commitments with due_date before today and status not completed/cancelled
+        """
+        commitments = self.get_commitments()
+        today = datetime.now().date()
+        overdue = []
+
+        for commitment in commitments:
+            due_date_str = commitment.get("due_date")
+            if not due_date_str:
+                continue
+
+            status = commitment.get("status", "")
+            if status in ["completed", "cancelled"]:
+                continue
+
+            try:
+                due_date = datetime.fromisoformat(due_date_str).date()
+                if due_date < today:
+                    overdue.append(commitment)
+            except (ValueError, TypeError):
+                continue
+
+        return overdue
+
+    def get_commitment_streaks(self) -> List[Dict[str, Any]]:
+        """Get commitments with active streaks.
+
+        Returns:
+            List of recurring commitments with streak_count > 0,
+            sorted by streak count (highest first)
+        """
+        commitments = self.get_commitments()
+        streaks = []
+
+        for commitment in commitments:
+            recurrence = commitment.get("recurrence_pattern", "none")
+            streak_count = commitment.get("streak_count", 0)
+
+            if recurrence != "none" and streak_count > 0:
+                streaks.append(commitment)
+
+        # Sort by streak count descending
+        streaks.sort(key=lambda c: c.get("streak_count", 0), reverse=True)
+        return streaks
+
+    def get_commitment_summary(self) -> Dict[str, Any]:
+        """Get summary statistics about commitments.
+
+        Returns:
+            Dictionary with counts and statistics:
+            - total: Total active commitments
+            - by_type: Counts by type (habit, goal, task)
+            - by_status: Counts by status
+            - due_today: Count of items due today
+            - overdue: Count of overdue items
+            - active_streaks: Count of commitments with streaks > 0
+            - longest_streak: Highest current streak count
+        """
+        try:
+            all_commitments = self.get_commitments(include_completed=False)
+            due_today = self.get_due_today()
+            overdue = self.get_overdue_commitments()
+            streaks = self.get_commitment_streaks()
+
+            # Count by type
+            by_type = {}
+            by_status = {}
+            longest_streak = 0
+
+            for commitment in all_commitments:
+                # Count by type
+                c_type = commitment.get("type", "unknown")
+                by_type[c_type] = by_type.get(c_type, 0) + 1
+
+                # Count by status
+                c_status = commitment.get("status", "unknown")
+                by_status[c_status] = by_status.get(c_status, 0) + 1
+
+                # Track longest streak
+                streak = commitment.get("streak_count", 0)
+                longest_streak = max(longest_streak, streak)
+
+            return {
+                "total": len(all_commitments),
+                "by_type": by_type,
+                "by_status": by_status,
+                "due_today": len(due_today),
+                "overdue": len(overdue),
+                "active_streaks": len(streaks),
+                "longest_streak": longest_streak
+            }
+        except Exception:
+            return {
+                "total": 0,
+                "by_type": {},
+                "by_status": {},
+                "due_today": 0,
+                "overdue": 0,
+                "active_streaks": 0,
+                "longest_streak": 0
+            }
 
     def get_last_interaction_time(self) -> Optional[datetime]:
         """Get the timestamp of the last user interaction.
@@ -416,7 +618,8 @@ class StateReader:
         Returns:
             Dictionary containing:
             - focus: Current primary focus
-            - pending_commitments: Count of pending items
+            - pending_commitments: Count of pending items (legacy from Commitments.md)
+            - commitment_summary: Enhanced commitment statistics from CommitmentData.json
             - top3: List of top 3 priorities
             - energy: Current energy state (if logged)
             - week_theme: This week's theme
@@ -426,6 +629,7 @@ class StateReader:
         return {
             "focus": self.get_current_focus(),
             "pending_commitments": self.get_pending_commitments(),
+            "commitment_summary": self.get_commitment_summary(),
             "top3": self.get_todays_top3(),
             "energy": self.get_energy_state(),
             "week_theme": self.get_week_theme(),
@@ -481,17 +685,56 @@ def main():
     reader = StateReader(state_dir)
 
     print("State Reader Test")
-    print("=" * 40)
+    print("=" * 60)
     print(f"State directory: {state_dir}")
     print(f"Directory exists: {state_dir.exists()}")
     print()
 
+    # Test basic context
+    print("Basic Context:")
+    print("-" * 60)
     ctx = reader.get_quick_context()
     for key, value in ctx.items():
-        print(f"{key}: {value}")
+        if key != "commitment_summary":  # Handle this separately
+            print(f"{key}: {value}")
+
+    # Test commitment data reading
+    print("\nCommitment Data:")
+    print("-" * 60)
+    summary = reader.get_commitment_summary()
+    print(f"Total active commitments: {summary['total']}")
+    print(f"By type: {summary['by_type']}")
+    print(f"By status: {summary['by_status']}")
+    print(f"Due today: {summary['due_today']}")
+    print(f"Overdue: {summary['overdue']}")
+    print(f"Active streaks: {summary['active_streaks']}")
+    print(f"Longest streak: {summary['longest_streak']}")
+
+    # Test filtering
+    print("\nFiltered Queries:")
+    print("-" * 60)
+    habits = reader.get_commitments(commitment_type="habit")
+    print(f"Habits: {len(habits)}")
+
+    pending = reader.get_commitments(status="pending")
+    print(f"Pending commitments: {len(pending)}")
+
+    # Test streak reading
+    streaks = reader.get_commitment_streaks()
+    if streaks:
+        print(f"\nTop streak: {streaks[0].get('title')} ({streaks[0].get('streak_count')} days)")
+    else:
+        print("\nNo active streaks")
+
+    # Test due/overdue
+    due_today = reader.get_due_today()
+    overdue = reader.get_overdue_commitments()
+    print(f"Due today: {len(due_today)}")
+    print(f"Overdue: {len(overdue)}")
 
     print()
     print("Hook output:")
+    print("-" * 60)
     print(reader.format_for_hook())
 
 

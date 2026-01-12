@@ -12,6 +12,8 @@ The MCP error handling system provides:
 - **Graceful Degradation**: Fallback strategies for different error scenarios
 - **Detailed Logging**: Rich context for debugging and monitoring
 
+> **Note**: This guide covers MCP-specific error handling. For general Thanos runtime errors (API failures, cache corruption, hook errors), see the **[Thanos Runtime Error Troubleshooting Guide](../../docs/TROUBLESHOOTING.md)**.
+
 ## Architecture
 
 ```
@@ -647,6 +649,28 @@ async def test_circuit_breaker_opens():
     # Circuit should be open now
     assert breaker.is_open()
 ```
+
+---
+
+## Related Documentation
+
+### General Thanos Error Handling
+
+For non-MCP runtime errors in Thanos, see:
+- **[Thanos Runtime Error Troubleshooting Guide](../../docs/TROUBLESHOOTING.md)**: Comprehensive troubleshooting for:
+  - API Error Handling (LiteLLM fallback chains, rate limits, connection failures)
+  - Cache Corruption Recovery (silent failures, automatic cleanup, monitoring)
+  - Hook Error Management (fail-safe execution, log locations, debugging)
+  - Common troubleshooting scenarios and resolution steps
+  - Best practices for error prevention
+
+### MCP Integration
+
+For MCP deployment and integration:
+- **[MCP Integration Guide](../../docs/mcp-integration-guide.md)**: Integrating MCP servers with Thanos
+- **[MCP Deployment Guide](../../docs/mcp-deployment-guide.md)**: Deploying and operating MCP servers
+
+---
 
 ## Summary
 
