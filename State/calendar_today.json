@@ -1,0 +1,31 @@
+{
+  "synced_at": "2026-01-11T22:52:53.560647-05:00",
+  "date": "2026-01-11",
+  "timezone": "America/New_York",
+  "events": [
+    {
+      "id": "event1",
+      "summary": "Morning Standup",
+      "start": {
+        "dateTime": "2024-01-15T09:00:00-05:00"
+      },
+      "end": {
+        "dateTime": "2024-01-15T09:30:00-05:00"
+      }
+    },
+    {
+      "id": "event2",
+      "summary": "Project Review",
+      "start": {
+        "dateTime": "2024-01-15T14:00:00-05:00"
+      },
+      "end": {
+        "dateTime": "2024-01-15T15:00:00-05:00"
+      }
+    }
+  ],
+  "summary": {
+    "total_events": 2,
+    "total_duration_minutes": 90
+  }
+}

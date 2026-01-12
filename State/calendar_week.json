@@ -1,0 +1,39 @@
+{
+  "synced_at": "2026-01-11T22:52:53.583471-05:00",
+  "week_start": "2026-01-05",
+  "week_end": "2026-01-11",
+  "timezone": "America/New_York",
+  "events": [
+    {
+      "id": "event1",
+      "summary": "Monday Meeting",
+      "start": {
+        "dateTime": "2024-01-15T09:00:00-05:00"
+      },
+      "end": {
+        "dateTime": "2024-01-15T10:00:00-05:00"
+      }
+    },
+    {
+      "id": "event2",
+      "summary": "Wednesday Review",
+      "start": {
+        "dateTime": "2024-01-17T14:00:00-05:00"
+      },
+      "end": {
+        "dateTime": "2024-01-17T15:00:00-05:00"
+      }
+    },
+    {
+      "id": "event3",
+      "summary": "Friday Standup",
+      "start": {
+        "dateTime": "2024-01-19T09:00:00-05:00"
+      },
+      "end": {
+        "dateTime": "2024-01-19T09:30:00-05:00"
+      }
+    }
+  ],
+  "event_count": 3
+}
