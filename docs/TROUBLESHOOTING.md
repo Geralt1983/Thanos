@@ -2027,6 +2027,394 @@ fi
 
 **User experience is prioritized** over complete hook execution.
 
+## Hook Performance Characteristics
+
+### Typical Execution Times
+
+Hooks are designed for fast, non-blocking operation:
+
+**Morning Brief Hook**:
+- State file reads: ~10-20ms
+- Context parsing: ~5-10ms
+- JSON output: ~1ms
+- **Total**: ~20-30ms typically
+- **Target**: < 100ms maximum
+
+**Session End Hook**:
+- State file reads: ~10-20ms
+- File creation: ~5-10ms
+- Text write: ~5ms
+- **Total**: ~20-35ms typically
+- **Target**: < 100ms maximum
+
+**Error Handling Overhead**:
+- Exception catching: negligible (<1ms)
+- Error logging: ~5-10ms (file append)
+- **Total impact**: minimal even on error path
+
+### Why Performance Matters
+
+- **Fast startup**: Morning brief must not delay session start
+- **Clean exit**: Session end must not slow down Claude Code exit
+- **No API calls**: All hook operations are local file operations only
+- **No blocking**: No network calls, no long computations
+
+**Performance Issues to Monitor**:
+
+```bash
+# If hooks feel slow, check log file size
+ls -lh ~/.claude/logs/hooks.log
+
+# Large log files slow down appends
+# Rotate if > 10MB
+
+# Check for repeated errors (indicates persistent issue)
+grep -c "error" ~/.claude/logs/hooks.log
+
+# High error count slows down hooks due to repeated logging
+```
+
+## Hook Log File Management
+
+### Log File Rotation
+
+**Current Behavior**:
+- ✅ **Append-only**: New errors added to end of file
+- ❌ **No automatic rotation**: File grows indefinitely
+- ❌ **No size limit**: Can consume disk space over time
+- ❌ **No cleanup**: Manual deletion required
+
+**Recommended Rotation Strategy**:
+
+**Option 1: Manual Rotation**
+```bash
+# Archive old logs (weekly or monthly)
+mv ~/.claude/logs/hooks.log ~/.claude/logs/hooks.log.$(date +%Y%m%d)
+
+# Keep only last 4 weeks of archives
+find ~/.claude/logs/ -name "hooks.log.*" -mtime +28 -delete
+```
+
+**Option 2: Truncate If Not Needed**
+```bash
+# Clear log file (lose history)
+echo "" > ~/.claude/logs/hooks.log
+
+# Or delete and recreate
+rm ~/.claude/logs/hooks.log
+touch ~/.claude/logs/hooks.log
+```
+
+**Option 3: Automated Rotation (Linux/macOS)**
+```bash
+# Create logrotate config: /etc/logrotate.d/claude-hooks
+cat > /tmp/claude-hooks-logrotate <<'EOF'
+/home/*/.claude/logs/hooks.log {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    create 0644 $USER $USER
+}
+EOF
+
+# Install (requires sudo)
+sudo mv /tmp/claude-hooks-logrotate /etc/logrotate.d/claude-hooks
+```
+
+**Option 4: Custom Rotation Script**
+```bash
+#!/bin/bash
+# Save as: ~/bin/rotate-hooks-log.sh
+
+LOG_FILE=~/.claude/logs/hooks.log
+
+if [ -f "$LOG_FILE" ]; then
+    # Check if file > 10MB
+    file_size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null)
+    if [ "$file_size" -gt 10485760 ]; then
+        echo "Rotating large hook log ($file_size bytes)"
+        mv "$LOG_FILE" "$LOG_FILE.$(date +%Y%m%d)"
+        touch "$LOG_FILE"
+        # Keep only last 4 rotated files
+        ls -t ~/.claude/logs/hooks.log.* | tail -n +5 | xargs rm -f
+    fi
+fi
+```
+
+**Add to crontab**:
+```bash
+# Run weekly on Sunday at 2 AM
+0 2 * * 0 ~/bin/rotate-hooks-log.sh
+```
+
+### Log Analysis and Monitoring
+
+**Common Log Patterns to Monitor**:
+
+1. **Repeated "State file not found"**
+   ```bash
+   grep -c "State file not found" ~/.claude/logs/hooks.log
+   ```
+   - **Indicates**: State management not initialized
+   - **Action**: Verify Thanos state directory structure
+   - **Fix**: Run initialization to create State/Today.md
+
+2. **"Cannot write to log file"**
+   ```bash
+   grep "Cannot write to log file" ~/.claude/logs/hooks.log
+   ```
+   - **Indicates**: Disk space or permissions issue
+   - **Action**: Check `~/.claude/logs/` permissions and space
+   - **Fix**: Free disk space or fix permissions
+
+3. **"Unknown hook event"**
+   ```bash
+   grep "Unknown hook event" ~/.claude/logs/hooks.log
+   ```
+   - **Indicates**: Claude Code version mismatch or configuration issue
+   - **Action**: Check if Thanos needs update for new hook events
+   - **Fix**: Update Thanos or adjust hook configuration
+
+4. **Timestamp Gaps**
+   ```bash
+   # Show dates of all hook events
+   cut -d']' -f1 ~/.claude/logs/hooks.log | cut -d'[' -f2 | sort | uniq -c
+   ```
+   - **Indicates**: Large gaps may mean hooks not being called
+   - **Action**: Check Claude Code hook configuration
+   - **Fix**: Verify hook integration is active
+
+**Monitoring Script**:
+```bash
+#!/bin/bash
+# Save as: ~/bin/monitor-hooks.sh
+
+LOG_FILE=~/.claude/logs/hooks.log
+
+if [ ! -f "$LOG_FILE" ]; then
+    echo "✓ No hook errors (log file doesn't exist yet)"
+    exit 0
+fi
+
+# Count errors in last 7 days
+recent_errors=$(grep "$(date -d '7 days ago' +%Y-%m-%d)" "$LOG_FILE" 2>/dev/null | wc -l)
+
+if [ "$recent_errors" -eq 0 ]; then
+    echo "✓ No hook errors in last 7 days"
+else
+    echo "⚠️  $recent_errors hook errors in last 7 days"
+    echo "Recent errors:"
+    tail -10 "$LOG_FILE"
+    echo ""
+    echo "Review full log: cat $LOG_FILE"
+fi
+
+# Check log file size
+file_size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null)
+file_size_mb=$((file_size / 1024 / 1024))
+
+if [ "$file_size_mb" -gt 10 ]; then
+    echo "⚠️  Hook log is ${file_size_mb}MB (consider rotating)"
+fi
+```
+
+## Error Logging Integration
+
+### Two Logging Mechanisms
+
+The hook system uses **two separate logging mechanisms** for different purposes:
+
+| Aspect | `_log_hook_error()` | `log_error()` |
+|--------|-------------------|---------------|
+| **Purpose** | Hook lifecycle errors | General application errors |
+| **Log File** | `~/.claude/logs/hooks.log` | `~/.claude/logs/errors.log` |
+| **Format** | `[timestamp] [thanos-orchestrator] <message>` | Structured error with component |
+| **When Used** | Top-level hook failures | Nested operation failures |
+| **Fallback** | stderr if file write fails | Depends on error_logger config |
+| **Dependencies** | None (standalone) | Requires `Tools.error_logger` |
+| **Example** | `morning-brief error: State file missing` | `[thanos_orchestrator] Failed to read state: FileNotFoundError` |
+
+**Why Two Mechanisms?**
+
+1. **Separation of Concerns**:
+   - Hook errors are lifecycle issues (Claude Code integration)
+   - Application errors are operational issues (Thanos functionality)
+
+2. **Different Audiences**:
+   - `hooks.log` is for debugging hook integration
+   - `errors.log` is for monitoring application health
+
+3. **Fallback Safety**:
+   - `_log_hook_error()` has no dependencies (even if error_logger fails)
+   - Critical for fail-safe design (hooks must never fail)
+
+**Example: Nested Error Logging**
+
+When session-end hook reads state files:
+
+```python
+# In handle_hook() for session-end event
+try:
+    from Tools.state_reader import StateReader
+    reader = StateReader(base_dir / "State")
+    ctx = reader.get_quick_context()
+    # ... use context ...
+except (OSError, IOError) as e:
+    # Logs to ~/.claude/logs/errors.log
+    log_error("thanos_orchestrator", e, "Failed to read state for session log")
+    session_log += "- [Context unavailable]\n"
+    # Hook continues, context marked as unavailable
+except Exception as e:
+    # Logs to ~/.claude/logs/errors.log
+    log_error("thanos_orchestrator", e, "Unexpected error reading context for session log")
+    session_log += "- [Context unavailable]\n"
+```
+
+If the entire hook fails:
+
+```python
+# In handle_hook() top-level exception handler
+try:
+    if event == "morning-brief":
+        # ... hook logic ...
+    elif event == "session-end":
+        # ... hook logic ...
+except Exception as e:
+    # Logs to ~/.claude/logs/hooks.log
+    _log_hook_error(f"{event} error: {e}")
+    pass  # Hook exits cleanly
+```
+
+**Finding Errors Across Both Logs**:
+
+```bash
+# Check hook lifecycle errors
+cat ~/.claude/logs/hooks.log
+
+# Check application errors from hooks
+grep "thanos_orchestrator" ~/.claude/logs/errors.log
+
+# Recent errors from both sources
+echo "=== Hook Errors ===" && tail -10 ~/.claude/logs/hooks.log
+echo ""
+echo "=== Application Errors ===" && grep "thanos_orchestrator" ~/.claude/logs/errors.log | tail -10
+```
+
+## Comparison with Other Error Handling
+
+### Hook vs. Cache vs. API Error Handling
+
+Understanding how hooks differ from other error handling systems:
+
+| Aspect | Hook Errors | Cache Errors | API Errors |
+|--------|------------|--------------|------------|
+| **Failure Mode** | Log and continue | Silent failure | Automatic fallback |
+| **Logging** | Explicit to hooks.log | None (completely silent) | Detailed to component logs |
+| **User Visibility** | Log file + optional stderr | None | Error messages may surface |
+| **Automatic Recovery** | Retry next hook invocation | Next cache operation retries | Fallback chain to next model |
+| **Manual Cleanup** | Fix underlying issue | Clear cache directory | Check API keys, quotas |
+| **Impact on Operation** | Missing context/logs | Cache miss, triggers API call | May fail user request |
+| **Retry Logic** | None (one-shot operation) | None (treats as cache miss) | Immediate fallback chain |
+| **Performance Impact** | None (exits immediately) | Minimal (graceful degradation) | Moderate (tries multiple models) |
+| **Configuration** | Hardcoded paths | Environment variables | config/api.json |
+
+**Similarity Across All Three**:
+- ✅ All prioritize reliability over strict error reporting
+- ✅ All catch exceptions at system boundaries
+- ✅ All implement graceful degradation
+- ✅ All prevent errors from disrupting user workflow
+
+**Key Differences**:
+
+1. **Hooks Never Retry**
+   - Cache: Treats corruption as cache miss, automatically retries next read
+   - API: Immediately tries next model in fallback chain
+   - **Hooks**: One-shot operation, next invocation is the "retry"
+
+2. **Logging Strategy**
+   - Hooks: Explicit logging to dedicated log file
+   - Cache: Completely silent (by design, not a bug)
+   - API: Detailed logging with fallback tracking
+
+3. **User Notification**
+   - Hooks: Silent unless log file write fails (stderr fallback)
+   - Cache: Never notifies user
+   - API: May show error messages if entire fallback chain fails
+
+**When Each Error Type Matters**:
+
+- **Hook errors**: Matter if you need morning context or session history
+- **Cache errors**: Matter if API costs are high or performance is critical
+- **API errors**: Matter immediately (blocks user request if all fallbacks fail)
+
+**Debugging Priority**:
+
+1. **Critical**: API errors (user-facing, immediate impact)
+2. **Important**: Cache errors (cost and performance impact)
+3. **Low Priority**: Hook errors (convenience features, non-blocking)
+
+### Example: Cascade of Errors
+
+What happens when multiple systems fail together:
+
+```
+User starts Claude Code session
+         ↓
+┌────────────────────────┐
+│ Morning Brief Hook     │
+│ Tries to read State/   │
+│ Today.md               │
+└────────┬───────────────┘
+         │ (file missing)
+         ▼
+┌────────────────────────┐
+│ Hook Error Handling    │ ← Logs to hooks.log
+│ Marks context as       │   Hook exits cleanly
+│ unavailable            │   Session starts normally
+└────────┬───────────────┘
+         │
+         ▼
+User makes API request
+         ↓
+┌────────────────────────┐
+│ Check Response Cache   │
+│ for previous result    │
+└────────┬───────────────┘
+         │ (cache corrupted)
+         ▼
+┌────────────────────────┐
+│ Cache Error Handling   │ ← Silent failure
+│ Treats as cache miss   │   No log entry
+│ Continues to API       │   User unaware
+└────────┬───────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ LiteLLM API Call       │
+│ Try first model        │
+└────────┬───────────────┘
+         │ (rate limit)
+         ▼
+┌────────────────────────┐
+│ API Error Handling     │ ← Logs fallback
+│ Try next model in      │   May show warning
+│ fallback chain         │   Request succeeds
+└────────┬───────────────┘
+         │ (success)
+         ▼
+Response returned to user
+```
+
+**Result**:
+- ✅ User gets response (all systems degraded gracefully)
+- ✅ Missing morning context (logged to hooks.log)
+- ✅ Cache miss (silent, no record)
+- ✅ Fallback model used (logged)
+
+**Each layer handled its error independently and appropriately.**
+
 ---
 
 # Common Troubleshooting Scenarios
