@@ -228,16 +228,26 @@ See [commands/pa/README.md](commands/pa/README.md) for complete documentation on
 
 ### Running Tests
 
+Thanos has a comprehensive test suite with **1,225+ tests** across unit, integration, and API categories.
+
+**Quick Start:**
 ```bash
-# Unit tests
-python -m pytest tests/
+# Run all tests
+python3 -m pytest
 
-# Integration tests (requires MCP servers)
-python -m pytest tests/integration/ -v
+# Run unit tests only (fast)
+python3 -m pytest -m unit
 
-# With coverage
-python -m pytest tests/ --cov=Tools/adapters --cov-report=html
+# Run with coverage report
+python3 -m pytest --cov=Tools --cov-report=html
 ```
+
+**📚 Complete Testing Documentation:**
+- **[Testing Guide](TESTING_GUIDE.md)** - Comprehensive guide for running tests, mocking patterns, and troubleshooting
+- **[Testing Strategy](TESTING_STRATEGY.md)** - Testing philosophy, coverage goals, and standards
+- **[Test Examples](examples/)** - Real-world test execution examples
+
+For detailed instructions on test categories, markers, external dependencies, coverage reporting, and CI/CD integration, see the [Testing Guide](TESTING_GUIDE.md).
 
 ### Contributing
 

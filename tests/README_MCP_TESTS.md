@@ -1,5 +1,8 @@
 # MCP Component Unit Tests
 
+> **📖 For comprehensive testing documentation**, see [TESTING_GUIDE.md](../TESTING_GUIDE.md)
+> in the project root. This README covers MCP-specific test details.
+
 Comprehensive test suite for MCP (Model Context Protocol) integration components.
 
 ## Test Coverage
@@ -50,6 +53,9 @@ Shared test fixtures and utilities:
 - Async testing utilities
 
 ## Running Tests
+
+> For more test execution options and advanced filtering, see the [Test Execution Commands](../TESTING_GUIDE.md#test-execution-commands)
+> section in the main testing guide.
 
 ### Run all tests:
 ```bash
