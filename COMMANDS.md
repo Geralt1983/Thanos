@@ -127,7 +127,21 @@ performance-profile: "optimization"
 
 ### Health & Wellness Commands
 
-**`/health:summary [flags]`** - Unified health metrics dashboard combining Oura Ring data (readiness, sleep, stress) with insights and recommendations | Auto-Persona: Health, Analyzer | Optional: --llm-enhance for AI-powered personalized analysis
+**`/health:summary [flags]`**
+```yaml
+---
+command: "/health:summary"
+category: "Health & Wellness"
+purpose: "Unified health metrics dashboard with Oura Ring integration"
+wave-enabled: false
+performance-profile: "standard"
+---
+```
+- **Auto-Persona**: Health, Analyzer
+- **MCP Integration**: Sequential (data analysis), Context7 (patterns)
+- **Tool Orchestration**: [Read, Write, Bash]
+- **Arguments**: `--llm-enhance` (AI-powered personalized analysis), `--trends` (7-day trend visualization)
+- **Features**: Real-time Oura Ring data (readiness, sleep, stress), evidence-based insights, actionable recommendations, ADHD-friendly formatting, auto-saves to History/HealthSummaries/
 
 ### Meta & Orchestration Commands
 
