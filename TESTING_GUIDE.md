@@ -1990,7 +1990,657 @@ pytest -v
 
 ## Mocking Patterns and Fixtures
 
-*This section will be completed in subtask 2.5*
+This section explains the mocking infrastructure available in the Thanos test suite and provides practical examples for writing tests. The test suite provides comprehensive fixtures and patterns to mock external dependencies, making tests fast, isolated, and reliable.
+
+### Overview
+
+**Mocking Philosophy:**
+- **Mock by default** - All external dependencies are mocked in tests
+- **Fixtures for reusability** - Common mocks are provided as pytest fixtures
+- **Isolated tests** - Each test runs independently with clean mocks
+- **Fast execution** - No network calls or external services in unit tests
+
+**What's available:**
+- **35+ pytest fixtures** in `conftest.py` and `conftest_mcp.py`
+- **unittest.mock** patterns (Mock, AsyncMock, patch)
+- **Temporary directories** for file-based tests
+- **Environment variable mocking** with monkeypatch
+- **Module-level import mocking** for unavailable dependencies
+
+---
+
+### Available Fixtures
+
+The test suite provides fixtures in three main files:
+
+#### Core Fixtures (tests/conftest.py)
+
+These fixtures are available to all tests automatically:
+
+**`mock_anthropic_client`** - Mocked Anthropic API client
+```python
+def test_llm_interaction(mock_anthropic_client):
+    """Test using the mock Anthropic client."""
+    # Client is pre-configured with mock responses
+    response = mock_anthropic_client.messages.create(
+        model="claude-sonnet-4-5-20250929",
+        messages=[{"role": "user", "content": "Test"}]
+    )
+    assert response.content[0].text == "Test response"
+```
+
+**`mock_anthropic_response`** - Standard API response dictionary
+```python
+def test_response_parsing(mock_anthropic_response):
+    """Test parsing Anthropic API responses."""
+    assert mock_anthropic_response["model"] == "claude-sonnet-4-5-20250929"
+    assert mock_anthropic_response["role"] == "assistant"
+    assert len(mock_anthropic_response["content"]) > 0
+```
+
+**`sample_messages`** - List of conversation messages
+```python
+def test_conversation_flow(sample_messages):
+    """Test with realistic conversation data."""
+    assert len(sample_messages) == 4
+    assert sample_messages[0]["role"] == "user"
+    assert sample_messages[1]["role"] == "assistant"
+```
+
+**`temp_config_dir`** - Temporary configuration directory
+```python
+def test_config_storage(temp_config_dir):
+    """Test storing configuration files."""
+    config_file = temp_config_dir / "settings.json"
+    config_file.write_text('{"key": "value"}')
+    assert config_file.exists()
+    # Automatic cleanup after test
+```
+
+**`mock_api_config`** - Mock API configuration file
+```python
+def test_api_setup(mock_api_config):
+    """Test with pre-configured API settings."""
+    import json
+    config = json.loads(mock_api_config.read_text())
+    assert "anthropic_api_key" in config
+    assert config["anthropic_api_key"] == "test-key-123"
+```
+
+**`project_root_path`** - Project root directory
+```python
+def test_file_locations(project_root_path):
+    """Test accessing project files."""
+    readme = project_root_path / "README.md"
+    assert readme.exists()
+```
+
+#### MCP Fixtures (tests/conftest_mcp.py)
+
+For testing MCP (Model Context Protocol) functionality:
+
+**`mock_client_session`** - Comprehensive MCP ClientSession mock
+```python
+@pytest.mark.asyncio
+async def test_mcp_tools(mock_client_session):
+    """Test MCP tool listing and execution."""
+    # Initialize MCP session
+    init_result = await mock_client_session.initialize()
+    assert init_result.protocolVersion == "2024-11-05"
+
+    # List available tools
+    tools_result = await mock_client_session.list_tools()
+    assert len(tools_result.tools) == 1
+
+    # Call a tool
+    tool_result = await mock_client_session.call_tool(
+        "test_tool",
+        {"arg1": "value"}
+    )
+    assert not tool_result.isError
+```
+
+**`sample_mcp_json`** - Mock `.mcp.json` configuration
+```python
+def test_mcp_config(sample_mcp_json):
+    """Test MCP configuration parsing."""
+    import json
+    config = json.loads(sample_mcp_json.read_text())
+    assert "test-server" in config["mcpServers"]
+    assert config["mcpServers"]["test-server"]["enabled"] is True
+```
+
+**`sample_tools`** - Sample tool definitions
+```python
+def test_tool_schema(sample_tools):
+    """Test tool schema validation."""
+    assert len(sample_tools) == 2
+    assert sample_tools[0]["name"] == "get_tasks"
+    assert "parameters" in sample_tools[0]
+```
+
+**`event_loop`** - Session-scoped event loop for async tests
+```python
+@pytest.mark.asyncio
+async def test_async_operation(event_loop):
+    """Test async code with managed event loop."""
+    result = await some_async_function()
+    assert result is not None
+```
+
+#### Calendar Fixtures (tests/fixtures/calendar_fixtures.py)
+
+Helper functions (not pytest fixtures) for Google Calendar testing:
+
+**`get_mock_event(...)`** - Create mock calendar events
+```python
+def test_calendar_event():
+    """Test with mock calendar events."""
+    from tests.fixtures.calendar_fixtures import get_mock_event
+    from datetime import datetime
+
+    event = get_mock_event(
+        summary="Team Meeting",
+        start_time=datetime.now(),
+        duration_minutes=60
+    )
+    assert event["summary"] == "Team Meeting"
+    assert event["status"] == "confirmed"
+```
+
+**`get_workday_events()`** - Realistic workday schedule
+```python
+def test_schedule_parsing():
+    """Test parsing a full day's schedule."""
+    from tests.fixtures.calendar_fixtures import get_workday_events
+
+    events = get_workday_events()
+    assert len(events) == 5
+    assert events[0]["summary"] == "Morning Standup"
+    assert events[1]["summary"] == "Deep Work Block"
+```
+
+**Other helpers:**
+- `get_mock_credentials_data()` - OAuth credentials
+- `get_mock_calendar()` - Calendar object
+- `get_all_day_event()` - All-day event
+- `get_recurring_event()` - Recurring event
+- `get_conflicting_event()` - Overlapping event for testing conflict detection
+
+---
+
+### Common Mocking Patterns
+
+#### Basic Mock Objects
+
+Use `Mock` for simple object mocking:
+
+```python
+from unittest.mock import Mock
+
+def test_basic_mock():
+    """Test with a simple mock object."""
+    mock_service = Mock()
+    mock_service.get_data.return_value = {"status": "ok"}
+
+    result = mock_service.get_data()
+
+    assert result["status"] == "ok"
+    mock_service.get_data.assert_called_once()
+```
+
+#### Async Mocking with AsyncMock
+
+For async functions, use `AsyncMock`:
+
+```python
+from unittest.mock import Mock, AsyncMock
+import pytest
+
+@pytest.mark.asyncio
+async def test_async_mock():
+    """Test async functions with AsyncMock."""
+    mock_client = Mock()
+    mock_client.fetch_data = AsyncMock(return_value={"data": "value"})
+
+    result = await mock_client.fetch_data()
+
+    assert result["data"] == "value"
+    mock_client.fetch_data.assert_awaited_once()
+```
+
+#### Patching Functions with @patch
+
+Mock external dependencies at the import boundary:
+
+```python
+from unittest.mock import patch
+
+@patch('module.external_api_call')
+def test_with_patch(mock_api):
+    """Test with patched external API."""
+    mock_api.return_value = {"status": "success"}
+
+    result = my_function()  # Calls module.external_api_call internally
+
+    mock_api.assert_called_once()
+    assert result is not None
+```
+
+#### Patching with Context Manager
+
+For more control, use patch as a context manager:
+
+```python
+from unittest.mock import patch
+
+def test_with_context():
+    """Test with patch context manager."""
+    with patch('module.external_api_call') as mock_api:
+        mock_api.return_value = {"status": "success"}
+
+        result = my_function()
+
+        mock_api.assert_called_once_with(expected_arg="value")
+        assert result is not None
+```
+
+#### Mock Multiple Return Values
+
+Use `side_effect` for different return values on successive calls:
+
+```python
+from unittest.mock import Mock
+
+def test_side_effect():
+    """Test mock with multiple return values."""
+    mock = Mock()
+    mock.get_next.side_effect = [1, 2, 3, StopIteration]
+
+    assert mock.get_next() == 1
+    assert mock.get_next() == 2
+    assert mock.get_next() == 3
+
+    with pytest.raises(StopIteration):
+        mock.get_next()
+```
+
+#### Environment Variable Mocking
+
+Use pytest's `monkeypatch` fixture:
+
+```python
+def test_env_variables(monkeypatch):
+    """Test with mocked environment variables."""
+    monkeypatch.setenv("API_KEY", "test_key_123")
+    monkeypatch.setenv("DEBUG_MODE", "true")
+
+    import os
+    assert os.getenv("API_KEY") == "test_key_123"
+    assert os.getenv("DEBUG_MODE") == "true"
+    # Automatic cleanup after test
+```
+
+#### Temporary Directory Pattern
+
+Use pytest's `tmp_path` for file operations:
+
+```python
+def test_file_operations(tmp_path):
+    """Test with temporary directory."""
+    # Create test file
+    test_file = tmp_path / "data.json"
+    test_file.write_text('{"key": "value"}')
+
+    # Verify file exists
+    assert test_file.exists()
+
+    # Read and verify content
+    import json
+    data = json.loads(test_file.read_text())
+    assert data["key"] == "value"
+
+    # Automatic cleanup after test
+```
+
+---
+
+### Writing Tests with Mocks
+
+#### Example 1: Testing a Function with External API
+
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@patch('Tools.adapters.chroma_adapter.CHROMADB_AVAILABLE', True)
+async def test_embedding_generation():
+    """Test generating embeddings with mocked ChromaDB."""
+    # Mock the ChromaDB client
+    with patch('chromadb.PersistentClient') as mock_client_class:
+        mock_client = Mock()
+        mock_collection = Mock()
+
+        # Configure mock behavior
+        mock_client_class.return_value = mock_client
+        mock_client.get_or_create_collection.return_value = mock_collection
+        mock_collection.add = AsyncMock()
+
+        # Import and test the adapter
+        from Tools.adapters.chroma_adapter import ChromaAdapter
+        adapter = ChromaAdapter(persist_directory="/tmp/test")
+
+        # Add document (uses mock)
+        await adapter.add_document("Test document", metadata={"source": "test"})
+
+        # Verify mock was called correctly
+        mock_collection.add.assert_called_once()
+```
+
+#### Example 2: Testing with Multiple Fixtures
+
+```python
+import pytest
+
+@pytest.mark.unit
+def test_client_initialization(mock_anthropic_client, temp_config_dir):
+    """Test client initialization with mocked dependencies."""
+    # Use temp directory for config
+    config_file = temp_config_dir / "client.json"
+    config_file.write_text('{"model": "claude-sonnet-4-5-20250929"}')
+
+    # Use mock client
+    from core.client import ThanosCLient
+    client = ThanosClient(
+        config_path=config_file,
+        api_client=mock_anthropic_client
+    )
+
+    # Verify initialization
+    assert client.model == "claude-sonnet-4-5-20250929"
+    assert client.api_client is mock_anthropic_client
+```
+
+#### Example 3: Testing Async Code with AsyncMock
+
+```python
+import pytest
+from unittest.mock import Mock, AsyncMock
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_async_workflow():
+    """Test async workflow with mocked async dependencies."""
+    # Create mock with async methods
+    mock_adapter = Mock()
+    mock_adapter.fetch_events = AsyncMock(return_value=[
+        {"id": "1", "title": "Meeting"},
+        {"id": "2", "title": "Standup"}
+    ])
+    mock_adapter.process_event = AsyncMock(return_value={"status": "processed"})
+
+    # Import and test
+    from core.session_manager import SessionManager
+    manager = SessionManager(calendar_adapter=mock_adapter)
+
+    # Test async operations
+    events = await manager.fetch_and_process_events()
+
+    # Verify async calls
+    mock_adapter.fetch_events.assert_awaited_once()
+    assert mock_adapter.process_event.await_count == 2
+    assert len(events) == 2
+```
+
+#### Example 4: Testing Database Operations
+
+```python
+import pytest
+import sys
+from unittest.mock import Mock, MagicMock
+
+# Mock Neo4j before importing adapter
+sys.modules['neo4j'] = MagicMock()
+
+from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+@pytest.mark.unit
+def test_neo4j_operations():
+    """Test Neo4j operations with mocked driver."""
+    # Create adapter with mock driver
+    adapter = Neo4jAdapter(
+        uri="bolt://localhost:7687",
+        username="neo4j",
+        password="test"
+    )
+
+    # Mock the driver's session
+    mock_session = Mock()
+    mock_result = Mock()
+    mock_result.single.return_value = {"count": 42}
+    mock_session.run.return_value = mock_result
+
+    adapter._driver = Mock()
+    adapter._driver.session = Mock(return_value=mock_session)
+
+    # Test database operation
+    with adapter._driver.session() as session:
+        result = session.run("MATCH (n) RETURN count(n) as count")
+        count = result.single()["count"]
+
+    assert count == 42
+    mock_session.run.assert_called_once()
+```
+
+#### Example 5: Testing with Environment Variables
+
+```python
+import pytest
+
+@pytest.mark.unit
+def test_api_key_loading(monkeypatch, temp_config_dir):
+    """Test API key loading from environment."""
+    # Set environment variables
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-123")
+    monkeypatch.setenv("CONFIG_DIR", str(temp_config_dir))
+
+    # Import after setting env vars
+    from core.config import load_config
+    config = load_config()
+
+    assert config.api_key == "test-key-123"
+    assert config.config_dir == temp_config_dir
+```
+
+#### Example 6: Integration Test with Real ChromaDB
+
+```python
+import pytest
+import tempfile
+import shutil
+
+# Check if ChromaDB is available
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+
+@pytest.fixture
+def temp_chroma_dir():
+    """Create temporary ChromaDB directory."""
+    temp_dir = tempfile.mkdtemp(prefix="chroma_test_")
+    yield temp_dir
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+@pytest.mark.integration
+@pytest.mark.skipif(not CHROMADB_AVAILABLE, reason="ChromaDB not installed")
+def test_chroma_integration(temp_chroma_dir):
+    """Test with real ChromaDB instance."""
+    import chromadb
+
+    # Create client with temporary storage
+    client = chromadb.PersistentClient(path=temp_chroma_dir)
+    collection = client.get_or_create_collection("test")
+
+    # Add documents
+    collection.add(
+        documents=["Test document 1", "Test document 2"],
+        ids=["id1", "id2"]
+    )
+
+    # Query
+    results = collection.query(query_texts=["Test"], n_results=2)
+
+    assert len(results["ids"][0]) == 2
+    # Automatic cleanup via fixture
+```
+
+---
+
+### Best Practices
+
+**✅ DO:**
+
+1. **Use fixtures for common mocks** - Don't repeat mock setup
+   ```python
+   @pytest.fixture
+   def mock_client():
+       client = Mock()
+       client.connect.return_value = True
+       return client
+   ```
+
+2. **Mock at the boundary** - Mock external dependencies, not internal functions
+   ```python
+   # Good: Mock external API
+   @patch('adapters.external_api.fetch_data')
+
+   # Bad: Mock internal helper
+   @patch('module.internal_helper')
+   ```
+
+3. **Use AsyncMock for async code** - Regular Mock won't work with await
+   ```python
+   mock.async_method = AsyncMock(return_value="result")
+   await mock.async_method()
+   ```
+
+4. **Verify mock behavior** - Assert mocks were called correctly
+   ```python
+   mock_api.assert_called_once_with(expected_arg="value")
+   mock_api.assert_awaited_once()  # For AsyncMock
+   ```
+
+5. **Use temporary directories** - Never write to fixed paths
+   ```python
+   def test_file_ops(tmp_path):
+       test_file = tmp_path / "test.txt"
+       # Automatic cleanup
+   ```
+
+**❌ DON'T:**
+
+1. **Don't use real external services in unit tests**
+   ```python
+   # Bad: Real API call
+   result = requests.get("https://api.example.com")
+
+   # Good: Mocked API call
+   with patch('requests.get') as mock_get:
+       mock_get.return_value.json.return_value = {"data": "value"}
+   ```
+
+2. **Don't forget to clean up resources**
+   ```python
+   # Bad: Manual file creation
+   Path("/tmp/test.txt").write_text("test")
+
+   # Good: Use tmp_path fixture
+   def test(tmp_path):
+       (tmp_path / "test.txt").write_text("test")
+   ```
+
+3. **Don't mock what you're testing**
+   ```python
+   # Bad: Mocking the function under test
+   @patch('module.function_to_test')
+   def test_function(mock_func):
+       # You're not actually testing anything!
+   ```
+
+4. **Don't use vague assertions**
+   ```python
+   # Bad: Vague check
+   assert mock.call_count > 0
+
+   # Good: Specific check
+   mock.assert_called_once_with(arg="expected_value")
+   ```
+
+---
+
+### Quick Reference
+
+**Common patterns at a glance:**
+
+```python
+# Basic mock
+mock = Mock()
+mock.method.return_value = "value"
+assert mock.method() == "value"
+
+# Async mock
+mock.async_method = AsyncMock(return_value="value")
+result = await mock.async_method()
+
+# Patch decorator
+@patch('module.function')
+def test(mock_func):
+    mock_func.return_value = "value"
+
+# Patch context manager
+with patch('module.function') as mock_func:
+    mock_func.return_value = "value"
+
+# Environment variables
+def test(monkeypatch):
+    monkeypatch.setenv("VAR", "value")
+
+# Temporary directory
+def test(tmp_path):
+    file = tmp_path / "test.txt"
+    file.write_text("content")
+
+# Using fixtures
+def test(mock_anthropic_client, temp_config_dir):
+    # Fixtures are automatically injected
+    pass
+
+# Module mocking
+sys.modules['unavailable_module'] = MagicMock()
+```
+
+---
+
+### Additional Resources
+
+For comprehensive mocking documentation, see:
+- **[TEST_MOCKING_PATTERNS.md](./TEST_MOCKING_PATTERNS.md)** - Complete mocking reference with all patterns
+- **[tests/conftest.py](./tests/conftest.py)** - All shared fixtures
+- **[tests/conftest_mcp.py](./tests/conftest_mcp.py)** - MCP-specific fixtures
+- **[tests/fixtures/calendar_fixtures.py](./tests/fixtures/calendar_fixtures.py)** - Calendar test helpers
+
+**External documentation:**
+- [unittest.mock documentation](https://docs.python.org/3/library/unittest.mock.html)
+- [pytest-mock documentation](https://pytest-mock.readthedocs.io/)
+- [pytest fixtures documentation](https://docs.pytest.org/en/stable/fixture.html)
+
+---
+
+**Next section:** [Coverage Reporting](#coverage-reporting) explains how to measure and improve test coverage.
 
 ## Coverage Reporting
 
