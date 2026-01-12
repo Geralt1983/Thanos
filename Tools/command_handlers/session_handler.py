@@ -91,7 +91,7 @@ class SessionHandler(BaseHandler):
             CommandResult with action and success status
         """
         self.session.clear()
-        print(f"{Colors.DIM}Conversation cleared.{Colors.RESET}")
+        print(f"{Colors.GREEN}Conversation cleared.{Colors.RESET}")
         return CommandResult()
 
     def handle_save(self, args: str) -> CommandResult:
@@ -108,7 +108,7 @@ class SessionHandler(BaseHandler):
             CommandResult with action and success status
         """
         filepath = self.session.save()
-        print(f"{Colors.DIM}Session saved: {filepath}{Colors.RESET}")
+        print(f"{Colors.GREEN}Session saved: {filepath}{Colors.RESET}")
         return CommandResult()
 
     def handle_sessions(self, args: str) -> CommandResult:
@@ -156,7 +156,7 @@ class SessionHandler(BaseHandler):
             # Show sessions and prompt
             sessions = self.session.list_sessions(limit=5)
             if not sessions:
-                print(f"{Colors.DIM}No saved sessions to resume.{Colors.RESET}")
+                print(f"{Colors.RED}No saved sessions to resume.{Colors.RESET}")
                 return CommandResult(success=False)
 
             print(f"\n{Colors.CYAN}Recent Sessions:{Colors.RESET}")
@@ -184,7 +184,7 @@ class SessionHandler(BaseHandler):
             )
             return CommandResult()
         else:
-            print(f"{Colors.DIM}Session not found: {session_id}{Colors.RESET}")
+            print(f"{Colors.RED}Session not found: {session_id}{Colors.RESET}")
             print(f"{Colors.DIM}Use /sessions to list available sessions.{Colors.RESET}")
             return CommandResult(success=False)
 
@@ -282,6 +282,6 @@ class SessionHandler(BaseHandler):
             print(f"\n{Colors.DIM}Conversation restored from branch point.{Colors.RESET}\n")
             return CommandResult()
         else:
-            print(f"{Colors.DIM}Branch not found: {branch_ref}{Colors.RESET}")
+            print(f"{Colors.RED}Branch not found: {branch_ref}{Colors.RESET}")
             print(f"{Colors.DIM}Use /branches to list available branches.{Colors.RESET}")
             return CommandResult(success=False)

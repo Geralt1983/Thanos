@@ -116,7 +116,7 @@ class AnalyticsHandler(BaseHandler):
         """
         history_dir = self.thanos_dir / "History" / "Sessions"
         if not history_dir.exists():
-            print(f"{Colors.DIM}No session history to analyze.{Colors.RESET}")
+            print(f"{Colors.RED}No session history to analyze.{Colors.RESET}")
             return CommandResult()
 
         # Collect session data
@@ -124,7 +124,7 @@ class AnalyticsHandler(BaseHandler):
         json_files = list(history_dir.glob("*.json"))
 
         if not json_files:
-            print(f"{Colors.DIM}No saved sessions found.{Colors.RESET}")
+            print(f"{Colors.RED}No saved sessions found.{Colors.RESET}")
             return CommandResult()
 
         for json_file in json_files:
@@ -135,7 +135,7 @@ class AnalyticsHandler(BaseHandler):
                 continue
 
         if not sessions_data:
-            print(f"{Colors.DIM}No valid session data to analyze.{Colors.RESET}")
+            print(f"{Colors.RED}No valid session data to analyze.{Colors.RESET}")
             return CommandResult()
 
         # Analyze patterns

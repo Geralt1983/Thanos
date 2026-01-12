@@ -187,6 +187,7 @@ class TestAgentHandler:
         captured = capsys.readouterr()
         assert "Switched to" in captured.out
         assert "Strategy" in captured.out
+        assert Colors.GREEN in captured.out
 
     def test_handle_agent_switch_invalid(self, handler_dependencies, capsys):
         """Test switching to invalid agent"""
@@ -199,6 +200,7 @@ class TestAgentHandler:
 
         captured = capsys.readouterr()
         assert "Unknown agent" in captured.out
+        assert Colors.RED in captured.out
 
     def test_handle_list_agents(self, handler_dependencies, capsys):
         """Test /agents command lists all agents"""
@@ -234,6 +236,7 @@ class TestSessionHandler:
 
         captured = capsys.readouterr()
         assert "Conversation cleared" in captured.out
+        assert Colors.GREEN in captured.out
 
     def test_handle_save(self, handler_dependencies, capsys):
         """Test /save command saves session"""
@@ -246,6 +249,7 @@ class TestSessionHandler:
 
         captured = capsys.readouterr()
         assert "Session saved" in captured.out
+        assert Colors.GREEN in captured.out
 
     def test_handle_sessions_empty(self, handler_dependencies, capsys):
         """Test /sessions with no saved sessions"""
@@ -394,6 +398,7 @@ class TestStateHandler:
 
         captured = capsys.readouterr()
         assert "No commitments file found" in captured.out
+        assert Colors.RED in captured.out
 
 
 class TestMemoryHandler:
@@ -522,6 +527,7 @@ class TestModelHandler:
         captured = capsys.readouterr()
         assert "Model switched:" in captured.out
         assert "sonnet" in captured.out
+        assert Colors.GREEN in captured.out
 
     def test_handle_model_switch_invalid(self, handler_dependencies, capsys):
         """Test switching to invalid model"""
@@ -534,6 +540,7 @@ class TestModelHandler:
 
         captured = capsys.readouterr()
         assert "Unknown model" in captured.out
+        assert Colors.RED in captured.out
 
     def test_get_current_model_default(self, handler_dependencies):
         """Test get_current_model returns default when none set"""
@@ -621,6 +628,7 @@ class TestCoreHandler:
 
         captured = capsys.readouterr()
         assert "Error running command" in captured.out
+        assert Colors.RED in captured.out
 
 
 class TestBaseHandler:
@@ -633,6 +641,9 @@ class TestBaseHandler:
         assert hasattr(Colors, "DIM")
         assert hasattr(Colors, "RESET")
         assert hasattr(Colors, "BOLD")
+        assert hasattr(Colors, "RED")
+        assert hasattr(Colors, "YELLOW")
+        assert hasattr(Colors, "GREEN")
 
         # Verify they are strings
         assert isinstance(Colors.PURPLE, str)
@@ -640,6 +651,9 @@ class TestBaseHandler:
         assert isinstance(Colors.DIM, str)
         assert isinstance(Colors.RESET, str)
         assert isinstance(Colors.BOLD, str)
+        assert isinstance(Colors.RED, str)
+        assert isinstance(Colors.YELLOW, str)
+        assert isinstance(Colors.GREEN, str)
 
     def test_command_result_defaults(self):
         """Test CommandResult default values"""

@@ -141,7 +141,7 @@ class MemoryHandler(BaseHandler):
         memos = self._get_memos()
         if not memos:
             print(
-                f"{Colors.DIM}MemOS not available. "
+                f"{Colors.RED}MemOS not available. "
                 f"Check Neo4j/ChromaDB configuration.{Colors.RESET}"
             )
             return CommandResult(success=False)
@@ -199,7 +199,7 @@ class MemoryHandler(BaseHandler):
         )
 
         if result and result.success:
-            print(f"\n{Colors.CYAN}Memory stored:{Colors.RESET}")
+            print(f"\n{Colors.GREEN}Memory stored:{Colors.RESET}")
             print(f"  Type: {memory_type}")
             print(f"  Domain: {domain}")
             if entities:
@@ -213,7 +213,7 @@ class MemoryHandler(BaseHandler):
             return CommandResult()
         else:
             error = result.error if result else "Unknown error"
-            print(f"{Colors.DIM}Failed to store memory: {error}{Colors.RESET}")
+            print(f"{Colors.RED}Failed to store memory: {error}{Colors.RESET}")
             return CommandResult(success=False)
 
     def handle_recall(self, args: str) -> CommandResult:
@@ -392,14 +392,14 @@ class MemoryHandler(BaseHandler):
                     if result and result.success:
                         print("    ✓ Neo4j connected")
                 except Exception:
-                    print("    ⚠ Neo4j connection issue")
+                    print(f"    {Colors.YELLOW}⚠ Neo4j connection issue{Colors.RESET}")
         else:
             if MEMOS_AVAILABLE:
-                print("    ⚠ MemOS available but not initialized")
-                print("    💡 MemOS will initialize on first /remember or /recall")
+                print(f"    {Colors.YELLOW}⚠ MemOS available but not initialized{Colors.RESET}")
+                print(f"    {Colors.YELLOW}💡 MemOS will initialize on first /remember or /recall{Colors.RESET}")
             else:
                 print("    ✗ MemOS not available")
-                print("    💡 Install neo4j and chromadb packages")
+                print(f"    {Colors.YELLOW}💡 Install neo4j and chromadb packages{Colors.RESET}")
 
         print()
 

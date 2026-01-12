@@ -188,7 +188,7 @@ class StateHandler(BaseHandler):
         """
         commitments_file = self.thanos_dir / "State" / "Commitments.md"
         if not commitments_file.exists():
-            print(f"{Colors.DIM}No commitments file found.{Colors.RESET}")
+            print(f"{Colors.RED}No commitments file found.{Colors.RESET}")
             return CommandResult(success=False)
 
         try:
@@ -221,5 +221,5 @@ class StateHandler(BaseHandler):
             return CommandResult()
 
         except Exception as e:
-            print(f"{Colors.DIM}Error reading commitments: {e}{Colors.RESET}")
+            print(f"{Colors.RED}Error reading commitments: {e}{Colors.RESET}")
             return CommandResult(success=False)
