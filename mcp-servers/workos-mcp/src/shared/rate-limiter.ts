@@ -14,7 +14,7 @@
 // Reference: .auto-claude/specs/.../rate-limiter-architecture.md
 // =============================================================================
 
-import { RATE_LIMITS, ERROR_MESSAGES } from './validation-constants.js';
+import { RATE_LIMITS, RATE_LIMIT_CONFIG, ERROR_MESSAGES } from './validation-constants.js';
 
 // =============================================================================
 // TYPES
@@ -103,14 +103,23 @@ export class RateLimiter {
 
   /**
    * Creates a new rate limiter instance
-   * @param config - Optional configuration overrides
+   *
+   * Default configuration from RATE_LIMIT_CONFIG in validation-constants.ts:
+   * - enabled: true (override with RATE_LIMIT_ENABLED=false)
+   * - globalPerMinute: 100 (override with RATE_LIMIT_GLOBAL_PER_MINUTE)
+   * - writeOpsPerMinute: 20 (override with RATE_LIMIT_WRITE_PER_MINUTE)
+   * - readOpsPerMinute: 60 (override with RATE_LIMIT_READ_PER_MINUTE)
+   * - windowMs: 60000 (1 minute)
+   * - cleanupIntervalMs: 300000 (5 minutes)
+   *
+   * @param config - Optional configuration overrides (takes precedence over env vars)
    */
   constructor(config?: Partial<RateLimitConfig>) {
     this.config = {
-      enabled: config?.enabled ?? true,
-      globalPerMinute: config?.globalPerMinute ?? RATE_LIMITS.GLOBAL_PER_MINUTE,
-      writeOpsPerMinute: config?.writeOpsPerMinute ?? RATE_LIMITS.WRITE_OPS_PER_MINUTE,
-      readOpsPerMinute: config?.readOpsPerMinute ?? RATE_LIMITS.READ_OPS_PER_MINUTE,
+      enabled: config?.enabled ?? RATE_LIMIT_CONFIG.enabled,
+      globalPerMinute: config?.globalPerMinute ?? RATE_LIMIT_CONFIG.globalPerMinute,
+      writeOpsPerMinute: config?.writeOpsPerMinute ?? RATE_LIMIT_CONFIG.writeOpsPerMinute,
+      readOpsPerMinute: config?.readOpsPerMinute ?? RATE_LIMIT_CONFIG.readOpsPerMinute,
       windowMs: config?.windowMs ?? RATE_LIMITS.WINDOW_ONE_MINUTE,
       cleanupIntervalMs: config?.cleanupIntervalMs ?? RATE_LIMITS.CLEANUP_INTERVAL,
     };
@@ -411,7 +420,12 @@ let rateLimiterInstance: RateLimiter | null = null;
 
 /**
  * Gets or creates the singleton rate limiter instance
- * @param config - Optional configuration (only used on first call)
+ *
+ * On first call, initializes with RATE_LIMIT_CONFIG from validation-constants.ts
+ * which respects environment variable overrides (RATE_LIMIT_ENABLED,
+ * RATE_LIMIT_GLOBAL_PER_MINUTE, RATE_LIMIT_WRITE_PER_MINUTE, RATE_LIMIT_READ_PER_MINUTE).
+ *
+ * @param config - Optional configuration overrides (only used on first call)
  * @returns The singleton rate limiter instance
  */
 export function getRateLimiter(config?: Partial<RateLimitConfig>): RateLimiter {
