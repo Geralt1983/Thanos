@@ -360,6 +360,91 @@ def export_to_csv(
 
 
 # =============================================================================
+# JSON EXPORT FUNCTIONS
+# =============================================================================
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """
+    Custom JSON encoder that handles datetime objects.
+
+    Converts datetime objects to ISO format strings for JSON serialization.
+    """
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def export_to_json(
+    data: Dict[str, Any],
+    data_type: str,
+    output_dir: Path
+) -> List[Tuple[str, Path]]:
+    """
+    Export data to JSON format.
+
+    Creates separate JSON files for each data type with proper indentation
+    and datetime handling. Produces well-formatted, human-readable JSON.
+
+    Args:
+        data: Dictionary containing data to export, organized by type
+        data_type: Type of data being exported (tasks/habits/goals/metrics/all)
+        output_dir: Path to output directory
+
+    Returns:
+        List of tuples containing (data_type, file_path) for each created file
+
+    Example:
+        >>> data = {"tasks": [...], "habits": [...]}
+        >>> files = export_to_json(data, "all", Path("./exports"))
+        >>> # Returns: [("tasks", Path("./exports/tasks.json")), ...]
+    """
+    exported_files = []
+
+    print("📝 Exporting to JSON format...")
+    print()
+
+    for data_key, records in data.items():
+        # Skip if no records
+        if not records or (isinstance(records, list) and len(records) == 0):
+            print(f"   ⚠️  Skipping {data_key} (no data)")
+            continue
+
+        # Create filename
+        filename = f"{data_key}.json"
+        filepath = output_dir / filename
+
+        try:
+            # Write JSON file with proper formatting
+            with open(filepath, "w", encoding="utf-8") as jsonfile:
+                json.dump(
+                    records,
+                    jsonfile,
+                    indent=2,
+                    cls=DateTimeEncoder,
+                    ensure_ascii=False
+                )
+
+            # Get file size
+            file_size = filepath.stat().st_size
+
+            # Count records
+            record_count = len(records) if isinstance(records, list) else 1
+
+            print(f"   ✓ {data_key}.json - {record_count} record(s) ({format_file_size(file_size)})")
+            exported_files.append((data_key, filepath))
+
+        except Exception as e:
+            print(f"   ❌ Error exporting {data_key}: {e}")
+            continue
+
+    print()
+    return exported_files
+
+
+# =============================================================================
 # ARGUMENT PARSING
 # =============================================================================
 
@@ -544,13 +629,6 @@ def execute(args: Optional[str] = None) -> str:
 ## Status
 
 ⚠️ No data found to export.
-
-## Next Steps
-
-The following will be implemented in subsequent phases:
-1. CSV export functionality (Subtask 1.3)
-2. JSON export functionality (Subtask 1.4)
-3. Progress streaming and history saving (Subtask 1.5)
 """
             save_export_summary(output_dir, summary)
             return summary
@@ -570,10 +648,8 @@ The following will be implemented in subsequent phases:
         exported_files = []
         if parsed_args.format == "csv":
             exported_files = export_to_csv(data, parsed_args.type, output_dir)
-        else:
-            # JSON export will be implemented in subtask 1.4
-            print("⚠️  JSON export functionality not yet implemented.")
-            print()
+        elif parsed_args.format == "json":
+            exported_files = export_to_json(data, parsed_args.type, output_dir)
 
         # Generate summary
         summary = f"""## Export Summary
@@ -603,8 +679,8 @@ The following will be implemented in subsequent phases:
         summary += "\n## Status\n\n"
         if parsed_args.format == "csv":
             summary += "✅ CSV export complete\n"
-        else:
-            summary += "⚠️ JSON export functionality will be implemented in subtask 1.4\n"
+        elif parsed_args.format == "json":
+            summary += "✅ JSON export complete\n"
 
         # Save summary
         save_export_summary(output_dir, summary)
