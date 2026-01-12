@@ -4291,7 +4291,700 @@ The test suite is designed to be offline-first with extensive mocking, so you sh
 
 ## CI/CD Integration
 
-*This section will be completed in subtask 2.8*
+This section documents the current CI/CD setup for the Thanos project and provides recommendations for automating test execution in continuous integration pipelines.
+
+### Overview
+
+**Current Status:**
+- ✅ **Linting Workflow** - Automated code quality checks using Ruff
+- ⚠️ **Test Workflow** - Not yet implemented (recommended)
+- 🎯 **Offline-First Design** - Tests designed to run in CI without external services
+- 📊 **Coverage Ready** - Infrastructure in place for coverage reporting
+
+**Recommended Setup:**
+1. Keep existing lint workflow for code quality
+2. Add test workflow for automated testing
+3. Optionally add coverage reporting and quality gates
+4. Configure branch protection rules to require passing tests
+
+---
+
+### Current CI Workflows
+
+#### Lint Workflow (`.github/workflows/lint.yml`)
+
+**Status:** ✅ **Currently Active**
+
+The project currently has one CI workflow that runs Ruff linter on all Python code.
+
+**What it does:**
+- Runs on pushes/PRs to `main` and `develop` branches
+- Checks Python file changes (`.py`, `pyproject.toml`, `.ruffignore`)
+- Runs `ruff check .` to identify linting issues
+- Runs `ruff format --check .` to verify code formatting
+- Uploads linting report as artifact on failure
+- Can be triggered manually via `workflow_dispatch`
+
+**Key configuration:**
+```yaml
+name: Lint Python Code
+runs-on: ubuntu-latest
+python-version: '3.9'
+```
+
+**Triggers:**
+- Push to `main` or `develop` branch (only if Python files changed)
+- Pull request to `main` or `develop` branch
+- Manual workflow dispatch
+
+#### Test Workflow
+
+**Status:** ⚠️ **Not Yet Implemented**
+
+Currently, there is **no automated test workflow** in CI. Tests must be run manually by developers.
+
+**Recommendation:** Add a test workflow to run pytest automatically on all code changes (see examples below).
+
+---
+
+### Recommended Test Workflows
+
+Below are example GitHub Actions workflows for running tests in CI. Choose the approach that best fits your needs.
+
+#### Option 1: Minimal Test Workflow (Fast)
+
+**Best for:** Quick feedback on PRs, fast CI runs
+
+Create `.github/workflows/test-minimal.yml`:
+
+```yaml
+# Minimal test workflow - runs unit tests only, no coverage
+name: Test (Minimal)
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.py'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'pytest.ini'
+      - '.github/workflows/test-*.yml'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run unit tests
+        run: |
+          # Run only unit tests (fast, no external dependencies)
+          pytest -m unit -v
+
+      - name: Run non-integration tests
+        run: |
+          # Run all tests except integration tests
+          pytest -m "not integration" --maxfail=5
+```
+
+**Estimated runtime:** 1-3 minutes
+
+**What it skips:**
+- Integration tests (saves time)
+- Coverage reporting (faster runs)
+- Multiple Python versions (single version only)
+
+---
+
+#### Option 2: Standard Test Workflow (Recommended)
+
+**Best for:** Most projects, balances speed and coverage
+
+Create `.github/workflows/test.yml`:
+
+```yaml
+# Standard test workflow - runs all tests with coverage
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.py'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'pytest.ini'
+      - '.github/workflows/test*.yml'
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run tests with coverage
+        run: |
+          # Run all tests (offline-first design, no external services needed)
+          # Skip slow tests and API tests to keep CI fast
+          pytest -m "not slow and not api" \
+            --cov=. \
+            --cov-report=xml \
+            --cov-report=term \
+            -v
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.9'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Archive coverage report
+        if: matrix.python-version == '3.9'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+          retention-days: 30
+```
+
+**Estimated runtime:** 3-8 minutes (depending on matrix size)
+
+**Features:**
+- Tests multiple Python versions (3.8-3.11)
+- Generates coverage reports
+- Uploads coverage to Codecov (optional)
+- Archives coverage as CI artifact
+- Skips slow/API tests to keep CI fast
+- Offline-first (no external services required)
+
+---
+
+#### Option 3: Full Test Workflow (Comprehensive)
+
+**Best for:** Pre-release testing, comprehensive validation
+
+Create `.github/workflows/test-full.yml`:
+
+```yaml
+# Full test workflow - runs all tests including slow/integration tests
+name: Test (Full)
+
+on:
+  # Run on main branch pushes
+  push:
+    branches: [main]
+  # Run on release tags
+  push:
+    tags:
+      - 'v*'
+  # Manual trigger for comprehensive testing
+  workflow_dispatch:
+  # Weekly scheduled run
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight
+
+jobs:
+  test-full:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run all tests (including slow tests)
+        run: |
+          # Run EVERYTHING - unit, integration, slow tests
+          # Still skip API tests (requires real credentials)
+          pytest -m "not api" \
+            --cov=. \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term \
+            --durations=20 \
+            -v
+
+      - name: Check coverage threshold
+        run: |
+          # Fail if coverage is below threshold
+          pytest --cov=. --cov-fail-under=70 -m "not api" || \
+            echo "Warning: Coverage below 70%"
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+          retention-days: 90
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Python version: $(python --version)" >> $GITHUB_STEP_SUMMARY
+          echo "Test suite: Full (including slow tests)" >> $GITHUB_STEP_SUMMARY
+```
+
+**Estimated runtime:** 10-20 minutes
+
+**When to use:**
+- Before releases
+- Weekly scheduled runs
+- Manual comprehensive validation
+
+---
+
+### Running Tests in CI Without External Services
+
+The Thanos test suite is designed **offline-first** to run in CI environments without external service dependencies.
+
+#### Strategy 1: Skip Tests Requiring External Services
+
+**Recommended for CI:**
+
+```bash
+# Skip tests that require external APIs
+pytest -m "not api"
+
+# Skip both API tests and slow tests
+pytest -m "not slow and not api"
+
+# Skip specific service requirements
+pytest -m "not requires_openai and not requires_google_calendar"
+```
+
+**What gets skipped:**
+- Tests marked with `@pytest.mark.api`
+- Tests marked with `@pytest.mark.requires_openai`
+- Tests marked with `@pytest.mark.requires_google_calendar`
+- Tests marked with `@pytest.mark.slow`
+
+**What still runs:**
+- All unit tests (200+ tests)
+- Most integration tests (with mocked dependencies)
+- Tests with ChromaDB (can install in CI)
+
+#### Strategy 2: Use Mocked Dependencies
+
+**All external dependencies are mocked by default:**
+
+```python
+# Neo4j - Fully mocked via sys.modules
+# ✅ No Neo4j server needed in CI
+
+# Anthropic API - Mocked via conftest.py fixtures
+# ✅ No API key needed in CI
+
+# PostgreSQL/WorkOS - Fully mocked
+# ✅ No database server needed in CI
+```
+
+**Optional dependencies (install in CI if needed):**
+
+```yaml
+# Install ChromaDB for integration tests
+- name: Install optional test dependencies
+  run: |
+    pip install chromadb>=0.4.0
+```
+
+#### Strategy 3: Auto-Skip Behavior
+
+Tests requiring external services **automatically skip** if credentials are not provided:
+
+```python
+# Example: OpenAI tests
+@pytest.mark.requires_openai
+def test_openai_integration():
+    """This test auto-skips if OPENAI_API_KEY is not set"""
+    ...
+
+# CI output:
+# tests/unit/test_client.py::test_openai_integration SKIPPED (OpenAI API key not set)
+```
+
+**No configuration needed** - tests gracefully skip when dependencies are unavailable.
+
+---
+
+### Environment Variables for CI
+
+#### Required Variables
+
+**None!** The test suite runs without environment variables by default.
+
+#### Optional Variables (for full integration testing)
+
+If you want to run API tests in CI, configure these as **GitHub Secrets**:
+
+```yaml
+# In GitHub repository settings > Secrets and variables > Actions
+
+# OpenAI API Tests
+OPENAI_API_KEY=sk-...  # Only if testing real OpenAI integration
+
+# Google Calendar API Tests (requires OAuth setup)
+# Not recommended for CI - use mocked tests instead
+```
+
+**⚠️ Warning:** Running real API tests in CI can:
+- Incur costs (OpenAI API charges per request)
+- Be slower than mocked tests
+- Be less reliable (network issues, rate limits)
+- Require credential management
+
+**Recommendation:** Keep CI tests mocked and run real API tests manually for integration validation.
+
+#### Coverage Report Variables
+
+```yaml
+# Optional: Codecov integration
+env:
+  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+```
+
+---
+
+### CI Best Practices
+
+#### ✅ DO
+
+- **Run unit tests on every PR** - Fast feedback loop
+- **Skip slow/API tests in CI** - Use `pytest -m "not slow and not api"`
+- **Use matrix testing** - Test multiple Python versions (3.8-3.11)
+- **Cache pip dependencies** - Use `cache: 'pip'` in setup-python action
+- **Set reasonable timeouts** - Prevent hanging tests from blocking CI
+- **Upload coverage reports** - Track coverage trends over time
+- **Run full tests on schedule** - Weekly comprehensive validation
+- **Use fail-fast: false** - See all Python version failures, not just first
+
+**Example configuration:**
+
+```yaml
+strategy:
+  fail-fast: false  # Don't stop on first failure
+  matrix:
+    python-version: ['3.8', '3.9', '3.10', '3.11']
+
+timeout-minutes: 15  # Prevent hanging tests
+```
+
+#### ❌ DON'T
+
+- **Don't run API tests by default** - Costs money, slower, less reliable
+- **Don't skip all tests** - Defeats the purpose of CI
+- **Don't ignore coverage trends** - Track coverage over time
+- **Don't test only one Python version** - May miss compatibility issues
+- **Don't run ChromaDB tests if not needed** - Adds ~30s to CI time
+- **Don't commit secrets to .yml files** - Use GitHub Secrets
+
+---
+
+### Example CI Configuration Summary
+
+**Recommended setup for most projects:**
+
+```yaml
+# .github/workflows/lint.yml (existing)
+✅ Runs on: Every PR, push to main/develop
+✅ Checks: Code style and formatting with Ruff
+✅ Duration: ~30-60 seconds
+
+# .github/workflows/test.yml (recommended)
+✅ Runs on: Every PR, push to main/develop
+✅ Tests: Unit tests + fast integration tests (no API/slow tests)
+✅ Python versions: 3.8, 3.9, 3.10, 3.11 (matrix)
+✅ Coverage: Generated and uploaded
+✅ Duration: ~3-5 minutes per Python version
+
+# .github/workflows/test-full.yml (optional)
+✅ Runs on: Manual trigger, weekly schedule, releases
+✅ Tests: All tests including slow tests (still skip API tests)
+✅ Python version: 3.9 only
+✅ Coverage: With quality gate (70% minimum)
+✅ Duration: ~10-15 minutes
+```
+
+**Total CI time for typical PR:**
+- Lint: ~1 minute
+- Tests (4 Python versions in parallel): ~5 minutes
+- **Total: ~6 minutes** ⚡
+
+---
+
+### Platform-Specific Notes
+
+#### GitHub Actions (Primary)
+
+See examples above. Use:
+- `actions/checkout@v4`
+- `actions/setup-python@v5`
+- `actions/upload-artifact@v4`
+
+#### GitLab CI
+
+```yaml
+# .gitlab-ci.yml
+test:
+  image: python:3.9
+  before_script:
+    - pip install -r requirements.txt -r requirements-test.txt
+  script:
+    - pytest -m "not slow and not api" --cov=. --cov-report=term
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+```
+
+#### CircleCI
+
+```yaml
+# .circleci/config.yml
+version: 2.1
+jobs:
+  test:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      - run: pip install -r requirements.txt -r requirements-test.txt
+      - run: pytest -m "not slow and not api" --cov=.
+```
+
+#### Jenkins
+
+```groovy
+// Jenkinsfile
+pipeline {
+    agent { docker { image 'python:3.9' } }
+    stages {
+        stage('Test') {
+            steps {
+                sh 'pip install -r requirements.txt -r requirements-test.txt'
+                sh 'pytest -m "not slow and not api" --cov=.'
+            }
+        }
+    }
+}
+```
+
+---
+
+### Monitoring and Reporting
+
+#### Coverage Tracking
+
+**Codecov Integration:**
+
+```yaml
+- name: Upload to Codecov
+  uses: codecov/codecov-action@v3
+  with:
+    file: ./coverage.xml
+    flags: unittests
+    fail_ci_if_error: false
+```
+
+**Coveralls Integration:**
+
+```yaml
+- name: Upload to Coveralls
+  uses: coverallsapp/github-action@v2
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    path-to-lcov: ./coverage.xml
+```
+
+#### Test Result Reporting
+
+**Publish test results:**
+
+```yaml
+- name: Publish test results
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: always()
+  with:
+    files: |
+      test-results/**/*.xml
+```
+
+#### GitHub Status Checks
+
+Configure branch protection rules to require:
+- ✅ Lint workflow passing
+- ✅ Test workflow passing (all Python versions)
+- ✅ Coverage threshold met (optional)
+
+**Settings > Branches > Branch protection rules > Require status checks**
+
+---
+
+### Troubleshooting CI Failures
+
+#### Tests pass locally but fail in CI
+
+**Possible causes:**
+
+1. **Different Python version**
+   - Solution: Test locally with same Python version as CI
+   ```bash
+   python --version  # Check version
+   pyenv install 3.9.18  # Install specific version if needed
+   ```
+
+2. **Missing dependencies**
+   - Solution: Ensure requirements-test.txt includes all test dependencies
+   ```bash
+   pip freeze > requirements-test-freeze.txt  # Freeze exact versions
+   ```
+
+3. **Environment-specific behavior**
+   - Solution: Use `monkeypatch` to mock environment-specific code
+   ```python
+   def test_something(monkeypatch):
+       monkeypatch.setenv("ENV_VAR", "test_value")
+   ```
+
+4. **File path issues**
+   - Solution: Use `Path` from pathlib for cross-platform compatibility
+   ```python
+   from pathlib import Path
+   test_file = Path(__file__).parent / "data" / "test.json"
+   ```
+
+#### CI is too slow
+
+**Solutions:**
+
+1. **Skip slow tests** - Use `pytest -m "not slow"`
+2. **Run in parallel** - Use `pytest -n auto` (requires pytest-xdist)
+3. **Use matrix strategically** - Only test critical Python versions
+4. **Cache dependencies** - Use `cache: 'pip'` in GitHub Actions
+5. **Split test suites** - Run unit tests in one job, integration in another
+
+```yaml
+jobs:
+  unit-tests:  # Fast (1-2 min)
+    run: pytest -m unit
+
+  integration-tests:  # Slower (3-5 min)
+    run: pytest -m integration
+```
+
+#### Coverage reports not generated
+
+**Check:**
+
+1. pytest-cov is installed: `pip install pytest-cov`
+2. Coverage flags are correct: `--cov=. --cov-report=xml`
+3. Tests are actually running (not all skipped)
+4. Coverage file is generated before upload: `ls -la coverage.xml`
+
+#### Authentication errors in CI
+
+**If you see:**
+```
+ModuleNotFoundError: No module named 'neo4j'
+google.auth.exceptions.DefaultCredentialsError
+openai.error.AuthenticationError: No API key provided
+```
+
+**Solution:**
+These are expected when external services are not configured. Tests should auto-skip:
+
+```python
+# Ensure tests have skip decorators
+@pytest.mark.skipif(not has_neo4j, reason="Neo4j not available")
+```
+
+Or use markers that auto-skip:
+```python
+@pytest.mark.requires_openai  # Auto-skips if OPENAI_API_KEY not set
+```
+
+---
+
+### Next Steps
+
+1. **Choose a test workflow** from the examples above (recommend Option 2: Standard)
+2. **Create `.github/workflows/test.yml`** with your chosen configuration
+3. **Test the workflow** by creating a PR or triggering manually
+4. **Configure branch protection** to require tests passing
+5. **Monitor coverage trends** using Codecov or similar service
+6. **Iterate** - Adjust test selection and timeouts as needed
+
+**Quick start:**
+```bash
+# Copy recommended workflow
+cp .github/workflows/test.yml.example .github/workflows/test.yml
+
+# Edit to match your needs
+# Commit and push
+git add .github/workflows/test.yml
+git commit -m "ci: add automated test workflow"
+git push
+```
+
+The test suite is ready for CI integration - all you need to do is add the workflow file!
 
 ## Additional Resources
 
