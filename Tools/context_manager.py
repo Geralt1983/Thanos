@@ -19,6 +19,31 @@ The cached encoder is initialized lazily on first use via _get_cached_encoder()
 and reused for the lifetime of the Python process. If initialization fails,
 the system gracefully falls back to heuristic token estimation (len/3.5).
 
+THREAD SAFETY CONSIDERATIONS:
+-----------------------------
+This module is designed for safe concurrent use with the following guarantees:
+
+1. Encoder Immutability:
+   - tiktoken encoders are immutable and stateless after initialization
+   - Multiple threads can safely call encoder.encode() concurrently
+   - No locks are needed when using the cached encoder instance
+
+2. Lazy Initialization Race Condition:
+   - In rare cases, concurrent first-time access may initialize multiple encoders
+   - This is harmless: one instance becomes cached, others are garbage collected
+   - The slight overhead (2-3x initialization) is acceptable vs. lock contention
+   - After initialization, all threads share the same cached instance
+
+3. ContextManager Instances:
+   - Each ContextManager instance is independent and stores its own state
+   - Instances can be safely created and used in different threads
+   - The shared encoder is read-only and never modified
+
+4. GIL Protection:
+   - Python's Global Interpreter Lock (GIL) prevents race conditions in the
+     module-level _CACHED_ENCODER assignment
+   - No additional synchronization primitives are required
+
 Usage:
     from Tools.context_manager import ContextManager
 
@@ -76,6 +101,25 @@ def _get_cached_encoder() -> Optional[Any]:
     Returns:
         Optional[Any]: The cached tiktoken encoder instance, or None if tiktoken
                        is unavailable or initialization fails.
+
+    Thread Safety:
+        This function is thread-safe with the following considerations:
+
+        - Check-then-set pattern: The function uses a non-atomic check-then-set
+          pattern (if _CACHED_ENCODER is not None). In rare concurrent first-calls,
+          multiple threads may pass the None check simultaneously.
+
+        - Race condition is benign: If multiple threads initialize encoders
+          concurrently, Python's GIL ensures the final assignment is atomic.
+          One encoder becomes cached, others are garbage collected. This slight
+          initialization overhead is acceptable vs. lock contention costs.
+
+        - Read-only after init: Once initialized, all threads safely read the
+          same cached encoder. tiktoken encoders are immutable and thread-safe
+          for concurrent encode() calls.
+
+        - No locks needed: The performance benefit of lock-free access outweighs
+          the negligible cost of potential duplicate initialization on first use.
 
     Note:
         This function modifies the module-level _CACHED_ENCODER variable.

@@ -128,29 +128,17 @@
     "zsh"
   ],
   "stack_commands": [
-    "ar",
-    "clang",
-    "clang++",
-    "cmake",
     "createdb",
     "createuser",
     "dropdb",
     "dropuser",
-    "g++",
-    "gcc",
     "initdb",
     "ipython",
     "jupyter",
-    "ld",
-    "make",
-    "meson",
-    "ninja",
-    "nm",
     "node",
     "notebook",
     "npm",
     "npx",
-    "objdump",
     "pdb",
     "pg_ctl",
     "pg_dump",
@@ -167,7 +155,6 @@
     "python",
     "python3",
     "ruff",
-    "strip",
     "ts-node",
     "tsc",
     "tsx"
@@ -178,9 +165,7 @@
     "languages": [
       "python",
       "javascript",
-      "typescript",
-      "c",
-      "cpp"
+      "typescript"
     ],
     "package_managers": [
       "pip"
@@ -204,7 +189,7 @@
     "cargo_aliases": [],
     "shell_scripts": []
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos",
-  "created_at": "2026-01-11T07:47:16.805182",
-  "project_hash": "5f14ad5bad76e535461a2eb23a3c41c2"
+  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/021-cache-tiktoken-encoder-instance-globally-for-token",
+  "created_at": "2026-01-11T20:10:58.668485",
+  "project_hash": "86b5fc351cc0b687edd66b089eadaf0a"
 }
