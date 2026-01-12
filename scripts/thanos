@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Thanos CLI - Personal AI Assistant
-# Wrapper script for the Thanos orchestrator
+# Wrapper script for thanos.py CLI entry point
 #
 
 set -e
@@ -32,120 +32,6 @@ fi
 # Set PYTHONPATH so imports work
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 
-# Helper functions
-show_help() {
-    cat << 'EOF'
-Thanos - Personal AI Assistant
-
-Usage:
-  thanos chat "message"     Chat with auto-routing to appropriate agent
-  thanos run <command>      Run a /pa: or /sc: command
-  thanos usage              Show API usage stats
-  thanos agents             List available agents
-  thanos commands           List available commands
-  thanos daily              Shortcut for /pa:daily
-
-Examples:
-  thanos chat "What should I focus on today?"
-  thanos run pa:daily
-  thanos run pa:email
-  thanos daily
-
-EOF
-}
-
-# Main command dispatch
-case "${1:-}" in
-    chat)
-        if [ -z "${2:-}" ]; then
-            echo "Error: Message required"
-            echo "Usage: thanos chat \"your message\""
-            exit 1
-        fi
-        shift
-        "$PYTHON" -c "
-import sys
-sys.path.insert(0, '$PROJECT_ROOT')
-from Tools.thanos_orchestrator import ThanosOrchestrator
-t = ThanosOrchestrator('$PROJECT_ROOT')
-t.chat('$*', stream=True)
-"
-        ;;
-    run)
-        if [ -z "${2:-}" ]; then
-            echo "Error: Command required"
-            echo "Usage: thanos run <command> [args]"
-            echo "Example: thanos run pa:daily"
-            exit 1
-        fi
-        CMD="$2"
-        shift 2
-        ARGS="${*:-}"
-        "$PYTHON" -c "
-import sys
-sys.path.insert(0, '$PROJECT_ROOT')
-from Tools.thanos_orchestrator import ThanosOrchestrator
-t = ThanosOrchestrator('$PROJECT_ROOT')
-t.run_command('$CMD', '$ARGS', stream=True)
-"
-        ;;
-    usage)
-        "$PYTHON" -c "
-import sys
-sys.path.insert(0, '$PROJECT_ROOT')
-from Tools.thanos_orchestrator import ThanosOrchestrator
-t = ThanosOrchestrator('$PROJECT_ROOT')
-try:
-    usage = t.get_usage()
-    print('API Usage (Last 30 Days)')
-    print(f\"  Tokens: {usage['total_tokens']:,}\")
-    print(f\"  Cost: \${usage['total_cost_usd']:.2f}\")
-    print(f\"  Monthly Projection: \${usage['projected_monthly_cost']:.2f}\")
-except Exception as e:
-    print(f'Error getting usage: {e}')
-"
-        ;;
-    agents)
-        "$PYTHON" -c "
-import sys
-sys.path.insert(0, '$PROJECT_ROOT')
-from Tools.thanos_orchestrator import ThanosOrchestrator
-t = ThanosOrchestrator('$PROJECT_ROOT')
-print('Available Agents:')
-for agent in t.list_agents():
-    print(f'  {agent}')
-"
-        ;;
-    commands)
-        "$PYTHON" -c "
-import sys
-sys.path.insert(0, '$PROJECT_ROOT')
-from Tools.thanos_orchestrator import ThanosOrchestrator
-t = ThanosOrchestrator('$PROJECT_ROOT')
-print('Available Commands:')
-for cmd in t.list_commands():
-    print(f'  {cmd}')
-"
-        ;;
-    daily)
-        "$PYTHON" -c "
-import sys
-sys.path.insert(0, '$PROJECT_ROOT')
-from Tools.thanos_orchestrator import ThanosOrchestrator
-t = ThanosOrchestrator('$PROJECT_ROOT')
-t.run_command('pa:daily', '', stream=True)
-"
-        ;;
-    help|--help|-h)
-        show_help
-        ;;
-    "")
-        show_help
-        ;;
-    *)
-        echo "Unknown command: $1"
-        echo ""
-        show_help
-        exit 1
-        ;;
-esac
+# Call thanos.py with all arguments passed through
+# thanos.py handles all command routing, shortcuts, and natural language
+exec "$PYTHON" "$PROJECT_ROOT/thanos.py" "$@"
