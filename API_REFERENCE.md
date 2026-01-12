@@ -57,7 +57,7 @@ The automatic routing system can reduce costs by 80%+ by intelligently selecting
 6. [Factory Functions](#factory-functions)
    - [get_client()](#get_client) *(coming in next sections)*
    - [init_client()](#init_client) *(coming in next sections)*
-7. [Configuration](#configuration) *(coming in next sections)*
+7. [Configuration](#configuration)
 8. [Usage Examples](#usage-examples) *(coming in next sections)*
 
 ---
@@ -4271,6 +4271,542 @@ The `ModelResponse` dataclass is designed for extensibility. Potential future ad
 - **Safety scores**: Content moderation/safety scores from providers
 - **Tool use**: Information about function/tool calls made during response
 - **Citations**: Source attribution for RAG-enhanced responses
+
+---
+
+## Configuration
+
+The LiteLLM package uses a JSON configuration file to control behavior, model routing, retry logic, caching, and more. This section provides comprehensive documentation of all available configuration options.
+
+### Configuration File Location
+
+**Default Path**: `config/api.json` (relative to project root)
+
+**Custom Path**: Specify when creating client:
+```python
+from Tools.litellm import LiteLLMClient
+
+client = LiteLLMClient(config_path="path/to/custom/config.json")
+```
+
+---
+
+### Complete Configuration Reference
+
+```json
+{
+  "litellm": {
+    "default_model": "claude-opus-4-5-20251101",
+    "fallback_chain": [
+      "claude-opus-4-5-20251101",
+      "claude-sonnet-4-20250514"
+    ],
+    "timeout": 600,
+    "max_retries": 3,
+    "retry_delay": 1.0,
+    "providers": {
+      "anthropic": {
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "models": {
+          "opus": "claude-opus-4-5-20251101",
+          "sonnet": "claude-sonnet-4-20250514",
+          "haiku": "claude-3-5-haiku-20241022"
+        }
+      },
+      "openai": {
+        "api_key_env": "OPENAI_API_KEY",
+        "models": {
+          "gpt4": "gpt-4-turbo-preview",
+          "gpt35": "gpt-3.5-turbo"
+        }
+      }
+    }
+  },
+  "model_routing": {
+    "enabled": true,
+    "rules": {
+      "complex": {
+        "model": "claude-opus-4-5-20251101",
+        "min_complexity": 0.7
+      },
+      "standard": {
+        "model": "claude-sonnet-4-20250514",
+        "min_complexity": 0.3
+      },
+      "simple": {
+        "model": "claude-3-5-haiku-20241022",
+        "max_complexity": 0.3
+      }
+    },
+    "complexity_factors": {
+      "length": 0.2,
+      "technical_terms": 0.3,
+      "question_complexity": 0.25,
+      "code_present": 0.15,
+      "history_depth": 0.1
+    }
+  },
+  "usage_tracking": {
+    "enabled": true,
+    "storage_path": "State/usage.json",
+    "pricing": {
+      "claude-opus-4-5-20251101": {
+        "input": 15.0,
+        "output": 75.0
+      },
+      "claude-sonnet-4-20250514": {
+        "input": 3.0,
+        "output": 15.0
+      },
+      "claude-3-5-haiku-20241022": {
+        "input": 0.8,
+        "output": 4.0
+      }
+    }
+  },
+  "caching": {
+    "enabled": true,
+    "ttl_seconds": 3600,
+    "storage_path": "Memory/cache/",
+    "max_cache_size_mb": 100
+  },
+  "defaults": {
+    "max_tokens": 4096,
+    "temperature": 1.0
+  }
+}
+```
+
+---
+
+### Section: litellm
+
+Core LiteLLM client configuration including retry and fallback settings.
+
+#### `default_model` (string, required)
+
+The default model to use when no specific model is requested and complexity-based routing is disabled.
+
+**Example**: `"claude-opus-4-5-20251101"`
+
+---
+
+#### `fallback_chain` (array of strings, optional)
+
+**IMPORTANT**: The LiteLLM package does **NOT** have a separate `RetryMiddleware` class. Retry and fallback logic is built directly into the `LiteLLMClient` class via the `_call_with_fallback()` method.
+
+An ordered list of model identifiers to try sequentially if the primary model fails. When a model call fails (rate limit, timeout, API error), the client automatically attempts the next model in the chain.
+
+**How It Works**:
+1. Client calls the primary model (either explicitly specified or selected via complexity routing)
+2. If the call fails, the client checks the `fallback_chain` configuration
+3. Each model in the chain is tried in order until one succeeds
+4. If all models fail, an exception is raised
+
+**Example**:
+```json
+"fallback_chain": [
+  "claude-opus-4-5-20251101",
+  "claude-sonnet-4-20250514",
+  "gpt-4-turbo-preview"
+]
+```
+
+**Use Cases**:
+- **Rate limit protection**: Fallback to alternative models when hitting rate limits
+- **High availability**: Ensure requests succeed even if one provider has issues
+- **Cost optimization**: Primary expensive model with cheaper fallback options
+
+**Default**: `[]` (no fallback)
+
+---
+
+#### `timeout` (number, optional)
+
+Maximum time in seconds to wait for an API response before timing out.
+
+**Example**: `600` (10 minutes)
+**Default**: `600`
+
+---
+
+#### `max_retries` (number, optional)
+
+**IMPORTANT**: This retry logic is built into `LiteLLMClient`, not a separate middleware class.
+
+Maximum number of retry attempts for transient failures (connection errors, temporary API issues). Retries use exponential backoff based on `retry_delay`.
+
+**Retry Behavior**:
+- **Retry triggers**: Connection errors, temporary API failures
+- **NOT retried**: Rate limit errors (uses fallback chain instead), invalid requests
+- **Backoff**: Each retry waits `retry_delay * (2 ^ attempt_number)` seconds
+
+**Example**: `3` (will make up to 3 retry attempts)
+**Default**: `3`
+
+**Example Retry Sequence** (with `retry_delay: 1.0`):
+1. Initial attempt fails (connection error)
+2. Wait 1 second, retry (attempt 1)
+3. Wait 2 seconds, retry (attempt 2)
+4. Wait 4 seconds, retry (attempt 3)
+5. If still failing, raise exception or try fallback chain
+
+---
+
+#### `retry_delay` (number, optional)
+
+Base delay in seconds for the exponential backoff retry strategy. Actual delay is `retry_delay * (2 ^ attempt_number)`.
+
+**Example**: `1.0` (1 second base delay)
+**Default**: `1.0`
+
+---
+
+#### `providers` (object, optional)
+
+Configuration for each model provider including API key environment variables and model aliases.
+
+**Structure**:
+```json
+"providers": {
+  "provider_name": {
+    "api_key_env": "ENV_VAR_NAME",
+    "models": {
+      "alias": "actual-model-id"
+    }
+  }
+}
+```
+
+**Example**:
+```json
+"providers": {
+  "anthropic": {
+    "api_key_env": "ANTHROPIC_API_KEY",
+    "models": {
+      "opus": "claude-opus-4-5-20251101",
+      "sonnet": "claude-sonnet-4-20250514"
+    }
+  }
+}
+```
+
+---
+
+### Section: model_routing
+
+Controls automatic model selection based on prompt complexity analysis.
+
+#### `enabled` (boolean, optional)
+
+Enable or disable automatic complexity-based routing. When `true`, the client analyzes each prompt and selects an appropriate model tier. When `false`, always uses `default_model`.
+
+**Default**: `true`
+
+---
+
+#### `rules` (object, required if routing enabled)
+
+Defines the mapping from complexity tiers to specific models. Each tier has complexity thresholds and a model assignment.
+
+**Tier Types**:
+- **complex**: High-complexity prompts (technical, long, detailed)
+- **standard**: Medium-complexity prompts (general questions)
+- **simple**: Low-complexity prompts (basic queries)
+
+**Example**:
+```json
+"rules": {
+  "complex": {
+    "model": "claude-opus-4-5-20251101",
+    "min_complexity": 0.7
+  },
+  "standard": {
+    "model": "claude-sonnet-4-20250514",
+    "min_complexity": 0.3
+  },
+  "simple": {
+    "model": "claude-3-5-haiku-20241022",
+    "max_complexity": 0.3
+  }
+}
+```
+
+---
+
+#### `complexity_factors` (object, optional)
+
+Weight values (0.0 to 1.0) for each factor in complexity analysis. All weights should sum to approximately 1.0.
+
+**Factors**:
+- `length`: Based on prompt length
+- `technical_terms`: Presence of technical keywords
+- `question_complexity`: Question structure analysis
+- `code_present`: Contains code snippets
+- `history_depth`: Conversation history length
+
+**Example**:
+```json
+"complexity_factors": {
+  "length": 0.2,
+  "technical_terms": 0.3,
+  "question_complexity": 0.25,
+  "code_present": 0.15,
+  "history_depth": 0.1
+}
+```
+
+---
+
+### Section: usage_tracking
+
+Controls token usage and cost tracking functionality.
+
+#### `enabled` (boolean, optional)
+
+Enable or disable usage tracking. When `true`, all API calls are logged with token counts, costs, and latency.
+
+**Default**: `true`
+
+---
+
+#### `storage_path` (string, required if enabled)
+
+Path to the JSON file where usage data is stored. Can be relative (to project root) or absolute.
+
+**Example**: `"State/usage.json"`
+
+---
+
+#### `pricing` (object, optional)
+
+Custom pricing per million tokens for each model. Used for cost calculations.
+
+**Structure**:
+```json
+"pricing": {
+  "model-id": {
+    "input": <price_per_million_input_tokens>,
+    "output": <price_per_million_output_tokens>
+  }
+}
+```
+
+**Example**:
+```json
+"pricing": {
+  "claude-opus-4-5-20251101": {
+    "input": 15.0,
+    "output": 75.0
+  }
+}
+```
+
+---
+
+### Section: caching
+
+Controls response caching to reduce redundant API calls and costs.
+
+#### `enabled` (boolean, optional)
+
+Enable or disable response caching. When `true`, responses are cached based on prompt, model, and parameters.
+
+**Default**: `true`
+
+---
+
+#### `ttl_seconds` (number, optional)
+
+Time-to-live in seconds for cached responses. After this period, cached entries expire and are cleaned up.
+
+**Example**: `3600` (1 hour)
+**Default**: `3600`
+
+---
+
+#### `storage_path` (string, required if enabled)
+
+Directory path where cache files are stored. Can be relative (to project root) or absolute.
+
+**Example**: `"Memory/cache/"`
+
+---
+
+#### `max_cache_size_mb` (number, optional)
+
+Maximum cache directory size in megabytes. When exceeded, oldest entries are removed.
+
+**Example**: `100`
+**Default**: `100`
+
+---
+
+### Section: defaults
+
+Default values for API call parameters when not explicitly specified.
+
+#### `max_tokens` (number, optional)
+
+Default maximum tokens for responses.
+
+**Example**: `4096`
+**Default**: `4096`
+
+---
+
+#### `temperature` (number, optional)
+
+Default temperature for response generation (0.0 to 2.0). Higher values increase randomness.
+
+**Example**: `1.0`
+**Default**: `1.0`
+
+---
+
+### Retry and Fallback Logic Architecture
+
+The LiteLLM package implements retry and fallback logic **directly in the `LiteLLMClient` class**, specifically in the `_call_with_fallback()` method. There is **NO separate `RetryMiddleware` class**.
+
+#### How It Works
+
+**1. Initial Call**:
+```python
+response = client.chat("prompt", model="claude-opus-4-5-20251101")
+```
+
+**2. Internal Flow**:
+```
+client.chat()
+  → _select_model() (choose model based on routing or explicit param)
+  → _call_with_fallback() (RETRY/FALLBACK LOGIC HERE)
+      → Try primary model via _make_call()
+      → If fails: Try next model in fallback_chain
+      → Continue until success or chain exhausted
+      → If all fail: Raise exception
+```
+
+**3. Code Reference**:
+The `_call_with_fallback()` method in `Tools/litellm/client.py` (lines 333-352):
+```python
+def _call_with_fallback(self, model: str, messages: List[Dict],
+                        max_tokens: int, temperature: float,
+                        system: Optional[str] = None,
+                        stream: bool = False) -> Any:
+    """Make API call with fallback chain support."""
+    fallback_chain = self.config.get("litellm", {}).get("fallback_chain", [model])
+
+    if model not in fallback_chain:
+        fallback_chain = [model] + fallback_chain
+
+    last_error = None
+    for fallback_model in fallback_chain:
+        try:
+            return self._make_call(fallback_model, messages, max_tokens,
+                                   temperature, system, stream)
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise last_error or Exception("All models in fallback chain failed")
+```
+
+#### Error Types and Handling
+
+| Error Type | Behavior |
+|------------|----------|
+| **Rate Limit Error** | Skip to next model in fallback chain |
+| **Connection Error** | Retry with exponential backoff (up to `max_retries`) |
+| **API Error** | Try next model in fallback chain |
+| **Invalid Request** | Raise immediately (no retry/fallback) |
+
+#### Configuration Example for High Availability
+
+```json
+{
+  "litellm": {
+    "default_model": "claude-opus-4-5-20251101",
+    "fallback_chain": [
+      "claude-opus-4-5-20251101",
+      "claude-sonnet-4-20250514",
+      "gpt-4-turbo-preview"
+    ],
+    "max_retries": 3,
+    "retry_delay": 1.0,
+    "timeout": 600
+  }
+}
+```
+
+This configuration ensures:
+1. Primary model: Claude Opus
+2. First fallback: Claude Sonnet (if Opus fails)
+3. Second fallback: GPT-4 (if both Claude models fail)
+4. Up to 3 retries for connection errors
+5. Exponential backoff starting at 1 second
+
+---
+
+### Minimal Configuration
+
+If you only need basic functionality with defaults:
+
+```json
+{
+  "litellm": {
+    "default_model": "claude-opus-4-5-20251101"
+  }
+}
+```
+
+This uses all default values for other settings.
+
+---
+
+### Configuration Best Practices
+
+1. **Always configure fallback chains** for production systems to ensure high availability
+2. **Set reasonable retry limits** (3-5 retries) to balance reliability vs. latency
+3. **Enable caching** to reduce costs for repeated queries
+4. **Enable usage tracking** to monitor costs and optimize model selection
+5. **Adjust complexity factors** based on your specific use case
+6. **Use environment variables** for API keys (never hardcode in config)
+7. **Set appropriate timeouts** based on expected response times
+8. **Monitor cache size** and adjust `max_cache_size_mb` if needed
+
+---
+
+### Environment Variables
+
+The configuration file references environment variables for API keys. Required variables depend on which providers you use:
+
+| Provider | Environment Variable | Required For |
+|----------|---------------------|--------------|
+| Anthropic | `ANTHROPIC_API_KEY` | Claude models |
+| OpenAI | `OPENAI_API_KEY` | GPT models |
+| Google | `GEMINI_API_KEY` | Gemini models |
+
+**Example `.env` file**:
+```bash
+ANTHROPIC_API_KEY=sk-ant-xxxxx
+OPENAI_API_KEY=sk-xxxxx
+GEMINI_API_KEY=xxxxx
+```
+
+---
+
+### Reloading Configuration at Runtime
+
+To reload configuration changes without restarting your application:
+
+```python
+from Tools.litellm import init_client
+
+# Modify config file externally, then:
+client = init_client()  # Forces reload from disk
+```
+
+See [`init_client()`](#init_client) documentation for details.
 
 ---
 
