@@ -194,9 +194,23 @@ If you're using direct adapters and want to migrate to MCP:
 3. Test both approaches in parallel
 4. Gradually migrate with fallback options
 
+## Troubleshooting
+
+Encountering issues? Check our comprehensive troubleshooting guide:
+
+**[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Complete guide for runtime errors and common issues
+
+This guide covers:
+- **API Error Handling**: Rate limits, connection failures, and status errors
+- **Cache Issues**: Corruption detection, cleanup procedures, and performance optimization
+- **Hook Errors**: Diagnosis and resolution of lifecycle hook failures
+- **Quick Reference**: Symptom-based lookup table for common problems
+- **Troubleshooting Scenarios**: Step-by-step solutions for real-world issues
+
 ## Support
 
 - **Documentation**: See `docs/` directory for comprehensive guides
+- **Troubleshooting**: See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for runtime error solutions
 - **Issues**: Report bugs via GitHub issues
 - **Examples**: See `examples/` directory for sample implementations
 

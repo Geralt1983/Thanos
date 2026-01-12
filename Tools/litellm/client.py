@@ -334,7 +334,120 @@ class LiteLLMClient:
                             max_tokens: int, temperature: float,
                             system: Optional[str] = None,
                             stream: bool = False) -> Any:
-        """Make API call with fallback chain support."""
+        """
+        Make API call with automatic fallback chain support.
+
+        This method implements a fallback chain mechanism that automatically tries
+        alternative models when API calls fail. Unlike traditional retry logic,
+        this system IMMEDIATELY moves to the next configured model on ANY failure,
+        with NO delays or exponential backoff.
+
+        How Fallback Chain Works:
+            1. Constructs fallback chain from config/api.json
+            2. If requested model not in chain, prepends it automatically
+            3. Tries each model in sequence until success or chain exhaustion
+            4. On ANY error (RateLimitError, APIConnectionError, APIStatusError):
+               - Immediately tries next model in chain
+               - No waiting, no exponential backoff
+               - Silent failure (no logging unless DEBUG enabled)
+            5. If all models fail, raises the last error encountered
+
+        Chain Construction Example:
+            Config: fallback_chain = ["claude-opus-4-5", "claude-sonnet-4"]
+            Request: model = "claude-3-5-haiku"
+            Final chain: ["claude-3-5-haiku", "claude-opus-4-5", "claude-sonnet-4"]
+
+        IMPORTANT - This is NOT Retry Logic:
+            - Fallback = Tries different MODELS (immediate, no delay)
+            - Retry = Retries same MODEL (with exponential backoff)
+            - Both can work together (retry logic handled by external middleware)
+            - See docs/TROUBLESHOOTING.md for detailed comparison
+
+        Silent Failures:
+            Individual model failures are SILENT by default. You will NOT see
+            which models failed or why unless debug logging is enabled:
+
+                export LITELLM_LOG_LEVEL=DEBUG
+
+            Without debug logging, you only see the final result (success or
+            exhaustion). This can make troubleshooting difficult.
+
+        Cache Behavior:
+            WARNING: Cache keys use the REQUESTED model, not the fallback model
+            that actually processed the request.
+
+            Example:
+                - Request claude-opus (fails) → fallback to claude-sonnet (succeeds)
+                - Response cached against "claude-opus" (not "claude-sonnet")
+                - Next request to claude-opus → cache miss, tries opus again
+                - Result: Lower cache hit rates, repeated failures
+
+            This is expected behavior. See docs/TROUBLESHOOTING.md section
+            "Cache Behavior with Fallbacks" for details.
+
+        Usage Tracking:
+            WARNING: Usage tracking records the REQUESTED model, not the fallback
+            model that actually processed the request. This leads to INACCURATE
+            cost calculations.
+
+            Example:
+                - User requests: claude-opus-4-5-20251101 (costs $15/1M input tokens)
+                - Actual model: claude-sonnet-4-20250514 (costs $3/1M input tokens)
+                - Tracked as: claude-opus-4-5-20251101 ← WRONG PRICING
+                - Result: Cost reports show 5x higher costs than reality
+
+            See docs/TROUBLESHOOTING.md section "Usage Tracking with Fallbacks"
+            for monitoring strategies.
+
+        Args:
+            model: The initially requested model (will be prepended to chain)
+            messages: List of message dicts with 'role' and 'content' keys
+            max_tokens: Maximum tokens to generate in response
+            temperature: Sampling temperature (0.0-2.0)
+            system: Optional system prompt for context/persona
+            stream: If True, return streaming response generator
+
+        Returns:
+            API response object (format depends on provider and stream mode):
+            - LiteLLM: completion response with choices[0].message.content
+            - Direct Anthropic: message object with content[0].text
+            - Stream mode: generator yielding chunks
+
+        Raises:
+            Exception: The last error encountered if all models in chain fail.
+                      Common errors: RateLimitError, APIConnectionError,
+                      APIStatusError (401/403/429/500/503)
+
+        Configuration:
+            Set fallback chain in config/api.json:
+            {
+                "litellm": {
+                    "fallback_chain": [
+                        "claude-opus-4-5-20251101",     // Anthropic
+                        "gpt-4-turbo",                  // OpenAI
+                        "claude-sonnet-4-20250514"      // Anthropic fallback
+                    ]
+                }
+            }
+
+        Best Practices:
+            ✅ Use models from DIFFERENT providers for resilience
+            ✅ Order by preference (best model first)
+            ✅ Enable debug logging during troubleshooting
+            ✅ Monitor fallback patterns in production
+            ❌ Don't use all models from same provider (rate limits affect all)
+            ❌ Don't rely on usage tracking cost accuracy with fallbacks
+
+        Troubleshooting:
+            For detailed troubleshooting of API errors, rate limits, fallback
+            failures, and monitoring strategies, see:
+            docs/TROUBLESHOOTING.md - API Error Handling section
+
+        See Also:
+            - _make_call(): Underlying method that executes single API call
+            - config/api.json: Fallback chain configuration
+            - docs/TROUBLESHOOTING.md: Comprehensive error handling guide
+        """
         fallback_chain = self.config.get("litellm", {}).get("fallback_chain", [model])
 
         if model not in fallback_chain:

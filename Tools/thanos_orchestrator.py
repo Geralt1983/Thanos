@@ -911,7 +911,21 @@ def init_thanos(base_dir: str = None) -> ThanosOrchestrator:
 
 
 def _log_hook_error(error: str):
-    """Log hook errors to file without disrupting hook execution."""
+    """Log hook errors to file without disrupting hook execution.
+
+    HOOK ERROR LOGGING STRATEGY:
+    - Errors are logged to ~/.claude/logs/hooks.log for debugging
+    - Logging failures NEVER disrupt hook execution (multi-level fallback)
+    - All errors eventually exit 0 to maintain Claude Code lifecycle integrity
+
+    This is part of a three-layer error handling system:
+      Layer 1: Hook logic (try/except around specific operations)
+      Layer 2: Hook function (try/except around entire hook)
+      Layer 3: Log function (THIS function - try/except with stderr fallback)
+
+    For comprehensive hook error documentation, see:
+    docs/TROUBLESHOOTING.md - Hook Error Management section
+    """
     try:
         log_dir = Path.home() / ".claude" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -920,12 +934,13 @@ def _log_hook_error(error: str):
         with open(log_file, 'a') as f:
             f.write(f"[{timestamp}] [thanos-orchestrator] {error}\n")
     except (OSError, IOError) as e:
-        # Can't write to log file - note to stderr but don't break hooks
+        # Layer 3 fallback: Can't write to log file - note to stderr but don't break hooks
+        # This handles permissions issues, disk full, or directory creation failures
         import sys
         print(f"[hooks] Cannot write to log file: {e}", file=sys.stderr)
     except Exception as e:
-        # Truly unexpected errors - still don't break hooks
-        # But at least try to write to stderr
+        # Layer 3 fallback: Truly unexpected errors - still don't break hooks
+        # Even if logging completely fails, we continue execution
         import sys
         print(f"[CRITICAL] Error logging hook error: {e}", file=sys.stderr)
 
@@ -948,11 +963,31 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
     - Graceful error handling (always exit 0)
     - Outputs JSON in Claude hook format
 
+    FAIL-SAFE ERROR HANDLING DESIGN:
+    Hooks are critical to Claude Code's lifecycle and MUST NEVER fail. This function
+    implements a multi-layer error handling strategy:
+
+    Layer 1: Specific operation errors (state read, file write) are caught with
+             nested try/except blocks and handled gracefully with fallback behavior
+
+    Layer 2: Top-level try/except catches any unexpected errors in the hook logic,
+             logs them via _log_hook_error(), and continues (see line 1082)
+
+    Layer 3: _log_hook_error() itself has multi-level error handling with stderr
+             fallback if log file writing fails
+
+    Result: Hooks ALWAYS exit 0, even if every operation fails. Errors are logged
+            to ~/.claude/logs/hooks.log for debugging but never disrupt Claude Code.
+
+    For comprehensive hook error documentation and troubleshooting, see:
+    docs/TROUBLESHOOTING.md - Hook Error Management section
+
     Args:
         event: Hook event name (morning-brief, session-end)
         args: Additional arguments
         base_dir: Thanos base directory
     """
+    # Layer 2: Top-level error handler - catches all errors in hook logic
     try:
         if event == "morning-brief":
             # Fast path: read state files, no API calls
@@ -1008,6 +1043,7 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
 ## Context at End
 """
             # Add quick context snapshot
+            # Layer 1: Nested error handling for state file operations
             try:
                 from Tools.state_reader import StateReader
                 reader = StateReader(base_dir / "State")
@@ -1017,11 +1053,13 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
                 if ctx["pending_commitments"] > 0:
                     session_log += f"- Pending commitments: {ctx['pending_commitments']}\n"
             except (OSError, IOError) as e:
-                # State file read errors - note in log but continue
+                # Layer 1 fallback: State file read errors - note in log but continue
+                # Graceful degradation: Show [Context unavailable] instead of failing the hook
                 log_error("thanos_orchestrator", e, "Failed to read state for session log")
                 session_log += "- [Context unavailable]\n"
             except Exception as e:
-                # Unexpected errors
+                # Layer 1 fallback: Unexpected errors in state reading
+                # Graceful degradation: Still create session log without context
                 log_error("thanos_orchestrator", e, "Unexpected error reading context for session log")
                 session_log += "- [Context unavailable]\n"
 
@@ -1038,11 +1076,18 @@ def handle_hook(event: str, args: List[str], base_dir: Path):
             print(f"Session logged: {log_path.name}", file=__import__('sys').stderr)
 
         else:
+            # Unknown hook event - log but don't fail
             _log_hook_error(f"Unknown hook event: {event}")
 
     except Exception as e:
+        # Layer 2 fallback: Top-level catch-all for any unexpected errors
+        # This catches errors not handled by Layer 1 nested handlers
+        # Examples: import errors, unexpected exceptions in hook logic
         _log_hook_error(f"{event} error: {e}")
-        # Always exit cleanly for hooks
+        # CRITICAL: Always exit cleanly for hooks - NEVER raise or sys.exit(1)
+        # Claude Code depends on hooks exiting with code 0 for lifecycle integrity
+        # Errors are logged to ~/.claude/logs/hooks.log for debugging
+        # See docs/TROUBLESHOOTING.md - Hook Error Management for troubleshooting
         pass
 
 
