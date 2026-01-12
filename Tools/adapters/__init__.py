@@ -1,7 +1,7 @@
 """
 Thanos MCP Bridge Adapters
 
-Provides unified access to external services (WorkOS, Oura) that are
+Provides unified access to external services (WorkOS, Oura, Calendar) that are
 typically accessed via MCP servers. These adapters bypass MCP for
 better performance and direct control while maintaining a compatible
 interface for future MCP integration.
@@ -18,6 +18,11 @@ Usage:
         # Call Oura tools (with prefix for clarity)
         result = await manager.call_tool("oura.get_daily_readiness", {
             "start_date": "2026-01-08"
+        })
+
+        # Call Calendar tools (unified interface)
+        result = await manager.call_tool("calendar.get_today_events", {
+            "calendar_id": "primary"
         })
 
         # Cleanup
@@ -59,6 +64,15 @@ except ImportError:
     GoogleCalendarAdapter = None
     GOOGLE_CALENDAR_AVAILABLE = False
 
+# Conditional Calendar Adapter import (requires GoogleCalendarAdapter)
+try:
+    from .calendar_adapter import CalendarAdapter
+
+    CALENDAR_AVAILABLE = True
+except ImportError:
+    CalendarAdapter = None
+    CALENDAR_AVAILABLE = False
+
 __all__ = [
     "BaseAdapter",
     "ToolResult",
@@ -67,11 +81,13 @@ __all__ = [
     "Neo4jAdapter",
     "ChromaAdapter",
     "GoogleCalendarAdapter",
+    "CalendarAdapter",
     "AdapterManager",
     "get_default_manager",
     "NEO4J_AVAILABLE",
     "CHROMADB_AVAILABLE",
     "GOOGLE_CALENDAR_AVAILABLE",
+    "CALENDAR_AVAILABLE",
 ]
 
 logger = logging.getLogger(__name__)
@@ -291,6 +307,14 @@ async def get_default_manager() -> AdapterManager:
                 logger.info("Registered Google Calendar adapter")
             except Exception as e:
                 logger.warning(f"Failed to register Google Calendar adapter: {e}")
+
+        # Register unified Calendar adapter if available
+        if CALENDAR_AVAILABLE:
+            try:
+                _default_manager.register(CalendarAdapter())
+                logger.info("Registered Calendar adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register Calendar adapter: {e}")
 
         _default_manager._initialized = True
 
