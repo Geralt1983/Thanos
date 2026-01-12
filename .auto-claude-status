@@ -1,17 +1,17 @@
 {
   "active": true,
-  "spec": "020-add-error-handling-and-troubleshooting-section-for",
+  "spec": "002-add-data-export-command-to-pa-namespace",
   "state": "building",
   "subtasks": {
     "completed": 0,
-    "total": 18,
+    "total": 22,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "",
-    "id": 0,
-    "total": 0
+    "current": "Error Handling and Edge Cases",
+    "id": 4,
+    "total": 4
   },
   "workers": {
     "active": 0,
@@ -19,7 +19,7 @@
   },
   "session": {
     "number": 16,
-    "started_at": "2026-01-11T22:43:33.758507"
+    "started_at": "2026-01-12T10:59:19.044025"
   },
-  "last_update": "2026-01-11T23:35:42.312993"
+  "last_update": "2026-01-12T18:48:45.191162"
 }

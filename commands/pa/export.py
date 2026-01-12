@@ -299,6 +299,33 @@ async def retrieve_all_data(data_type: str) -> Dict[str, Any]:
 
 
 # =============================================================================
+# DATA SCHEMAS
+# =============================================================================
+
+# Standard field names for each data type (used for empty datasets)
+DATA_SCHEMAS = {
+    "tasks": [
+        "id", "title", "description", "status", "client_id", "client_name",
+        "sort_order", "created_at", "completed_at", "updated_at",
+        "effort_estimate", "points_final", "points_ai_guess"
+    ],
+    "habits": [
+        "id", "title", "description", "is_active", "sort_order",
+        "current_streak", "longest_streak", "last_completed_date",
+        "created_at", "updated_at", "last_completion"
+    ],
+    "goals": [
+        "date", "current_streak", "earned_points", "target_points", "goal_met"
+    ],
+    "metrics": [
+        "completed_count", "earned_points", "target_points", "minimum_points",
+        "progress_percentage", "streak", "active_count", "queued_count",
+        "goal_met", "target_met"
+    ]
+}
+
+
+# =============================================================================
 # CSV EXPORT FUNCTIONS
 # =============================================================================
 
@@ -372,24 +399,33 @@ def export_to_csv(
             if not isinstance(records, list):
                 records = [records]
 
-        # Skip if no records
-        if not records or len(records) == 0:
-            print(f"   ⚠️  Skipping {data_key} (no data)", flush=True)
-            continue
+        # Check if records is empty
+        is_empty = not records or len(records) == 0
 
         # Create filename
         filename = f"{data_key}.csv"
         filepath = output_dir / filename
 
         try:
-            # Get all unique keys from all records to create comprehensive headers
-            all_keys = set()
-            for record in records:
-                if isinstance(record, dict):
-                    all_keys.update(record.keys())
+            # Determine fieldnames
+            if is_empty:
+                # Use predefined schema for empty datasets
+                if data_key in DATA_SCHEMAS:
+                    fieldnames = DATA_SCHEMAS[data_key]
+                    print(f"   ⚠️  {data_key}.csv - 0 records (empty dataset, headers only)", flush=True)
+                else:
+                    # Unknown data type with no records, skip it
+                    print(f"   ⚠️  Skipping {data_key} (no data, no schema)", flush=True)
+                    continue
+            else:
+                # Get all unique keys from all records to create comprehensive headers
+                all_keys = set()
+                for record in records:
+                    if isinstance(record, dict):
+                        all_keys.update(record.keys())
 
-            # Sort keys for consistent column order
-            fieldnames = sorted(all_keys)
+                # Sort keys for consistent column order
+                fieldnames = sorted(all_keys)
 
             # Write CSV file
             with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
@@ -398,19 +434,22 @@ def export_to_csv(
                 # Write header
                 writer.writeheader()
 
-                # Write data rows
-                for record in records:
-                    # Format all values for CSV
-                    formatted_record = {
-                        key: format_value_for_csv(record.get(key))
-                        for key in fieldnames
-                    }
-                    writer.writerow(formatted_record)
+                # Write data rows (if any)
+                if not is_empty:
+                    for record in records:
+                        # Format all values for CSV
+                        formatted_record = {
+                            key: format_value_for_csv(record.get(key))
+                            for key in fieldnames
+                        }
+                        writer.writerow(formatted_record)
 
             # Get file size
             file_size = filepath.stat().st_size
 
-            print(f"   ✓ {data_key}.csv - {len(records)} records ({format_file_size(file_size)})", flush=True)
+            if not is_empty:
+                print(f"   ✓ {data_key}.csv - {len(records)} records ({format_file_size(file_size)})", flush=True)
+
             exported_files.append((data_key, filepath))
 
         except Exception as e:
@@ -469,10 +508,21 @@ def export_to_json(
     print()
 
     for data_key, records in data.items():
-        # Skip if no records
-        if not records or (isinstance(records, list) and len(records) == 0):
-            print(f"   ⚠️  Skipping {data_key} (no data)", flush=True)
-            continue
+        # Check if records is empty
+        is_empty = not records or (isinstance(records, list) and len(records) == 0)
+
+        # For empty datasets, create appropriate empty structure
+        if is_empty:
+            # Determine if this should be an array or object
+            if data_key == "metrics":
+                # Metrics is typically a single object, keep as empty dict if truly empty
+                # But in practice, metrics should have at least default values
+                records = {}
+            else:
+                # Tasks, habits, goals are arrays
+                records = []
+
+            print(f"   ⚠️  {data_key}.json - 0 records (empty dataset)", flush=True)
 
         # Create filename
         filename = f"{data_key}.json"
@@ -493,9 +543,10 @@ def export_to_json(
             file_size = filepath.stat().st_size
 
             # Count records
-            record_count = len(records) if isinstance(records, list) else 1
+            if not is_empty:
+                record_count = len(records) if isinstance(records, list) else 1
+                print(f"   ✓ {data_key}.json - {record_count} record(s) ({format_file_size(file_size)})", flush=True)
 
-            print(f"   ✓ {data_key}.json - {record_count} record(s) ({format_file_size(file_size)})", flush=True)
             exported_files.append((data_key, filepath))
 
         except Exception as e:
