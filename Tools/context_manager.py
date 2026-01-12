@@ -52,3 +52,7 @@ MODEL_LIMITS: Dict[str, int] = {
     "claude-3-5-sonnet-20241022": 200_000,    # Claude 3.5 Sonnet: 200k tokens
     "default": 100_000,                        # Default fallback: 100k tokens
 }
+
+# Reserved tokens for model output responses
+# This ensures sufficient space for the model to generate complete responses
+OUTPUT_RESERVE: int = 8_000
