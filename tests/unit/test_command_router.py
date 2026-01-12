@@ -111,7 +111,7 @@ class TestCommandRouter:
         assert router.state_reader is not None
         assert router.thanos_dir == Path("/fake/thanos")
         assert router.current_agent == "ops"
-        assert len(router._commands) > 0
+        assert len(router.registry.get_all_commands()) > 0
 
     def test_command_registration(self, router):
         """Test all expected commands are registered"""
@@ -135,7 +135,7 @@ class TestCommandRouter:
             "agents",  # List agents
         ]
         for cmd in expected_commands:
-            assert cmd in router._commands
+            assert router.registry.has_command(cmd)
 
     def test_unknown_command(self, router, capsys):
         """Test unknown command handling"""
@@ -148,16 +148,16 @@ class TestCommandRouter:
     def test_command_aliases(self, router):
         """Test command aliases route to same handler"""
         # State aliases
-        assert router._commands["state"][0] == router._commands["s"][0]
+        assert router.registry.get("state")[0] == router.registry.get("s")[0]
         # Commitments aliases
-        assert router._commands["commitments"][0] == router._commands["c"][0]
+        assert router.registry.get("commitments")[0] == router.registry.get("c")[0]
         # Agent aliases
-        assert router._commands["agent"][0] == router._commands["a"][0]
+        assert router.registry.get("agent")[0] == router.registry.get("a")[0]
         # Help aliases
-        assert router._commands["help"][0] == router._commands["h"][0]
+        assert router.registry.get("help")[0] == router.registry.get("h")[0]
         # Quit aliases
-        assert router._commands["quit"][0] == router._commands["q"][0]
-        assert router._commands["quit"][0] == router._commands["exit"][0]
+        assert router.registry.get("quit")[0] == router.registry.get("q")[0]
+        assert router.registry.get("quit")[0] == router.registry.get("exit")[0]
 
 
 class TestAgentCommand:
