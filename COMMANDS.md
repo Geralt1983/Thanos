@@ -125,6 +125,10 @@ performance-profile: "optimization"
 
 **`/design [domain] [flags]`** - Design orchestration | Auto-Persona: Architect, Frontend | MCP: Magic, Sequential, Context7
 
+### Health & Wellness Commands
+
+**`/health:summary [flags]`** - Unified health metrics dashboard combining Oura Ring data (readiness, sleep, stress) with insights and recommendations | Auto-Persona: Health, Analyzer | Optional: --llm-enhance for AI-powered personalized analysis
+
 ### Meta & Orchestration Commands
 
 **`/index [query] [flags]`** - Command catalog browsing | Auto-Persona: Mentor, Analyzer | MCP: Sequential
@@ -152,6 +156,7 @@ complex: "Resource-intensive with comprehensive analysis"
 - **Testing**: test
 - **Documentation**: document
 - **Version-Control**: git
+- **Health**: health:summary
 - **Meta**: index, load, spawn
 
 ### Wave-Enabled Commands
