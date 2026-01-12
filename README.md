@@ -152,6 +152,67 @@ Thanos includes native Python adapters for:
 
 These adapters work alongside MCP bridges, providing flexibility in integration approach.
 
+## Personal Assistant Commands
+
+Thanos includes a suite of personal assistant (pa) commands for productivity and task management:
+
+### Quick Examples
+
+```bash
+# Morning briefing
+/pa:daily
+
+# Process brain dump entries with AI categorization
+/pa:process --limit 10
+
+# Get next task recommendation
+/pa:tasks focus
+
+# Check email with priority triage
+/pa:email summary
+```
+
+### Brain Dump Processing
+
+The `/pa:process` command intelligently categorizes and processes brain dump entries:
+
+```bash
+# Preview what would happen (dry-run)
+/pa:process --dry-run
+
+# Process up to 5 entries
+/pa:process --limit 5
+
+# Process default batch (10 entries)
+/pa:process
+```
+
+**How it works:**
+- Uses AI (Claude Haiku) to categorize entries as: thought, task, idea, or worry
+- Automatically converts actionable items to tasks
+- Archives non-actionable entries
+- Conservative approach: when in doubt, archives rather than creating tasks
+- Full transparency: shows reasoning for each decision
+
+**Daily workflow example:**
+```bash
+# Capture ideas throughout the day (via MCP or directly to database)
+# Then at end of day:
+/pa:process --limit 5      # Process today's brain dumps
+/pa:tasks review          # Review all tasks
+```
+
+### Available Commands
+
+See [commands/pa/README.md](commands/pa/README.md) for complete documentation on all personal assistant commands including:
+- Daily briefings (`/pa:daily`)
+- Email management (`/pa:email`)
+- Calendar management (`/pa:schedule`)
+- Task management (`/pa:tasks`)
+- Brainstorming (`/pa:brainstorm`)
+- Brain dump processing (`/pa:process`)
+- Weekly reviews (`/pa:weekly`)
+
 ## Development
 
 ### Running Tests
