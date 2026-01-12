@@ -502,18 +502,19 @@ export async function handleGetClientMemory(
 
 /**
  * Get comprehensive daily summary for Life OS morning brief
- * Provides complete overview of progress, active tasks, points, and queued work
+ * Provides complete overview of progress, active tasks, points, queued work, and energy-aware recommendations
  * Designed for daily planning and decision-making
  *
  * @param args - Empty object (no arguments required)
  * @param db - Database instance for querying tasks, daily goals, and progress
- * @returns Promise resolving to MCP ContentResponse with date, progress metrics, active tasks with points, potential total, and up-next queued tasks
+ * @returns Promise resolving to MCP ContentResponse with date, progress metrics (including adjusted target), energy context (readiness, sleep, level), energy-aware task recommendations, active tasks with points, potential total, and up-next queued tasks
  */
 export async function handleDailySummary(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
   const todayStart = getESTTodayStart();
+  const todayDate = new Date().toISOString().split('T')[0];
 
   // Get today's completed tasks
   const completedToday = await db
@@ -564,18 +565,86 @@ export async function handleDailySummary(
   const earnedPoints = calculateTotalPoints(completedToday);
   const activePoints = activeTasks.reduce((sum, t) => sum + (t.pointsFinal ?? t.pointsAiGuess ?? 2), 0);
 
+  // Get today's energy context (readiness score, sleep score, energy level)
+  const energyContext = await getEnergyContext(db);
+
+  // Get today's daily goal with adjusted target
+  const [todayGoal] = await db
+    .select()
+    .from(schema.dailyGoals)
+    .where(eq(schema.dailyGoals.date, todayDate))
+    .limit(1);
+
+  // Get actionable tasks for energy-aware recommendations
+  const tasksWithClients = await db
+    .select({
+      task: schema.tasks,
+      clientName: schema.clients.name,
+    })
+    .from(schema.tasks)
+    .leftJoin(schema.clients, eq(schema.tasks.clientId, schema.clients.id))
+    .where(
+      or(
+        eq(schema.tasks.status, "active"),
+        eq(schema.tasks.status, "queued"),
+        eq(schema.tasks.status, "backlog")
+      )
+    );
+
+  // Extract tasks for ranking
+  const tasks = tasksWithClients.map(row => row.task);
+
+  // Rank tasks by energy match
+  const rankedTasks = rankTasksByEnergy(tasks, energyContext.energyLevel, 5);
+
+  // Create a map of task IDs to client names
+  const clientNameMap = new Map(
+    tasksWithClients.map(row => [row.task.id, row.clientName])
+  );
+
+  // Get top 5 energy-matched recommendations
+  const topRecommendations = rankedTasks.map(t => ({
+    id: t.id,
+    title: t.title,
+    client: clientNameMap.get(t.id) ?? null,
+    energyScore: t.energyScore,
+    matchReason: t.matchReason,
+  }));
+
+  // Determine target points (adjusted or default)
+  const originalTarget = 18;
+  const adjustedTarget = todayGoal?.adjustedTargetPoints ?? originalTarget;
+  const targetAdjustment = todayGoal?.adjustmentReason ?? null;
+
   return {
     content: [
       {
         type: "text",
         text: JSON.stringify({
-          date: new Date().toISOString().split('T')[0],
+          date: todayDate,
           progress: {
             earnedPoints,
-            targetPoints: 18,
+            targetPoints: adjustedTarget,
+            originalTarget,
             minimumPoints: 12,
             completedTasks: completedToday.length,
             streak: latestGoal?.currentStreak ?? 0,
+          },
+          energy: {
+            level: energyContext.energyLevel,
+            readinessScore: energyContext.readinessScore,
+            sleepScore: energyContext.sleepScore,
+            source: energyContext.source,
+            targetAdjustment: adjustedTarget !== originalTarget ? {
+              original: originalTarget,
+              adjusted: adjustedTarget,
+              difference: adjustedTarget - originalTarget,
+              reason: targetAdjustment,
+            } : null,
+          },
+          recommendations: {
+            message: `Based on your ${energyContext.energyLevel} energy level today, here are your best-matched tasks:`,
+            tasks: topRecommendations,
           },
           today: {
             activeTasks: activeTasks.map(t => ({
