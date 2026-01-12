@@ -48,6 +48,7 @@ class TestBriefingEngine(unittest.TestCase):
         self.assertIn("commitments", context)
         self.assertIn("this_week", context)
         self.assertIn("current_focus", context)
+        self.assertIn("calendar", context)
         self.assertIn("today_date", context)
         self.assertIn("day_of_week", context)
         self.assertIn("is_weekend", context)
@@ -57,6 +58,8 @@ class TestBriefingEngine(unittest.TestCase):
         self.assertEqual(context["commitments"], [])
         self.assertIsInstance(context["this_week"], dict)
         self.assertIsInstance(context["current_focus"], dict)
+        self.assertIsInstance(context["calendar"], dict)
+        self.assertEqual(context["calendar"]["events"], [])
 
     def test_gather_context_basic_structure(self):
         """Test that gather_context returns properly structured data."""
@@ -72,6 +75,7 @@ class TestBriefingEngine(unittest.TestCase):
         self.assertIsInstance(context["commitments"], list)
         self.assertIsInstance(context["this_week"], dict)
         self.assertIsInstance(context["current_focus"], dict)
+        self.assertIsInstance(context["calendar"], dict)
         self.assertIsInstance(context["metadata"], dict)
 
         # Verify date fields
@@ -226,6 +230,78 @@ Need to coordinate with the design team.
 
         # Content should be preserved
         self.assertIn("Current Focus", current_focus["content"])
+
+    def test_read_calendar_with_events(self):
+        """Test reading calendar_today.json with events."""
+        import json
+
+        calendar_data = {
+            "synced_at": "2026-01-11T22:52:53.560647-05:00",
+            "date": "2026-01-11",
+            "timezone": "America/New_York",
+            "events": [
+                {
+                    "id": "event1",
+                    "summary": "Morning Standup",
+                    "start": {"dateTime": "2024-01-15T09:00:00-05:00"},
+                    "end": {"dateTime": "2024-01-15T09:30:00-05:00"}
+                },
+                {
+                    "id": "event2",
+                    "summary": "Project Review",
+                    "start": {"dateTime": "2024-01-15T14:00:00-05:00"},
+                    "end": {"dateTime": "2024-01-15T15:00:00-05:00"}
+                }
+            ],
+            "summary": {
+                "total_events": 2,
+                "total_duration_minutes": 90
+            }
+        }
+
+        calendar_file = self.state_dir / "calendar_today.json"
+        with open(calendar_file, 'w') as f:
+            json.dump(calendar_data, f)
+
+        context = self.engine.gather_context()
+        calendar = context["calendar"]
+
+        # Verify structure
+        self.assertIn("events", calendar)
+        self.assertIn("synced_at", calendar)
+        self.assertIn("date", calendar)
+        self.assertIn("timezone", calendar)
+        self.assertIn("summary", calendar)
+
+        # Verify data
+        self.assertEqual(len(calendar["events"]), 2)
+        self.assertEqual(calendar["events"][0]["summary"], "Morning Standup")
+        self.assertEqual(calendar["timezone"], "America/New_York")
+        self.assertEqual(calendar["summary"]["total_events"], 2)
+
+    def test_read_calendar_missing_file(self):
+        """Test reading calendar when file doesn't exist."""
+        context = self.engine.gather_context()
+        calendar = context["calendar"]
+
+        # Should return default structure
+        self.assertEqual(calendar["events"], [])
+        self.assertIsNone(calendar["synced_at"])
+        self.assertEqual(calendar["date"], self.engine.today.isoformat())
+        self.assertIsNone(calendar["timezone"])
+        self.assertEqual(calendar["summary"]["total_events"], 0)
+
+    def test_read_calendar_invalid_json(self):
+        """Test reading calendar with invalid JSON."""
+        calendar_file = self.state_dir / "calendar_today.json"
+        calendar_file.write_text("{ invalid json }")
+
+        context = self.engine.gather_context()
+        calendar = context["calendar"]
+
+        # Should return default structure on error
+        self.assertEqual(calendar["events"], [])
+        self.assertEqual(calendar["summary"]["total_events"], 0)
 
     def test_get_active_commitments(self):
         """Test filtering for active (incomplete) commitments."""
