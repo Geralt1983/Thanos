@@ -224,5 +224,24 @@ export function getTaskTools(): ToolDefinition[] {
         required: ["taskId"],
       },
     },
+    {
+      name: "workos_get_energy_aware_tasks",
+      description: "Get tasks prioritized by current energy level. Returns tasks ranked by energy-task match, with high-cognitive tasks suggested on high energy days and low-cognitive tasks on low energy days.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          energy_level: {
+            type: "string",
+            description: "Override current energy level (default: auto-detect from Oura/manual logs)",
+            enum: ["low", "medium", "high"],
+          },
+          limit: {
+            type: "number",
+            description: "Max tasks to return (default: unlimited)",
+          },
+        },
+        required: [],
+      },
+    },
   ];
 }
