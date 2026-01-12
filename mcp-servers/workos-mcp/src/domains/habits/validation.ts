@@ -75,12 +75,12 @@ export const GetHabitsSchema = z.object({});
  */
 export const CreateHabitSchema = z.object({
   name: habitNameSchema,
-  description: habitDescriptionSchema,
-  emoji: habitEmojiSchema,
+  description: habitDescriptionSchema.optional(),
+  emoji: habitEmojiSchema.optional(),
   frequency: habitFrequencySchema.optional(),
-  targetCount: targetCountSchema,
+  targetCount: targetCountSchema.optional(),
   timeOfDay: habitTimeOfDaySchema.optional(),
-  category: habitCategorySchema,
+  category: habitCategorySchema.optional(),
 });
 
 /**
@@ -92,7 +92,7 @@ export const CreateHabitSchema = z.object({
  */
 export const CompleteHabitSchema = z.object({
   habitId: habitIdSchema,
-  note: habitNoteSchema,
+  note: habitNoteSchema.optional(),
 });
 
 /**
@@ -104,7 +104,7 @@ export const CompleteHabitSchema = z.object({
  */
 export const GetHabitStreaksSchema = z.object({
   habitId: habitIdSchema.optional(),
-  days: daysStreakSchema,
+  days: daysStreakSchema.optional(),
 });
 
 /**
@@ -127,7 +127,7 @@ export const HabitCheckinSchema = z.object({
  * @property format - Optional output format (compact, detailed, weekly; default: compact)
  */
 export const HabitDashboardSchema = z.object({
-  days: daysDashboardSchema,
+  days: daysDashboardSchema.optional(),
   format: habitDashboardFormatSchema.optional(),
 });
 
