@@ -80,6 +80,7 @@ export async function handleGetHabits(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -126,6 +127,7 @@ export async function handleCreateHabit(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -167,6 +169,7 @@ export async function handleCompleteHabit(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -275,6 +278,7 @@ export async function handleGetHabitStreaks(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -321,6 +325,7 @@ export async function handleHabitCheckin(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -398,6 +403,7 @@ export async function handleHabitDashboard(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -561,6 +567,7 @@ export async function handleRecalculateStreaks(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 

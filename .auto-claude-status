@@ -3,7 +3,7 @@
   "spec": "014-mcp-server-lacks-rate-limiting-and-input-bounds-ch",
   "state": "building",
   "subtasks": {
-    "completed": 20,
+    "completed": 21,
     "total": 24,
     "in_progress": 1,
     "failed": 0
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 22,
+    "number": 23,
     "started_at": "2026-01-12T00:38:48.656294"
   },
-  "last_update": "2026-01-12T01:50:01.579198"
+  "last_update": "2026-01-12T01:53:59.597060"
 }

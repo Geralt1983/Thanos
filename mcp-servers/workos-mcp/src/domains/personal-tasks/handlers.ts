@@ -27,6 +27,7 @@ export async function handleGetPersonalTasks(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 

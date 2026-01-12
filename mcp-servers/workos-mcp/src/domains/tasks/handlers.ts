@@ -85,6 +85,7 @@ export async function handleGetTodayMetrics(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -174,6 +175,7 @@ export async function handleGetTasks(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -269,6 +271,7 @@ export async function handleGetClients(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -325,6 +328,7 @@ export async function handleCreateTask(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -391,6 +395,7 @@ export async function handleCompleteTask(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -450,6 +455,7 @@ export async function handlePromoteTask(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -507,6 +513,7 @@ export async function handleGetStreak(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -543,6 +550,7 @@ export async function handleGetClientMemory(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -585,6 +593,7 @@ export async function handleDailySummary(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -691,6 +700,7 @@ export async function handleUpdateTask(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -754,6 +764,7 @@ export async function handleDeleteTask(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 

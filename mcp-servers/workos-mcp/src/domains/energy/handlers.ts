@@ -27,6 +27,7 @@ export async function handleLogEnergy(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -67,6 +68,7 @@ export async function handleGetEnergy(
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
