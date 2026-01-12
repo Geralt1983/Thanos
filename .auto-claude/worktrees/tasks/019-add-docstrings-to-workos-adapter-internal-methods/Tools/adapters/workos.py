@@ -387,7 +387,55 @@ class WorkOSAdapter(BaseAdapter):
             return ToolResult.ok(self._row_to_dict(row))
 
     async def _update_task(self, pool: asyncpg.Pool, task_id: int, **updates) -> ToolResult:
-        """Update an existing task."""
+        """
+        Update an existing task with dynamic field updates.
+
+        Builds a parameterized SQL UPDATE query dynamically based on the provided
+        update fields. Only allows updates to whitelisted fields for security and
+        data integrity. Automatically sets updated_at timestamp and handles special
+        cases like status transitions.
+
+        Args:
+            pool: asyncpg connection pool for database access.
+            task_id: ID of the task to update.
+            **updates: Variable keyword arguments containing field-value pairs to update.
+                      Only whitelisted fields will be processed.
+
+        Returns:
+            ToolResult containing the updated task dictionary if successful, or a failure
+            message if the task is not found or no valid fields are provided.
+
+        Allowed fields whitelist:
+            - title: Task title (str)
+            - description: Task description (str)
+            - status: Task status ('active', 'queued', 'backlog', or 'done')
+            - sort_order: Sort position for ordering tasks (int)
+            - effort_estimate: Estimated effort points (int)
+            - client_id: Associated client ID (int)
+
+        Dynamic query building process:
+            1. Filters updates to only include whitelisted fields with non-None values.
+            2. Returns failure if no valid fields remain after filtering.
+            3. Constructs parameterized SET clause with positional parameters ($2, $3, ...).
+            4. Automatically appends updated_at = NOW() to all updates.
+            5. Checks if status is being set to 'done' and adds completed_at = NOW().
+            6. Builds final UPDATE query with RETURNING clause to fetch updated row.
+
+        Special handling:
+            - Status 'done': Automatically sets completed_at timestamp to current time.
+            - updated_at: Always set to NOW() for any update operation.
+            - None values: Filtered out and not included in the update.
+
+        Parameterized query construction:
+            - Uses positional parameters ($1 for task_id, $2+ for update values).
+            - Prevents SQL injection by using asyncpg's parameter substitution.
+            - Parameters are passed in the order they appear in update_fields.keys().
+
+        Error cases:
+            - Returns failure if no valid update fields are provided.
+            - Returns failure if task_id does not exist in the database.
+            - Database errors are propagated to the caller for handling.
+        """
         # Build dynamic update query
         allowed_fields = {
             "title",
@@ -557,7 +605,39 @@ class WorkOSAdapter(BaseAdapter):
         return midnight_est.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
     def _row_to_dict(self, row: asyncpg.Record) -> dict[str, Any]:
-        """Convert asyncpg Record to dict, handling datetime serialization."""
+        """
+        Convert an asyncpg database record to a JSON-serializable dictionary.
+
+        Transforms asyncpg.Record objects returned from database queries into standard
+        Python dictionaries with proper serialization of complex types. This ensures all
+        data can be safely returned through the tool interface and serialized to JSON.
+
+        Args:
+            row: asyncpg.Record object from a database query result. Contains column
+                 names as keys and corresponding values from the query.
+
+        Returns:
+            Dictionary with all field names as keys and their values. Datetime objects
+            are serialized to ISO 8601 format strings (e.g., "2026-01-11T15:30:45.123456").
+            All other data types (integers, strings, booleans, None, etc.) are preserved
+            unchanged.
+
+        Datetime serialization:
+            - Uses Python's datetime.isoformat() method for ISO 8601 compliance.
+            - Format includes microsecond precision when available.
+            - Timezone-aware datetimes include timezone offset (e.g., "+00:00").
+            - Timezone-naive datetimes omit timezone information.
+
+        Type preservation:
+            - Datetime objects: Converted to ISO 8601 strings.
+            - All other types: Passed through without modification (int, str, bool, None, etc.).
+
+        Usage context:
+            This method is called by all query methods (_get_tasks, _get_habits, _get_clients,
+            _complete_task, _create_task, _update_task, etc.) to prepare database results
+            for return through ToolResult objects. Ensures consistency in data serialization
+            across all WorkOS adapter operations.
+        """
         result = dict(row)
         for key, value in result.items():
             if isinstance(value, datetime):

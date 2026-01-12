@@ -36,5 +36,64 @@ export function getEnergyTools(): ToolDefinition[] {
         required: [],
       },
     },
+    {
+      name: "workos_override_energy_suggestion",
+      description: "Manually override auto-detected energy level or task suggestions. Records override reason for learning and algorithm improvement.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          energyLevel: {
+            type: "string",
+            description: "Manual energy level override (high/medium/low)",
+            enum: ["high", "medium", "low"],
+          },
+          reason: {
+            type: "string",
+            description: "Why are you overriding? (e.g. 'Feel more energized than readiness suggests', 'Need to push through despite low energy', 'Readiness doesn't account for coffee/medication')",
+          },
+          taskId: {
+            type: "number",
+            description: "Optional task ID if overriding a specific task suggestion",
+          },
+          adjustDailyGoal: {
+            type: "boolean",
+            description: "Whether to recalculate today's daily goal based on the manual energy level (default: true)",
+          },
+        },
+        required: ["energyLevel", "reason"],
+      },
+    },
+    {
+      name: "workos_provide_energy_feedback",
+      description: "Record feedback on whether an energy-based task suggestion was helpful. Data is used to refine the energy-task matching algorithm over time.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "number",
+            description: "ID of the task that was suggested",
+          },
+          suggestedEnergyLevel: {
+            type: "string",
+            description: "What energy level was suggested for this task (low/medium/high)",
+            enum: ["low", "medium", "high"],
+          },
+          actualEnergyLevel: {
+            type: "string",
+            description: "What was your actual energy level when working on this task? (low/medium/high)",
+            enum: ["low", "medium", "high"],
+          },
+          completedSuccessfully: {
+            type: "boolean",
+            description: "Did you successfully complete the task?",
+          },
+          userFeedback: {
+            type: "string",
+            description: "Optional: Any additional feedback about the energy-task match (e.g. 'Task was harder than expected', 'Perfect match', 'Should have waited for higher energy')",
+          },
+        },
+        required: ["taskId", "suggestedEnergyLevel", "actualEnergyLevel", "completedSuccessfully"],
+      },
+    },
   ];
 }

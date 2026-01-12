@@ -7,7 +7,8 @@ import {
   calculateTotalPoints,
 } from "../../shared/utils.js";
 import * as schema from "../../schema.js";
-import { eq, and, gte, ne, desc, asc } from "drizzle-orm";
+import type { EnergyLevel } from "../../schema.js";
+import { eq, and, gte, ne, desc, asc, or, inArray } from "drizzle-orm";
 import {
   getCachedTasks,
   getCachedTasksByClient,
@@ -16,6 +17,11 @@ import {
   getLatestCachedDailyGoal,
 } from "../../cache/cache.js";
 import { syncSingleTask, removeCachedTask } from "../../cache/sync.js";
+import {
+  getEnergyContext,
+  rankTasksByEnergy,
+  applyDailyGoalAdjustment,
+} from "../../services/energy-prioritization.js";
 
 // =============================================================================
 // TASK DOMAIN HANDLERS
@@ -274,7 +280,7 @@ export async function handleGetClients(
  * Uses write-through pattern: writes to Neon first, then syncs to cache
  * Automatically calculates sortOrder to place task at top of its status column
  *
- * @param args - { title: string, description?: string, clientId?: number, status?: string, category?: string, valueTier?: string, drainType?: string }
+ * @param args - { title: string, description?: string, clientId?: number, status?: string, category?: string, valueTier?: string, drainType?: string, cognitiveLoad?: string }
  * @param db - Database instance for creating the task
  * @returns Promise resolving to MCP ContentResponse with success status and created task object
  */
@@ -282,7 +288,7 @@ export async function handleCreateTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { title, description, clientId, status = "backlog", category = "work", valueTier = "progress", drainType } = args as any;
+  const { title, description, clientId, status = "backlog", category = "work", valueTier = "progress", drainType, cognitiveLoad } = args as any;
 
   if (!title) {
     return {
@@ -307,6 +313,7 @@ export async function handleCreateTask(
       category,
       valueTier,
       drainType: drainType || null,
+      cognitiveLoad: cognitiveLoad || null,
       sortOrder: minSortOrder - 1,
       updatedAt: new Date(),
     })
@@ -495,18 +502,19 @@ export async function handleGetClientMemory(
 
 /**
  * Get comprehensive daily summary for Life OS morning brief
- * Provides complete overview of progress, active tasks, points, and queued work
+ * Provides complete overview of progress, active tasks, points, queued work, and energy-aware recommendations
  * Designed for daily planning and decision-making
  *
  * @param args - Empty object (no arguments required)
  * @param db - Database instance for querying tasks, daily goals, and progress
- * @returns Promise resolving to MCP ContentResponse with date, progress metrics, active tasks with points, potential total, and up-next queued tasks
+ * @returns Promise resolving to MCP ContentResponse with date, progress metrics (including adjusted target), energy context (readiness, sleep, level), energy-aware task recommendations, active tasks with points, potential total, and up-next queued tasks
  */
 export async function handleDailySummary(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
   const todayStart = getESTTodayStart();
+  const todayDate = new Date().toISOString().split('T')[0];
 
   // Get today's completed tasks
   const completedToday = await db
@@ -557,18 +565,86 @@ export async function handleDailySummary(
   const earnedPoints = calculateTotalPoints(completedToday);
   const activePoints = activeTasks.reduce((sum, t) => sum + (t.pointsFinal ?? t.pointsAiGuess ?? 2), 0);
 
+  // Get today's energy context (readiness score, sleep score, energy level)
+  const energyContext = await getEnergyContext(db);
+
+  // Get today's daily goal with adjusted target
+  const [todayGoal] = await db
+    .select()
+    .from(schema.dailyGoals)
+    .where(eq(schema.dailyGoals.date, todayDate))
+    .limit(1);
+
+  // Get actionable tasks for energy-aware recommendations
+  const tasksWithClients = await db
+    .select({
+      task: schema.tasks,
+      clientName: schema.clients.name,
+    })
+    .from(schema.tasks)
+    .leftJoin(schema.clients, eq(schema.tasks.clientId, schema.clients.id))
+    .where(
+      or(
+        eq(schema.tasks.status, "active"),
+        eq(schema.tasks.status, "queued"),
+        eq(schema.tasks.status, "backlog")
+      )
+    );
+
+  // Extract tasks for ranking
+  const tasks = tasksWithClients.map(row => row.task);
+
+  // Rank tasks by energy match
+  const rankedTasks = rankTasksByEnergy(tasks, energyContext.energyLevel, 5);
+
+  // Create a map of task IDs to client names
+  const clientNameMap = new Map(
+    tasksWithClients.map(row => [row.task.id, row.clientName])
+  );
+
+  // Get top 5 energy-matched recommendations
+  const topRecommendations = rankedTasks.map(t => ({
+    id: t.id,
+    title: t.title,
+    client: clientNameMap.get(t.id) ?? null,
+    energyScore: t.energyScore,
+    matchReason: t.matchReason,
+  }));
+
+  // Determine target points (adjusted or default)
+  const originalTarget = 18;
+  const adjustedTarget = todayGoal?.adjustedTargetPoints ?? originalTarget;
+  const targetAdjustment = todayGoal?.adjustmentReason ?? null;
+
   return {
     content: [
       {
         type: "text",
         text: JSON.stringify({
-          date: new Date().toISOString().split('T')[0],
+          date: todayDate,
           progress: {
             earnedPoints,
-            targetPoints: 18,
+            targetPoints: adjustedTarget,
+            originalTarget,
             minimumPoints: 12,
             completedTasks: completedToday.length,
             streak: latestGoal?.currentStreak ?? 0,
+          },
+          energy: {
+            level: energyContext.energyLevel,
+            readinessScore: energyContext.readinessScore,
+            sleepScore: energyContext.sleepScore,
+            source: energyContext.source,
+            targetAdjustment: adjustedTarget !== originalTarget ? {
+              original: originalTarget,
+              adjusted: adjustedTarget,
+              difference: adjustedTarget - originalTarget,
+              reason: targetAdjustment,
+            } : null,
+          },
+          recommendations: {
+            message: `Based on your ${energyContext.energyLevel} energy level today, here are your best-matched tasks:`,
+            tasks: topRecommendations,
           },
           today: {
             activeTasks: activeTasks.map(t => ({
@@ -596,7 +672,7 @@ export async function handleDailySummary(
  * Uses write-through pattern: updates Neon first, then syncs to cache
  * Allows updating any combination of task fields
  *
- * @param args - { taskId: number, clientId?: number, title?: string, description?: string, status?: string, valueTier?: string, drainType?: string }
+ * @param args - { taskId: number, clientId?: number, title?: string, description?: string, status?: string, valueTier?: string, drainType?: string, cognitiveLoad?: string }
  * @param db - Database instance for updating the task
  * @returns Promise resolving to MCP ContentResponse with success status and updated task, or error if task not found or taskId missing
  */
@@ -604,7 +680,7 @@ export async function handleUpdateTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { taskId, clientId, title, description, status, valueTier, drainType } = args as any;
+  const { taskId, clientId, title, description, status, valueTier, drainType, cognitiveLoad } = args as any;
 
   if (!taskId) {
     return {
@@ -619,6 +695,7 @@ export async function handleUpdateTask(
   if (status !== undefined) updateData.status = status;
   if (valueTier !== undefined) updateData.valueTier = valueTier;
   if (drainType !== undefined) updateData.drainType = drainType;
+  if (cognitiveLoad !== undefined) updateData.cognitiveLoad = cognitiveLoad;
 
   const [updatedTask] = await db
     .update(schema.tasks)
@@ -699,6 +776,168 @@ export async function handleDeleteTask(
       {
         type: "text",
         text: JSON.stringify({ success: true, deleted: deletedTask }, null, 2),
+      },
+    ],
+  };
+}
+
+/**
+ * Get tasks prioritized by current energy level
+ * Uses energy-aware prioritization algorithm to match tasks to current energy state
+ * Returns tasks ranked by energy score with explanations
+ *
+ * @param args - { energy_level?: string, limit?: number } - Optional energy override and result limit
+ * @param db - Database instance for querying tasks and energy context
+ * @returns Promise resolving to MCP ContentResponse with ranked tasks, energy context, and match explanations
+ */
+export async function handleGetEnergyAwareTasks(
+  args: Record<string, any>,
+  db: Database
+): Promise<ContentResponse> {
+  const { energy_level, limit } = args as {
+    energy_level?: EnergyLevel;
+    limit?: number;
+  };
+
+  // Step 1: Get current energy context (unless overridden)
+  let energyLevel: EnergyLevel;
+  let energyContext;
+
+  if (energy_level) {
+    // User manually overrode energy level
+    energyLevel = energy_level;
+    energyContext = {
+      energyLevel: energy_level,
+      readinessScore: null,
+      sleepScore: null,
+      source: "manual_override",
+      timestamp: new Date(),
+    };
+  } else {
+    // Auto-detect energy from Oura/manual logs
+    energyContext = await getEnergyContext(db);
+    energyLevel = energyContext.energyLevel;
+  }
+
+  // Step 2: Get tasks that are actionable (active, queued, backlog)
+  // Don't include completed tasks
+  const tasksWithClients = await db
+    .select({
+      task: schema.tasks,
+      clientName: schema.clients.name,
+    })
+    .from(schema.tasks)
+    .leftJoin(schema.clients, eq(schema.tasks.clientId, schema.clients.id))
+    .where(
+      or(
+        eq(schema.tasks.status, "active"),
+        eq(schema.tasks.status, "queued"),
+        eq(schema.tasks.status, "backlog")
+      )
+    )
+    .orderBy(asc(schema.tasks.sortOrder), desc(schema.tasks.createdAt));
+
+  // Extract tasks for ranking
+  const tasks = tasksWithClients.map(row => row.task);
+
+  // Step 3: Rank tasks by energy match
+  const rankedTasks = rankTasksByEnergy(tasks, energyLevel, limit);
+
+  // Create a map of task IDs to client names
+  const clientNameMap = new Map(
+    tasksWithClients.map(row => [row.task.id, row.clientName])
+  );
+
+  // Step 4: Format response with energy context and ranked tasks
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            energyContext: {
+              energyLevel: energyContext.energyLevel,
+              readinessScore: energyContext.readinessScore,
+              sleepScore: energyContext.sleepScore,
+              source: energyContext.source,
+              timestamp: energyContext.timestamp,
+            },
+            taskCount: rankedTasks.length,
+            tasks: rankedTasks.map((task) => ({
+              id: task.id,
+              title: task.title,
+              description: task.description,
+              status: task.status,
+              category: task.category,
+              valueTier: task.valueTier,
+              drainType: task.drainType,
+              cognitiveLoad: task.cognitiveLoad,
+              effortEstimate: task.effortEstimate,
+              points: task.pointsFinal ?? task.pointsAiGuess ?? 2,
+              clientName: clientNameMap.get(task.id) || null,
+              energyScore: task.energyScore,
+              matchReason: task.matchReason,
+            })),
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+/**
+ * Manually trigger daily goal adjustment based on current energy level
+ * Gets current energy context (readiness, sleep) and applies goal adjustment algorithm
+ * Updates today's daily_goals record with adjusted target and reasoning
+ *
+ * @param args - { baseTarget?: number } - Optional base daily target points (default: 18)
+ * @param db - Database instance for querying energy context and updating daily goals
+ * @returns Promise resolving to MCP ContentResponse with adjustment details including original target, adjusted target, adjustment percentage, reasoning, and energy context
+ */
+export async function handleAdjustDailyGoal(
+  args: Record<string, any>,
+  db: Database
+): Promise<ContentResponse> {
+  const { baseTarget = 18 } = args as { baseTarget?: number };
+
+  // Step 1: Get current energy context (readiness & sleep scores)
+  const energyContext = await getEnergyContext(db);
+
+  // Step 2: Apply daily goal adjustment using energy context
+  const adjustment = await applyDailyGoalAdjustment(
+    db,
+    energyContext.readinessScore,
+    energyContext.sleepScore,
+    baseTarget
+  );
+
+  // Step 3: Format response with detailed adjustment information
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            success: true,
+            adjustment: {
+              originalTarget: adjustment.originalTarget,
+              adjustedTarget: adjustment.adjustedTarget,
+              adjustmentPercentage: adjustment.adjustmentPercentage,
+              reason: adjustment.reason,
+            },
+            energyContext: {
+              energyLevel: adjustment.energyLevel,
+              readinessScore: adjustment.readinessScore,
+              sleepScore: adjustment.sleepScore,
+              source: energyContext.source,
+            },
+            message: `Daily goal adjusted from ${adjustment.originalTarget} to ${adjustment.adjustedTarget} points (${adjustment.adjustmentPercentage >= 0 ? '+' : ''}${adjustment.adjustmentPercentage}%)`,
+          },
+          null,
+          2
+        ),
       },
     ],
   };

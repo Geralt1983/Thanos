@@ -28,6 +28,7 @@ export const tasks = pgTable("tasks", {
   effortEstimate: integer("effort_estimate").default(2),
   effortActual: integer("effort_actual"),
   drainType: text("drain_type"),
+  cognitiveLoad: text("cognitive_load"), // low, medium, high - mental complexity required
   sortOrder: integer("sort_order").default(0),
   subtasks: jsonb("subtasks").default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -58,6 +59,10 @@ export const dailyGoals = pgTable("daily_goals", {
   dailyDebt: integer("daily_debt").default(0),
   weeklyDebt: integer("weekly_debt").default(0),
   pressureLevel: integer("pressure_level").default(0),
+  adjustedTargetPoints: integer("adjusted_target_points"), // Energy-adjusted target points
+  readinessScore: integer("readiness_score"), // Oura readiness score (0-100)
+  energyLevel: text("energy_level"), // Derived energy level: high, medium, low
+  adjustmentReason: text("adjustment_reason"), // Why target was adjusted
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 })
 
@@ -146,6 +151,22 @@ export const brainDump = pgTable("brain_dump", {
 ])
 
 // =============================================================================
+// ENERGY FEEDBACK
+// =============================================================================
+export const energyFeedback = pgTable("energy_feedback", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").references(() => tasks.id).notNull(),
+  suggestedEnergyLevel: text("suggested_energy_level").notNull(), // low, medium, high
+  actualEnergyLevel: text("actual_energy_level").notNull(), // low, medium, high
+  userFeedback: text("user_feedback"), // free-form feedback from user
+  completedSuccessfully: boolean("completed_successfully").notNull(), // whether task was completed
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("energy_feedback_task_id_idx").on(table.taskId),
+  index("energy_feedback_created_at_idx").on(table.createdAt),
+])
+
+// =============================================================================
 // TYPE EXPORTS
 // =============================================================================
 export type Client = InferSelectModel<typeof clients>
@@ -156,8 +177,10 @@ export type Habit = InferSelectModel<typeof habits>
 export type HabitCompletion = InferSelectModel<typeof habitCompletions>
 export type EnergyState = InferSelectModel<typeof energyStates>
 export type BrainDumpEntry = InferSelectModel<typeof brainDump>
+export type EnergyFeedback = InferSelectModel<typeof energyFeedback>
 export type TaskStatus = "active" | "queued" | "backlog" | "done"
 export type EnergyLevel = "high" | "medium" | "low"
+export type CognitiveLoad = "low" | "medium" | "high"
 
 // =============================================================================
 // RELATIONS
@@ -187,6 +210,13 @@ export const habitCompletionsRelations = relations(habitCompletions, ({ one }) =
 export const brainDumpRelations = relations(brainDump, ({ one }) => ({
   convertedTask: one(tasks, {
     fields: [brainDump.convertedToTaskId],
+    references: [tasks.id],
+  }),
+}))
+
+export const energyFeedbackRelations = relations(energyFeedback, ({ one }) => ({
+  task: one(tasks, {
+    fields: [energyFeedback.taskId],
     references: [tasks.id],
   }),
 }))
