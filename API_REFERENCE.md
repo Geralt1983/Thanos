@@ -3521,7 +3521,756 @@ test_cache = ResponseCache("cache/test/", ttl_seconds=604800, max_size_mb=1000)
 
 ---
 
-*(Documentation continues with additional components...)*
+## Factory Functions
+
+The LiteLLM package provides convenience functions for managing client instances with singleton pattern support for efficient resource usage.
+
+### get_client()
+
+#### Function Signature
+
+```python
+def get_client(config_path: str = None) -> LiteLLMClient
+```
+
+#### Description
+
+Returns a singleton instance of the LiteLLMClient. On first call, creates a new client instance using the specified configuration. Subsequent calls return the same instance, ensuring efficient resource usage and consistent state across your application.
+
+**Singleton Pattern Benefits:**
+- **Resource Efficiency**: Single connection pool, cache, and usage tracker shared across application
+- **Configuration Consistency**: All code uses the same client configuration
+- **State Preservation**: Usage statistics and cache persist across multiple calls
+- **Memory Efficiency**: Only one client instance exists in memory
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `config_path` | `str` | No | `None` | Path to configuration file. If None, uses `config/api.json` relative to package root. Only used on first call; ignored on subsequent calls. |
+
+#### Returns
+
+**Type**: `LiteLLMClient`
+
+Returns the singleton LiteLLMClient instance, creating it if it doesn't exist yet.
+
+#### Raises
+
+- **`FileNotFoundError`**: If config_path specified but file doesn't exist (on first call only)
+- **`json.JSONDecodeError`**: If config file contains invalid JSON (on first call only)
+- **`RuntimeError`**: If no API client libraries available (neither litellm nor anthropic installed)
+
+#### Usage Examples
+
+**Basic Usage (Recommended):**
+
+```python
+from Tools.litellm import get_client
+
+# Get client instance (creates on first call)
+client = get_client()
+
+# Use the client
+response = client.chat("What is Python?")
+print(response)
+
+# Subsequent calls return same instance
+client2 = get_client()
+assert client is client2  # True - same instance
+```
+
+**With Custom Configuration:**
+
+```python
+from Tools.litellm import get_client
+
+# First call with custom config
+client = get_client(config_path="config/production.json")
+
+# Later in your code (config_path ignored, returns same instance)
+client = get_client()  # Still uses production.json config
+```
+
+**Application-Wide Usage Pattern:**
+
+```python
+# main.py
+from Tools.litellm import get_client
+
+def main():
+    # Initialize once at startup
+    client = get_client(config_path="config/api.json")
+
+    # Call various functions
+    process_user_input()
+    generate_reports()
+    analyze_data()
+
+# module1.py
+from Tools.litellm import get_client
+
+def process_user_input():
+    # Gets same client instance
+    client = get_client()
+    response = client.chat("Process this input...")
+    return response
+
+# module2.py
+from Tools.litellm import get_client
+
+def generate_reports():
+    # Gets same client instance with shared usage tracker
+    client = get_client()
+    summary = client.get_usage_summary(days=7)
+    return summary
+```
+
+**Module-Level Import Pattern:**
+
+```python
+# your_module.py
+from Tools.litellm import get_client
+
+# Get client at module level
+client = get_client()
+
+def function1():
+    # Use module-level client
+    return client.chat("Query 1")
+
+def function2():
+    # Reuses same client instance
+    return client.chat("Query 2")
+```
+
+#### When to Use
+
+**Use `get_client()` when:**
+- ✅ Building a standard application or service
+- ✅ You want singleton behavior (one client for entire application)
+- ✅ You want to preserve usage statistics across calls
+- ✅ You want efficient resource usage (shared connection pool, cache)
+- ✅ You don't need to dynamically change configuration during runtime
+
+**Use `init_client()` instead when:**
+- ❌ You need to change configuration during runtime
+- ❌ Testing scenarios requiring fresh client state
+- ❌ You need multiple clients with different configurations
+
+#### Thread Safety
+
+The singleton instance is **not thread-safe** by default. If using in multi-threaded applications:
+
+```python
+from threading import Lock
+from Tools.litellm import get_client
+
+# Create lock for thread safety
+client_lock = Lock()
+
+def thread_safe_chat(prompt):
+    with client_lock:
+        client = get_client()
+        return client.chat(prompt)
+```
+
+For async/concurrent usage, consider using separate client instances per worker:
+
+```python
+from Tools.litellm import LiteLLMClient
+
+# Each worker gets its own client
+def worker_function():
+    worker_client = LiteLLMClient()
+    return worker_client.chat("Process...")
+```
+
+---
+
+### init_client()
+
+#### Function Signature
+
+```python
+def init_client(config_path: str = None) -> LiteLLMClient
+```
+
+#### Description
+
+Forces creation of a new LiteLLMClient instance, replacing any existing singleton instance. Use this when you need to reload configuration or reset client state during runtime.
+
+**Key Differences from `get_client()`:**
+- **Always creates new instance**: Discards existing singleton and creates fresh client
+- **Resets state**: Clears existing usage statistics and cache references
+- **Reloads configuration**: Reads config file again, picking up any changes
+- **Use sparingly**: Most applications should use `get_client()` instead
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `config_path` | `str` | No | `None` | Path to configuration file. If None, uses `config/api.json` relative to package root. Always reads this file, even if client already exists. |
+
+#### Returns
+
+**Type**: `LiteLLMClient`
+
+Returns a newly created LiteLLMClient instance, replacing the singleton.
+
+#### Raises
+
+- **`FileNotFoundError`**: If config_path specified but file doesn't exist
+- **`json.JSONDecodeError`**: If config file contains invalid JSON
+- **`RuntimeError`**: If no API client libraries available
+
+#### Usage Examples
+
+**Reloading Configuration:**
+
+```python
+from Tools.litellm import get_client, init_client
+
+# Initial client with default config
+client1 = get_client()
+print(client1.config['litellm']['default_model'])  # claude-opus-4-5-20251101
+
+# Modify config file externally...
+# (e.g., change default_model to claude-sonnet-4-20250514)
+
+# Reload with new configuration
+client2 = init_client()
+print(client2.config['litellm']['default_model'])  # claude-sonnet-4-20250514
+
+# get_client() now returns the new instance
+client3 = get_client()
+assert client2 is client3  # True
+assert client1 is not client2  # True - different instances
+```
+
+**Testing with Fresh State:**
+
+```python
+import pytest
+from Tools.litellm import init_client
+
+@pytest.fixture
+def fresh_client():
+    """Provides a fresh client for each test."""
+    # Create new client with test config
+    client = init_client(config_path="config/test.json")
+    yield client
+    # Usage stats are isolated per test
+
+def test_chat_response(fresh_client):
+    response = fresh_client.chat("Test query")
+    assert len(response) > 0
+
+def test_usage_tracking(fresh_client):
+    # Starts with clean usage stats
+    usage = fresh_client.get_today_usage()
+    assert usage['calls'] == 0
+```
+
+**Switching Between Environments:**
+
+```python
+from Tools.litellm import init_client
+import os
+
+def configure_for_environment():
+    env = os.environ.get('APP_ENV', 'development')
+
+    if env == 'production':
+        return init_client(config_path="config/production.json")
+    elif env == 'staging':
+        return init_client(config_path="config/staging.json")
+    else:
+        return init_client(config_path="config/development.json")
+
+# At application startup
+client = configure_for_environment()
+```
+
+**Resetting Cache and Usage Stats:**
+
+```python
+from Tools.litellm import init_client, get_client
+
+# Client with accumulated state
+client1 = get_client()
+# ... many API calls made ...
+usage = client1.get_usage_summary(days=7)
+print(f"Total calls: {usage['total_calls']}")  # 1000+
+
+# Reset to fresh state (note: usage history file persists)
+client2 = init_client()
+
+# Client is fresh but usage_tracker still reads from disk
+# To truly reset, would need to clear State/usage.json file
+```
+
+**Dynamic Model Selection:**
+
+```python
+from Tools.litellm import init_client
+import json
+
+def switch_to_model_tier(tier: str):
+    """Dynamically switch to different model configuration."""
+    # Load base config
+    with open('config/api.json', 'r') as f:
+        config = json.load(f)
+
+    # Modify based on tier
+    if tier == 'premium':
+        config['litellm']['default_model'] = 'claude-opus-4-5-20251101'
+        config['litellm']['fallback_chain'] = ['claude-opus-4-5-20251101']
+    elif tier == 'standard':
+        config['litellm']['default_model'] = 'claude-sonnet-4-20250514'
+    elif tier == 'budget':
+        config['litellm']['default_model'] = 'claude-3-5-haiku-20241022'
+
+    # Save temporary config
+    with open('config/api_temp.json', 'w') as f:
+        json.dump(config, f)
+
+    # Reinitialize with new config
+    return init_client(config_path='config/api_temp.json')
+
+# Usage
+client = switch_to_model_tier('premium')
+response = client.chat("Complex analysis task...")
+```
+
+#### When to Use
+
+**Use `init_client()` when:**
+- ✅ Need to reload configuration from disk
+- ✅ Switching between different config files at runtime
+- ✅ Testing scenarios requiring isolated client state
+- ✅ Implementing hot-reload of configuration
+- ✅ Need to reset client state without restarting application
+
+**Use `get_client()` instead when:**
+- ❌ Normal application operation (singleton behavior desired)
+- ❌ You don't need to change configuration during runtime
+- ❌ Resource efficiency and state preservation are important
+
+#### Performance Considerations
+
+Calling `init_client()` has overhead:
+- **Initialization time**: 50-200ms (reads config, initializes components)
+- **Memory allocation**: Creates new cache, usage tracker, complexity analyzer
+- **Resource cleanup**: Previous instance may not be immediately garbage collected
+
+Avoid calling in hot paths or frequently:
+
+```python
+# ❌ BAD: Reinitializing in loop
+for task in tasks:
+    client = init_client()  # Expensive!
+    client.chat(task)
+
+# ✅ GOOD: Initialize once
+client = get_client()
+for task in tasks:
+    client.chat(task)
+```
+
+#### Best Practices
+
+1. **Prefer `get_client()` for normal usage**: Only use `init_client()` when truly needed
+2. **Initialize early**: Call during application startup, not during request handling
+3. **Don't mix patterns**: Choose singleton or manual management, not both
+4. **Test configuration changes**: Ensure new config is valid before calling
+5. **Consider alternatives**: Environment variables might be better than runtime config changes
+
+---
+
+## Data Models
+
+The LiteLLM package defines standardized data structures for representing API responses and passing data between components.
+
+### ModelResponse
+
+#### Dataclass Definition
+
+```python
+@dataclass
+class ModelResponse:
+    """Standardized response from any model provider."""
+    content: str
+    model: str
+    provider: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cost_usd: float
+    latency_ms: float
+    cached: bool = False
+    metadata: Dict = field(default_factory=dict)
+```
+
+#### Description
+
+`ModelResponse` is a dataclass that provides a **unified interface** for LLM API responses across all providers (Anthropic, OpenAI, Google Gemini, etc.). It normalizes response format, token counting, and cost tracking regardless of the underlying model provider.
+
+**Purpose:**
+- **Provider Abstraction**: Consistent interface whether using Claude, GPT, Gemini, or others
+- **Usage Tracking**: Captures token counts and costs for analytics
+- **Performance Monitoring**: Records latency for each API call
+- **Metadata Support**: Extensible structure for custom data
+
+**Design Benefits:**
+- Switch providers without changing response handling code
+- Unified usage tracking across all models
+- Easy integration with logging and monitoring systems
+- Type-safe response handling
+
+**Note**: Currently, the `chat()` method returns `str` (just the content), not a full `ModelResponse` object. The `ModelResponse` dataclass is defined for future enhancements and internal use. To get full response details, use the usage tracker and metadata parameters.
+
+#### Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `content` | `str` | Yes | - | The generated text response from the model |
+| `model` | `str` | Yes | - | Full model identifier (e.g., `"claude-sonnet-4-20250514"`) |
+| `provider` | `str` | Yes | - | Provider name (e.g., `"anthropic"`, `"openai"`, `"google"`) |
+| `input_tokens` | `int` | Yes | - | Number of tokens in the prompt/input |
+| `output_tokens` | `int` | Yes | - | Number of tokens in the generated response |
+| `total_tokens` | `int` | Yes | - | Sum of input_tokens + output_tokens |
+| `cost_usd` | `float` | Yes | - | Cost of this API call in USD |
+| `latency_ms` | `float` | Yes | - | Response time in milliseconds |
+| `cached` | `bool` | No | `False` | Whether response was served from cache |
+| `metadata` | `Dict` | No | `{}` | Additional metadata (complexity score, tier, custom data) |
+
+#### Field Details
+
+**`content`**
+- The actual text generated by the model
+- Includes complete response (not chunked)
+- For streaming, this would be the accumulated final text
+- Empty string if generation failed or was blocked
+
+**`model`**
+- Exact model identifier used for the API call
+- Format varies by provider:
+  - Anthropic: `"claude-opus-4-5-20251101"`, `"claude-sonnet-4-20250514"`
+  - OpenAI: `"gpt-4"`, `"gpt-3.5-turbo"`
+  - Google: `"gemini-pro"`, `"gemini-ultra"`
+- Important for cost calculation and usage analysis
+
+**`provider`**
+- Top-level provider name
+- Common values: `"anthropic"`, `"openai"`, `"google"`, `"cohere"`, `"ai21"`
+- Used for provider-level usage aggregation
+
+**`input_tokens` / `output_tokens` / `total_tokens`**
+- Token counts from the provider's tokenizer
+- Used for:
+  - Cost calculation
+  - Rate limit tracking
+  - Usage analytics
+  - Performance optimization
+- Note: Different providers count tokens differently
+
+**`cost_usd`**
+- Calculated cost in US dollars
+- Based on provider pricing and token counts
+- Formula: `(input_tokens * input_price) + (output_tokens * output_price)`
+- Includes any provider-specific pricing (e.g., caching discounts)
+
+**`latency_ms`**
+- Time from request start to response completion
+- Includes:
+  - Network round-trip
+  - Model processing time
+  - API overhead
+- Excludes:
+  - Local complexity analysis
+  - Cache lookup time
+  - Usage tracking overhead
+
+**`cached`**
+- Indicates if response came from local cache
+- When `True`:
+  - `latency_ms` will be very low (<1ms)
+  - No API call was made
+  - `cost_usd` may be zero or reduced
+- When `False`: Fresh API call was made
+
+**`metadata`**
+- Flexible dictionary for additional data
+- Common usage:
+  - `{"complexity": 0.65, "tier": "standard"}` - Routing decision data
+  - `{"operation": "code_review"}` - Operation categorization
+  - `{"user_id": "123", "session": "abc"}` - Custom tracking data
+  - `{"fallback_count": 2}` - Retry/fallback information
+- Preserved in usage tracking for analysis
+
+#### Usage Examples
+
+**Creating a ModelResponse (Internal Use):**
+
+```python
+from Tools.litellm.models import ModelResponse
+
+# Construct response object (typically done by client internals)
+response = ModelResponse(
+    content="Paris is the capital of France.",
+    model="claude-sonnet-4-20250514",
+    provider="anthropic",
+    input_tokens=15,
+    output_tokens=8,
+    total_tokens=23,
+    cost_usd=0.00012,
+    latency_ms=456.7,
+    cached=False,
+    metadata={
+        "complexity": 0.2,
+        "tier": "simple",
+        "operation": "qa"
+    }
+)
+
+# Access fields
+print(f"Response: {response.content}")
+print(f"Cost: ${response.cost_usd:.6f}")
+print(f"Speed: {response.latency_ms:.1f}ms")
+print(f"Efficiency: {response.total_tokens / (response.latency_ms / 1000):.0f} tokens/sec")
+```
+
+**Analyzing Response Characteristics:**
+
+```python
+from Tools.litellm.models import ModelResponse
+
+def analyze_response(response: ModelResponse):
+    """Analyze response metrics and characteristics."""
+
+    # Cost efficiency
+    cost_per_token = response.cost_usd / response.total_tokens if response.total_tokens > 0 else 0
+
+    # Speed metrics
+    tokens_per_second = response.total_tokens / (response.latency_ms / 1000) if response.latency_ms > 0 else 0
+
+    # Response size
+    words = len(response.content.split())
+    chars = len(response.content)
+
+    return {
+        "provider": response.provider,
+        "model": response.model,
+        "cost_per_token": cost_per_token,
+        "tokens_per_second": tokens_per_second,
+        "words": words,
+        "characters": chars,
+        "cached": response.cached,
+        "total_cost": response.cost_usd,
+        "latency": response.latency_ms
+    }
+
+# Usage
+analysis = analyze_response(response)
+print(f"Model: {analysis['model']}")
+print(f"Speed: {analysis['tokens_per_second']:.0f} tok/s")
+print(f"Cost efficiency: ${analysis['cost_per_token']:.6f} per token")
+```
+
+**Future Usage Pattern (When client returns ModelResponse):**
+
+```python
+from Tools.litellm import get_client
+from Tools.litellm.models import ModelResponse
+
+# Future API (not yet implemented)
+# client = get_client()
+# response: ModelResponse = client.chat_full("What is Python?")
+
+# With full response object, you would be able to:
+# print(f"Content: {response.content}")
+# print(f"Model used: {response.model}")
+# print(f"Cost: ${response.cost_usd:.6f}")
+# print(f"Tokens: {response.total_tokens}")
+# print(f"Speed: {response.latency_ms}ms")
+# print(f"Cached: {response.cached}")
+# print(f"Metadata: {response.metadata}")
+```
+
+**Type Hints and Validation:**
+
+```python
+from typing import List
+from Tools.litellm.models import ModelResponse
+
+def process_batch_responses(responses: List[ModelResponse]) -> dict:
+    """Process multiple responses with type safety."""
+    total_cost = sum(r.cost_usd for r in responses)
+    total_tokens = sum(r.total_tokens for r in responses)
+    avg_latency = sum(r.latency_ms for r in responses) / len(responses)
+    cache_hit_rate = sum(1 for r in responses if r.cached) / len(responses)
+
+    return {
+        "total_cost": total_cost,
+        "total_tokens": total_tokens,
+        "avg_latency": avg_latency,
+        "cache_hit_rate": cache_hit_rate
+    }
+```
+
+**Serialization for Logging:**
+
+```python
+from Tools.litellm.models import ModelResponse
+import json
+from dataclasses import asdict
+
+def log_response(response: ModelResponse):
+    """Serialize ModelResponse for logging."""
+    # Convert to dictionary
+    response_dict = asdict(response)
+
+    # Serialize to JSON
+    json_str = json.dumps(response_dict, indent=2)
+
+    # Log or store
+    print(json_str)
+
+    # Save to file
+    with open('logs/responses.jsonl', 'a') as f:
+        f.write(json.dumps(response_dict) + '\n')
+
+# Example output:
+# {
+#   "content": "Paris is the capital of France.",
+#   "model": "claude-sonnet-4-20250514",
+#   "provider": "anthropic",
+#   "input_tokens": 15,
+#   "output_tokens": 8,
+#   "total_tokens": 23,
+#   "cost_usd": 0.00012,
+#   "latency_ms": 456.7,
+#   "cached": false,
+#   "metadata": {
+#     "complexity": 0.2,
+#     "tier": "simple"
+#   }
+# }
+```
+
+**Comparison Across Providers:**
+
+```python
+from Tools.litellm.models import ModelResponse
+
+def compare_providers(responses: List[ModelResponse]):
+    """Compare different providers/models for same task."""
+    print(f"{'Provider':<12} {'Model':<30} {'Cost':<10} {'Speed':<10} {'Tokens':<8}")
+    print("-" * 80)
+
+    for r in responses:
+        print(f"{r.provider:<12} {r.model:<30} ${r.cost_usd:<9.6f} {r.latency_ms:<9.1f}ms {r.total_tokens:<8}")
+
+    # Find best by cost
+    cheapest = min(responses, key=lambda r: r.cost_usd)
+    fastest = min(responses, key=lambda r: r.latency_ms)
+
+    print(f"\nCheapest: {cheapest.model} (${cheapest.cost_usd:.6f})")
+    print(f"Fastest: {fastest.model} ({fastest.latency_ms:.1f}ms)")
+
+# Example output:
+# Provider     Model                          Cost       Speed      Tokens
+# --------------------------------------------------------------------------------
+# anthropic    claude-3-5-haiku-20241022      $0.000023  234.5ms    23
+# anthropic    claude-sonnet-4-20250514       $0.000120  456.7ms    23
+# openai       gpt-3.5-turbo                  $0.000035  189.2ms    23
+# openai       gpt-4                          $0.000690  678.9ms    23
+#
+# Cheapest: claude-3-5-haiku-20241022 ($0.000023)
+# Fastest: gpt-3.5-turbo (189.2ms)
+```
+
+#### Integration with Usage Tracking
+
+The `ModelResponse` dataclass aligns with the `UsageTracker.record()` method parameters:
+
+```python
+from Tools.litellm.models import ModelResponse
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker("State/usage.json")
+
+# Record from ModelResponse object
+def record_response(response: ModelResponse):
+    tracker.record(
+        model=response.model,
+        input_tokens=response.input_tokens,
+        output_tokens=response.output_tokens,
+        cost_usd=response.cost_usd,
+        latency_ms=response.latency_ms,
+        operation=response.metadata.get('operation', 'unknown'),
+        metadata=response.metadata
+    )
+
+# This ensures consistent tracking across all responses
+```
+
+#### Best Practices
+
+1. **Use for Type Hints**: Provide clear API contracts
+   ```python
+   def process_response(response: ModelResponse) -> str:
+       return response.content.upper()
+   ```
+
+2. **Metadata Conventions**: Establish consistent metadata keys
+   ```python
+   # Good: Consistent keys across application
+   metadata = {
+       "operation": "code_review",
+       "user_id": "user_123",
+       "complexity": 0.75
+   }
+   ```
+
+3. **Validation**: Validate fields for data quality
+   ```python
+   def validate_response(response: ModelResponse):
+       assert response.cost_usd >= 0, "Cost cannot be negative"
+       assert response.total_tokens == response.input_tokens + response.output_tokens
+       assert response.latency_ms > 0, "Latency must be positive"
+   ```
+
+4. **Immutability**: Treat as immutable after creation (dataclass is not frozen by default)
+   ```python
+   # Don't modify after creation
+   # response.cost_usd = 0.5  # Avoid
+
+   # Create new instance if changes needed
+   updated = ModelResponse(
+       content=response.content,
+       model=response.model,
+       provider=response.provider,
+       input_tokens=response.input_tokens,
+       output_tokens=response.output_tokens,
+       total_tokens=response.total_tokens,
+       cost_usd=new_cost,  # Changed value
+       latency_ms=response.latency_ms,
+       cached=response.cached,
+       metadata=response.metadata
+   )
+   ```
+
+#### Future Enhancements
+
+The `ModelResponse` dataclass is designed for extensibility. Potential future additions:
+
+- **Streaming support**: Fields for first-token latency, chunk count
+- **Finish reasons**: Why generation stopped (length, stop sequence, etc.)
+- **Safety scores**: Content moderation/safety scores from providers
+- **Tool use**: Information about function/tool calls made during response
+- **Citations**: Source attribution for RAG-enhanced responses
 
 ---
 
