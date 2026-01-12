@@ -1,3 +1,1 @@
-"""
-Thanos test suite.
-"""
+"""Tests package."""

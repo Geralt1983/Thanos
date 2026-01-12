@@ -1,0 +1,145 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "description": "Configuration for automated commitment review and check-in scheduling",
+
+  "reviews": {
+    "weekly": {
+      "enabled": true,
+      "time": "20:00",
+      "timezone": "local",
+      "day_of_week": "sunday",
+      "alternative_day": "monday",
+      "alternative_time": "08:00",
+      "description": "Weekly commitment performance review with trends and insights",
+      "delivery_channels": ["cli", "file"],
+      "compare_weeks": 4,
+      "include_detailed_stats": true,
+      "include_reflection_prompts": true
+    }
+  },
+
+  "check_ins": {
+    "daily_digest": {
+      "enabled": true,
+      "time": "07:00",
+      "timezone": "local",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": true,
+        "sunday": true
+      },
+      "description": "Morning commitment digest with due items and streaks",
+      "delivery_channels": ["cli"],
+      "include_overdue": true,
+      "include_due_today": true,
+      "include_habits": true,
+      "include_encouragement": true
+    },
+    "coach_check_in": {
+      "enabled": true,
+      "trigger": "missed_commitment",
+      "escalation_enabled": true,
+      "consecutive_misses_threshold": 2,
+      "description": "Coach-led accountability check-ins for missed commitments",
+      "delivery_channels": ["cli"],
+      "quiet_hours_respected": true
+    }
+  },
+
+  "prompts": {
+    "due_reminders": {
+      "enabled": true,
+      "show_on_session_start": true,
+      "include_overdue": true,
+      "include_due_today": true,
+      "respect_quiet_hours": true
+    },
+    "habit_reminders": {
+      "enabled": true,
+      "frequency_hours": 24,
+      "show_streak_info": true,
+      "celebrate_milestones": true
+    }
+  },
+
+  "delivery": {
+    "cli": {
+      "enabled": true,
+      "color": true,
+      "emoji": true,
+      "detailed_mode": false
+    },
+    "file": {
+      "enabled": true,
+      "output_dir": "History/CommitmentReviews",
+      "filename_pattern": "{date}_weekly_review.md",
+      "format": "markdown"
+    },
+    "notification": {
+      "enabled": false,
+      "summary_only": true,
+      "priority": "normal"
+    }
+  },
+
+  "quiet_hours": {
+    "enabled": true,
+    "start_time": "22:00",
+    "end_time": "07:00",
+    "timezone": "local",
+    "description": "Suppress non-urgent commitment prompts during these hours"
+  },
+
+  "scheduler": {
+    "check_interval_minutes": 5,
+    "prevent_duplicate_runs": true,
+    "log_file": "logs/commitment_scheduler.log",
+    "error_notification": false,
+    "retry_on_error": true,
+    "max_retries": 3
+  },
+
+  "advanced": {
+    "state_dir": "State",
+    "manual_trigger_enabled": true,
+    "auto_mark_reviewed": true,
+    "export_analytics": false,
+    "analytics_export_dir": "History/CommitmentAnalytics",
+    "pattern_learning_enabled": false,
+    "_comment": "Pattern learning will track user engagement with reviews to optimize timing"
+  },
+
+  "integrations": {
+    "session_start_hook": {
+      "enabled": true,
+      "show_due_commitments": true,
+      "show_overdue_commitments": true,
+      "timeout_seconds": 5
+    },
+    "coach_agent": {
+      "enabled": true,
+      "auto_trigger_on_misses": true,
+      "consecutive_miss_threshold": 2,
+      "provide_pattern_analysis": true
+    }
+  },
+
+  "_metadata": {
+    "created_at": "2026-01-11T23:30:00Z",
+    "last_modified": "2026-01-11T23:30:00Z",
+    "schema_version": "1.0.0",
+    "notes": [
+      "Weekly reviews scheduled for Sunday 8:00 PM by default",
+      "Alternative Monday 8:00 AM if Sunday is missed",
+      "Daily digest runs at 7:00 AM every day",
+      "Coach check-ins trigger after 2+ consecutive misses",
+      "Manual reviews can be triggered anytime via CLI",
+      "Quiet hours (10 PM - 7 AM) suppress non-urgent prompts"
+    ]
+  }
+}
