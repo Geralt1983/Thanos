@@ -11,6 +11,8 @@ from enum import Enum
 import os
 from pathlib import Path
 import re
+import subprocess
+import sys
 from typing import Callable, Optional
 
 
@@ -371,6 +373,13 @@ class CommandRouter:
             "patterns": (self._cmd_patterns, "Show conversation patterns", []),
             "model": (self._cmd_model, "Switch AI model", ["name"]),
             "m": (self._cmd_model, "Switch model (alias)", ["name"]),
+            # Commitment commands
+            "commitment:add": (self._cmd_commitment_add, "Add commitment", ["options"]),
+            "commitment:new": (self._cmd_commitment_add, "Add commitment (alias)", ["options"]),
+            "commitment:update": (self._cmd_commitment_update, "Update commitment", ["id", "options"]),
+            "commitment:complete": (self._cmd_commitment_update, "Complete commitment (alias)", ["id"]),
+            "commitment:list": (self._cmd_commitment_list, "List commitments", ["options"]),
+            "commitment:ls": (self._cmd_commitment_list, "List commitments (alias)", ["options"]),
             # MCP commands
             "mcp": (self._cmd_mcp, "Show MCP server status", []),
             "mcp:list": (self._cmd_mcp_list, "List MCP servers and tools", []),
@@ -550,6 +559,78 @@ class CommandRouter:
             print(f"{Colors.DIM}Error reading commitments: {e}{Colors.RESET}")
             return CommandResult(success=False)
 
+    def _cmd_commitment_add(self, args: str) -> CommandResult:
+        """Add a new commitment (habit, goal, or task)."""
+        # Build command to run commitment_add.py
+        cmd_path = self.thanos_dir / "commands" / "commitment_add.py"
+
+        if not cmd_path.exists():
+            print(f"{Colors.DIM}Error: commitment_add.py not found at {cmd_path}{Colors.RESET}")
+            return CommandResult(success=False)
+
+        # If no args provided, run in interactive mode
+        if not args.strip():
+            cmd = [sys.executable, str(cmd_path), "--interactive"]
+        else:
+            # Parse args and pass to script
+            cmd = [sys.executable, str(cmd_path)] + args.split()
+
+        try:
+            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
+            return CommandResult(success=(result.returncode == 0))
+        except Exception as e:
+            print(f"{Colors.DIM}Error running commitment add: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
+    def _cmd_commitment_update(self, args: str) -> CommandResult:
+        """Update an existing commitment."""
+        # Build command to run commitment_update.py
+        cmd_path = self.thanos_dir / "commands" / "commitment_update.py"
+
+        if not cmd_path.exists():
+            print(f"{Colors.DIM}Error: commitment_update.py not found at {cmd_path}{Colors.RESET}")
+            return CommandResult(success=False)
+
+        if not args.strip():
+            print(f"{Colors.DIM}Usage: /commitment:update <id> [options]{Colors.RESET}")
+            print(f"{Colors.DIM}Examples:{Colors.RESET}")
+            print(f"  /commitment:update abc123 --complete")
+            print(f"  /commitment:update abc123 --missed --notes 'Overslept'")
+            print(f"  /commitment:update abc123 --reschedule +3d")
+            print(f"  /commitment:update abc123 --interactive")
+            return CommandResult(success=False)
+
+        # Parse args and pass to script
+        cmd = [sys.executable, str(cmd_path)] + args.split()
+
+        try:
+            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
+            return CommandResult(success=(result.returncode == 0))
+        except Exception as e:
+            print(f"{Colors.DIM}Error running commitment update: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
+    def _cmd_commitment_list(self, args: str) -> CommandResult:
+        """List commitments with filtering and sorting options."""
+        # Build command to run commitment_list.py
+        cmd_path = self.thanos_dir / "commands" / "commitment_list.py"
+
+        if not cmd_path.exists():
+            print(f"{Colors.DIM}Error: commitment_list.py not found at {cmd_path}{Colors.RESET}")
+            return CommandResult(success=False)
+
+        # Parse args and pass to script (empty args is fine - shows all)
+        cmd = [sys.executable, str(cmd_path)]
+        if args.strip():
+            cmd.extend(args.split())
+
+        try:
+            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
+            return CommandResult(success=(result.returncode == 0))
+        except Exception as e:
+            print(f"{Colors.DIM}Error running commitment list: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
     def _cmd_help(self, args: str) -> CommandResult:
         """Show help information."""
         print(f"""
@@ -576,6 +657,17 @@ class CommandRouter:
   /help          - Show this help
   /quit          - Exit interactive mode
 
+{Colors.CYAN}Commitment Commands:{Colors.RESET}
+  /commitment:add [options]     - Add new commitment (interactive if no options)
+  /commitment:list [filters]    - List commitments with filters
+  /commitment:update <id> [opt] - Update or complete commitment
+
+  Examples:
+    /commitment:add --interactive
+    /commitment:list --overdue
+    /commitment:update abc123 --complete
+    /commitment:update abc123 --reschedule +3d
+
 {Colors.CYAN}MCP Commands:{Colors.RESET}
   /mcp           - Show MCP server status and overview
   /mcp:list      - List all MCP servers and available tools
@@ -585,6 +677,8 @@ class CommandRouter:
 
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
+  /commitment:new = /commitment:add
+  /commitment:ls = /commitment:list
   /r = /resume, /m = /model, /h = /help, /q = /quit
 
 {Colors.DIM}Tip: Use \""" for multi-line input{Colors.RESET}
