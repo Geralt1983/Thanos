@@ -239,3 +239,42 @@ class ContextManager:
         # Fallback: heuristic estimation (characters / 3.5)
         # This provides a reasonable approximation when tiktoken is unavailable
         return int(len(text) / 3.5)
+
+    def estimate_messages_tokens(self, messages: List[Dict[str, str]]) -> int:
+        """
+        Estimate the total number of tokens in a list of messages.
+
+        Calculates tokens for message content plus structural overhead.
+        Each message adds ~4 tokens for structure (role, formatting, etc.).
+
+        Args:
+            messages (List[Dict[str, str]]): List of message dictionaries.
+                                            Each should have "content" key.
+
+        Returns:
+            int: Total estimated tokens including content and overhead.
+                 Returns 0 for empty list.
+
+        Example:
+            messages = [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi!"}
+            ]
+            tokens = cm.estimate_messages_tokens(messages)
+        """
+        # Return 0 for empty message list
+        if not messages:
+            return 0
+
+        total_tokens = 0
+
+        # Iterate through messages
+        for message in messages:
+            # Estimate tokens for message content
+            content = message.get("content", "")
+            content_tokens = self.estimate_tokens(content)
+
+            # Add content tokens + 4 for message structure overhead
+            total_tokens += content_tokens + 4
+
+        return total_tokens
