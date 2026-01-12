@@ -602,7 +602,7 @@ export async function handleDailySummary(
  * Uses write-through pattern: updates Neon first, then syncs to cache
  * Allows updating any combination of task fields
  *
- * @param args - { taskId: number, clientId?: number, title?: string, description?: string, status?: string, valueTier?: string, drainType?: string }
+ * @param args - { taskId: number, clientId?: number, title?: string, description?: string, status?: string, valueTier?: string, drainType?: string, cognitiveLoad?: string }
  * @param db - Database instance for updating the task
  * @returns Promise resolving to MCP ContentResponse with success status and updated task, or error if task not found or taskId missing
  */
@@ -610,7 +610,7 @@ export async function handleUpdateTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { taskId, clientId, title, description, status, valueTier, drainType } = args as any;
+  const { taskId, clientId, title, description, status, valueTier, drainType, cognitiveLoad } = args as any;
 
   if (!taskId) {
     return {
@@ -625,6 +625,7 @@ export async function handleUpdateTask(
   if (status !== undefined) updateData.status = status;
   if (valueTier !== undefined) updateData.valueTier = valueTier;
   if (drainType !== undefined) updateData.drainType = drainType;
+  if (cognitiveLoad !== undefined) updateData.cognitiveLoad = cognitiveLoad;
 
   const [updatedTask] = await db
     .update(schema.tasks)

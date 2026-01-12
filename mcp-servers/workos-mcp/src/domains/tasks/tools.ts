@@ -176,7 +176,7 @@ export function getTaskTools(): ToolDefinition[] {
     },
     {
       name: "workos_update_task",
-      description: "Update a task's properties (clientId, title, description, status, valueTier, drainType)",
+      description: "Update a task's properties (clientId, title, description, status, valueTier, drainType, cognitiveLoad)",
       inputSchema: {
         type: "object",
         properties: {
@@ -210,6 +210,11 @@ export function getTaskTools(): ToolDefinition[] {
             type: "string",
             description: "New drain type",
             enum: ["deep", "shallow", "admin"],
+          },
+          cognitiveLoad: {
+            type: "string",
+            description: "Cognitive load: low (admin/simple), medium (standard work), high (complex/deep work)",
+            enum: ["low", "medium", "high"],
           },
         },
         required: ["taskId"],
