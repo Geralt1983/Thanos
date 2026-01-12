@@ -63,5 +63,37 @@ export function getEnergyTools(): ToolDefinition[] {
         required: ["energyLevel", "reason"],
       },
     },
+    {
+      name: "workos_provide_energy_feedback",
+      description: "Record feedback on whether an energy-based task suggestion was helpful. Data is used to refine the energy-task matching algorithm over time.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          taskId: {
+            type: "number",
+            description: "ID of the task that was suggested",
+          },
+          suggestedEnergyLevel: {
+            type: "string",
+            description: "What energy level was suggested for this task (low/medium/high)",
+            enum: ["low", "medium", "high"],
+          },
+          actualEnergyLevel: {
+            type: "string",
+            description: "What was your actual energy level when working on this task? (low/medium/high)",
+            enum: ["low", "medium", "high"],
+          },
+          completedSuccessfully: {
+            type: "boolean",
+            description: "Did you successfully complete the task?",
+          },
+          userFeedback: {
+            type: "string",
+            description: "Optional: Any additional feedback about the energy-task match (e.g. 'Task was harder than expected', 'Perfect match', 'Should have waited for higher energy')",
+          },
+        },
+        required: ["taskId", "suggestedEnergyLevel", "actualEnergyLevel", "completedSuccessfully"],
+      },
+    },
   ];
 }
