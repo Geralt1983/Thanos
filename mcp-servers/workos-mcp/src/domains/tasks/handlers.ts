@@ -20,6 +20,7 @@ import { syncSingleTask, removeCachedTask } from "../../cache/sync.js";
 import {
   getEnergyContext,
   rankTasksByEnergy,
+  applyDailyGoalAdjustment,
 } from "../../services/energy-prioritization.js";
 
 // =============================================================================
@@ -808,6 +809,62 @@ export async function handleGetEnergyAwareTasks(
               energyScore: task.energyScore,
               matchReason: task.matchReason,
             })),
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+/**
+ * Manually trigger daily goal adjustment based on current energy level
+ * Gets current energy context (readiness, sleep) and applies goal adjustment algorithm
+ * Updates today's daily_goals record with adjusted target and reasoning
+ *
+ * @param args - { baseTarget?: number } - Optional base daily target points (default: 18)
+ * @param db - Database instance for querying energy context and updating daily goals
+ * @returns Promise resolving to MCP ContentResponse with adjustment details including original target, adjusted target, adjustment percentage, reasoning, and energy context
+ */
+export async function handleAdjustDailyGoal(
+  args: Record<string, any>,
+  db: Database
+): Promise<ContentResponse> {
+  const { baseTarget = 18 } = args as { baseTarget?: number };
+
+  // Step 1: Get current energy context (readiness & sleep scores)
+  const energyContext = await getEnergyContext(db);
+
+  // Step 2: Apply daily goal adjustment using energy context
+  const adjustment = await applyDailyGoalAdjustment(
+    db,
+    energyContext.readinessScore,
+    energyContext.sleepScore,
+    baseTarget
+  );
+
+  // Step 3: Format response with detailed adjustment information
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            success: true,
+            adjustment: {
+              originalTarget: adjustment.originalTarget,
+              adjustedTarget: adjustment.adjustedTarget,
+              adjustmentPercentage: adjustment.adjustmentPercentage,
+              reason: adjustment.reason,
+            },
+            energyContext: {
+              energyLevel: adjustment.energyLevel,
+              readinessScore: adjustment.readinessScore,
+              sleepScore: adjustment.sleepScore,
+              source: energyContext.source,
+            },
+            message: `Daily goal adjusted from ${adjustment.originalTarget} to ${adjustment.adjustedTarget} points (${adjustment.adjustmentPercentage >= 0 ? '+' : ''}${adjustment.adjustmentPercentage}%)`,
           },
           null,
           2

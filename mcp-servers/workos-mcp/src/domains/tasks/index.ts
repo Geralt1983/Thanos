@@ -14,6 +14,7 @@ import {
   handleUpdateTask,
   handleDeleteTask,
   handleGetEnergyAwareTasks,
+  handleAdjustDailyGoal,
 } from "./handlers.js";
 
 // =============================================================================
@@ -63,6 +64,8 @@ export const handleTaskTool: ToolRouter = async (
       return handleDeleteTask(args, db);
     case "workos_get_energy_aware_tasks":
       return handleGetEnergyAwareTasks(args, db);
+    case "workos_adjust_daily_goal":
+      return handleAdjustDailyGoal(args, db);
     default:
       return errorResponse(`Unknown task tool: ${name}`);
   }

@@ -253,5 +253,19 @@ export function getTaskTools(): ToolDefinition[] {
         required: [],
       },
     },
+    {
+      name: "workos_adjust_daily_goal",
+      description: "Manually trigger daily goal adjustment based on current energy level. Adjusts target points based on readiness score: <70 reduces by 25%, 70-84 maintains target, 85+ increases by 15%. Returns explanation of adjustment and new target.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          baseTarget: {
+            type: "number",
+            description: "Base daily target points (default: 18)",
+          },
+        },
+        required: [],
+      },
+    },
   ];
 }
