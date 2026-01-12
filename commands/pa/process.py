@@ -266,8 +266,123 @@ Return your analysis as a JSON object following the format specified in the syst
 
 
 # =============================================================================
-# MAIN COMMAND (stub for now - will be implemented in subtask 2.3)
+# MAIN COMMAND LOGIC
 # =============================================================================
+
+
+async def _process_entries_async(dry_run: bool = False, limit: int = 10) -> Dict[str, Any]:
+    """
+    Process brain dump entries asynchronously.
+
+    Args:
+        dry_run: If True, preview without making changes
+        limit: Maximum number of entries to process
+
+    Returns:
+        Dict with processing results (tasks_created, archived, errors)
+    """
+    # Initialize adapter
+    adapter = WorkOSAdapter()
+
+    try:
+        # Fetch unprocessed entries
+        entries = await get_unprocessed_entries(adapter, limit)
+
+        if not entries:
+            return {
+                "tasks_created": 0,
+                "archived": 0,
+                "total": 0,
+                "errors": [],
+                "entries": [],
+            }
+
+        results = {
+            "tasks_created": 0,
+            "archived": 0,
+            "total": len(entries),
+            "errors": [],
+            "entries": [],
+        }
+
+        # Process each entry
+        for entry in entries:
+            entry_id = entry["id"]
+            content = entry["content"]
+            created_at = entry["created_at"]
+
+            try:
+                # Analyze with LLM
+                analysis = await analyze_brain_dump_entry(content)
+
+                # Prepare result entry
+                entry_result = {
+                    "id": entry_id,
+                    "content": content,
+                    "created_at": created_at,
+                    "category": analysis["category"],
+                    "should_convert": analysis["should_convert_to_task"],
+                    "reasoning": analysis.get("reasoning", ""),
+                    "task_id": None,
+                }
+
+                # Handle task conversion
+                if analysis["should_convert_to_task"] and not dry_run:
+                    # Create task from entry
+                    task_title = analysis.get("task_title", content[:100])
+                    task_description = analysis.get("task_description", content)
+                    task_category = analysis.get("task_category", "personal")
+
+                    # Create task (use the full description, not just title)
+                    task_id = await create_task_from_entry(
+                        adapter, task_description, task_category
+                    )
+
+                    if task_id:
+                        entry_result["task_id"] = task_id
+                        entry_result["task_title"] = task_title
+                        entry_result["task_category"] = task_category
+                        results["tasks_created"] += 1
+                    else:
+                        results["errors"].append(
+                            f"Failed to create task for entry {entry_id}"
+                        )
+                        # Still mark as processed, but without task link
+                        entry_result["should_convert"] = False
+
+                    # Mark as processed with task link
+                    success = await mark_as_processed(adapter, entry_id, task_id)
+                    if not success:
+                        results["errors"].append(
+                            f"Failed to mark entry {entry_id} as processed"
+                        )
+
+                elif analysis["should_convert_to_task"] and dry_run:
+                    # Dry run - just record what would happen
+                    entry_result["task_title"] = analysis.get("task_title", content[:100])
+                    entry_result["task_category"] = analysis.get("task_category", "personal")
+                    results["tasks_created"] += 1
+                else:
+                    # Archive (mark as processed without task)
+                    if not dry_run:
+                        success = await mark_as_processed(adapter, entry_id, None)
+                        if not success:
+                            results["errors"].append(
+                                f"Failed to mark entry {entry_id} as processed"
+                            )
+                    results["archived"] += 1
+
+                results["entries"].append(entry_result)
+
+            except Exception as e:
+                results["errors"].append(f"Error processing entry {entry_id}: {str(e)}")
+                continue
+
+        return results
+
+    finally:
+        # Ensure adapter is closed
+        await adapter.close()
 
 
 def execute(args: Optional[str] = None) -> str:
@@ -280,15 +395,104 @@ def execute(args: Optional[str] = None) -> str:
     Returns:
         Processing results
     """
-    # TODO: Implement in subtasks 2.2 and 2.3
-    return "Brain dump processing command - coming soon!"
+    import asyncio
+
+    # Parse arguments
+    dry_run = False
+    limit = 10
+
+    if args:
+        arg_parts = args.split()
+        if "--dry-run" in arg_parts:
+            dry_run = True
+        for i, part in enumerate(arg_parts):
+            if part == "--limit" and i + 1 < len(arg_parts):
+                try:
+                    limit = int(arg_parts[i + 1])
+                except ValueError:
+                    pass
+
+    # Print header
+    mode = "DRY RUN" if dry_run else "Processing"
+    print(f"🧠 Brain Dump {mode}")
+    print(f"📡 Using claude-3-5-haiku-20241022")
+    print(f"📊 Limit: {limit} entries\n")
+    print("-" * 70)
+
+    # Run async processing
+    results = asyncio.run(_process_entries_async(dry_run, limit))
+
+    # Format output
+    output_parts = []
+
+    if results["total"] == 0:
+        output_parts.append("\n✨ No unprocessed brain dump entries found!\n")
+        print("\n✨ No unprocessed brain dump entries found!\n")
+        print("-" * 70)
+        return "\n".join(output_parts)
+
+    # Display each entry's processing result
+    for i, entry in enumerate(results["entries"], 1):
+        print(f"\n📝 Entry {i}/{results['total']}")
+        print(f"   Created: {entry['created_at']}")
+        print(f"\n   Content: {entry['content'][:100]}{'...' if len(entry['content']) > 100 else ''}")
+        print(f"\n   Category: {entry['category'].upper()}")
+        print(f"   Decision: {'→ TASK' if entry['should_convert'] else '→ ARCHIVE'}")
+
+        if entry.get("reasoning"):
+            print(f"   Reasoning: {entry['reasoning']}")
+
+        if entry["should_convert"]:
+            task_title = entry.get("task_title", "Untitled")
+            task_category = entry.get("task_category", "personal")
+            if dry_run:
+                print(f"   Would create: [{task_category}] {task_title}")
+            else:
+                if entry.get("task_id"):
+                    print(f"   ✅ Created: [{task_category}] {task_title} (ID: {entry['task_id']})")
+                else:
+                    print(f"   ❌ Failed to create task")
+        else:
+            if dry_run:
+                print(f"   Would archive")
+            else:
+                print(f"   📦 Archived")
+
+        print()
+
+    # Summary
+    print("-" * 70)
+    print(f"\n📊 Summary")
+    print(f"   Total processed: {results['total']}")
+    print(f"   Tasks created: {results['tasks_created']}")
+    print(f"   Archived: {results['archived']}")
+
+    if results["errors"]:
+        print(f"   ⚠️  Errors: {len(results['errors'])}")
+        for error in results["errors"]:
+            print(f"      - {error}")
+
+    if dry_run:
+        print(f"\n💡 This was a dry run. Use without --dry-run to apply changes.")
+
+    print()
+
+    # Build return string (for programmatic use)
+    output_parts.append(f"Processed {results['total']} entries")
+    output_parts.append(f"Tasks created: {results['tasks_created']}")
+    output_parts.append(f"Archived: {results['archived']}")
+
+    if results["errors"]:
+        output_parts.append(f"Errors: {len(results['errors'])}")
+
+    return "\n".join(output_parts)
 
 
 def main():
     """CLI entry point."""
     args = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else None
     result = execute(args)
-    print(result)
+    # Result is already printed in execute(), so we don't print again
 
 
 if __name__ == "__main__":
