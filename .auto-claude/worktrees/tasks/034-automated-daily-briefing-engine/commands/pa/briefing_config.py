@@ -260,22 +260,22 @@ def pretty_print_json(data: Any, indent: int = 0, max_depth: int = 10) -> None:
             if isinstance(value, dict):
                 print("{")
                 pretty_print_json(value, indent + 1, max_depth)
-                print(f"{prefix}{',' if not is_last else '}'}")
+                print(f"{prefix}" + (',' if not is_last else '}'))
             elif isinstance(value, list):
                 print("[")
                 pretty_print_json(value, indent + 1, max_depth)
-                print(f"{prefix}{',' if not is_last else ']'}")
+                print(f"{prefix}" + (',' if not is_last else ']'))
             elif isinstance(value, bool):
                 color = Colors.GREEN if value else Colors.YELLOW
-                print(f"{color}{str(value).lower()}{Colors.END}{',' if not is_last else ''}")
+                print(f"{color}{str(value).lower()}{Colors.END}" + (',' if not is_last else ''))
             elif isinstance(value, (int, float)):
-                print(f"{Colors.BLUE}{value}{Colors.END}{',' if not is_last else ''}")
+                print(f"{Colors.BLUE}{value}{Colors.END}" + (',' if not is_last else ''))
             elif isinstance(value, str):
-                print(f'{Colors.YELLOW}"{value}"{Colors.END}{',' if not is_last else ''}')
+                print(f'{Colors.YELLOW}"{value}"{Colors.END}' + (',' if not is_last else ''))
             elif value is None:
-                print(f"{Colors.YELLOW}null{Colors.END}{',' if not is_last else ''}")
+                print(f"{Colors.YELLOW}null{Colors.END}" + (',' if not is_last else ''))
             else:
-                print(f"{value}{',' if not is_last else ''}")
+                print(f"{value}" + (',' if not is_last else ''))
 
     elif isinstance(data, list):
         if not data:
@@ -293,13 +293,13 @@ def pretty_print_json(data: Any, indent: int = 0, max_depth: int = 10) -> None:
                     print(",")
             elif isinstance(item, bool):
                 color = Colors.GREEN if item else Colors.YELLOW
-                print(f"{color}{str(item).lower()}{Colors.END}{',' if not is_last else ''}")
+                print(f"{color}{str(item).lower()}{Colors.END}" + (',' if not is_last else ''))
             elif isinstance(item, (int, float)):
-                print(f"{Colors.BLUE}{item}{Colors.END}{',' if not is_last else ''}")
+                print(f"{Colors.BLUE}{item}{Colors.END}" + (',' if not is_last else ''))
             elif isinstance(item, str):
-                print(f'{Colors.YELLOW}"{item}"{Colors.END}{',' if not is_last else ''}')
+                print(f'{Colors.YELLOW}"{item}"{Colors.END}' + (',' if not is_last else ''))
             else:
-                print(f"{item}{',' if not is_last else ''}")
+                print(f"{item}" + (',' if not is_last else ''))
 
 
 def list_all_keys(data: Dict[str, Any], prefix: str = '') -> List[str]:
