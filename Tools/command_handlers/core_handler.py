@@ -87,6 +87,7 @@ class CoreHandler(BaseHandler):
   /sessions      - List saved sessions
   /resume <id>   - Resume a saved session (/resume last for most recent)
   /recall <q>    - Search memories (MemOS hybrid) or past sessions
+  /history-search <q> - Semantic search of conversation history
   /remember <c>  - Store a memory in MemOS knowledge graph
   /memory        - Show memory system info (Neo4j, ChromaDB, sessions)
   /branch [name] - Create conversation branch from current point
