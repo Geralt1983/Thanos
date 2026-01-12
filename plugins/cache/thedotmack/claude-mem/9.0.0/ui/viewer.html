@@ -1475,18 +1475,35 @@
       margin: 0 auto;
     }
 
-    /* Empty State Component - Matches card design patterns */
+    /*
+     * Empty State Component Styles
+     *
+     * Design Philosophy:
+     * - Matches existing card design patterns for visual consistency
+     * - Uses theme CSS variables for automatic light/dark mode support
+     * - Provides welcoming, helpful guidance when no memories exist
+     *
+     * Layout Strategy:
+     * - Centered with generous top margin (80px) to vertically center in viewport
+     * - Max-width (500px) ensures readability and prevents overly wide text
+     * - Card-like appearance (border, radius, background) maintains design language
+     *
+     * Animation:
+     * - fadeIn (0.4s) is slightly slower than card slideIn (0.3s) to feel distinct
+     *   but still cohesive with the overall animation style
+     */
     .empty-state {
       margin: 80px auto 24px;
       padding: 48px 32px;
       max-width: 500px;
       background: var(--color-bg-card);
       border: 1px solid var(--color-border-primary);
-      border-radius: 8px;
+      border-radius: 8px;  /* Matches card border-radius */
       text-align: center;
       animation: fadeIn 0.4s ease-out;
     }
 
+    /* Subtle fade-in with slight upward movement for smooth appearance */
     @keyframes fadeIn {
       from {
         opacity: 0;
@@ -1498,6 +1515,11 @@
       }
     }
 
+    /*
+     * Icon Styling:
+     * - Reduced opacity (0.4) and grayscale filter create a subtle, non-distracting icon
+     * - Icon becomes even more subtle (0.3) in filtered state to indicate temporary condition
+     */
     .empty-state-icon {
       width: 64px;
       height: 64px;
@@ -1569,13 +1591,23 @@
       font-weight: 500;
     }
 
-    /* Filtered state variant */
+    /*
+     * Filtered State Variant:
+     * Applied when empty state is caused by active filters (not truly empty)
+     *
+     * Visual Differences:
+     * - Slightly less padding (40px vs 48px) to feel more compact/temporary
+     * - Lower icon opacity (0.3 vs 0.4) to emphasize this is a transient state
+     * - Reduced message margin to tighten spacing
+     *
+     * This variant communicates "your data exists, but filters hide it"
+     */
     .empty-state--filtered {
       padding: 40px 32px;
     }
 
     .empty-state--filtered .empty-state-icon {
-      opacity: 0.3;
+      opacity: 0.3;  /* Even more subtle to indicate temporary filtered state */
     }
 
     .empty-state--filtered .empty-state-message {
@@ -1619,20 +1651,23 @@
         padding: 20px;
       }
 
-      /* Empty state - tablet adjustments */
+      /*
+       * Empty state - tablet adjustments (481-768px)
+       * Moderate reduction in sizing to fit tablet viewports while maintaining readability
+       */
       .empty-state {
-        margin-top: 60px;
-        padding: 40px 28px;
+        margin-top: 60px;  /* Reduced from 80px */
+        padding: 40px 28px;  /* Reduced from 48px 32px */
       }
 
       .empty-state-title {
-        font-size: 18px;
+        font-size: 18px;  /* Down from 20px */
       }
 
       .empty-state-icon {
-        width: 56px;
+        width: 56px;  /* Down from 64px */
         height: 56px;
-        margin-bottom: 20px;
+        margin-bottom: 20px;  /* Reduced from 24px */
       }
     }
 
@@ -1648,29 +1683,33 @@
         display: none;
       }
 
-      /* Empty state - mobile adjustments */
+      /*
+       * Empty state - mobile adjustments (≤600px)
+       * Further reduced sizing for smaller screens while maintaining usability
+       * All spacing and font sizes scale down proportionally
+       */
       .empty-state {
-        margin-top: 40px;
-        padding: 32px 24px;
+        margin-top: 40px;  /* Reduced from 80px */
+        padding: 32px 24px;  /* Reduced from 48px 32px */
       }
 
       .empty-state-title {
-        font-size: 17px;
+        font-size: 17px;  /* Down from 20px */
       }
 
       .empty-state-message {
-        font-size: 13px;
+        font-size: 13px;  /* Down from 14px */
       }
 
       .empty-state-hints {
-        gap: 10px;
-        margin-top: 24px;
-        padding-top: 24px;
+        gap: 10px;  /* Reduced from 12px */
+        margin-top: 24px;  /* Reduced from 28px */
+        padding-top: 24px;  /* Reduced from 28px */
       }
 
       .empty-state-hint {
-        padding: 10px 14px;
-        gap: 10px;
+        padding: 10px 14px;  /* Reduced from 12px 16px */
+        gap: 10px;  /* Reduced from 12px */
       }
 
       .hint-icon {
@@ -1817,26 +1856,30 @@
         height: 44px;
       }
 
-      /* Empty state - small mobile adjustments */
+      /*
+       * Empty state - small mobile adjustments (≤480px)
+       * Minimal sizing for very small screens while keeping content readable
+       * Tighter margins to maximize available space
+       */
       .empty-state {
-        margin: 24px 12px;
-        padding: 28px 20px;
+        margin: 24px 12px;  /* Minimal margins for small screens */
+        padding: 28px 20px;  /* Reduced from 48px 32px */
       }
 
       .empty-state-icon {
-        width: 48px;
+        width: 48px;  /* Smallest icon size (down from 64px) */
         height: 48px;
-        margin-bottom: 16px;
+        margin-bottom: 16px;  /* Reduced from 24px */
       }
 
       .empty-state-title {
-        font-size: 16px;
-        margin-bottom: 10px;
+        font-size: 16px;  /* Down from 20px */
+        margin-bottom: 10px;  /* Reduced from 12px */
       }
 
       .empty-state-message {
-        font-size: 12px;
-        margin-bottom: 20px;
+        font-size: 12px;  /* Smallest text size (down from 14px) */
+        margin-bottom: 20px;  /* Reduced from 28px */
       }
 
       .empty-state-hints {
