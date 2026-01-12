@@ -704,7 +704,687 @@ pytest tests/unit/test_new_feature.py --cov=core/new_feature --cov-report=term-m
 
 ## Test Categories and Markers
 
-*This section will be completed in subtask 2.3*
+Understanding test markers is crucial for running the right tests at the right time. Markers let you categorize tests and run specific subsets based on speed, dependencies, or purpose. This section explains all available markers and when to use each one.
+
+### Marker Overview
+
+All markers are registered in `pytest.ini` and enforced with the `--strict-markers` flag. This prevents typos and ensures consistency across the test suite.
+
+**Quick marker reference:**
+
+| Marker | Purpose | Auto-Skip? | Typical Count |
+|--------|---------|------------|---------------|
+| `@pytest.mark.unit` | Fast, isolated unit tests | No | ~200+ tests |
+| `@pytest.mark.integration` | Tests with external dependencies | No | ~50+ tests |
+| `@pytest.mark.slow` | Tests taking >5 seconds | No | ~20 tests |
+| `@pytest.mark.api` | Tests requiring API access | No | ~15 tests |
+| `@pytest.mark.requires_openai` | Tests requiring OpenAI API key | Yes* | ~10 tests |
+| `@pytest.mark.requires_google_calendar` | Tests requiring Google Calendar credentials | Yes* | ~8 tests |
+| `@pytest.mark.asyncio` | Async tests (auto-applied) | No | ~100+ tests |
+
+*Auto-skip means tests automatically skip themselves if the required credentials are not available.
+
+---
+
+### @pytest.mark.unit
+
+**Purpose:** Marks fast, isolated unit tests with all external dependencies mocked.
+
+**Characteristics:**
+- ⚡ **Fast** - Typically complete in milliseconds
+- 🔒 **Isolated** - No external services, databases, or APIs
+- 🎭 **Fully mocked** - All dependencies are mocked or stubbed
+- ✅ **Reliable** - No flaky behavior from external factors
+- 🚀 **CI-friendly** - Perfect for rapid feedback in CI/CD
+
+**When to use:**
+- Testing individual functions, classes, or methods
+- Testing business logic without external dependencies
+- Testing error handling and edge cases
+- Any test that can run with mocked dependencies
+
+**Example:**
+
+```python
+import pytest
+from core.commitment_tracker import CommitmentTracker
+
+@pytest.mark.unit
+def test_commitment_creation():
+    """Test that commitments are created with correct properties."""
+    tracker = CommitmentTracker()
+    commitment = tracker.create_commitment(
+        title="Complete project",
+        due_date="2024-12-31"
+    )
+    assert commitment.title == "Complete project"
+    assert commitment.status == "pending"
+```
+
+**Run unit tests:**
+
+```bash
+# All unit tests
+pytest -m unit
+
+# Unit tests excluding slow ones
+pytest -m "unit and not slow"
+
+# Unit tests with coverage
+pytest -m unit --cov=. --cov-report=html
+
+# Specific unit test file
+pytest -m unit tests/unit/test_commitment_tracker.py
+```
+
+**Best practices:**
+- Use for the majority of your tests (80%+ of test suite)
+- Mock all external dependencies (databases, APIs, file systems)
+- Keep tests fast (<100ms per test)
+- Test one thing per test function
+- Use descriptive test names that explain what's being tested
+
+---
+
+### @pytest.mark.integration
+
+**Purpose:** Marks integration tests that verify interactions between components or with external systems.
+
+**Characteristics:**
+- 🔗 **Cross-component** - Tests multiple components working together
+- 🐌 **Slower** - May take seconds rather than milliseconds
+- 🌐 **External dependencies** - May use real or mocked external services
+- 🎯 **End-to-end scenarios** - Tests realistic workflows
+- ⚙️ **System-level** - Tests configuration, initialization, teardown
+
+**When to use:**
+- Testing interactions between multiple components
+- Testing adapters with real external services (when safe)
+- Testing complex workflows that span multiple modules
+- Verifying system-level behavior
+- Testing configuration and initialization logic
+
+**Example:**
+
+```python
+import pytest
+from adapters.google_calendar_adapter import GoogleCalendarAdapter
+from core.session_manager import SessionManager
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_calendar_integration_workflow():
+    """Test complete workflow of fetching and processing calendar events."""
+    # This test uses mocked Google Calendar API
+    adapter = GoogleCalendarAdapter()
+    session_manager = SessionManager()
+
+    events = await adapter.fetch_events()
+    session = await session_manager.create_session(events)
+
+    assert len(session.events) > 0
+    assert session.status == "active"
+```
+
+**Run integration tests:**
+
+```bash
+# All integration tests
+pytest -m integration
+
+# Integration tests with verbose output
+pytest -m integration -v
+
+# Integration tests excluding external API requirements
+pytest -m "integration and not requires_openai and not requires_google_calendar"
+
+# Specific integration test file
+pytest tests/integration/test_calendar_integration.py
+```
+
+**Best practices:**
+- Use for tests that verify component interactions
+- Mock external services when possible (most integration tests do)
+- Keep integration tests focused on specific workflows
+- Use fixtures to set up complex test scenarios
+- Consider using temporary databases or in-memory storage
+- Combine with other markers (`@pytest.mark.slow`, `@pytest.mark.requires_openai`) as needed
+
+---
+
+### @pytest.mark.slow
+
+**Purpose:** Marks tests that take significant time to run (>5 seconds).
+
+**Characteristics:**
+- ⏱️ **Time-consuming** - Takes >5 seconds to complete
+- 🔄 **Performance tests** - May include benchmarks or stress tests
+- 📊 **Large datasets** - May process significant amounts of data
+- 🧪 **Complex scenarios** - Multi-step workflows or comprehensive tests
+
+**When to use:**
+- Performance benchmarks and profiling tests
+- Tests that process large amounts of data
+- Complex multi-step integration scenarios
+- Tests that intentionally wait (rate limiting, retries)
+- Comprehensive end-to-end tests
+
+**Example:**
+
+```python
+import pytest
+from integration.chroma_adapter_integration import ChromaIntegration
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.asyncio
+async def test_large_scale_embedding_generation():
+    """Test generating embeddings for 1000+ documents."""
+    integration = ChromaIntegration()
+    documents = [f"Document {i}" for i in range(1000)]
+
+    embeddings = await integration.generate_embeddings(documents)
+
+    assert len(embeddings) == 1000
+    # This test takes ~10 seconds due to embedding generation
+```
+
+**Run or skip slow tests:**
+
+```bash
+# Skip slow tests (recommended for development)
+pytest -m "not slow"
+
+# Run only slow tests
+pytest -m slow
+
+# Run unit tests but skip slow ones (fastest feedback)
+pytest -m "unit and not slow"
+
+# Run all tests including slow ones
+pytest  # (slow tests are included by default)
+```
+
+**Best practices:**
+- Always combine with `@pytest.mark.unit` or `@pytest.mark.integration`
+- Use for tests that genuinely need time (don't mark tests slow just because they're integration tests)
+- Consider splitting slow tests into smaller, focused tests when possible
+- Document why the test is slow in the docstring
+- Run slow tests in CI but skip during local development
+
+---
+
+### @pytest.mark.api
+
+**Purpose:** General marker for tests that require network access or external API calls.
+
+**Characteristics:**
+- 🌐 **Network dependent** - Requires internet connectivity
+- 🔑 **May need credentials** - Might require API keys or tokens
+- 🎲 **Potentially flaky** - Network issues can cause intermittent failures
+- 💰 **May have costs** - Some API calls may incur charges
+
+**When to use:**
+- Tests making real HTTP requests to external services
+- Tests that require internet connectivity
+- Tests that interact with third-party APIs (when not using more specific markers)
+- Tests that have external rate limits
+
+**Example:**
+
+```python
+import pytest
+import requests
+
+@pytest.mark.api
+def test_external_service_health():
+    """Test that external service is reachable."""
+    response = requests.get("https://api.example.com/health")
+    assert response.status_code == 200
+```
+
+**Run or skip API tests:**
+
+```bash
+# Skip all API tests (recommended for offline development)
+pytest -m "not api"
+
+# Run only API tests
+pytest -m api
+
+# Run integration tests but skip API tests
+pytest -m "integration and not api"
+```
+
+**Best practices:**
+- Use more specific markers when available (`requires_openai`, `requires_google_calendar`)
+- Mock API calls in most tests; only use real APIs when absolutely necessary
+- Implement auto-skip logic if credentials are missing
+- Consider VCR/cassette libraries to record/replay API responses
+- Be mindful of rate limits and API costs
+
+---
+
+### @pytest.mark.requires_openai
+
+**Purpose:** Marks tests that require a valid OpenAI API key to run.
+
+**Characteristics:**
+- 🔑 **Requires API key** - Needs `OPENAI_API_KEY` environment variable
+- ✅ **Auto-skip** - Tests automatically skip if API key not provided
+- 💰 **Incurs costs** - Makes real API calls that cost money
+- 🎯 **Real integration** - Tests actual OpenAI API behavior
+- 🌐 **Network dependent** - Requires internet connectivity
+
+**When to use:**
+- Testing OpenAI-specific features (embeddings, completions, chat)
+- Verifying integration with OpenAI's API
+- Testing behavior with real AI model responses
+- Validating error handling for OpenAI-specific errors
+
+**Example:**
+
+```python
+import pytest
+import os
+from adapters.chroma_adapter import ChromaAdapter
+
+@pytest.mark.requires_openai
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_openai_embedding_generation():
+    """Test generating embeddings using real OpenAI API.
+
+    Requires OPENAI_API_KEY environment variable.
+    Skips automatically if not provided.
+    """
+    if not os.getenv("OPENAI_API_KEY"):
+        pytest.skip("OpenAI API key not configured")
+
+    adapter = ChromaAdapter()
+    embedding = await adapter.generate_embedding("Test document")
+
+    assert isinstance(embedding, list)
+    assert len(embedding) == 1536  # OpenAI embedding dimension
+```
+
+**Setup:**
+
+```bash
+# Add to .env file
+OPENAI_API_KEY=sk-your-api-key-here
+
+# Or set temporarily for one test run
+OPENAI_API_KEY=sk-your-key pytest -m requires_openai
+```
+
+**Run or skip OpenAI tests:**
+
+```bash
+# Skip OpenAI tests (default for local development)
+pytest -m "not requires_openai"
+
+# Run only OpenAI tests
+pytest -m requires_openai
+
+# Run all tests except those requiring external APIs
+pytest -m "not requires_openai and not requires_google_calendar"
+
+# Run integration tests but skip OpenAI tests
+pytest -m "integration and not requires_openai"
+```
+
+**Best practices:**
+- Always implement auto-skip logic (check for API key presence)
+- Document in test docstring that API key is required
+- Use sparingly - most tests should use mocked OpenAI responses
+- Consider using recorded responses (VCR cassettes) instead
+- Be mindful of API costs when running these tests
+- Combine with `@pytest.mark.integration` and `@pytest.mark.slow` if appropriate
+
+---
+
+### @pytest.mark.requires_google_calendar
+
+**Purpose:** Marks tests that require Google Calendar API credentials to run.
+
+**Characteristics:**
+- 🔑 **Requires credentials** - Needs Google Calendar OAuth2 credentials
+- ✅ **Auto-skip** - Tests automatically skip if credentials not configured
+- 🌐 **Network dependent** - Requires internet connectivity
+- 📅 **Real calendar data** - May interact with real calendar events (use test calendars!)
+- 🎯 **OAuth flow** - Tests authentication and authorization
+
+**When to use:**
+- Testing Google Calendar adapter integration
+- Verifying OAuth2 authentication flow
+- Testing calendar event fetching, creation, or updates
+- Validating error handling for Google Calendar API errors
+
+**Example:**
+
+```python
+import pytest
+import os
+from adapters.google_calendar_adapter import GoogleCalendarAdapter
+
+@pytest.mark.requires_google_calendar
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_fetch_calendar_events():
+    """Test fetching events from Google Calendar.
+
+    Requires Google Calendar API credentials:
+    - GOOGLE_CALENDAR_CLIENT_ID
+    - GOOGLE_CALENDAR_CLIENT_SECRET
+
+    Skips automatically if not configured.
+    """
+    if not (os.getenv("GOOGLE_CALENDAR_CLIENT_ID") and
+            os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET")):
+        pytest.skip("Google Calendar credentials not configured")
+
+    adapter = GoogleCalendarAdapter()
+    events = await adapter.fetch_events(days_ahead=7)
+
+    assert isinstance(events, list)
+```
+
+**Setup:**
+
+```bash
+# Add to .env file
+GOOGLE_CALENDAR_CLIENT_ID=your-client-id
+GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret
+
+# Follow Google Calendar API setup guide
+# https://developers.google.com/calendar/api/quickstart/python
+```
+
+**Run or skip Google Calendar tests:**
+
+```bash
+# Skip Google Calendar tests (default for local development)
+pytest -m "not requires_google_calendar"
+
+# Run only Google Calendar tests
+pytest -m requires_google_calendar
+
+# Run all tests except those requiring external APIs
+pytest -m "not requires_openai and not requires_google_calendar"
+
+# Run integration tests but skip Google Calendar tests
+pytest -m "integration and not requires_google_calendar"
+```
+
+**Best practices:**
+- Always implement auto-skip logic (check for credentials)
+- Use test/sandbox Google Calendar accounts, never production calendars
+- Document credential setup in test docstring
+- Most tests should use mocked Google Calendar responses
+- Use recorded API responses when possible
+- Combine with `@pytest.mark.integration` marker
+- Be careful about modifying real calendar data
+
+---
+
+### @pytest.mark.asyncio
+
+**Purpose:** Marks async tests that use `async`/`await` syntax.
+
+**Characteristics:**
+- 🔄 **Async execution** - Tests async functions and coroutines
+- ⚙️ **Auto-applied** - pytest-asyncio plugin handles event loop setup
+- 🎯 **Async patterns** - Tests async code paths and concurrent execution
+- 📦 **Plugin-managed** - Requires pytest-asyncio plugin (included in requirements-test.txt)
+
+**When to use:**
+- Testing async functions (any function defined with `async def`)
+- Testing code that uses `await`
+- Testing concurrent operations
+- Testing async context managers or generators
+
+**Example:**
+
+```python
+import pytest
+from core.session_manager import SessionManager
+
+@pytest.mark.asyncio
+async def test_async_session_creation():
+    """Test asynchronous session creation."""
+    manager = SessionManager()
+    session = await manager.create_session()
+
+    assert session.id is not None
+    assert session.status == "active"
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_concurrent_operations():
+    """Test multiple async operations running concurrently."""
+    manager = SessionManager()
+
+    # Run multiple operations concurrently
+    sessions = await asyncio.gather(
+        manager.create_session(),
+        manager.create_session(),
+        manager.create_session()
+    )
+
+    assert len(sessions) == 3
+    assert all(s.status == "active" for s in sessions)
+```
+
+**Configuration:**
+
+The `@pytest.mark.asyncio` marker is automatically recognized by the pytest-asyncio plugin (installed via requirements-test.txt). No additional configuration needed!
+
+**Best practices:**
+- Combine with `@pytest.mark.unit` or `@pytest.mark.integration`
+- Use `AsyncMock` from `unittest.mock` for mocking async functions
+- Test both successful async execution and async exceptions
+- Be aware of event loop configuration (handled automatically by pytest-asyncio)
+- Use `await` for all async operations in tests
+
+---
+
+### Combining Markers
+
+Tests can have multiple markers to precisely categorize them:
+
+**Common marker combinations:**
+
+```python
+# Fast unit test (no external dependencies)
+@pytest.mark.unit
+def test_simple_function():
+    pass
+
+# Integration test with async code
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_async_integration():
+    pass
+
+# Slow integration test requiring OpenAI
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.requires_openai
+@pytest.mark.asyncio
+async def test_expensive_ai_operation():
+    pass
+
+# Unit test that's slow (performance benchmark)
+@pytest.mark.unit
+@pytest.mark.slow
+def test_performance_benchmark():
+    pass
+```
+
+**Filtering with combined markers:**
+
+```bash
+# Fast unit tests only (exclude slow)
+pytest -m "unit and not slow"
+
+# Integration tests without external API requirements
+pytest -m "integration and not requires_openai and not requires_google_calendar"
+
+# Only tests that require OpenAI (likely integration and slow)
+pytest -m requires_openai
+
+# All tests except slow and API-dependent
+pytest -m "not slow and not api and not requires_openai and not requires_google_calendar"
+```
+
+---
+
+### Writing Tests: Which Marker Should I Use?
+
+Use this decision tree when writing new tests:
+
+```
+1. Does the test use async/await?
+   ├─ Yes → Add @pytest.mark.asyncio
+   └─ No → Continue
+
+2. Does the test require external API calls?
+   ├─ Yes → Which API?
+   │   ├─ OpenAI → Add @pytest.mark.requires_openai
+   │   ├─ Google Calendar → Add @pytest.mark.requires_google_calendar
+   │   └─ Other → Add @pytest.mark.api
+   └─ No → Continue
+
+3. Does the test integrate multiple components?
+   ├─ Yes → Add @pytest.mark.integration
+   └─ No → Add @pytest.mark.unit
+
+4. Does the test take >5 seconds?
+   ├─ Yes → Add @pytest.mark.slow
+   └─ No → Done!
+```
+
+**Examples:**
+
+- **Simple function test:** `@pytest.mark.unit`
+- **Async function test:** `@pytest.mark.unit` + `@pytest.mark.asyncio`
+- **Component integration:** `@pytest.mark.integration` + `@pytest.mark.asyncio`
+- **OpenAI integration:** `@pytest.mark.integration` + `@pytest.mark.requires_openai` + `@pytest.mark.asyncio`
+- **Slow benchmark:** `@pytest.mark.unit` + `@pytest.mark.slow`
+
+---
+
+### Marker Best Practices
+
+**DO:**
+- ✅ Mark all unit tests with `@pytest.mark.unit`
+- ✅ Mark all integration tests with `@pytest.mark.integration`
+- ✅ Mark tests requiring external APIs with specific markers
+- ✅ Implement auto-skip logic for tests requiring credentials
+- ✅ Combine markers to precisely categorize tests
+- ✅ Document in test docstrings when special setup is required
+
+**DON'T:**
+- ❌ Skip markers - they enable powerful test filtering
+- ❌ Mark tests with both `unit` and `integration` (choose one)
+- ❌ Overuse `slow` marker (try to keep tests fast)
+- ❌ Make real API calls without appropriate markers
+- ❌ Use custom markers (stick to registered markers in pytest.ini)
+
+**Example of good test marking:**
+
+```python
+import pytest
+import os
+from core.commitment_tracker import CommitmentTracker
+from adapters.google_calendar_adapter import GoogleCalendarAdapter
+
+# Good: Simple unit test
+@pytest.mark.unit
+def test_commitment_creation():
+    tracker = CommitmentTracker()
+    commitment = tracker.create("Test")
+    assert commitment.title == "Test"
+
+# Good: Integration test with auto-skip
+@pytest.mark.integration
+@pytest.mark.requires_google_calendar
+@pytest.mark.asyncio
+async def test_calendar_sync():
+    """Sync commitments with Google Calendar.
+
+    Requires Google Calendar API credentials.
+    Skips automatically if not configured.
+    """
+    if not (os.getenv("GOOGLE_CALENDAR_CLIENT_ID")):
+        pytest.skip("Google Calendar not configured")
+
+    adapter = GoogleCalendarAdapter()
+    result = await adapter.sync_events()
+    assert result.success
+
+# Good: Performance benchmark marked as slow
+@pytest.mark.unit
+@pytest.mark.slow
+def test_large_dataset_processing():
+    """Test processing 10,000 items (benchmark)."""
+    tracker = CommitmentTracker()
+    items = [f"Item {i}" for i in range(10000)]
+    result = tracker.process_batch(items)
+    assert len(result) == 10000
+```
+
+---
+
+### Viewing Available Markers
+
+**See all registered markers:**
+
+```bash
+pytest --markers
+```
+
+**Output:**
+```
+@pytest.mark.unit: Unit tests (fast, isolated)
+@pytest.mark.integration: Integration tests (slower, external dependencies)
+@pytest.mark.slow: Slow running tests
+@pytest.mark.api: Tests requiring API access
+@pytest.mark.requires_google_calendar: Tests requiring Google Calendar API credentials
+@pytest.mark.requires_openai: Tests requiring OpenAI API key
+@pytest.mark.asyncio: Mark async test functions
+...
+```
+
+**Count tests by marker:**
+
+```bash
+# See how many tests have each marker
+pytest --collect-only -q | grep "<Module" | wc -l  # Total tests
+pytest -m unit --collect-only -q | wc -l           # Unit tests
+pytest -m integration --collect-only -q | wc -l    # Integration tests
+pytest -m slow --collect-only -q | wc -l           # Slow tests
+```
+
+---
+
+### Summary
+
+Markers are your primary tool for organizing and filtering tests. The Thanos test suite uses a clear, hierarchical marking system:
+
+1. **Primary category:** Every test is either `unit` or `integration`
+2. **Execution time:** Slow tests get `slow` marker
+3. **External dependencies:** Tests requiring APIs get specific markers (`requires_openai`, `requires_google_calendar`, or generic `api`)
+4. **Async support:** Async tests automatically get `asyncio` marker
+
+This system enables powerful test filtering for different workflows:
+- **Development:** `pytest -m "unit and not slow"` (fastest feedback)
+- **Pre-commit:** `pytest -m "not slow and not requires_openai and not requires_google_calendar"` (comprehensive but quick)
+- **CI/CD:** `pytest` (everything, including slow tests)
+- **Integration:** `pytest -m integration` (verify component interactions)
+
+**Next section:** [External Dependencies](#external-dependencies) explains how to set up optional external services for integration tests.
 
 ## External Dependencies
 
