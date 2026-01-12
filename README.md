@@ -120,13 +120,24 @@ Pre-configured bridges for popular MCP servers:
    result = await manager.call_tool("read_file", {"path": "/path/to/file.txt"})
    ```
 
-### MCP Documentation
+### Documentation
 
+#### Core Documentation
+- **[Agent Routing Algorithm](docs/agent-routing.md)**: Comprehensive guide to the intelligent agent routing system
+  - Routing algorithm and scoring system
+  - Complete keyword reference (92 keywords)
+  - Performance optimization details
+  - Developer guides for customization
+  - Troubleshooting and FAQ
+
+#### MCP Documentation
 - **[MCP Integration Guide](docs/mcp-integration-guide.md)**: Complete guide for using MCP in Thanos
 - **[Custom MCP Server Guide](docs/custom-mcp-server-guide.md)**: Build your own MCP servers
 - **[MCP Server Development](docs/mcp-server-development.md)**: Advanced MCP server development
 - **[Third-Party MCP Servers](docs/third-party-mcp-servers.md)**: Pre-configured third-party servers
 - **[MCP Implementation Details](MCP.md)**: Technical implementation overview
+
+#### System Architecture
 - **[Architecture Documentation](docs/architecture.md)**: System architecture with MCP
 
 ## Architecture

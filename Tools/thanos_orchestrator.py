@@ -454,6 +454,10 @@ class ThanosOrchestrator:
     def _get_intent_matcher(self) -> Union[KeywordMatcher, TrieKeywordMatcher]:
         """Get or create the cached intent matcher with pre-compiled patterns.
 
+        For complete documentation of the keyword structure, scoring weights,
+        and all 92 keywords organized by agent and priority, see:
+        📚 docs/agent-routing.md
+
         PERFORMANCE OPTIMIZATION:
         ------------------------
         The original implementation used nested loops in find_agent():
@@ -666,6 +670,10 @@ You track patterns and surface them.""")
 
     def find_agent(self, message: str) -> Optional[Agent]:
         """Find the best matching agent for a message using intent detection.
+
+        For comprehensive documentation of the routing algorithm, scoring system,
+        keyword reference, performance optimization, and troubleshooting guides, see:
+        📚 docs/agent-routing.md
 
         ROUTING ALGORITHM:
         -----------------

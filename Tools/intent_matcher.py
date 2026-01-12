@@ -6,6 +6,10 @@ This module provides efficient keyword matching for intent detection in the
 ThanosOrchestrator. Instead of O(n*m) substring searches, it uses pre-compiled
 regex patterns with alternation groups for O(m) complexity.
 
+For comprehensive documentation of the routing algorithm, keyword reference,
+performance benchmarks, and developer guides, see:
+📚 docs/agent-routing.md
+
 Performance characteristics:
 - Compilation: O(n) at initialization (one-time cost)
 - Matching: O(m) where m = message length

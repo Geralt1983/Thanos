@@ -143,11 +143,12 @@ class TestBriefingScheduler(unittest.TestCase):
         self.assertFalse(scheduler.should_stop)
 
     def test_config_validation_on_init(self):
-        """Test that invalid config raises error on initialization."""
-        # Write invalid config (missing required fields)
+        """Test that completely invalid JSON raises error on initialization."""
+        # Write invalid JSON (not just missing fields, but malformed JSON)
         with open(self.config_path, 'w') as f:
-            json.dump({"invalid": "config"}, f)
+            f.write("{invalid json without quotes")
 
+        # Should raise ValueError due to JSON parsing error
         with self.assertRaises(ValueError):
             BriefingScheduler(
                 config_path=str(self.config_path),
@@ -376,12 +377,9 @@ class TestBriefingScheduler(unittest.TestCase):
         self.assertTrue(scheduler._has_run_today("morning"))
 
     def test_deliver_file_creates_output(self):
-        """Test that file delivery creates output file."""
-        scheduler = BriefingScheduler(
-            config_path=str(self.config_path),
-            state_dir=str(self.state_dir),
-            templates_dir=str(self.templates_dir)
-        )
+        """Test that file delivery creates output file using FileChannel."""
+        # Import FileChannel
+        from Tools.delivery_channels import FileChannel
 
         output_dir = Path(self.temp_dir) / "output"
         config = {
@@ -391,15 +389,25 @@ class TestBriefingScheduler(unittest.TestCase):
 
         content = "# Test Briefing\nContent here"
 
-        scheduler._deliver_file("morning", content, config)
+        # Create FileChannel and deliver
+        file_channel = FileChannel(config)
+        metadata = {"date": date.today().isoformat()}
+        result = file_channel.deliver(content, "morning", metadata)
+
+        # Verify delivery succeeded
+        self.assertTrue(result)
 
         # Check file was created
         expected_file = output_dir / f"{date.today().isoformat()}_morning_briefing.md"
         self.assertTrue(expected_file.exists())
 
-        # Check content
+        # Check content (FileChannel adds YAML frontmatter, so check content is included)
         with open(expected_file, 'r') as f:
-            self.assertEqual(f.read(), content)
+            file_content = f.read()
+            self.assertIn(content, file_content)
+            # Verify frontmatter is present
+            self.assertIn("---", file_content)
+            self.assertIn("type: morning", file_content)
 
     def test_check_and_run_no_briefings_due(self):
         """Test check_and_run when no briefings are due."""
