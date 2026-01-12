@@ -11,6 +11,7 @@ Model: gpt-4o-mini (simple task - cost effective)
 
 from datetime import datetime
 from pathlib import Path
+import subprocess
 import sys
 from typing import Optional
 
@@ -46,6 +47,39 @@ Output format:
 - Keep it scannable (bullet points)
 - End with a single focus recommendation
 """
+
+
+def sync_calendar_quietly(timezone: str = "America/New_York") -> bool:
+    """
+    Quietly sync today's calendar data before generating briefing.
+
+    Args:
+        timezone: Timezone for date calculations
+
+    Returns:
+        True if sync succeeded, False otherwise
+    """
+    project_root = Path(__file__).parent.parent.parent
+    sync_script = project_root / "Tools" / "calendar_sync.py"
+
+    # Skip if sync script doesn't exist
+    if not sync_script.exists():
+        return False
+
+    try:
+        # Run sync quietly (capture output)
+        result = subprocess.run(
+            [sys.executable, str(sync_script), "--today", "--timezone", timezone],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        return result.returncode == 0
+
+    except (subprocess.TimeoutExpired, Exception):
+        # Fail silently - calendar sync is optional
+        return False
 
 
 def build_context_legacy() -> str:
@@ -128,6 +162,9 @@ def execute(args: Optional[str] = None, use_llm_enhancement: bool = False) -> st
     today = datetime.now().strftime("%A, %B %d, %Y")
     print(f"☀️  Generating daily briefing for {today}...")
     print(f"📊 Using BriefingEngine v2.0")
+
+    # Auto-sync today's calendar (quietly)
+    sync_calendar_quietly()
 
     try:
         # Gather context using the new engine

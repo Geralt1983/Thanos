@@ -1,10 +1,10 @@
 {
   "active": true,
-  "spec": "020-add-error-handling-and-troubleshooting-section-for",
+  "spec": "001-add-calendar-integration-adapter",
   "state": "building",
   "subtasks": {
     "completed": 0,
-    "total": 18,
+    "total": 0,
     "in_progress": 1,
     "failed": 0
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 16,
-    "started_at": "2026-01-11T22:43:33.758507"
+    "number": 15,
+    "started_at": "2026-01-11T22:41:18.737296"
   },
-  "last_update": "2026-01-11T23:35:42.312993"
+  "last_update": "2026-01-11T23:32:33.125519"
 }

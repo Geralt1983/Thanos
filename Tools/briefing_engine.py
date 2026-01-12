@@ -36,8 +36,9 @@ class BriefingEngine:
     """
     Core engine for generating personalized daily briefings.
 
-    Gathers data from State files (Commitments.md, ThisWeek.md, CurrentFocus.md),
-    processes and structures the information, and prepares it for rendering.
+    Gathers data from State files (Commitments.md, ThisWeek.md, CurrentFocus.md,
+    calendar_today.json), processes and structures the information, and prepares
+    it for rendering.
     """
 
     def __init__(self, state_dir: Optional[str] = None, templates_dir: Optional[str] = None):
@@ -85,6 +86,7 @@ class BriefingEngine:
             - commitments: List of active commitments
             - this_week: This week's tasks and goals
             - current_focus: Current focus areas
+            - calendar: Today's calendar events
             - today_date: Today's date
             - day_of_week: Day name (Monday, Tuesday, etc.)
             - is_weekend: Boolean indicating if today is weekend
@@ -97,6 +99,7 @@ class BriefingEngine:
             "commitments": self._read_commitments(),
             "this_week": self._read_this_week(),
             "current_focus": self._read_current_focus(),
+            "calendar": self._read_calendar(),
             "metadata": {
                 "generated_at": datetime.now().isoformat(),
                 "state_dir": str(self.state_dir),
@@ -338,6 +341,70 @@ class BriefingEngine:
                     result[current_section].append(text)
 
         return result
+
+    def _read_calendar(self) -> Dict[str, Any]:
+        """
+        Read and parse calendar_today.json file.
+
+        Returns:
+            Dictionary with today's calendar events and metadata.
+        """
+        file_path = self.state_dir / "calendar_today.json"
+
+        if not file_path.exists():
+            self._mark_file_missing("calendar_today.json")
+            return {
+                "events": [],
+                "synced_at": None,
+                "date": self.today.isoformat(),
+                "timezone": None,
+                "summary": {
+                    "total_events": 0,
+                    "total_duration_minutes": 0
+                }
+            }
+
+        self._mark_file_read("calendar_today.json")
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                calendar_data = json.load(f)
+
+            # Ensure we have all expected fields
+            return {
+                "events": calendar_data.get("events", []),
+                "synced_at": calendar_data.get("synced_at"),
+                "date": calendar_data.get("date", self.today.isoformat()),
+                "timezone": calendar_data.get("timezone"),
+                "summary": calendar_data.get("summary", {
+                    "total_events": len(calendar_data.get("events", [])),
+                    "total_duration_minutes": 0
+                })
+            }
+        except json.JSONDecodeError as e:
+            print(f"Warning: Error parsing calendar_today.json: {e}")
+            return {
+                "events": [],
+                "synced_at": None,
+                "date": self.today.isoformat(),
+                "timezone": None,
+                "summary": {
+                    "total_events": 0,
+                    "total_duration_minutes": 0
+                }
+            }
+        except Exception as e:
+            print(f"Warning: Error reading calendar_today.json: {e}")
+            return {
+                "events": [],
+                "synced_at": None,
+                "date": self.today.isoformat(),
+                "timezone": None,
+                "summary": {
+                    "total_events": 0,
+                    "total_duration_minutes": 0
+                }
+            }
 
     def _mark_file_read(self, filename: str) -> None:
         """Track which files were successfully read."""
