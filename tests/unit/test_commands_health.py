@@ -888,3 +888,266 @@ class TestIntegration:
             assert sample_health_data["date"] in result
             mock_save.assert_called_once()
             assert "78/100" in result  # Readiness score from sample data
+
+
+# ========================================================================
+# Weekly Trends Tests
+# ========================================================================
+
+
+@pytest.fixture
+def sample_weekly_data():
+    """Sample 7-day data from OuraAdapter"""
+    return {
+        "readiness": [
+            {"day": "2024-01-09", "score": 70},
+            {"day": "2024-01-10", "score": 72},
+            {"day": "2024-01-11", "score": 75},
+            {"day": "2024-01-12", "score": 78},
+            {"day": "2024-01-13", "score": 80},
+            {"day": "2024-01-14", "score": 82},
+            {"day": "2024-01-15", "score": 85},
+        ],
+        "sleep": [
+            {"day": "2024-01-09", "score": 65},
+            {"day": "2024-01-10", "score": 68},
+            {"day": "2024-01-11", "score": 70},
+            {"day": "2024-01-12", "score": 72},
+            {"day": "2024-01-13", "score": 75},
+            {"day": "2024-01-14", "score": 78},
+            {"day": "2024-01-15", "score": 80},
+        ],
+        "stress": [],
+        "activity": [],
+    }
+
+
+class TestWeeklyTrends:
+    """Tests for weekly trends functionality"""
+
+    @pytest.mark.asyncio
+    async def test_fetch_weekly_trends_success(self, sample_weekly_data):
+        """Test successful fetch of weekly trends"""
+        with patch("commands.health.summary.OuraAdapter") as mock_adapter_class:
+            mock_adapter = AsyncMock()
+            mock_adapter.call_tool = AsyncMock(
+                return_value=ToolResult.ok(sample_weekly_data)
+            )
+            mock_adapter.close = AsyncMock()
+            mock_adapter_class.return_value = mock_adapter
+
+            result = await summary.fetch_weekly_trends()
+
+            assert "error" not in result
+            assert "readiness" in result
+            assert "sleep" in result
+            assert "patterns" in result
+            mock_adapter.call_tool.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_fetch_weekly_trends_error(self):
+        """Test error handling in weekly trends fetch"""
+        with patch("commands.health.summary.OuraAdapter") as mock_adapter_class:
+            mock_adapter = AsyncMock()
+            mock_adapter.call_tool = AsyncMock(
+                return_value=ToolResult.fail("API error")
+            )
+            mock_adapter.close = AsyncMock()
+            mock_adapter_class.return_value = mock_adapter
+
+            result = await summary.fetch_weekly_trends()
+
+            assert "error" in result
+            assert "API error" in result["error"]
+
+    def test_calculate_trend_stats_improving(self):
+        """Test trend calculation for improving scores"""
+        scores = [70, 72, 75, 78, 80, 82, 85]
+        result = summary._calculate_trend_stats(scores, "Test")
+
+        assert result["average"] == 77.4
+        assert result["min"] == 70
+        assert result["max"] == 85
+        assert result["trend"] == "improving"
+        assert result["days"] == 7
+
+    def test_calculate_trend_stats_declining(self):
+        """Test trend calculation for declining scores"""
+        scores = [85, 82, 80, 78, 75, 72, 70]
+        result = summary._calculate_trend_stats(scores, "Test")
+
+        assert result["average"] == 77.4
+        assert result["min"] == 70
+        assert result["max"] == 85
+        assert result["trend"] == "declining"
+
+    def test_calculate_trend_stats_stable(self):
+        """Test trend calculation for stable scores"""
+        scores = [75, 76, 75, 77, 75, 76, 75]
+        result = summary._calculate_trend_stats(scores, "Test")
+
+        assert result["trend"] == "stable"
+
+    def test_calculate_trend_stats_no_data(self):
+        """Test trend calculation with no data"""
+        result = summary._calculate_trend_stats([], "Test")
+
+        assert result["average"] is None
+        assert result["min"] is None
+        assert result["max"] is None
+        assert result["trend"] == "no_data"
+        assert result["days"] == 0
+
+    def test_get_trend_direction_improving(self):
+        """Test trend direction detection for improving scores"""
+        scores = [70, 72, 75, 78, 80, 82, 85]
+        assert summary._get_trend_direction(scores) == "improving"
+
+    def test_get_trend_direction_declining(self):
+        """Test trend direction detection for declining scores"""
+        scores = [85, 82, 80, 78, 75, 72, 70]
+        assert summary._get_trend_direction(scores) == "declining"
+
+    def test_get_trend_direction_stable(self):
+        """Test trend direction detection for stable scores"""
+        scores = [75, 76, 75, 77, 75, 76, 75]
+        assert summary._get_trend_direction(scores) == "stable"
+
+    def test_analyze_weekly_trends_both_improving(self, sample_weekly_data):
+        """Test pattern detection for both metrics improving"""
+        result = summary._analyze_weekly_trends(sample_weekly_data)
+
+        assert "readiness" in result
+        assert "sleep" in result
+        assert result["readiness"]["trend"] == "improving"
+        assert result["sleep"]["trend"] == "improving"
+        assert any("Both sleep and recovery improving" in p for p in result["patterns"])
+
+    def test_analyze_weekly_trends_both_declining(self):
+        """Test pattern detection for both metrics declining"""
+        declining_data = {
+            "readiness": [
+                {"day": "2024-01-09", "score": 85},
+                {"day": "2024-01-10", "score": 82},
+                {"day": "2024-01-11", "score": 80},
+                {"day": "2024-01-12", "score": 75},
+                {"day": "2024-01-13", "score": 72},
+                {"day": "2024-01-14", "score": 70},
+                {"day": "2024-01-15", "score": 68},
+            ],
+            "sleep": [
+                {"day": "2024-01-09", "score": 80},
+                {"day": "2024-01-10", "score": 78},
+                {"day": "2024-01-11", "score": 75},
+                {"day": "2024-01-12", "score": 72},
+                {"day": "2024-01-13", "score": 70},
+                {"day": "2024-01-14", "score": 68},
+                {"day": "2024-01-15", "score": 65},
+            ],
+            "stress": [],
+        }
+
+        result = summary._analyze_weekly_trends(declining_data)
+
+        assert result["readiness"]["trend"] == "declining"
+        assert result["sleep"]["trend"] == "declining"
+        assert any("Both readiness and sleep declining" in p for p in result["patterns"])
+
+    def test_analyze_weekly_trends_low_averages(self):
+        """Test pattern detection for low weekly averages"""
+        low_data = {
+            "readiness": [
+                {"day": "2024-01-09", "score": 65},
+                {"day": "2024-01-10", "score": 66},
+                {"day": "2024-01-11", "score": 67},
+                {"day": "2024-01-12", "score": 68},
+                {"day": "2024-01-13", "score": 69},
+                {"day": "2024-01-14", "score": 68},
+                {"day": "2024-01-15", "score": 67},
+            ],
+            "sleep": [
+                {"day": "2024-01-09", "score": 60},
+                {"day": "2024-01-10", "score": 62},
+                {"day": "2024-01-11", "score": 64},
+                {"day": "2024-01-12", "score": 65},
+                {"day": "2024-01-13", "score": 66},
+                {"day": "2024-01-14", "score": 65},
+                {"day": "2024-01-15", "score": 64},
+            ],
+            "stress": [],
+        }
+
+        result = summary._analyze_weekly_trends(low_data)
+
+        assert any("Low readiness" in p for p in result["patterns"])
+        assert any("Suboptimal sleep" in p for p in result["patterns"])
+
+    def test_format_weekly_trends_success(self, sample_weekly_data):
+        """Test formatting of weekly trends data"""
+        trends = summary._analyze_weekly_trends(sample_weekly_data)
+        formatted = summary._format_weekly_trends(trends)
+
+        assert "📊 7-Day Trends" in formatted
+        assert "Readiness" in formatted
+        assert "Sleep" in formatted
+        assert "Average:" in formatted
+        assert "Range:" in formatted
+        assert "Trend:" in formatted
+        assert "Patterns Detected:" in formatted
+
+    def test_format_weekly_trends_error(self):
+        """Test formatting of error response"""
+        error_trends = {"error": "API connection failed"}
+        formatted = summary._format_weekly_trends(error_trends)
+
+        assert "📊 7-Day Trends" in formatted
+        assert "❌" in formatted
+        assert "API connection failed" in formatted
+
+    def test_format_weekly_trends_no_data(self):
+        """Test formatting when no data available"""
+        no_data = {
+            "readiness": {"average": None, "trend": "no_data"},
+            "sleep": {"average": None, "trend": "no_data"},
+            "patterns": [],
+        }
+        formatted = summary._format_weekly_trends(no_data)
+
+        assert "No data available" in formatted
+
+    @pytest.mark.asyncio
+    async def test_execute_with_trends(self, sample_health_data, sample_weekly_data):
+        """Test execute with trends flag enabled"""
+        with patch(
+            "commands.health.summary.OuraAdapter"
+        ) as mock_adapter_class, patch(
+            "commands.health.summary.save_to_history"
+        ) as mock_save:
+
+            # Setup mock adapter
+            mock_adapter = AsyncMock()
+
+            # Mock will be called twice: once for today's data, once for weekly data
+            mock_adapter.call_tool = AsyncMock(
+                side_effect=[
+                    ToolResult.ok(sample_health_data),
+                    ToolResult.ok(sample_weekly_data),
+                ]
+            )
+            mock_adapter.close = AsyncMock()
+            mock_adapter_class.return_value = mock_adapter
+
+            # Execute with trends
+            result = await summary.execute(
+                use_llm_enhancement=False, show_trends=True
+            )
+
+            # Verify both summaries are included
+            assert "Health Dashboard" in result
+            assert "📊 7-Day Trends" in result
+            assert "Readiness" in result
+            assert "Sleep" in result
+            mock_save.assert_called_once()
+
+            # Verify adapter was called twice
+            assert mock_adapter.call_tool.call_count == 2

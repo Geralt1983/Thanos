@@ -5,15 +5,20 @@ Generates a comprehensive health metrics dashboard combining Oura Ring data
 (readiness, sleep, stress) into a unified health snapshot.
 
 Usage:
-    python -m commands.health.summary [--llm-enhance]
+    python -m commands.health.summary [--llm-enhance] [--trends]
+
+Flags:
+    --llm-enhance: Use LLM to provide personalized insights
+    --trends: Include 7-day trend analysis
 
 Model: gpt-4o-mini (simple task - cost effective)
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -70,6 +75,201 @@ async def fetch_health_data() -> dict:
         return {"error": f"Error fetching health data: {str(e)}"}
     finally:
         await adapter.close()
+
+
+async def fetch_weekly_trends() -> dict:
+    """
+    Fetch 7-day health trends from Oura Ring.
+
+    Returns:
+        Dictionary with trend analysis including averages, ranges, and patterns.
+        Returns empty dict with error key if fetch fails.
+    """
+    try:
+        adapter = OuraAdapter()
+        today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+        seven_days_ago = (datetime.now(ZoneInfo("America/New_York")) - timedelta(days=6)).strftime("%Y-%m-%d")
+
+        result = await adapter.call_tool("get_daily_summary", {
+            "start_date": seven_days_ago,
+            "end_date": today
+        })
+
+        if result.success:
+            return _analyze_weekly_trends(result.data)
+        else:
+            return {"error": f"Failed to fetch weekly data: {result.error}"}
+
+    except Exception as e:
+        return {"error": f"Error fetching weekly data: {str(e)}"}
+    finally:
+        await adapter.close()
+
+
+def _analyze_weekly_trends(data: dict) -> dict:
+    """
+    Analyze weekly health data to identify trends.
+
+    Args:
+        data: Raw weekly data from OuraAdapter
+
+    Returns:
+        Dictionary with trend statistics and analysis
+    """
+    readiness_scores = [item.get("score") for item in data.get("readiness", []) if item.get("score")]
+    sleep_scores = [item.get("score") for item in data.get("sleep", []) if item.get("score")]
+    stress_data = data.get("stress", [])
+
+    trends = {
+        "readiness": _calculate_trend_stats(readiness_scores, "Readiness"),
+        "sleep": _calculate_trend_stats(sleep_scores, "Sleep"),
+        "patterns": []
+    }
+
+    # Identify patterns
+    if readiness_scores and sleep_scores:
+        # Check for declining trends
+        readiness_trend = _get_trend_direction(readiness_scores)
+        sleep_trend = _get_trend_direction(sleep_scores)
+
+        if readiness_trend == "declining" and sleep_trend == "declining":
+            trends["patterns"].append("⚠️ Both readiness and sleep declining - prioritize recovery")
+        elif readiness_trend == "improving" and sleep_trend == "improving":
+            trends["patterns"].append("✅ Positive trend: Both sleep and recovery improving")
+        elif readiness_trend == "declining" and sleep_trend != "declining":
+            trends["patterns"].append("⚠️ Readiness declining despite stable sleep - check stress and activity")
+        elif sleep_trend == "declining":
+            trends["patterns"].append("⚠️ Sleep quality declining - review sleep environment and bedtime routine")
+
+        # Check if below optimal
+        avg_readiness = sum(readiness_scores) / len(readiness_scores)
+        avg_sleep = sum(sleep_scores) / len(sleep_scores)
+
+        if avg_readiness < 70:
+            trends["patterns"].append("📊 Week average: Low readiness - consider lighter training load")
+        if avg_sleep < 70:
+            trends["patterns"].append("📊 Week average: Suboptimal sleep - focus on sleep hygiene")
+
+    if not trends["patterns"]:
+        trends["patterns"].append("📊 Metrics stable across the week")
+
+    return trends
+
+
+def _calculate_trend_stats(scores: list[int], metric_name: str) -> dict:
+    """
+    Calculate statistical analysis for a metric's trend.
+
+    Args:
+        scores: List of scores over time
+        metric_name: Name of the metric for display
+
+    Returns:
+        Dictionary with min, max, average, and trend direction
+    """
+    if not scores:
+        return {
+            "average": None,
+            "min": None,
+            "max": None,
+            "trend": "no_data",
+            "days": 0
+        }
+
+    return {
+        "average": round(sum(scores) / len(scores), 1),
+        "min": min(scores),
+        "max": max(scores),
+        "trend": _get_trend_direction(scores),
+        "days": len(scores)
+    }
+
+
+def _get_trend_direction(scores: list[int]) -> str:
+    """
+    Determine if a metric is improving, declining, or stable.
+
+    Args:
+        scores: List of scores in chronological order
+
+    Returns:
+        "improving", "declining", or "stable"
+    """
+    if len(scores) < 2:
+        return "stable"
+
+    # Compare first half to second half
+    mid = len(scores) // 2
+    first_half_avg = sum(scores[:mid]) / mid
+    second_half_avg = sum(scores[mid:]) / len(scores[mid:])
+
+    diff_pct = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+
+    if diff_pct > 5:
+        return "improving"
+    elif diff_pct < -5:
+        return "declining"
+    else:
+        return "stable"
+
+
+def _format_weekly_trends(trends: dict) -> str:
+    """
+    Format weekly trends data into a readable string.
+
+    Args:
+        trends: Trend analysis from _analyze_weekly_trends
+
+    Returns:
+        Formatted string with trend visualizations
+    """
+    if "error" in trends:
+        return f"\n## 📊 7-Day Trends\n\n❌ {trends['error']}\n"
+
+    output = "\n## 📊 7-Day Trends\n\n"
+
+    # Readiness trends
+    readiness = trends.get("readiness", {})
+    if readiness.get("average"):
+        trend_emoji = {
+            "improving": "📈",
+            "declining": "📉",
+            "stable": "➡️",
+            "no_data": "❓"
+        }.get(readiness.get("trend", "stable"), "➡️")
+
+        output += f"**Readiness** {trend_emoji}\n"
+        output += f"- Average: {readiness['average']} ({_get_status_emoji(int(readiness['average']))})\n"
+        output += f"- Range: {readiness['min']} - {readiness['max']}\n"
+        output += f"- Trend: {readiness['trend'].replace('_', ' ').title()}\n\n"
+    else:
+        output += "**Readiness**: No data available\n\n"
+
+    # Sleep trends
+    sleep = trends.get("sleep", {})
+    if sleep.get("average"):
+        trend_emoji = {
+            "improving": "📈",
+            "declining": "📉",
+            "stable": "➡️",
+            "no_data": "❓"
+        }.get(sleep.get("trend", "stable"), "➡️")
+
+        output += f"**Sleep** {trend_emoji}\n"
+        output += f"- Average: {sleep['average']} ({_get_status_emoji(int(sleep['average']))})\n"
+        output += f"- Range: {sleep['min']} - {sleep['max']}\n"
+        output += f"- Trend: {sleep['trend'].replace('_', ' ').title()}\n\n"
+    else:
+        output += "**Sleep**: No data available\n\n"
+
+    # Patterns
+    patterns = trends.get("patterns", [])
+    if patterns:
+        output += "**Patterns Detected:**\n"
+        for pattern in patterns:
+            output += f"- {pattern}\n"
+
+    return output
 
 
 def _get_status_emoji(score: int) -> str:
@@ -509,12 +709,13 @@ def save_to_history(summary: str):
         f.write(summary)
 
 
-async def execute(use_llm_enhancement: bool = False) -> str:
+async def execute(use_llm_enhancement: bool = False, show_trends: bool = False) -> str:
     """
     Generate health summary using OuraAdapter.
 
     Args:
         use_llm_enhancement: If True, uses LLM to enhance the output with insights
+        show_trends: If True, includes 7-day trend analysis
 
     Returns:
         The generated health summary
@@ -526,8 +727,18 @@ async def execute(use_llm_enhancement: bool = False) -> str:
     print("📊 Fetching Oura Ring data...")
     health_data = await fetch_health_data()
 
+    # Fetch weekly trends if requested
+    trends_data = None
+    if show_trends:
+        print("📈 Fetching 7-day trends...")
+        trends_data = await fetch_weekly_trends()
+
     # Format the summary
     summary = format_health_summary(health_data)
+
+    # Add trends if available
+    if trends_data:
+        summary += _format_weekly_trends(trends_data)
 
     print("-" * 50)
 
@@ -582,11 +793,12 @@ def main():
     """CLI entry point."""
     import asyncio
 
-    # Check for LLM enhancement flag
+    # Check for flags
     use_llm = "--llm-enhance" in sys.argv
+    show_trends = "--trends" in sys.argv
 
     # Run the async execute function
-    asyncio.run(execute(use_llm_enhancement=use_llm))
+    asyncio.run(execute(use_llm_enhancement=use_llm, show_trends=show_trends))
 
 
 if __name__ == "__main__":
