@@ -17,7 +17,7 @@ from ..time_series import TaskCompletionRecord
 def analyze_hourly_patterns(
     task_records: List[TaskCompletionRecord],
     min_samples: int = 5,
-    min_confidence: float = 0.6
+    min_confidence: float = 0.7
 ) -> List[TaskCompletionPattern]:
     """Analyze task completion patterns by hour of day.
 
@@ -138,7 +138,7 @@ def analyze_hourly_patterns(
 def analyze_daily_patterns(
     task_records: List[TaskCompletionRecord],
     min_samples: int = 3,
-    min_confidence: float = 0.6
+    min_confidence: float = 0.7
 ) -> List[TaskCompletionPattern]:
     """Analyze task completion patterns by day of week.
 
@@ -244,7 +244,7 @@ def analyze_daily_patterns(
 def analyze_task_type_patterns(
     task_records: List[TaskCompletionRecord],
     min_samples: int = 5,
-    min_confidence: float = 0.6
+    min_confidence: float = 0.7
 ) -> List[TaskCompletionPattern]:
     """Analyze when different task types are typically completed.
 
@@ -430,7 +430,7 @@ def get_all_task_patterns(
     min_samples_hourly: int = 5,
     min_samples_daily: int = 3,
     min_samples_task_type: int = 5,
-    min_confidence: float = 0.6
+    min_confidence: float = 0.7
 ) -> Dict[str, List[TaskCompletionPattern]]:
     """Run all task pattern analyses and return comprehensive results.
 

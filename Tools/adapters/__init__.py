@@ -1,18 +1,20 @@
 """
 Thanos MCP Bridge Adapters
 
-Provides unified access to external services (WorkOS, Oura) that are
-typically accessed via MCP servers. These adapters bypass MCP for
-better performance and direct control while maintaining a compatible
-interface for future MCP integration.
+Provides unified access to external services (WorkOS, Oura) via both:
+1. Direct adapters - Direct Python implementations (better performance)
+2. MCP bridges - Full MCP protocol support (better ecosystem integration)
+
+The AdapterManager seamlessly supports both approaches with automatic routing.
 
 Usage:
     from Tools.adapters import get_default_manager
 
     async def main():
-        manager = await get_default_manager()
+        # Get manager with both direct adapters and MCP bridges
+        manager = await get_default_manager(enable_mcp_bridges=True)
 
-        # Call WorkOS tools
+        # Call WorkOS tools (routes to best available adapter)
         result = await manager.call_tool("get_today_metrics")
 
         # Call Oura tools (with prefix for clarity)
@@ -20,17 +22,43 @@ Usage:
             "start_date": "2026-01-08"
         })
 
-        # Cleanup
+        # Cleanup (closes both adapters and bridges)
         await manager.close_all()
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from .base import BaseAdapter, ToolResult
-from .oura import OuraAdapter
-from .workos import WorkOSAdapter
 
+# MCP bridge imports (conditional)
+try:
+    from .mcp_bridge import MCPBridge
+    from .mcp_discovery import discover_servers, get_server_config
+    from .mcp_config import MCPServerConfig
+
+    MCP_BRIDGE_AVAILABLE = True
+except ImportError:
+    MCPBridge = None
+    MCP_BRIDGE_AVAILABLE = False
+
+# Conditional Oura import (requires httpx package)
+try:
+    from .oura import OuraAdapter
+
+    OURA_AVAILABLE = True
+except ImportError:
+    OuraAdapter = None
+    OURA_AVAILABLE = False
+
+# Conditional WorkOS import (requires asyncpg package)
+try:
+    from .workos import WorkOSAdapter
+
+    WORKOS_AVAILABLE = True
+except ImportError:
+    WorkOSAdapter = None
+    WORKOS_AVAILABLE = False
 
 # Conditional Neo4j import (requires neo4j package)
 try:
@@ -57,10 +85,14 @@ __all__ = [
     "OuraAdapter",
     "Neo4jAdapter",
     "ChromaAdapter",
+    "MCPBridge",
     "AdapterManager",
     "get_default_manager",
+    "WORKOS_AVAILABLE",
+    "OURA_AVAILABLE",
     "NEO4J_AVAILABLE",
     "CHROMADB_AVAILABLE",
+    "MCP_BRIDGE_AVAILABLE",
 ]
 
 logger = logging.getLogger(__name__)
@@ -229,33 +261,42 @@ class AdapterManager:
 _default_manager: Optional[AdapterManager] = None
 
 
-async def get_default_manager() -> AdapterManager:
+async def get_default_manager(enable_mcp_bridges: bool = False) -> AdapterManager:
     """
     Get or create the default adapter manager.
 
     This is the primary entry point for using the adapter system.
     Registers WorkOS and Oura adapters by default.
 
+    Args:
+        enable_mcp_bridges: If True, discover and register MCP servers as bridges.
+                          Provides access to third-party MCP ecosystem.
+
     Returns:
-        Configured AdapterManager instance
+        Configured AdapterManager instance with direct adapters and optionally MCP bridges
     """
     global _default_manager
 
     if _default_manager is None:
         _default_manager = AdapterManager()
 
-        # Register default adapters
-        try:
-            _default_manager.register(WorkOSAdapter())
-            logger.info("Registered WorkOS adapter")
-        except Exception as e:
-            logger.warning(f"Failed to register WorkOS adapter: {e}")
+        # Register direct adapters first (better performance for built-in services)
 
-        try:
-            _default_manager.register(OuraAdapter())
-            logger.info("Registered Oura adapter")
-        except Exception as e:
-            logger.warning(f"Failed to register Oura adapter: {e}")
+        # Register WorkOS adapter if available
+        if WORKOS_AVAILABLE:
+            try:
+                _default_manager.register(WorkOSAdapter())
+                logger.info("Registered WorkOS adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register WorkOS adapter: {e}")
+
+        # Register Oura adapter if available
+        if OURA_AVAILABLE:
+            try:
+                _default_manager.register(OuraAdapter())
+                logger.info("Registered Oura adapter")
+            except Exception as e:
+                logger.warning(f"Failed to register Oura adapter: {e}")
 
         # Register Neo4j adapter if available and configured
         if NEO4J_AVAILABLE:
@@ -272,6 +313,27 @@ async def get_default_manager() -> AdapterManager:
                 logger.info("Registered ChromaDB adapter")
             except Exception as e:
                 logger.warning(f"Failed to register ChromaDB adapter: {e}")
+
+        # Register MCP bridges if enabled
+        if enable_mcp_bridges and MCP_BRIDGE_AVAILABLE:
+            try:
+                # Discover available MCP servers from configuration
+                servers = await discover_servers()
+                logger.info(f"Discovered {len(servers)} MCP servers")
+
+                # Create and register a bridge for each discovered server
+                for server_config in servers:
+                    try:
+                        bridge = MCPBridge(server_config)
+                        await bridge.connect()  # Initialize connection
+                        _default_manager.register(bridge)
+                        logger.info(f"Registered MCP bridge for '{server_config.name}'")
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to register MCP bridge for '{server_config.name}': {e}"
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to discover/register MCP bridges: {e}")
 
         _default_manager._initialized = True
 

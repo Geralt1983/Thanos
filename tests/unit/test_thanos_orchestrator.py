@@ -639,5 +639,215 @@ class TestRealWorldMessages:
         assert agent.name.lower() == 'coach'
 
 
+# ========================================================================
+# Test Spinner Integration
+# ========================================================================
+
+class TestSpinnerIntegration:
+    """Test spinner integration in orchestrator methods"""
+
+    def test_spinner_module_imports_correctly(self):
+        """Test that spinner module can be imported"""
+        from Tools.spinner import command_spinner, chat_spinner, ThanosSpinner
+        assert command_spinner is not None
+        assert chat_spinner is not None
+        assert ThanosSpinner is not None
+
+    def test_command_spinner_factory(self):
+        """Test command_spinner factory creates correct spinner"""
+        from Tools.spinner import command_spinner
+
+        spinner = command_spinner("pa:daily")
+        assert spinner.text == "Executing pa:daily..."
+        assert spinner.color == "cyan"
+        assert spinner.spinner_type == "dots"
+
+    def test_chat_spinner_factory_without_agent(self):
+        """Test chat_spinner factory without agent name"""
+        from Tools.spinner import chat_spinner
+
+        spinner = chat_spinner()
+        assert spinner.text == "Thinking..."
+        assert spinner.color == "magenta"
+        assert spinner.spinner_type == "dots"
+
+    def test_chat_spinner_factory_with_agent(self):
+        """Test chat_spinner factory with agent name"""
+        from Tools.spinner import chat_spinner
+
+        spinner = chat_spinner("Ops")
+        assert spinner.text == "Thinking as Ops..."
+        assert spinner.color == "magenta"
+        assert spinner.spinner_type == "dots"
+
+    def test_spinner_context_manager_protocol(self):
+        """Test that ThanosSpinner implements context manager protocol"""
+        from Tools.spinner import ThanosSpinner
+
+        spinner = ThanosSpinner()
+        assert hasattr(spinner, '__enter__')
+        assert hasattr(spinner, '__exit__')
+        assert callable(spinner.__enter__)
+        assert callable(spinner.__exit__)
+
+    def test_spinner_manual_control_methods(self):
+        """Test that ThanosSpinner has manual control methods"""
+        from Tools.spinner import ThanosSpinner
+
+        spinner = ThanosSpinner()
+        assert hasattr(spinner, 'start')
+        assert hasattr(spinner, 'stop')
+        assert hasattr(spinner, 'ok')
+        assert hasattr(spinner, 'fail')
+        assert hasattr(spinner, 'update_text')
+        assert callable(spinner.start)
+        assert callable(spinner.stop)
+        assert callable(spinner.ok)
+        assert callable(spinner.fail)
+        assert callable(spinner.update_text)
+
+    @pytest.mark.parametrize("stream_mode", [True, False])
+    def test_run_command_uses_spinner(self, orchestrator, stream_mode):
+        """Test that run_command integrates with spinner (mocked API)"""
+        from unittest.mock import patch, MagicMock
+
+        # Mock the API client and spinner
+        with patch.object(orchestrator, 'api_client') as mock_api, \
+             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
+
+            # Setup mock spinner
+            mock_spinner = MagicMock()
+            mock_spinner_factory.return_value = mock_spinner
+
+            # Setup mock API responses
+            if stream_mode:
+                mock_api.chat_stream.return_value = iter(["test ", "response"])
+            else:
+                mock_api.chat.return_value = "test response"
+
+            # Mock find_command to return a valid command
+            mock_command = MagicMock()
+            mock_command.name = "daily"
+            mock_command.instructions = "Test instructions"
+            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+                # Call run_command
+                result = orchestrator.run_command("daily", stream=stream_mode)
+
+            # Verify spinner factory was called with command name
+            mock_spinner_factory.assert_called_once_with("daily")
+
+            # Verify spinner was used appropriately based on mode
+            if stream_mode:
+                # Streaming: manual start/stop
+                mock_spinner.start.assert_called_once()
+                mock_spinner.stop.assert_called_once()
+            else:
+                # Non-streaming: context manager
+                mock_spinner.__enter__.assert_called_once()
+                mock_spinner.__exit__.assert_called_once()
+
+    @pytest.mark.parametrize("stream_mode", [True, False])
+    def test_chat_uses_spinner(self, orchestrator, stream_mode):
+        """Test that chat integrates with spinner (mocked API)"""
+        from unittest.mock import patch, MagicMock
+
+        # Mock the API client and spinner
+        with patch.object(orchestrator, 'api_client') as mock_api, \
+             patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
+
+            # Setup mock spinner
+            mock_spinner = MagicMock()
+            mock_spinner_factory.return_value = mock_spinner
+
+            # Setup mock API responses
+            if stream_mode:
+                mock_api.chat_stream.return_value = iter(["test ", "response"])
+            else:
+                mock_api.chat.return_value = "test response"
+
+            # Call chat
+            result = orchestrator.chat("test message", stream=stream_mode)
+
+            # Verify spinner factory was called (agent name may be None or detected agent)
+            mock_spinner_factory.assert_called_once()
+
+            # Verify spinner was used appropriately based on mode
+            if stream_mode:
+                # Streaming: manual start/stop
+                mock_spinner.start.assert_called_once()
+                mock_spinner.stop.assert_called_once()
+            else:
+                # Non-streaming: context manager
+                mock_spinner.__enter__.assert_called_once()
+                mock_spinner.__exit__.assert_called_once()
+
+    def test_run_command_spinner_fail_on_error(self, orchestrator):
+        """Test that spinner shows failure when command errors (streaming)"""
+        from unittest.mock import patch, MagicMock
+
+        # Mock the API client and spinner
+        with patch.object(orchestrator, 'api_client') as mock_api, \
+             patch('Tools.thanos_orchestrator.command_spinner') as mock_spinner_factory:
+
+            # Setup mock spinner
+            mock_spinner = MagicMock()
+            mock_spinner_factory.return_value = mock_spinner
+
+            # Setup API to raise an error
+            mock_api.chat_stream.side_effect = Exception("API error")
+
+            # Mock find_command to return a valid command
+            mock_command = MagicMock()
+            mock_command.name = "daily"
+            mock_command.instructions = "Test instructions"
+            with patch.object(orchestrator, 'find_command', return_value=mock_command):
+                # Call run_command and expect exception
+                with pytest.raises(Exception, match="API error"):
+                    orchestrator.run_command("daily", stream=True)
+
+            # Verify spinner.fail() was called before exception propagated
+            mock_spinner.fail.assert_called_once()
+
+    def test_chat_spinner_fail_on_error(self, orchestrator):
+        """Test that spinner shows failure when chat errors (streaming)"""
+        from unittest.mock import patch, MagicMock
+
+        # Mock the API client and spinner
+        with patch.object(orchestrator, 'api_client') as mock_api, \
+             patch('Tools.thanos_orchestrator.chat_spinner') as mock_spinner_factory:
+
+            # Setup mock spinner
+            mock_spinner = MagicMock()
+            mock_spinner_factory.return_value = mock_spinner
+
+            # Setup API to raise an error
+            mock_api.chat_stream.side_effect = Exception("API error")
+
+            # Call chat and expect exception
+            with pytest.raises(Exception, match="API error"):
+                orchestrator.chat("test message", stream=True)
+
+            # Verify spinner.fail() was called before exception propagated
+            mock_spinner.fail.assert_called_once()
+
+    def test_spinner_non_tty_safe(self):
+        """Test that spinners work safely in non-TTY environments"""
+        from Tools.spinner import ThanosSpinner
+        from unittest.mock import patch
+
+        # Simulate non-TTY environment
+        with patch('sys.stdout.isatty', return_value=False):
+            spinner = ThanosSpinner("Test")
+
+            # These should be no-ops in non-TTY
+            spinner.start()  # Should not raise
+            spinner.update_text("Updated")  # Should not raise
+            spinner.stop()  # Should not raise
+
+            # Context manager should also work
+            with ThanosSpinner("Test2") as s:
+                pass  # Should not raise
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
