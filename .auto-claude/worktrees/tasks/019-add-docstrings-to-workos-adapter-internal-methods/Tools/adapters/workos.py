@@ -605,7 +605,39 @@ class WorkOSAdapter(BaseAdapter):
         return midnight_est.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
     def _row_to_dict(self, row: asyncpg.Record) -> dict[str, Any]:
-        """Convert asyncpg Record to dict, handling datetime serialization."""
+        """
+        Convert an asyncpg database record to a JSON-serializable dictionary.
+
+        Transforms asyncpg.Record objects returned from database queries into standard
+        Python dictionaries with proper serialization of complex types. This ensures all
+        data can be safely returned through the tool interface and serialized to JSON.
+
+        Args:
+            row: asyncpg.Record object from a database query result. Contains column
+                 names as keys and corresponding values from the query.
+
+        Returns:
+            Dictionary with all field names as keys and their values. Datetime objects
+            are serialized to ISO 8601 format strings (e.g., "2026-01-11T15:30:45.123456").
+            All other data types (integers, strings, booleans, None, etc.) are preserved
+            unchanged.
+
+        Datetime serialization:
+            - Uses Python's datetime.isoformat() method for ISO 8601 compliance.
+            - Format includes microsecond precision when available.
+            - Timezone-aware datetimes include timezone offset (e.g., "+00:00").
+            - Timezone-naive datetimes omit timezone information.
+
+        Type preservation:
+            - Datetime objects: Converted to ISO 8601 strings.
+            - All other types: Passed through without modification (int, str, bool, None, etc.).
+
+        Usage context:
+            This method is called by all query methods (_get_tasks, _get_habits, _get_clients,
+            _complete_task, _create_task, _update_task, etc.) to prepare database results
+            for return through ToolResult objects. Ensures consistency in data serialization
+            across all WorkOS adapter operations.
+        """
         result = dict(row)
         for key, value in result.items():
             if isinstance(value, datetime):
