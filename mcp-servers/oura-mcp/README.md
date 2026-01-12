@@ -7,12 +7,23 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that in
 
 ## ✨ Features
 
-- **OAuth Authentication** - Secure authentication with Oura Ring API
+- **Personal Access Token Auth** - Simple, secure authentication with Oura Ring API
+- **4 MCP Tools** - Readiness, sleep, trends, and health check diagnostics
 - **Comprehensive Health Metrics** - Access sleep, readiness, activity, and HRV data
 - **Smart Caching** - SQLite cache reduces API calls and improves performance
 - **Rate Limiting** - Respects Oura API limits (5000 requests/day)
 - **Graceful Degradation** - Returns cached data when API is unavailable
+- **Health Diagnostics** - Built-in health check tool for troubleshooting
 - **Type-Safe** - Full TypeScript support with Zod validation
+
+## 📖 Documentation
+
+- **[Setup Guide](./SETUP.md)** - Complete step-by-step installation and configuration
+- **[Usage Examples](./EXAMPLES.md)** - Practical examples and use cases
+- **[OAuth Setup](./OAUTH_SETUP.md)** - OAuth configuration for multi-user apps
+- **[Architecture](./ARCHITECTURE.md)** - Technical architecture for developers
+- **[Test Summary](./TEST_SUMMARY.md)** - Test coverage and testing guide
+- **[Integration Tests](./INTEGRATION_TESTS.md)** - End-to-end testing documentation
 
 ## 🚀 Quick Start
 
@@ -43,12 +54,17 @@ cp .env.example .env
 2. Configure your Oura API credentials in `.env`:
 
 ```bash
-OURA_CLIENT_ID=your_client_id_here
-OURA_CLIENT_SECRET=your_client_secret_here
-OURA_ACCESS_TOKEN=your_access_token_here
+# Required: Oura Personal Access Token
+OURA_ACCESS_TOKEN=your_oura_personal_access_token_here
+
+# Optional: Custom cache directory (defaults to ~/.oura-cache)
+# OURA_CACHE_DIR=/path/to/cache
+
+# Optional: Enable sync debugging
+# DEBUG_SYNC=true
 ```
 
-See the [OAuth Setup Guide](#oauth-setup-guide) below for detailed instructions on obtaining these credentials.
+See the [Personal Access Token Setup](#personal-access-token-setup) below or the [complete Setup Guide](./SETUP.md) for detailed instructions.
 
 ### Running the Server
 
@@ -62,75 +78,88 @@ npm run dev
 
 The server will start and listen for MCP protocol requests over stdio.
 
-## 🔑 OAuth Setup Guide
+## 🔑 Personal Access Token Setup
 
-### Step 1: Create an Oura Application
+### Step 1: Navigate to Oura Cloud
 
-1. Go to [Oura Cloud OAuth Applications](https://cloud.ouraring.com/oauth/applications)
+1. Go to [Oura Cloud](https://cloud.ouraring.com/)
 2. Log in with your Oura account
-3. Click "Create a new OAuth application"
-4. Fill in the application details:
-   - **Name**: Thanos Oura MCP Server (or any name you prefer)
-   - **Redirect URI**: `http://localhost:3000/callback` (for local testing)
-   - **Scopes**: Select all scopes (daily, heartrate, workout, session, tag, personal, sleep)
 
-5. Click "Create application"
+### Step 2: Create Personal Access Token
 
-### Step 2: Get Your Credentials
+1. Click on your profile icon (top right)
+2. Select **Personal Access Tokens** from the dropdown menu
+3. Click **Create A New Personal Access Token**
+4. Give it a descriptive name (e.g., "Thanos MCP Server")
+5. The token will be generated and displayed **only once** - copy it immediately!
 
-After creating the application, you'll see:
-- **Client ID**: Copy this to `OURA_CLIENT_ID` in your `.env` file
-- **Client Secret**: Copy this to `OURA_CLIENT_SECRET` in your `.env` file
+### Step 3: Configure Environment
 
-### Step 3: Generate an Access Token
+Paste your token into the `.env` file:
 
-For development and testing, you can generate a personal access token:
+```bash
+OURA_ACCESS_TOKEN=your_copied_token_here
+```
 
-1. In your Oura application settings, look for "Personal Access Token"
-2. Click "Create Personal Access Token"
-3. Select the required scopes (daily, heartrate, workout, session, tag, personal, sleep)
-4. Copy the generated token to `OURA_ACCESS_TOKEN` in your `.env` file
+**Important Security Notes**:
+- Personal Access Tokens provide read-only access to your health data
+- Tokens don't expire unless you revoke them
+- Never commit your `.env` file to version control
+- Keep your token secure - treat it like a password
+- You can revoke tokens anytime at https://cloud.ouraring.com/
 
-**Note**: Personal access tokens don't expire but have the same rate limits as OAuth tokens. For production use, implement the full OAuth flow with refresh tokens.
+### Why Personal Access Tokens?
 
-### Step 4: (Optional) OAuth Flow for Refresh Tokens
+This server uses Personal Access Tokens instead of OAuth for simplicity:
+- ✅ No complex OAuth flow needed
+- ✅ Read-only access (can't modify your data)
+- ✅ Easy to set up and test
+- ✅ Same rate limits as OAuth (5000 requests/day)
+- ✅ No token refresh needed (doesn't expire)
 
-For automatic token renewal, implement the OAuth authorization flow:
-
-1. Direct users to: `https://cloud.ouraring.com/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=YOUR_REDIRECT_URI`
-2. User authorizes the application
-3. Exchange the authorization code for an access token and refresh token
-4. Store both tokens in your `.env` file
-
-The server will automatically handle token refresh when needed.
+For production applications with multiple users, OAuth with refresh tokens would be more appropriate.
 
 ## 🛠️ Available Tools
 
-### `get_today_readiness`
+### `oura_get_today_readiness`
 
 Fetch today's readiness score and contributing factors.
 
-**Returns**:
-- Readiness score (0-100)
-- Contributing factors (sleep, HRV, temperature, activity balance, etc.)
-- Timestamp of last update
+**Parameters**:
+- `date` (optional): Date in YYYY-MM-DD format. Defaults to today.
 
-**Example usage**:
-```typescript
+**Returns**:
+- Readiness score (0-100) with interpretation
+- 8 contributors with scores and explanations
+- Raw metrics (temperature, HRV, resting heart rate)
+- Data source indicator (cache, api, cache_stale)
+
+**Example response**:
+```json
 {
-  "readiness_score": 85,
+  "date": "2026-01-11",
+  "score": 85,
+  "interpretation": "Good - Ready for moderate activity",
   "contributors": {
-    "sleep_score": 88,
-    "hrv_balance": 92,
-    "temperature": 85,
-    "activity_balance": 78,
-    "resting_heart_rate": 90
+    "sleep_score": { "score": 88, "meaning": "Good sleep quality" },
+    "hrv_balance": { "score": 92, "meaning": "Excellent recovery" },
+    "body_temperature": { "score": 85, "meaning": "Normal temperature deviation" },
+    "resting_heart_rate": { "score": 90, "meaning": "Good cardiovascular recovery" },
+    "activity_balance": { "score": 78, "meaning": "Moderate activity recovery" },
+    "sleep_balance": { "score": 82, "meaning": "Good sleep consistency" },
+    "previous_day": { "score": 80, "meaning": "Good activity level" },
+    "recovery_index": { "score": 87, "meaning": "Good overall recovery" }
   },
-  "timestamp": "2026-01-11T08:00:00Z"
+  "metrics": {
+    "temperature_celsius": 36.5,
+    "hrv_ms": 55,
+    "resting_hr_bpm": 52
+  },
+  "source": "cache"
 }
 ```
 
-### `get_sleep_summary`
+### `oura_get_sleep_summary`
 
 Fetch sleep summary for a specific date (defaults to last night).
 
@@ -138,58 +167,154 @@ Fetch sleep summary for a specific date (defaults to last night).
 - `date` (optional): Date in YYYY-MM-DD format. Defaults to last night.
 
 **Returns**:
-- Sleep score (0-100)
-- Total sleep time
-- Sleep stages (REM, deep, light sleep durations)
-- Sleep efficiency
-- Latency and timing
+- Sleep score (0-100) with interpretation
+- Duration breakdown (total, REM, deep, light, awake)
+- Sleep efficiency percentage
+- 7 contributors with explanations
+- Additional metrics (heart rate, HRV, breath rate, temperature)
+- Data source indicator
 
-**Example usage**:
-```typescript
+**Example response**:
+```json
 {
   "date": "2026-01-10",
-  "sleep_score": 82,
-  "total_sleep_seconds": 26100,  // 7h 15m
-  "rem_sleep_seconds": 6300,
-  "deep_sleep_seconds": 5400,
-  "light_sleep_seconds": 14400,
-  "efficiency": 91,
-  "latency_seconds": 480
+  "score": 82,
+  "interpretation": "Good - Quality restorative sleep",
+  "duration": {
+    "total_seconds": 26100,
+    "total_hours": 7.25,
+    "rem_seconds": 6300,
+    "rem_hours": 1.75,
+    "deep_seconds": 5400,
+    "deep_hours": 1.5,
+    "light_seconds": 14400,
+    "light_hours": 4.0,
+    "awake_seconds": 900,
+    "awake_hours": 0.25
+  },
+  "efficiency": {
+    "percentage": 91,
+    "interpretation": "Excellent - Minimal time awake"
+  },
+  "contributors": {
+    "total_sleep": { "score": 85, "meaning": "Good duration" },
+    "efficiency": { "score": 91, "meaning": "Excellent efficiency" },
+    "restfulness": { "score": 88, "meaning": "Good restfulness" },
+    "rem_sleep": { "score": 82, "meaning": "Good REM duration" },
+    "deep_sleep": { "score": 80, "meaning": "Good deep sleep" },
+    "latency": { "score": 90, "meaning": "Fast sleep onset" },
+    "timing": { "score": 85, "meaning": "Good sleep schedule" }
+  },
+  "source": "cache"
 }
 ```
 
-### `get_weekly_trends`
+### `oura_get_weekly_trends`
 
-Fetch weekly health trends and patterns.
+Fetch weekly health trends and patterns with statistical analysis.
+
+**Parameters**:
+- `days` (optional): Number of days to analyze (1-30). Defaults to 7.
 
 **Returns**:
-- 7-day trends for readiness, sleep, and activity scores
-- Statistical summary (average, min, max)
-- Trend direction (improving, declining, stable)
-- Pattern insights
+- Statistical summary for readiness, sleep, and activity
+- Trend direction with percentage change
+- Daily score arrays
+- Cross-metric pattern insights
+- Data source indicators for each metric
 
-**Example usage**:
-```typescript
+**Example response**:
+```json
 {
-  "period": "2026-01-04 to 2026-01-10",
+  "period": {
+    "start_date": "2026-01-04",
+    "end_date": "2026-01-10",
+    "days": 7
+  },
   "readiness": {
     "average": 82,
     "min": 68,
     "max": 92,
     "trend": "improving",
-    "daily_scores": [68, 75, 78, 82, 85, 88, 92]
+    "trend_percentage": 15.3,
+    "daily_scores": [68, 75, 78, 82, 85, 88, 92],
+    "source": "cache"
   },
   "sleep": {
     "average": 79,
     "min": 65,
     "max": 88,
     "trend": "stable",
-    "daily_scores": [78, 79, 82, 75, 77, 80, 88]
+    "trend_percentage": 2.1,
+    "daily_scores": [78, 79, 82, 75, 77, 80, 88],
+    "source": "cache"
   },
-  "insights": [
-    "Readiness improving over the week",
-    "Sleep quality consistent"
+  "activity": {
+    "average": 75,
+    "min": 60,
+    "max": 85,
+    "trend": "declining",
+    "trend_percentage": -8.2,
+    "daily_scores": [85, 80, 78, 75, 70, 65, 60],
+    "source": "cache"
+  },
+  "patterns": [
+    "Readiness improving significantly over the week (+15.3%)",
+    "Sleep quality stable with consistent scores",
+    "Activity declining while readiness improves - good recovery balance"
   ]
+}
+```
+
+### `oura_health_check`
+
+Check the health status of the Oura MCP server for troubleshooting.
+
+**Parameters**:
+- `include_cache_samples` (optional): If true, includes sample data from cache. Defaults to false.
+
+**Returns**:
+- Overall health status (healthy, degraded)
+- API connectivity status with response time
+- Cache status with entry counts
+- Rate limit information
+- Diagnostic recommendations
+
+**Example response**:
+```json
+{
+  "overall_status": "healthy",
+  "timestamp": "2026-01-11T19:45:00.000Z",
+  "components": {
+    "api": {
+      "status": "connected",
+      "message": "Successfully connected to Oura API",
+      "response_time_ms": 245,
+      "status_code": 200
+    },
+    "cache": {
+      "status": "healthy",
+      "message": "Cache is healthy with 127 total entries",
+      "statistics": {
+        "readiness_entries": 45,
+        "sleep_entries": 42,
+        "activity_entries": 40,
+        "total_entries": 127
+      },
+      "last_sync": {
+        "date": "2026-01-11",
+        "hasDataToday": true
+      }
+    }
+  },
+  "diagnostics": {
+    "can_fetch_fresh_data": true,
+    "can_use_cached_data": true,
+    "has_today_data": true,
+    "recommendations": [
+      "✅ System is healthy and ready. Today's data is available."
+    ]
+  }
 }
 ```
 
@@ -251,15 +376,19 @@ The Oura API has a limit of 5000 requests per day. This server implements:
 
 ## 🧪 Testing
 
+The server includes comprehensive test coverage (>80%) across all components.
+
 ```bash
 # Run all tests
-npm test
+find . -name "test-*.mjs" -exec node {} \;
 
-# Run specific test suites
-npm run test:api
-npm run test:cache
-npm run test:tools
+# Run specific test
+./test-readiness-tool.mjs
+./test-integration-mcp-tools.mjs
 ```
+
+**See [TEST_SUMMARY.md](./TEST_SUMMARY.md)** for detailed testing documentation and coverage report.
+**See [INTEGRATION_TESTS.md](./INTEGRATION_TESTS.md)** for integration testing guide.
 
 ## 🔧 Configuration
 
@@ -267,36 +396,48 @@ All configuration is managed through environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OURA_CLIENT_ID` | OAuth client ID | Required |
-| `OURA_CLIENT_SECRET` | OAuth client secret | Required |
-| `OURA_ACCESS_TOKEN` | OAuth access token | Required |
-| `OURA_REFRESH_TOKEN` | OAuth refresh token | Optional |
-| `CACHE_DB_PATH` | SQLite cache path | `.cache/oura-health.db` |
-| `CACHE_TTL` | Cache TTL in seconds | `3600` (1 hour) |
-| `RATE_LIMIT_MAX_REQUESTS` | Max requests per day | `5000` |
-| `RATE_LIMIT_WINDOW` | Rate limit window (ms) | `86400000` (24h) |
-| `LOG_LEVEL` | Logging level | `info` |
-| `DEBUG_API_CALLS` | Enable debug logging | `false` |
+| `OURA_ACCESS_TOKEN` | Personal Access Token (recommended) | Required* |
+| `OURA_CLIENT_ID` | OAuth Client ID (alternative to PAT) | Optional |
+| `OURA_CLIENT_SECRET` | OAuth Client Secret (alternative to PAT) | Optional |
+| `OURA_CACHE_DIR` | Cache directory path | `~/.oura-cache` |
+| `CACHE_TTL_HOURS` | Cache expiration time | `1` |
+| `SYNC_INTERVAL_HOURS` | Background sync frequency | `1` |
+| `SYNC_HISTORY_DAYS` | Days of historical data to cache | `7` |
+| `RATE_LIMIT_MAX_REQUESTS` | API request limit per day | `5000` |
+| `DEBUG_SYNC` | Enable sync debugging | `false` |
+| `DEBUG_API_CALLS` | Enable API call logging | `false` |
+
+\* Either `OURA_ACCESS_TOKEN` or both `OURA_CLIENT_ID` and `OURA_CLIENT_SECRET` are required. See [OAuth Setup Guide](./OAUTH_SETUP.md) for OAuth configuration.
 
 ## 🔗 Integration with Claude Desktop
 
-Add this server to your Claude Desktop configuration:
+Add this server to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
 {
   "mcpServers": {
-    "oura-health": {
+    "oura-mcp": {
       "command": "node",
-      "args": ["/path/to/oura-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/oura-mcp/dist/index.js"],
       "env": {
-        "OURA_CLIENT_ID": "your_client_id",
-        "OURA_CLIENT_SECRET": "your_client_secret",
-        "OURA_ACCESS_TOKEN": "your_access_token"
+        "OURA_ACCESS_TOKEN": "your_personal_access_token_here"
       }
     }
   }
 }
 ```
+
+**Important Notes**:
+- Use **absolute paths** for the `args` array
+- Replace `/absolute/path/to/oura-mcp` with your actual installation path
+- Replace `your_personal_access_token_here` with your Oura Personal Access Token
+- Restart Claude Desktop after modifying the configuration
+
+**Verification**:
+1. Restart Claude Desktop
+2. Open a new conversation
+3. Look for the 🔌 icon in the bottom-right to confirm the server is connected
+4. Try asking: "Check my Oura health status" or "What's my readiness score today?"
 
 ## 🏥 Health Persona Integration
 
@@ -309,31 +450,92 @@ This MCP server is designed to work with the Thanos Health persona. Example prom
 
 The Health persona can use this data to provide personalized recommendations based on your physical state.
 
+**See [EXAMPLES.md](./EXAMPLES.md) for more usage examples and advanced use cases.**
+
 ## 🐛 Troubleshooting
 
-### "Invalid credentials" error
+### Using the Health Check Tool
 
-- Verify your `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET`, and `OURA_ACCESS_TOKEN` are correct
-- Check that your personal access token hasn't been revoked
-- Ensure your OAuth application has the required scopes
+The best way to diagnose issues is to use the built-in health check tool:
 
-### "Rate limit exceeded" error
+```
+Ask Claude: "Run oura_health_check"
+```
 
-- You've hit the 5000 requests/day limit
-- Wait for the rate limit window to reset (24 hours)
-- Consider increasing cache TTL to reduce API calls
+This will provide comprehensive diagnostics including:
+- API connectivity status and response time
+- Cache database health and entry counts
+- Rate limit status and remaining quota
+- Actionable recommendations for fixing issues
 
-### "No data available" error
+### Common Issues
 
-- Make sure you're wearing your Oura Ring regularly
-- Data may not be available for today until it's synced
-- Check the Oura app to verify data is present
+#### "Invalid credentials" or "Authentication failed" error
 
-### Cache not updating
+**Symptoms**: Error 401 or 403 when trying to fetch data
 
-- Check that `.cache/oura-health.db` is writable
-- Verify `CACHE_TTL` is set appropriately
-- Try manually deleting the cache file to force a refresh
+**Solutions**:
+1. Run health check to verify API connectivity
+2. Check your `OURA_API_KEY` in `.env` file is correct
+3. Verify token hasn't been revoked at https://cloud.ouraring.com/
+4. Generate a new Personal Access Token if needed
+5. Restart the MCP server after updating credentials
+
+#### "Rate limit exceeded" error
+
+**Symptoms**: Error 429, health check shows rate_limited status
+
+**Solutions**:
+1. Check health check output for rate limit reset time
+2. Wait for the 24-hour window to reset
+3. Cache will automatically serve stale data during rate limits
+4. Consider reducing query frequency if hitting limits regularly
+5. The server respects Oura's 5000 requests/day limit
+
+#### "No data available" error
+
+**Symptoms**: Tools return null or empty data
+
+**Solutions**:
+1. Run health check to see if today's data exists in cache
+2. Verify you're wearing your Oura Ring regularly
+3. Check the Oura app to confirm data has synced
+4. Data typically syncs in the morning after waking
+5. Try using a date parameter for yesterday's data: `{ "date": "2026-01-10" }`
+
+#### Cache not updating
+
+**Symptoms**: Stale data, health check shows old last_sync date
+
+**Solutions**:
+1. Run health check to see cache statistics
+2. Check that cache directory (`~/.oura-cache`) is writable
+3. Verify no permission issues on the SQLite database
+4. Try clearing cache: `rm -rf ~/.oura-cache` (will refetch from API)
+5. Check if DEBUG_SYNC=true in .env shows sync activity
+
+#### Server not appearing in Claude Desktop
+
+**Symptoms**: MCP server not listed, 🔌 icon not shown
+
+**Solutions**:
+1. Verify configuration file location: `~/Library/Application Support/Claude/claude_desktop_config.json`
+2. Check JSON syntax is valid (no trailing commas, proper quotes)
+3. Ensure absolute path to `dist/index.js` is correct
+4. Run `npm run build` to ensure compiled JavaScript exists
+5. Restart Claude Desktop completely (Quit and reopen)
+6. Check Claude Desktop logs for error messages
+
+#### TypeScript compilation errors
+
+**Symptoms**: `npm run build` fails
+
+**Solutions**:
+1. Run `npm install` to ensure dependencies are installed
+2. Check Node.js version (requires 18+)
+3. Verify tsconfig.json exists and is valid
+4. Review error messages for missing types or imports
+5. Try `rm -rf node_modules package-lock.json && npm install`
 
 ## 📚 API Documentation
 
