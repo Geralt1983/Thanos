@@ -199,7 +199,7 @@ class MemoryHandler(BaseHandler):
         )
 
         if result and result.success:
-            print(f"\n{Colors.CYAN}Memory stored:{Colors.RESET}")
+            print(f"\n{Colors.GREEN}Memory stored:{Colors.RESET}")
             print(f"  Type: {memory_type}")
             print(f"  Domain: {domain}")
             if entities:
