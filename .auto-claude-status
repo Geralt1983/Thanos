@@ -1,10 +1,10 @@
 {
   "active": true,
-  "spec": "008-improve-cli-error-message-visibility-with-color-di",
+  "spec": "016-synchronize-api-reference-md-with-actual-code-impl",
   "state": "building",
   "subtasks": {
-    "completed": 12,
-    "total": 13,
+    "completed": 0,
+    "total": 0,
     "in_progress": 1,
     "failed": 0
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 14,
-    "started_at": "2026-01-11T22:40:48.603059"
+    "number": 10,
+    "started_at": "2026-01-11T22:40:32.533430"
   },
-  "last_update": "2026-01-11T23:11:34.323957"
+  "last_update": "2026-01-11T23:18:57.821071"
 }
