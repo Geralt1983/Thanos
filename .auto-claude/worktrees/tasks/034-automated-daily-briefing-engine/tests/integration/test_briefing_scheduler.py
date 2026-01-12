@@ -237,7 +237,7 @@ Top priorities for tomorrow:
         self.assertIn('current_focus', context)
 
         # Test that _run_briefing can be called
-        with patch('Tools.delivery_channels.deliver_to_channels') as mock_deliver:
+        with patch('Tools.briefing_scheduler.deliver_to_channels') as mock_deliver:
             mock_deliver.return_value = True
 
             briefing_config = scheduler.config['briefings']['morning']
@@ -323,8 +323,7 @@ Top priorities for tomorrow:
             results = deliver_to_channels(
                 content=content,
                 briefing_type='morning',
-                channels_config=channels_config,
-                delivery_config=self.default_config['delivery']
+                channels_config=channels_config
             )
 
             # Verify both channels were called
@@ -681,7 +680,7 @@ class TestSchedulerExecutionFlow(unittest.TestCase):
         )
 
         # Mock delivery to track calls
-        with patch('Tools.delivery_channels.deliver_to_channels') as mock_deliver:
+        with patch('Tools.briefing_scheduler.deliver_to_channels') as mock_deliver:
             mock_deliver.return_value = True
 
             # Get briefing config
