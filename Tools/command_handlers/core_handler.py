@@ -151,5 +151,5 @@ class CoreHandler(BaseHandler):
             self.orchestrator.run_command(args, stream=True)
             return CommandResult()
         except Exception as e:
-            print(f"{Colors.DIM}Error running command: {e}{Colors.RESET}")
+            print(f"{Colors.RED}Error running command: {e}{Colors.RESET}")
             return CommandResult(success=False)

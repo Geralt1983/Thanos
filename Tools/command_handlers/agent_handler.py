@@ -115,7 +115,7 @@ class AgentHandler(BaseHandler):
             return CommandResult()
         else:
             # Unknown agent
-            print(f"{Colors.DIM}Unknown agent: {agent_name}{Colors.RESET}")
+            print(f"{Colors.RED}Unknown agent: {agent_name}{Colors.RESET}")
             print(f"Available: {', '.join(self.orchestrator.agents.keys())}")
             return CommandResult(success=False)
 
