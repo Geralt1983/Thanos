@@ -750,3 +750,99 @@ Updated implementation_plan.json to mark subtask 4.1 as completed.
 
 Next: Subtask 4.2 (Health agent integration) remains optional and pending.
 
+#### Subtask 4.2: Integrate with Health agent ✓
+
+[2026-01-12 - Health Agent Integration Complete]
+==========================================
+
+Integration Completed:
+- Updated Agents/Health.md to reference the health:summary command throughout the document
+- Added strategic references in key sections where the command is most relevant
+
+Changes Made:
+=============
+
+1. **Skills Access Section** (line 58)
+   ✓ Added "History/HealthSummaries/ (health:summary output)" to Skills Access list
+   ✓ Ensures Health agent knows where to find health summary history files
+
+2. **Vyvanse Decision Tree Section** (line 91)
+   ✓ Updated decision factor #3: "Sleep quality last night? (Check with `health:summary` for Oura readiness)"
+   ✓ Provides actionable reference for checking readiness during Vyvanse decision
+
+3. **Energy Crash Protocol Section** (line 101)
+   ✓ Added #5 to assessment checklist: "Check `health:summary` for sleep quality and readiness indicators"
+   ✓ Helps diagnose crash causes using objective health data
+
+4. **Oura Ring Integration Section** (line 164)
+   ✓ Added prominent "Quick Start" callout at beginning of section
+   ✓ Shows command syntax: `python -m commands.health.summary`
+   ✓ Highlights all three modes: basic, --trends, --llm-enhance
+   ✓ Provides instant guidance for new users
+
+Integration Benefits:
+=====================
+
+✓ **Discoverability** - Command is now visible in multiple contexts
+✓ **Contextual Relevance** - References appear where users need them most
+✓ **Quick Start** - Prominent callout helps users get started immediately
+✓ **Decision Support** - Command referenced in key decision protocols (Vyvanse, crashes)
+✓ **Data Access** - Health agent knows where to find summary history files
+
+Quality Verification:
+====================
+
+✓ Maintains existing documentation structure
+✓ Adds value without being intrusive
+✓ References are contextually appropriate
+✓ Quick Start callout is prominent but not disruptive
+✓ Command syntax is accurate and complete
+✓ Integration supports Health agent's primary functions
+
+Committed:
+==========
+- b7c4c41: "auto-claude: 4.2 - Update Agents/Health.md to reference health:summary command"
+  - Added History/HealthSummaries/ to Skills Access section
+  - Added health:summary reference in Vyvanse Decision Tree for checking readiness
+  - Added health:summary reference in Energy Crash Protocol assessment
+  - Added Quick Start callout in Oura Ring Integration section with command usage
+
+Status: COMPLETE ✅
+
+Impact:
+=======
+The Health agent documentation now seamlessly integrates the health:summary command,
+making it easy for users to discover and use the command in relevant contexts. The
+integration enhances the Health agent's ability to provide data-informed recommendations
+by pointing users to objective health metrics when making decisions about Vyvanse timing,
+energy crashes, and overall health optimization.
+
+### Phase 4 Summary
+
+Phase 4 (Integration and Enhancement) is now COMPLETE! ✅
+
+All subtasks completed:
+✓ 4.1 - Weekly trends visualization (already implemented)
+✓ 4.2 - Health agent integration (completed in this session)
+
+---
+
+## Task 005 - COMPLETE ✅
+
+All 4 phases completed successfully:
+✓ Phase 1: Setup and Infrastructure (2/2 subtasks)
+✓ Phase 2: Implement Summary Command (5/5 subtasks)
+✓ Phase 3: Testing and Documentation (4/4 subtasks)
+✓ Phase 4: Integration and Enhancement (2/2 subtasks)
+
+Total: 13/13 subtasks completed
+
+Final Status: PRODUCTION READY
+- Command fully implemented and tested
+- Comprehensive documentation created
+- Unit tests (67 tests) all passing
+- Manual testing completed
+- Integration with Health agent complete
+
+The health:summary command is ready for use!
+
