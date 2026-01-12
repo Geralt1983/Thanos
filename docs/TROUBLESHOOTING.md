@@ -3225,10 +3225,16 @@ fi
 
 For MCP-specific errors (MCP servers, tools, protocols), see:
 - **[MCP Error Handling Guide](../Tools/adapters/README_ERROR_HANDLING.md)**: Comprehensive guide for MCP adapter errors
-  - MCP connection errors
-  - Tool execution errors
-  - Circuit breaker and retry logic
-  - MCP-specific recovery strategies
+  - Custom exception hierarchy (MCPError, MCPConnectionError, MCPToolError, etc.)
+  - Exponential backoff retry logic with jitter
+  - Circuit breaker pattern for fault isolation
+  - MCP connection and transport errors
+  - Tool execution and validation errors
+  - Configuration and discovery errors
+  - Graceful degradation strategies
+  - MCP-specific recovery procedures
+
+> **Note**: MCP errors use a different error handling system (retry + circuit breaker) compared to the LiteLLM fallback chain. Both systems work together to provide comprehensive error resilience.
 
 ## Hook Integration
 
