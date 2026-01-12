@@ -1,3 +1,1 @@
-"""
-Unit tests for Thanos components.
-"""
+"""Unit tests package."""

@@ -1,0 +1,224 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://thanos.local/schemas/briefing_schedule.json",
+  "title": "Briefing Schedule Configuration",
+  "description": "Configuration schema for automated daily briefing scheduling and delivery",
+  "type": "object",
+  "required": ["version", "briefings"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Configuration schema version",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of this configuration"
+    },
+    "briefings": {
+      "type": "object",
+      "description": "Briefing type configurations (morning, evening, etc.)",
+      "properties": {
+        "morning": {
+          "$ref": "#/definitions/briefing_config"
+        },
+        "evening": {
+          "$ref": "#/definitions/briefing_config"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/briefing_config"
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "description": "Delivery channel configurations",
+      "properties": {
+        "cli": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable CLI output delivery"
+            },
+            "color": {
+              "type": "boolean",
+              "description": "Use colored output in CLI"
+            }
+          }
+        },
+        "file": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable file output delivery"
+            },
+            "output_dir": {
+              "type": "string",
+              "description": "Directory path for briefing files"
+            },
+            "filename_pattern": {
+              "type": "string",
+              "description": "Filename pattern with {date}, {type}, {timestamp} placeholders"
+            }
+          }
+        },
+        "notification": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable desktop notifications"
+            },
+            "summary_only": {
+              "type": "boolean",
+              "description": "Show only summary in notification (not full briefing)"
+            }
+          }
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "description": "Content generation settings",
+      "properties": {
+        "max_priorities": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of priorities to include"
+        },
+        "include_quick_wins": {
+          "type": "boolean",
+          "description": "Include quick win tasks in briefing"
+        },
+        "include_calendar": {
+          "type": "boolean",
+          "description": "Include calendar items in briefing"
+        },
+        "include_energy_prompts": {
+          "type": "boolean",
+          "description": "Prompt for energy/health state during briefing"
+        },
+        "weekend_mode": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable weekend-specific behavior"
+            },
+            "exclude_work_tasks": {
+              "type": "boolean",
+              "description": "Exclude work tasks from weekend briefings"
+            },
+            "focus_on_personal": {
+              "type": "boolean",
+              "description": "Prioritize personal tasks on weekends"
+            }
+          }
+        }
+      }
+    },
+    "scheduler": {
+      "type": "object",
+      "description": "Scheduler daemon settings",
+      "properties": {
+        "check_interval_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "description": "How often to check schedule (in minutes)"
+        },
+        "prevent_duplicate_runs": {
+          "type": "boolean",
+          "description": "Prevent running the same briefing multiple times per day"
+        },
+        "log_file": {
+          "type": "string",
+          "description": "Path to scheduler log file"
+        },
+        "error_notification": {
+          "type": "boolean",
+          "description": "Send notification on briefing generation errors"
+        }
+      }
+    },
+    "advanced": {
+      "type": "object",
+      "description": "Advanced configuration options",
+      "properties": {
+        "state_dir": {
+          "type": "string",
+          "description": "Path to State directory"
+        },
+        "templates_dir": {
+          "type": "string",
+          "description": "Path to Templates directory"
+        },
+        "use_llm_enhancement": {
+          "type": "boolean",
+          "description": "Use LLM to enhance template-generated briefings"
+        },
+        "llm_model": {
+          "type": "string",
+          "description": "LLM model to use for enhancement"
+        },
+        "pattern_learning_enabled": {
+          "type": "boolean",
+          "description": "Enable pattern learning from user behavior"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "briefing_config": {
+      "type": "object",
+      "description": "Configuration for a specific briefing type",
+      "required": ["enabled", "time"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable this briefing type"
+        },
+        "time": {
+          "type": "string",
+          "pattern": "^([0-1][0-9]|2[0-3]):[0-5][0-9]$",
+          "description": "Time in HH:MM format (24-hour)"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "Timezone for scheduling (e.g., 'local', 'America/New_York', 'UTC')",
+          "default": "local"
+        },
+        "days": {
+          "type": "object",
+          "description": "Days of week to run this briefing",
+          "properties": {
+            "monday": { "type": "boolean" },
+            "tuesday": { "type": "boolean" },
+            "wednesday": { "type": "boolean" },
+            "thursday": { "type": "boolean" },
+            "friday": { "type": "boolean" },
+            "saturday": { "type": "boolean" },
+            "sunday": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "template": {
+          "type": "string",
+          "description": "Template filename to use for this briefing"
+        },
+        "delivery_channels": {
+          "type": "array",
+          "description": "Delivery channels to use for this briefing",
+          "items": {
+            "type": "string",
+            "enum": ["cli", "file", "notification", "state_sync", "email"]
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}
