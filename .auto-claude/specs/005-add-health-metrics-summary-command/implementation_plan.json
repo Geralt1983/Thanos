@@ -172,8 +172,8 @@
           "subtask_id": "4.2",
           "title": "Integrate with Health agent",
           "description": "Update Agents/Health.md to reference the new health:summary command for quick health status checks",
-          "status": "pending",
-          "notes": "Optional enhancement",
+          "status": "completed",
+          "notes": "Successfully integrated health:summary command references throughout Agents/Health.md. Added: History/HealthSummaries/ to Skills Access, health:summary reference in Vyvanse Decision Tree (for checking Oura readiness), health:summary reference in Energy Crash Protocol assessment checklist, and Quick Start callout in Oura Ring Integration section with full command usage examples. Committed as b7c4c41.",
           "files_to_modify": [
             "Agents/Health.md"
           ],
