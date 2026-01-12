@@ -74,7 +74,8 @@ Configure your task management integration:
 # Check email periodically
 /pa:email summary --timeframe 2h
 
-# End of day: Quick review
+# End of day: Process brain dumps and review
+/pa:process --limit 5
 /pa:tasks review
 ```
 
@@ -83,8 +84,9 @@ Configure your task management integration:
 # Sunday/Monday: Weekly planning
 /pa:weekly plan
 
-# Mid-week: Check project status
+# Mid-week: Check project status and process backlog
 /pa:epic status
+/pa:process --limit 20
 
 # Friday: Weekly reflection
 /pa:weekly reflect
@@ -97,6 +99,10 @@ Configure your task management integration:
 
 # Brainstorm a problem
 /pa:brainstorm "How to improve orderset adoption" --mode solve
+
+# Process captured ideas before they pile up
+/pa:process --dry-run  # Preview first
+/pa:process           # Then process for real
 
 # Quick email check
 /pa:email summary --urgent
