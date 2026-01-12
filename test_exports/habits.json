@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1,
+    "title": "Morning Exercise",
+    "description": "30 min workout",
+    "is_active": true,
+    "sort_order": 1,
+    "current_streak": 5,
+    "longest_streak": 10,
+    "last_completed_date": "2026-01-12T06:00:00",
+    "created_at": "2026-01-01T10:00:00",
+    "updated_at": "2026-01-12T06:00:00",
+    "last_completion": "2026-01-12T06:00:00"
+  },
+  {
+    "id": 2,
+    "title": "Reading",
+    "description": "Read 20 pages",
+    "is_active": true,
+    "sort_order": 2,
+    "current_streak": 3,
+    "longest_streak": 15,
+    "last_completed_date": "2026-01-11T22:00:00",
+    "created_at": "2026-01-01T10:00:00",
+    "updated_at": "2026-01-11T22:00:00",
+    "last_completion": "2026-01-11T22:00:00"
+  }
+]

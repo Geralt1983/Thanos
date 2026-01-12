@@ -158,7 +158,7 @@ Security Improvements (2026-01):
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, date
 from dataclasses import dataclass
 from enum import Enum
@@ -492,7 +492,7 @@ class ValidRelationshipType(Enum):
 # ============================================================================
 
 
-def validate_relationship_type(rel_type_input: str) -> tuple[str, str | None]:
+def validate_relationship_type(rel_type_input: str) -> Tuple[str, Optional[str]]:
     """
     Validate and normalize a relationship type string against the whitelist.
 
@@ -538,7 +538,7 @@ def validate_integer_bounds(
     min_value: int,
     max_value: int,
     param_name: str = "parameter"
-) -> tuple[int | None, str | None]:
+) -> Tuple[Optional[int], Optional[str]]:
     """
     Validate that a value is an integer within specified bounds.
 
@@ -591,7 +591,7 @@ def validate_integer_bounds(
     return value, None
 
 
-def validate_node_label(label_input: str) -> tuple[str, str | None]:
+def validate_node_label(label_input: str) -> Tuple[str, Optional[str]]:
     """
     Validate and normalize a node label string against the schema.
 

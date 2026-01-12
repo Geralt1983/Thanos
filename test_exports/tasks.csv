@@ -1,0 +1,3 @@
+client_id,client_name,completed_at,created_at,description,effort_estimate,id,points_ai_guess,points_final,sort_order,status,title,updated_at
+1,Test Client,,2026-01-10T10:00:00,This is a test task,medium,1,3,3,1,active,Test Task 1,2026-01-12T10:00:00
+1,Test Client,2026-01-11T15:30:00,2026-01-09T10:00:00,"Another test task with special chars: commas, ""quotes""",small,2,2,1,2,done,Test Task 2,2026-01-11T15:30:00
