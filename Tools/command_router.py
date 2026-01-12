@@ -11,11 +11,8 @@ from enum import Enum
 import os
 from pathlib import Path
 import re
-import subprocess
-import sys
 from typing import Callable, Optional
 
-from Tools.command_handlers.history_search_handler import HistorySearchHandler
 
 # MemOS integration (optional - graceful degradation if unavailable)
 try:
@@ -31,9 +28,6 @@ except ImportError:
 class Colors:
     PURPLE = "\033[35m"
     CYAN = "\033[36m"
-    RED = "\033[31m"
-    YELLOW = "\033[33m"
-    GREEN = "\033[32m"
     DIM = "\033[2m"
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -83,6 +77,7 @@ class CommandRouter:
         self.thanos_dir = thanos_dir
         self.current_agent = "ops"  # Track current agent
         self.current_model = None  # None = use default from config
+        self.current_prompt_mode = None  # None = use default from config
 
         # Available models (from config/api.json)
         self._available_models = {
@@ -99,16 +94,6 @@ class CommandRouter:
         # Calendar adapter integration (lazy initialization)
         self._calendar_adapter = None
         self._calendar_initialized = False
-
-        # Initialize command handlers
-        self._history_search_handler = HistorySearchHandler(
-            orchestrator=orchestrator,
-            session_manager=session_manager,
-            context_manager=context_manager,
-            state_reader=state_reader,
-            thanos_dir=thanos_dir,
-            current_agent_getter=lambda: self.current_agent,
-        )
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
@@ -251,7 +236,6 @@ class CommandRouter:
             "resume": (self._cmd_resume, "Resume a session", ["session_id"]),
             "r": (self._cmd_resume, "Resume session (alias)", ["session_id"]),
             "recall": (self._cmd_recall, "Search past sessions", ["query"]),
-            "history-search": (self._cmd_history_search, "Semantic search of conversation history", ["query"]),
             "remember": (self._cmd_remember, "Store a memory in MemOS", ["content"]),
             "memory": (self._cmd_memory, "Memory system info", []),
             "branch": (self._cmd_branch, "Create conversation branch", ["name"]),
@@ -260,24 +244,12 @@ class CommandRouter:
             "patterns": (self._cmd_patterns, "Show conversation patterns", []),
             "model": (self._cmd_model, "Switch AI model", ["name"]),
             "m": (self._cmd_model, "Switch model (alias)", ["name"]),
-            # Calendar commands
             "calendar": (self._cmd_calendar, "Show calendar events", ["args"]),
             "cal": (self._cmd_calendar, "Show calendar (alias)", ["args"]),
             "schedule": (self._cmd_schedule, "Schedule a task", ["args"]),
             "free": (self._cmd_free, "Find free time slots", ["args"]),
-            # Commitment commands
-            "commitment:add": (self._cmd_commitment_add, "Add commitment", ["options"]),
-            "commitment:new": (self._cmd_commitment_add, "Add commitment (alias)", ["options"]),
-            "commitment:update": (self._cmd_commitment_update, "Update commitment", ["id", "options"]),
-            "commitment:complete": (self._cmd_commitment_update, "Complete commitment (alias)", ["id"]),
-            "commitment:list": (self._cmd_commitment_list, "List commitments", ["options"]),
-            "commitment:ls": (self._cmd_commitment_list, "List commitments (alias)", ["options"]),
-            # MCP commands
-            "mcp": (self._cmd_mcp, "Show MCP server status", []),
-            "mcp:list": (self._cmd_mcp_list, "List MCP servers and tools", []),
-            "mcp:test": (self._cmd_mcp_test, "Test MCP server connection", ["server"]),
-            "mcp:metrics": (self._cmd_mcp_metrics, "Show MCP performance metrics", ["server"]),
-            "mcp:refresh": (self._cmd_mcp_refresh, "Refresh MCP connections", [])
+            "prompt": (self._cmd_prompt, "Switch prompt display mode", ["mode"]),
+            "p": (self._cmd_prompt, "Switch prompt mode (alias)", ["mode"]),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -300,7 +272,7 @@ class CommandRouter:
             return handler(args)
         else:
             print(
-                f"{Colors.RED}Unknown command: /{command}. "
+                f"{Colors.DIM}Unknown command: /{command}. "
                 f"Type /help for available commands.{Colors.RESET}"
             )
             return CommandResult(action=CommandAction.CONTINUE, success=False)
@@ -331,23 +303,23 @@ class CommandRouter:
         if agent_name in self.orchestrator.agents:
             self.current_agent = agent_name
             agent = self.orchestrator.agents[agent_name]
-            print(f"{Colors.GREEN}Switched to {agent.name} ({agent.role}){Colors.RESET}")
+            print(f"{Colors.DIM}Switched to {agent.name} ({agent.role}){Colors.RESET}")
             return CommandResult()
         else:
-            print(f"{Colors.RED}Unknown agent: {agent_name}{Colors.RESET}")
+            print(f"{Colors.DIM}Unknown agent: {agent_name}{Colors.RESET}")
             print(f"Available: {', '.join(self.orchestrator.agents.keys())}")
             return CommandResult(success=False)
 
     def _cmd_clear(self, args: str) -> CommandResult:
         """Clear conversation history."""
         self.session.clear()
-        print(f"{Colors.GREEN}Conversation cleared.{Colors.RESET}")
+        print(f"{Colors.DIM}Conversation cleared.{Colors.RESET}")
         return CommandResult()
 
     def _cmd_save(self, args: str) -> CommandResult:
         """Save session to History/Sessions/."""
         filepath = self.session.save()
-        print(f"{Colors.GREEN}Session saved: {filepath}{Colors.RESET}")
+        print(f"{Colors.DIM}Session saved: {filepath}{Colors.RESET}")
         return CommandResult()
 
     def _cmd_usage(self, args: str) -> CommandResult:
@@ -415,7 +387,7 @@ class CommandRouter:
         """Show active commitments from Commitments.md."""
         commitments_file = self.thanos_dir / "State" / "Commitments.md"
         if not commitments_file.exists():
-            print(f"{Colors.RED}No commitments file found.{Colors.RESET}")
+            print(f"{Colors.DIM}No commitments file found.{Colors.RESET}")
             return CommandResult(success=False)
 
         try:
@@ -448,79 +420,7 @@ class CommandRouter:
             return CommandResult()
 
         except Exception as e:
-            print(f"{Colors.RED}Error reading commitments: {e}{Colors.RESET}")
-            return CommandResult(success=False)
-
-    def _cmd_commitment_add(self, args: str) -> CommandResult:
-        """Add a new commitment (habit, goal, or task)."""
-        # Build command to run commitment_add.py
-        cmd_path = self.thanos_dir / "commands" / "commitment_add.py"
-
-        if not cmd_path.exists():
-            print(f"{Colors.DIM}Error: commitment_add.py not found at {cmd_path}{Colors.RESET}")
-            return CommandResult(success=False)
-
-        # If no args provided, run in interactive mode
-        if not args.strip():
-            cmd = [sys.executable, str(cmd_path), "--interactive"]
-        else:
-            # Parse args and pass to script
-            cmd = [sys.executable, str(cmd_path)] + args.split()
-
-        try:
-            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
-            return CommandResult(success=(result.returncode == 0))
-        except Exception as e:
-            print(f"{Colors.DIM}Error running commitment add: {e}{Colors.RESET}")
-            return CommandResult(success=False)
-
-    def _cmd_commitment_update(self, args: str) -> CommandResult:
-        """Update an existing commitment."""
-        # Build command to run commitment_update.py
-        cmd_path = self.thanos_dir / "commands" / "commitment_update.py"
-
-        if not cmd_path.exists():
-            print(f"{Colors.DIM}Error: commitment_update.py not found at {cmd_path}{Colors.RESET}")
-            return CommandResult(success=False)
-
-        if not args.strip():
-            print(f"{Colors.DIM}Usage: /commitment:update <id> [options]{Colors.RESET}")
-            print(f"{Colors.DIM}Examples:{Colors.RESET}")
-            print(f"  /commitment:update abc123 --complete")
-            print(f"  /commitment:update abc123 --missed --notes 'Overslept'")
-            print(f"  /commitment:update abc123 --reschedule +3d")
-            print(f"  /commitment:update abc123 --interactive")
-            return CommandResult(success=False)
-
-        # Parse args and pass to script
-        cmd = [sys.executable, str(cmd_path)] + args.split()
-
-        try:
-            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
-            return CommandResult(success=(result.returncode == 0))
-        except Exception as e:
-            print(f"{Colors.DIM}Error running commitment update: {e}{Colors.RESET}")
-            return CommandResult(success=False)
-
-    def _cmd_commitment_list(self, args: str) -> CommandResult:
-        """List commitments with filtering and sorting options."""
-        # Build command to run commitment_list.py
-        cmd_path = self.thanos_dir / "commands" / "commitment_list.py"
-
-        if not cmd_path.exists():
-            print(f"{Colors.DIM}Error: commitment_list.py not found at {cmd_path}{Colors.RESET}")
-            return CommandResult(success=False)
-
-        # Parse args and pass to script (empty args is fine - shows all)
-        cmd = [sys.executable, str(cmd_path)]
-        if args.strip():
-            cmd.extend(args.split())
-
-        try:
-            result = subprocess.run(cmd, cwd=str(self.thanos_dir), check=False)
-            return CommandResult(success=(result.returncode == 0))
-        except Exception as e:
-            print(f"{Colors.DIM}Error running commitment list: {e}{Colors.RESET}")
+            print(f"{Colors.DIM}Error reading commitments: {e}{Colors.RESET}")
             return CommandResult(success=False)
 
     def _cmd_help(self, args: str) -> CommandResult:
@@ -545,6 +445,7 @@ class CommandRouter:
   /switch <ref>  - Switch to a different branch (by name or id)
   /patterns      - Show conversation patterns and usage analytics
   /model [name]  - Switch AI model (opus, sonnet, haiku)
+  /prompt [mode] - Switch prompt display (compact, standard, verbose)
   /calendar [when] - Show calendar events (today, tomorrow, week, YYYY-MM-DD)
   /schedule <task> - Schedule a task on calendar
   /free [when]   - Find free time slots (today, tomorrow, week)
@@ -552,32 +453,12 @@ class CommandRouter:
   /help          - Show this help
   /quit          - Exit interactive mode
 
-{Colors.CYAN}Commitment Commands:{Colors.RESET}
-  /commitment:add [options]     - Add new commitment (interactive if no options)
-  /commitment:list [filters]    - List commitments with filters
-  /commitment:update <id> [opt] - Update or complete commitment
-
-  Examples:
-    /commitment:add --interactive
-    /commitment:list --overdue
-    /commitment:update abc123 --complete
-    /commitment:update abc123 --reschedule +3d
-
-{Colors.CYAN}MCP Commands:{Colors.RESET}
-  /mcp           - Show MCP server status and overview
-  /mcp:list      - List all MCP servers and available tools
-  /mcp:test <s>  - Test connection to an MCP server
-  /mcp:metrics   - Show detailed performance metrics
-  /mcp:refresh   - Refresh all MCP server connections
-
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
-  /commitment:new = /commitment:add
-  /commitment:ls = /commitment:list
   /r = /resume, /m = /model, /h = /help, /q = /quit
-  /cal = /calendar
+  /p = /prompt, /cal = /calendar
 
-{Colors.YELLOW}Tip: Use \""" for multi-line input{Colors.RESET}
+{Colors.DIM}Tip: Use \""" for multi-line input{Colors.RESET}
 """)
         return CommandResult()
 
@@ -588,7 +469,7 @@ class CommandRouter:
     def _cmd_run(self, args: str) -> CommandResult:
         """Run a Thanos command."""
         if not args:
-            print(f"{Colors.RED}Usage: /run <command> (e.g., /run pa:daily){Colors.RESET}")
+            print(f"{Colors.DIM}Usage: /run <command> (e.g., /run pa:daily){Colors.RESET}")
             return CommandResult(success=False)
 
         print(f"{Colors.DIM}Running {args}...{Colors.RESET}\n")
@@ -596,7 +477,7 @@ class CommandRouter:
             self.orchestrator.run_command(args, stream=True)
             return CommandResult()
         except Exception as e:
-            print(f"{Colors.RED}Error running command: {e}{Colors.RESET}")
+            print(f"{Colors.DIM}Error running command: {e}{Colors.RESET}")
             return CommandResult(success=False)
 
     def _cmd_list_agents(self, args: str) -> CommandResult:
@@ -631,7 +512,7 @@ class CommandRouter:
             # Show sessions and prompt
             sessions = self.session.list_sessions(limit=5)
             if not sessions:
-                print(f"{Colors.RED}No saved sessions to resume.{Colors.RESET}")
+                print(f"{Colors.DIM}No saved sessions to resume.{Colors.RESET}")
                 return CommandResult(success=False)
 
             print(f"\n{Colors.CYAN}Recent Sessions:{Colors.RESET}")
@@ -645,7 +526,7 @@ class CommandRouter:
             # Update current agent to match restored session
             self.current_agent = self.session.session.agent
             stats = self.session.get_stats()
-            print(f"{Colors.GREEN}Session restored:{Colors.RESET}")
+            print(f"{Colors.CYAN}Session restored:{Colors.RESET}")
             print(f"  ID: {stats['session_id']}")
             print(f"  Agent: {stats['current_agent']}")
             print(f"  Messages: {stats['message_count']}")
@@ -653,12 +534,12 @@ class CommandRouter:
                 f"  Previous tokens: {stats['total_input_tokens'] + stats['total_output_tokens']:,}"
             )
             print(
-                f"\n{Colors.GREEN}Conversation history loaded. "
+                f"\n{Colors.DIM}Conversation history loaded. "
                 f"Continue where you left off.{Colors.RESET}\n"
             )
             return CommandResult()
         else:
-            print(f"{Colors.RED}Session not found: {session_id}{Colors.RESET}")
+            print(f"{Colors.DIM}Session not found: {session_id}{Colors.RESET}")
             print(f"{Colors.DIM}Use /sessions to list available sessions.{Colors.RESET}")
             return CommandResult(success=False)
 
@@ -682,7 +563,7 @@ class CommandRouter:
         memos = self._get_memos()
         if not memos:
             print(
-                f"{Colors.RED}MemOS not available. "
+                f"{Colors.DIM}MemOS not available. "
                 f"Check Neo4j/ChromaDB configuration.{Colors.RESET}"
             )
             return CommandResult(success=False)
@@ -739,7 +620,7 @@ class CommandRouter:
         )
 
         if result and result.success:
-            print(f"\n{Colors.GREEN}Memory stored:{Colors.RESET}")
+            print(f"\n{Colors.CYAN}Memory stored:{Colors.RESET}")
             print(f"  Type: {memory_type}")
             print(f"  Domain: {domain}")
             if entities:
@@ -753,7 +634,7 @@ class CommandRouter:
             return CommandResult()
         else:
             error = result.error if result else "Unknown error"
-            print(f"{Colors.RED}Failed to store memory: {error}{Colors.RESET}")
+            print(f"{Colors.DIM}Failed to store memory: {error}{Colors.RESET}")
             return CommandResult(success=False)
 
     def _cmd_recall(self, args: str) -> CommandResult:
@@ -870,10 +751,6 @@ class CommandRouter:
 
         return CommandResult()
 
-    def _cmd_history_search(self, args: str) -> CommandResult:
-        """Search conversation history using semantic similarity."""
-        return self._history_search_handler.handle_history_search(args)
-
     def _cmd_memory(self, args: str) -> CommandResult:
         """Display memory system information including MemOS (Neo4j + ChromaDB)."""
         print(f"\n{Colors.CYAN}Memory Systems:{Colors.RESET}\n")
@@ -904,14 +781,14 @@ class CommandRouter:
                     if result and result.success:
                         print("    ✓ Neo4j connected")
                 except Exception:
-                    print(f"    {Colors.YELLOW}⚠ Neo4j connection issue{Colors.RESET}")
+                    print("    ⚠ Neo4j connection issue")
         else:
             if MEMOS_AVAILABLE:
-                print(f"    {Colors.YELLOW}⚠ MemOS available but not initialized{Colors.RESET}")
-                print(f"    {Colors.YELLOW}💡 MemOS will initialize on first /remember or /recall{Colors.RESET}")
+                print("    ⚠ MemOS available but not initialized")
+                print("    💡 MemOS will initialize on first /remember or /recall")
             else:
                 print("    ✗ MemOS not available")
-                print(f"    {Colors.YELLOW}💡 Install neo4j and chromadb packages{Colors.RESET}")
+                print("    💡 Install neo4j and chromadb packages")
 
         print()
 
@@ -963,13 +840,13 @@ class CommandRouter:
         new_id = self.session.create_branch(branch_name)
         branch_info = self.session.get_branch_info()
 
-        print(f"\n{Colors.GREEN}Branch created:{Colors.RESET}")
+        print(f"\n{Colors.CYAN}Branch created:{Colors.RESET}")
         print(f"  Name: {branch_info['name']}")
         print(f"  ID: {new_id}")
         print(f"  Branched from: {branch_info['parent_id']}")
         print(f"  At message: {branch_info['branch_point']}")
         print(
-            f"\n{Colors.GREEN}Continue conversation on this branch. "
+            f"\n{Colors.DIM}Continue conversation on this branch. "
             f"Use /branches to list all.{Colors.RESET}\n"
         )
         return CommandResult()
@@ -1009,14 +886,14 @@ class CommandRouter:
             branch_info = self.session.get_branch_info()
             stats = self.session.get_stats()
 
-            print(f"\n{Colors.GREEN}Switched to branch:{Colors.RESET}")
+            print(f"\n{Colors.CYAN}Switched to branch:{Colors.RESET}")
             print(f"  Name: {branch_info['name']}")
             print(f"  ID: {branch_info['id']}")
             print(f"  Messages: {stats['message_count']}")
-            print(f"\n{Colors.GREEN}Conversation restored from branch point.{Colors.RESET}\n")
+            print(f"\n{Colors.DIM}Conversation restored from branch point.{Colors.RESET}\n")
             return CommandResult()
         else:
-            print(f"{Colors.RED}Branch not found: {branch_ref}{Colors.RESET}")
+            print(f"{Colors.DIM}Branch not found: {branch_ref}{Colors.RESET}")
             print(f"{Colors.DIM}Use /branches to list available branches.{Colors.RESET}")
             return CommandResult(success=False)
 
@@ -1144,11 +1021,11 @@ class CommandRouter:
         if model_name in self._available_models:
             old_model = self.current_model or self._default_model
             self.current_model = model_name
-            print(f"{Colors.GREEN}Model switched:{Colors.RESET} {old_model} → {model_name}")
-            print(f"{Colors.GREEN}Using: {self._available_models[model_name]}{Colors.RESET}")
+            print(f"{Colors.CYAN}Model switched:{Colors.RESET} {old_model} → {model_name}")
+            print(f"{Colors.DIM}Using: {self._available_models[model_name]}{Colors.RESET}")
             return CommandResult()
         else:
-            print(f"{Colors.RED}Unknown model: {model_name}{Colors.RESET}")
+            print(f"{Colors.DIM}Unknown model: {model_name}{Colors.RESET}")
             print(f"Available: {', '.join(self._available_models.keys())}")
             return CommandResult(success=False)
 
@@ -1157,15 +1034,48 @@ class CommandRouter:
         model_alias = self.current_model or self._default_model
         return self._available_models.get(model_alias, self._available_models[self._default_model])
 
+    def _cmd_prompt(self, args: str) -> CommandResult:
+        """Switch prompt display mode."""
+        available_modes = ["compact", "standard", "verbose"]
+
+        if not args:
+            # Show current mode and available options
+            current = self.current_prompt_mode or "compact"
+            print(f"\n{Colors.CYAN}Prompt Display Mode:{Colors.RESET}")
+            print(f"  Current: {current}")
+            print(f"\n{Colors.CYAN}Available Modes:{Colors.RESET}")
+            for mode in available_modes:
+                marker = "→" if mode == current else " "
+                if mode == "compact":
+                    desc = "Tokens and cost only - (1.2K | $0.04)"
+                elif mode == "standard":
+                    desc = "Adds session duration - (45m | 1.2K tokens | $0.04)"
+                else:  # verbose
+                    desc = "Full details - (45m | 12 msgs | 1.2K in | 3.4K out | $0.04)"
+                print(f"  {marker} {mode:10} {desc}")
+            print(f"\n{Colors.DIM}Usage: /prompt <compact|standard|verbose>{Colors.RESET}\n")
+            return CommandResult()
+
+        mode = args.lower().strip()
+        if mode in available_modes:
+            old_mode = self.current_prompt_mode or "compact"
+            self.current_prompt_mode = mode
+            print(f"{Colors.CYAN}Prompt mode switched:{Colors.RESET} {old_mode} → {mode}")
+            return CommandResult()
+        else:
+            print(f"{Colors.DIM}Unknown mode: {mode}{Colors.RESET}")
+            print(f"Available: {', '.join(available_modes)}")
+            return CommandResult(success=False)
+
     def _cmd_calendar(self, args: str) -> CommandResult:
         """Show calendar events for today or a specified date."""
         calendar = self._get_calendar_adapter()
         if not calendar:
-            print(f"{Colors.RED}Calendar integration not available. Install google-auth, google-auth-oauthlib, and google-api-python-client.{Colors.RESET}")
+            print(f"{Colors.DIM}Calendar integration not available. Install google-auth, google-auth-oauthlib, and google-api-python-client.{Colors.RESET}")
             return CommandResult(success=False)
 
         if not calendar.is_authenticated():
-            print(f"{Colors.RED}Calendar not authenticated. Use /run tools to authorize Google Calendar.{Colors.RESET}")
+            print(f"{Colors.DIM}Calendar not authenticated. Use /run tools to authorize Google Calendar.{Colors.RESET}")
             return CommandResult(success=False)
 
         try:
@@ -1204,7 +1114,7 @@ class CommandRouter:
                         "end_date": end
                     }))
                 except ValueError:
-                    print(f"{Colors.RED}Invalid date format. Use YYYY-MM-DD or 'today', 'tomorrow', 'week'{Colors.RESET}")
+                    print(f"{Colors.DIM}Invalid date format. Use YYYY-MM-DD or 'today', 'tomorrow', 'week'{Colors.RESET}")
                     return CommandResult(success=False)
 
             if result and result.success:
@@ -1235,22 +1145,22 @@ class CommandRouter:
                 return CommandResult()
             else:
                 error_msg = result.error if result else "Unknown error"
-                print(f"{Colors.RED}Failed to fetch calendar: {error_msg}{Colors.RESET}")
+                print(f"{Colors.DIM}Failed to fetch calendar: {error_msg}{Colors.RESET}")
                 return CommandResult(success=False)
 
         except Exception as e:
-            print(f"{Colors.RED}Error fetching calendar: {e}{Colors.RESET}")
+            print(f"{Colors.DIM}Error fetching calendar: {e}{Colors.RESET}")
             return CommandResult(success=False)
 
     def _cmd_schedule(self, args: str) -> CommandResult:
         """Schedule a task on the calendar."""
         calendar = self._get_calendar_adapter()
         if not calendar:
-            print(f"{Colors.RED}Calendar integration not available.{Colors.RESET}")
+            print(f"{Colors.DIM}Calendar integration not available.{Colors.RESET}")
             return CommandResult(success=False)
 
         if not calendar.is_authenticated():
-            print(f"{Colors.RED}Calendar not authenticated. Use /run tools to authorize.{Colors.RESET}")
+            print(f"{Colors.DIM}Calendar not authenticated. Use /run tools to authorize.{Colors.RESET}")
             return CommandResult(success=False)
 
         if not args:
@@ -1266,24 +1176,24 @@ class CommandRouter:
 
             # This is a placeholder - the actual scheduling logic should be in the agent
             # For now, just inform the user to use natural language with the agent
-            print(f"\n{Colors.YELLOW}Tip: For intelligent scheduling, ask the agent in natural language:{Colors.RESET}")
-            print(f'{Colors.YELLOW}Example: "Schedule this task for tomorrow morning"{Colors.RESET}\n')
+            print(f"\n{Colors.DIM}Tip: For intelligent scheduling, ask the agent in natural language:{Colors.RESET}")
+            print(f'{Colors.DIM}Example: "Schedule this task for tomorrow morning"{Colors.RESET}\n')
 
             return CommandResult()
 
         except Exception as e:
-            print(f"{Colors.RED}Error scheduling task: {e}{Colors.RESET}")
+            print(f"{Colors.DIM}Error scheduling task: {e}{Colors.RESET}")
             return CommandResult(success=False)
 
     def _cmd_free(self, args: str) -> CommandResult:
         """Find free time slots in calendar."""
         calendar = self._get_calendar_adapter()
         if not calendar:
-            print(f"{Colors.RED}Calendar integration not available.{Colors.RESET}")
+            print(f"{Colors.DIM}Calendar integration not available.{Colors.RESET}")
             return CommandResult(success=False)
 
         if not calendar.is_authenticated():
-            print(f"{Colors.RED}Calendar not authenticated. Use /run tools to authorize.{Colors.RESET}")
+            print(f"{Colors.DIM}Calendar not authenticated. Use /run tools to authorize.{Colors.RESET}")
             return CommandResult(success=False)
 
         try:
@@ -1341,9 +1251,9 @@ class CommandRouter:
                 return CommandResult()
             else:
                 error_msg = result.error if result else "Unknown error"
-                print(f"{Colors.RED}Failed to find free slots: {error_msg}{Colors.RESET}")
+                print(f"{Colors.DIM}Failed to find free slots: {error_msg}{Colors.RESET}")
                 return CommandResult(success=False)
 
         except Exception as e:
-            print(f"{Colors.RED}Error finding free slots: {e}{Colors.RESET}")
+            print(f"{Colors.DIM}Error finding free slots: {e}{Colors.RESET}")
             return CommandResult(success=False)

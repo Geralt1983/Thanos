@@ -111,7 +111,7 @@ class TestCommandRouter:
         assert router.state_reader is not None
         assert router.thanos_dir == Path("/fake/thanos")
         assert router.current_agent == "ops"
-        assert len(router.registry.get_all_commands()) > 0
+        assert len(router._commands) > 0
 
     def test_command_registration(self, router):
         """Test all expected commands are registered"""
@@ -133,9 +133,11 @@ class TestCommandRouter:
             "exit",  # Exit
             "run",  # Command execution
             "agents",  # List agents
+            "prompt",
+            "p",  # Prompt mode switching
         ]
         for cmd in expected_commands:
-            assert router.registry.has_command(cmd)
+            assert cmd in router._commands
 
     def test_unknown_command(self, router, capsys):
         """Test unknown command handling"""
@@ -149,16 +151,18 @@ class TestCommandRouter:
     def test_command_aliases(self, router):
         """Test command aliases route to same handler"""
         # State aliases
-        assert router.registry.get("state")[0] == router.registry.get("s")[0]
+        assert router._commands.get("state")[0] == router._commands.get("s")[0]
         # Commitments aliases
-        assert router.registry.get("commitments")[0] == router.registry.get("c")[0]
+        assert router._commands.get("commitments")[0] == router._commands.get("c")[0]
         # Agent aliases
-        assert router.registry.get("agent")[0] == router.registry.get("a")[0]
+        assert router._commands.get("agent")[0] == router._commands.get("a")[0]
         # Help aliases
-        assert router.registry.get("help")[0] == router.registry.get("h")[0]
+        assert router._commands.get("help")[0] == router._commands.get("h")[0]
         # Quit aliases
-        assert router.registry.get("quit")[0] == router.registry.get("q")[0]
-        assert router.registry.get("quit")[0] == router.registry.get("exit")[0]
+        assert router._commands.get("quit")[0] == router._commands.get("q")[0]
+        assert router._commands.get("quit")[0] == router._commands.get("exit")[0]
+        # Prompt aliases
+        assert router._commands.get("prompt")[0] == router._commands.get("p")[0]
 
 
 class TestAgentCommand:
@@ -462,6 +466,66 @@ class TestGetAvailableCommands:
             assert isinstance(cmd, str)
             assert isinstance(desc, str)
             assert isinstance(args, list)
+
+
+class TestPromptCommand:
+    """Test /prompt command"""
+
+    def test_prompt_switch_compact(self, router, capsys):
+        """Test switching to compact mode"""
+        result = router.route_command("/prompt compact")
+        assert result.action == CommandAction.CONTINUE
+        assert result.success is True
+        assert router.current_prompt_mode == "compact"
+        captured = capsys.readouterr()
+        assert "Prompt mode switched" in captured.out
+
+    def test_prompt_switch_standard(self, router, capsys):
+        """Test switching to standard mode"""
+        result = router.route_command("/prompt standard")
+        assert result.action == CommandAction.CONTINUE
+        assert result.success is True
+        assert router.current_prompt_mode == "standard"
+        captured = capsys.readouterr()
+        assert "Prompt mode switched" in captured.out
+
+    def test_prompt_switch_verbose(self, router, capsys):
+        """Test switching to verbose mode"""
+        result = router.route_command("/prompt verbose")
+        assert result.action == CommandAction.CONTINUE
+        assert result.success is True
+        assert router.current_prompt_mode == "verbose"
+        captured = capsys.readouterr()
+        assert "Prompt mode switched" in captured.out
+
+    def test_prompt_switch_invalid(self, router, capsys):
+        """Test switching to invalid mode"""
+        result = router.route_command("/prompt invalid")
+        assert result.action == CommandAction.CONTINUE
+        assert result.success is False
+        assert router.current_prompt_mode is None  # Unchanged
+        captured = capsys.readouterr()
+        assert "Unknown mode" in captured.out
+
+    def test_prompt_no_args(self, router, capsys):
+        """Test /prompt without arguments shows current and available"""
+        result = router.route_command("/prompt")
+        assert result.action == CommandAction.CONTINUE
+        assert result.success is True
+        captured = capsys.readouterr()
+        assert "Prompt Display Mode" in captured.out
+        assert "Current:" in captured.out
+        assert "Available Modes:" in captured.out
+        assert "compact" in captured.out
+        assert "standard" in captured.out
+        assert "verbose" in captured.out
+
+    def test_prompt_alias(self, router, capsys):
+        """Test /p alias works"""
+        result = router.route_command("/p verbose")
+        assert result.action == CommandAction.CONTINUE
+        assert result.success is True
+        assert router.current_prompt_mode == "verbose"
 
 
 class TestCommandResult:

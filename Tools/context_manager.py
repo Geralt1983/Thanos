@@ -1,409 +1,47 @@
+#!/usr/bin/env python3
 """
-Context Manager for Thanos conversation history and token counting.
+ContextManager - Manages context window usage and provides reporting.
 
-This module provides context window management for Claude API interactions,
-including token estimation, message history trimming, and usage reporting.
-
-GLOBAL ENCODER CACHING:
-----------------------
-The tiktoken encoder is expensive to initialize (~100ms per instance).
-Since encoders are stateless and thread-safe, we cache a single encoder
-instance at module level for reuse across all ContextManager instances.
-
-Benefits:
-- Subsequent ContextManager instantiations are ~100ms faster
-- Reduced memory overhead from multiple encoder instances
-- Thread-safe: tiktoken encoders can be safely shared across contexts
-
-The cached encoder is initialized lazily on first use via _get_cached_encoder()
-and reused for the lifetime of the Python process. If initialization fails,
-the system gracefully falls back to heuristic token estimation (len/3.5).
-
-THREAD SAFETY CONSIDERATIONS:
------------------------------
-This module is designed for safe concurrent use with the following guarantees:
-
-1. Encoder Immutability:
-   - tiktoken encoders are immutable and stateless after initialization
-   - Multiple threads can safely call encoder.encode() concurrently
-   - No locks are needed when using the cached encoder instance
-
-2. Lazy Initialization Race Condition:
-   - In rare cases, concurrent first-time access may initialize multiple encoders
-   - This is harmless: one instance becomes cached, others are garbage collected
-   - The slight overhead (2-3x initialization) is acceptable vs. lock contention
-   - After initialization, all threads share the same cached instance
-
-3. ContextManager Instances:
-   - Each ContextManager instance is independent and stores its own state
-   - Instances can be safely created and used in different threads
-   - The shared encoder is read-only and never modified
-
-4. GIL Protection:
-   - Python's Global Interpreter Lock (GIL) prevents race conditions in the
-     module-level _CACHED_ENCODER assignment
-   - No additional synchronization primitives are required
-
-Usage:
-    from Tools.context_manager import ContextManager
-
-    # Create manager for a specific model
-    cm = ContextManager(model="claude-opus-4-5-20251101")
-
-    # Estimate tokens in text
-    tokens = cm.estimate_tokens("Your text here")
-
-    # Trim conversation history to fit context window
-    trimmed, was_trimmed = cm.trim_history(history, system_prompt, new_message)
-
-    # Get usage statistics
-    report = cm.get_usage_report(history, system_prompt)
+This is a minimal stub implementation to support interactive mode.
+Full implementation would track actual context window usage.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
-
-try:
-    import tiktoken
-    TIKTOKEN_AVAILABLE = True
-except ImportError:
-    TIKTOKEN_AVAILABLE = False
-
-
-# Token limits for different Claude models
-# These represent the maximum context window size for each model
-MODEL_LIMITS: Dict[str, int] = {
-    "claude-opus-4-5-20251101": 200_000,      # Claude Opus 4.5: 200k tokens
-    "claude-sonnet-4-20250514": 200_000,      # Claude Sonnet 4: 200k tokens
-    "claude-3-5-sonnet-20241022": 200_000,    # Claude 3.5 Sonnet: 200k tokens
-    "default": 100_000,                        # Default fallback: 100k tokens
-}
-
-# Reserved tokens for model output responses
-# This ensures sufficient space for the model to generate complete responses
-OUTPUT_RESERVE: int = 8_000
-
-# Global encoder cache to avoid expensive re-initialization
-# Initialized to None and lazily loaded via _get_cached_encoder()
-# Thread-safe: tiktoken encoders are stateless and safe for concurrent access
-_CACHED_ENCODER: Optional[Any] = None
-
-
-def _get_cached_encoder() -> Optional[Any]:
-    """
-    Get or initialize the cached tiktoken encoder instance.
-
-    This function implements lazy initialization of the tiktoken encoder.
-    On first call, it initializes the encoder using tiktoken.get_encoding('cl100k_base')
-    and caches it in the module-level _CACHED_ENCODER variable for reuse.
-
-    The cl100k_base encoding is used by GPT-4 and Claude models for token counting.
-
-    Returns:
-        Optional[Any]: The cached tiktoken encoder instance, or None if tiktoken
-                       is unavailable or initialization fails.
-
-    Thread Safety:
-        This function is thread-safe with the following considerations:
-
-        - Check-then-set pattern: The function uses a non-atomic check-then-set
-          pattern (if _CACHED_ENCODER is not None). In rare concurrent first-calls,
-          multiple threads may pass the None check simultaneously.
-
-        - Race condition is benign: If multiple threads initialize encoders
-          concurrently, Python's GIL ensures the final assignment is atomic.
-          One encoder becomes cached, others are garbage collected. This slight
-          initialization overhead is acceptable vs. lock contention costs.
-
-        - Read-only after init: Once initialized, all threads safely read the
-          same cached encoder. tiktoken encoders are immutable and thread-safe
-          for concurrent encode() calls.
-
-        - No locks needed: The performance benefit of lock-free access outweighs
-          the negligible cost of potential duplicate initialization on first use.
-
-    Note:
-        This function modifies the module-level _CACHED_ENCODER variable.
-        Subsequent calls return the cached instance without re-initialization.
-    """
-    global _CACHED_ENCODER
-
-    # Return cached encoder if already initialized
-    if _CACHED_ENCODER is not None:
-        return _CACHED_ENCODER
-
-    # Check if tiktoken is available
-    if not TIKTOKEN_AVAILABLE:
-        return None
-
-    # Initialize encoder on first use with error handling
-    try:
-        _CACHED_ENCODER = tiktoken.get_encoding("cl100k_base")
-        return _CACHED_ENCODER
-    except Exception as e:
-        # If initialization fails (network issues, corrupted cache, etc.),
-        # return None to allow fallback to heuristic token estimation
-        return None
+from typing import Dict, List
 
 
 class ContextManager:
-    """
-    Manages conversation context and token counting for Claude API interactions.
+    """Manages context window usage tracking."""
 
-    This class provides methods for estimating token counts, trimming conversation
-    history to fit within context windows, and reporting usage statistics.
-
-    Attributes:
-        model (str): The Claude model identifier being used
-        max_tokens (int): Maximum context window size for the model
-        OUTPUT_RESERVE (int): Tokens reserved for model output
-        available_tokens (int): Tokens available for input (max - reserve)
-        encoding (Optional[Any]): Cached tiktoken encoder instance
-
-    Example:
-        cm = ContextManager(model="claude-opus-4-5-20251101")
-        tokens = cm.estimate_tokens("Hello world")
-        trimmed, was_trimmed = cm.trim_history(history, system_prompt, new_message)
-    """
-
-    # Make MODEL_LIMITS accessible at class level for tests
-    MODEL_LIMITS = MODEL_LIMITS
-
-    def __init__(self, model: str = "claude-opus-4-5-20251101"):
+    def __init__(self, max_tokens: int = 200000):
         """
-        Initialize ContextManager for a specific Claude model.
+        Initialize context manager.
 
         Args:
-            model (str): Claude model identifier. Defaults to "claude-opus-4-5-20251101".
-                        If model is not in MODEL_LIMITS, uses default limit of 100k tokens.
-
-        The initialization:
-        1. Sets the model name
-        2. Looks up max_tokens from MODEL_LIMITS (or uses default)
-        3. Sets OUTPUT_RESERVE constant
-        4. Calculates available_tokens for input
-        5. Gets the cached tiktoken encoder instance
+            max_tokens: Maximum context window size (default: 200K for Claude)
         """
-        self.model = model
+        self.max_tokens = max_tokens
 
-        # Look up token limit for this model, with fallback to default
-        self.max_tokens = MODEL_LIMITS.get(model, MODEL_LIMITS["default"])
-
-        # Set output reserve constant
-        self.OUTPUT_RESERVE = OUTPUT_RESERVE
-
-        # Calculate available tokens for input (context window - output reserve)
-        self.available_tokens = self.max_tokens - self.OUTPUT_RESERVE
-
-        # Get the cached encoder instance (may be None if tiktoken unavailable)
-        self.encoding = _get_cached_encoder()
-
-    def estimate_tokens(self, text: Optional[str]) -> int:
+    def get_usage_report(self, history: List[Dict], system_prompt: str) -> Dict:
         """
-        Estimate the number of tokens in a text string.
-
-        Uses tiktoken encoder if available, otherwise falls back to heuristic
-        estimation (length / 3.5). This provides accurate token counts for
-        context management and trimming decisions.
+        Get context window usage report.
 
         Args:
-            text (Optional[str]): The text to estimate tokens for.
-                                 Can be None or empty string.
+            history: List of message dicts
+            system_prompt: System prompt text
 
         Returns:
-            int: Estimated number of tokens in the text.
-                 Returns 0 for None or empty strings.
-
-        Fallback Behavior:
-            - If tiktoken is unavailable: uses heuristic (len/3.5)
-            - If encoding fails: uses heuristic (len/3.5)
-            - The heuristic assumes ~3.5 characters per token on average
-
-        Example:
-            cm = ContextManager()
-            tokens = cm.estimate_tokens("Hello world")  # Returns ~3 tokens
+            Dictionary with usage information
         """
-        # Handle None and empty strings
-        if not text:
-            return 0
-
-        # Try to use tiktoken encoder if available
-        if self.encoding is not None:
-            try:
-                # Use tiktoken for accurate token counting
-                encoded = self.encoding.encode(text)
-                return len(encoded)
-            except Exception:
-                # If encoding fails, fall through to heuristic estimation
-                pass
-
-        # Fallback: heuristic estimation (characters / 3.5)
-        # This provides a reasonable approximation when tiktoken is unavailable
-        return int(len(text) / 3.5)
-
-    def estimate_messages_tokens(self, messages: List[Dict[str, str]]) -> int:
-        """
-        Estimate the total number of tokens in a list of messages.
-
-        Calculates tokens for message content plus structural overhead.
-        Each message adds ~4 tokens for structure (role, formatting, etc.).
-
-        Args:
-            messages (List[Dict[str, str]]): List of message dictionaries.
-                                            Each should have "content" key.
-
-        Returns:
-            int: Total estimated tokens including content and overhead.
-                 Returns 0 for empty list.
-
-        Example:
-            messages = [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi!"}
-            ]
-            tokens = cm.estimate_messages_tokens(messages)
-        """
-        # Return 0 for empty message list
-        if not messages:
-            return 0
-
-        total_tokens = 0
-
-        # Iterate through messages
-        for message in messages:
-            # Estimate tokens for message content
-            content = message.get("content", "")
-            content_tokens = self.estimate_tokens(content)
-
-            # Add content tokens + 4 for message structure overhead
-            total_tokens += content_tokens + 4
-
-        return total_tokens
-
-    def trim_history(
-        self,
-        history: List[Dict[str, str]],
-        system_prompt: str,
-        new_message: str,
-    ) -> Tuple[List[Dict[str, str]], bool]:
-        """
-        Trim conversation history to fit within available token limits.
-
-        Calculates total tokens needed for system_prompt + new_message + history.
-        If the total exceeds available_tokens, removes oldest messages first
-        until the total fits within the limit.
-
-        Args:
-            history (List[Dict[str, str]]): List of conversation messages.
-                                           Each should have "content" key.
-            system_prompt (str): The system prompt to include in token calculation.
-            new_message (str): The new message to include in token calculation.
-
-        Returns:
-            Tuple[List[Dict[str, str]], bool]: A tuple containing:
-                - trimmed_history: The potentially trimmed message list
-                - was_trimmed: True if any messages were removed, False otherwise
-
-        Behavior:
-            - If total tokens fit within available_tokens: returns (history, False)
-            - If trimming needed: removes oldest messages first until it fits
-            - Most recent messages are always preserved when possible
-            - Returns ([], True) if even empty history exceeds limits
-
-        Example:
-            cm = ContextManager()
-            history = [{"role": "user", "content": "Hello"}]
-            trimmed, was_trimmed = cm.trim_history(history, "System", "New message")
-        """
-        # Calculate tokens for system prompt and new message
-        system_tokens = self.estimate_tokens(system_prompt)
-        new_message_tokens = self.estimate_tokens(new_message)
-
-        # Calculate tokens for current history
-        history_tokens = self.estimate_messages_tokens(history)
-
-        # Calculate total tokens needed
-        total_tokens = system_tokens + new_message_tokens + history_tokens
-
-        # If total fits within available tokens, no trimming needed
-        if total_tokens <= self.available_tokens:
-            return (history, False)
-
-        # Trimming is needed - start removing oldest messages
-        trimmed_history = history.copy()
-
-        # Calculate base tokens (system + new message)
-        base_tokens = system_tokens + new_message_tokens
-
-        # If even without history we exceed the limit, return empty history
-        if base_tokens >= self.available_tokens:
-            return ([], True)
-
-        # Remove oldest messages until we fit within available tokens
-        while trimmed_history:
-            # Recalculate history tokens with current trimmed list
-            history_tokens = self.estimate_messages_tokens(trimmed_history)
-            total_tokens = base_tokens + history_tokens
-
-            # If we fit within limits, we're done
-            if total_tokens <= self.available_tokens:
-                break
-
-            # Remove the oldest message (first in list)
-            trimmed_history.pop(0)
-
-        # Return trimmed history and indicate that trimming occurred
-        return (trimmed_history, True)
-
-    def get_usage_report(
-        self,
-        history: List[Dict[str, str]],
-        system_prompt: str,
-    ) -> Dict[str, Any]:
-        """
-        Generate a usage report for the current context state.
-
-        Calculates token usage statistics for system prompt and conversation history,
-        providing insights into context window utilization.
-
-        Args:
-            history (List[Dict[str, str]]): List of conversation messages.
-            system_prompt (str): The system prompt used for the conversation.
-
-        Returns:
-            Dict[str, Any]: Usage report containing:
-                - system_tokens (int): Tokens used by system prompt
-                - history_tokens (int): Tokens used by conversation history
-                - total_used (int): Total tokens used (system + history)
-                - available (int): Total tokens available for input
-                - usage_percent (float): Percentage of available tokens used
-                - messages_in_context (int): Number of messages in history
-
-        Example:
-            cm = ContextManager()
-            history = [{"role": "user", "content": "Hello"}]
-            report = cm.get_usage_report(history, "You are a helpful assistant.")
-            print(f"Using {report['usage_percent']:.1f}% of context window")
-        """
-        # Calculate tokens for system prompt
-        system_tokens = self.estimate_tokens(system_prompt)
-
-        # Calculate tokens for conversation history
-        history_tokens = self.estimate_messages_tokens(history)
-
-        # Calculate total tokens used
+        # Simple token estimation (roughly 4 chars per token)
+        system_tokens = len(system_prompt) // 4
+        history_tokens = sum(len(msg.get("content", "")) for msg in history) // 4
         total_used = system_tokens + history_tokens
-
-        # Calculate usage percentage
-        usage_percent = (total_used / self.available_tokens) * 100
-
-        # Count messages in context
-        messages_in_context = len(history)
 
         return {
             "system_tokens": system_tokens,
             "history_tokens": history_tokens,
+            "messages_in_context": len(history),
             "total_used": total_used,
-            "available": self.available_tokens,
-            "usage_percent": usage_percent,
-            "messages_in_context": messages_in_context,
+            "available": self.max_tokens,
+            "usage_percent": (total_used / self.max_tokens) * 100 if self.max_tokens > 0 else 0,
         }
