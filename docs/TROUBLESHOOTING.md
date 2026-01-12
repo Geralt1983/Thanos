@@ -14,18 +14,39 @@ Thanos implements robust error handling across three major subsystems:
 
 ## Quick Reference
 
-Common issues and their resolutions:
+Most common issues and their resolutions:
+
+### API Errors
 
 | Symptom | Automatic Behavior | User Action Required |
 |---------|-------------------|---------------------|
 | API rate limit hit | Immediately tries next model in fallback chain | None - verify fallback chain configured |
 | API connection fails | Falls back to next model | Check network, verify API keys |
 | All fallback models fail | Request fails with last error | Check API keys, quotas, network |
+| Fallback chain exhausted quickly | Uses last available model | Review fallback chain config, check API keys |
+
+### Cache Issues
+
+| Symptom | Automatic Behavior | User Action Required |
+|---------|-------------------|---------------------|
 | Cache corruption detected | Treats as cache miss, continues normally | None - corrupted files cleaned automatically |
 | Cache directory full | Write may fail silently | Monitor disk space, clear old cache |
+| High disk usage | No automatic cleanup | Clear cache: `rm -rf Memory/cache/*.json` |
+| Slow responses / poor performance | Cache misses trigger full API calls | Clear corrupted cache, check disk space |
+
+### Hook Errors
+
+| Symptom | Automatic Behavior | User Action Required |
+|---------|-------------------|---------------------|
 | Hook execution error | Logs error, continues workflow | Check `~/.claude/logs/hooks.log` for details |
 | Missing morning context | Silent failure, session starts normally | Verify `State/Today.md` exists |
 | Session log not created | Silent failure, no session history | Check `History/Sessions/` permissions |
+
+### Response Quality
+
+| Symptom | Automatic Behavior | User Action Required |
+|---------|-------------------|---------------------|
+| Inconsistent responses from same prompt | Different models may respond due to fallbacks | Enable DEBUG logging, simplify fallback chain |
 
 ## System Architecture
 
