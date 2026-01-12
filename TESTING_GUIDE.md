@@ -1388,7 +1388,605 @@ This system enables powerful test filtering for different workflows:
 
 ## External Dependencies
 
-*This section will be completed in subtask 2.4*
+This section explains how to set up external dependencies for integration testing. The good news: **most tests require NO external dependencies** and run with mocks by default!
+
+### Overview
+
+The Thanos test suite is designed with a **graceful fallback strategy**:
+
+- ✅ **Unit tests (33 files):** All external dependencies mocked - runs offline
+- ✅ **Integration tests (7 files):** Most dependencies mocked - minimal setup required
+- ⚡ **Real API tests:** Opt-in only - auto-skip if credentials not available
+
+**Philosophy:**
+- **Mock by default** - Tests use mocked dependencies unless explicitly marked
+- **Auto-skip pattern** - Tests requiring external services skip gracefully if unavailable
+- **No database servers** - Neo4j, PostgreSQL, and other databases are fully mocked
+- **CI-friendly** - Can run entire test suite without external services
+
+---
+
+### Dependency Categories
+
+External dependencies fall into three categories:
+
+| Category | Examples | Setup Required | Tests Skip if Missing |
+|----------|----------|----------------|----------------------|
+| **Fully Mocked** | Neo4j, Anthropic, Oura, PostgreSQL | None | N/A (always mocked) |
+| **Optional Services** | ChromaDB | `pip install chromadb` | Yes |
+| **Optional APIs** | OpenAI, Google Calendar | API credentials | Yes |
+
+---
+
+### Neo4j Database
+
+**Status:** ✅ Fully mocked - no setup required
+
+**What it's used for:**
+- Graph database operations for commitments
+- Pattern recognition and relationship storage
+- Memory graph queries
+
+**Do I need to install Neo4j?**
+No! All Neo4j tests use mocks. You don't need to install or run a Neo4j database server.
+
+**Related tests:**
+- `tests/integration/test_neo4j_batch_operations.py` (mocked)
+- `tests/unit/test_neo4j_*.py` (all mocked)
+- `tests/benchmarks/test_neo4j_session_performance.py` (mocked)
+
+**How it works:**
+```python
+# Tests mock Neo4j before importing the adapter
+sys.modules['neo4j'] = MagicMock()
+from Tools.adapters.neo4j_adapter import Neo4jAdapter
+
+# All database operations use the mock
+adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j", password="test")
+adapter._driver = Mock()  # Mocked driver
+```
+
+**Run Neo4j tests:**
+```bash
+# All Neo4j tests run with mocks
+pytest tests/unit/test_neo4j_session_pool.py -v
+pytest tests/integration/test_neo4j_batch_operations.py -v
+```
+
+---
+
+### ChromaDB
+
+**Status:** 📦 Optional - install for integration tests
+
+**What it's used for:**
+- Vector storage and semantic search
+- Embedding management
+- Memory retrieval
+
+**Do I need to install ChromaDB?**
+Only if you want to run ChromaDB integration tests. Most tests mock ChromaDB and run without it.
+
+**Installation:**
+```bash
+# Install ChromaDB
+pip install chromadb
+
+# Verify installation
+python -c "import chromadb; print(chromadb.__version__)"
+```
+
+**No server setup needed!** Tests use embedded ChromaDB with temporary directories.
+
+**Related tests:**
+- **Unit tests (mocked):**
+  - `tests/unit/test_chroma_adapter.py` - All unit tests use mocks
+  - `tests/unit/test_memory_integration.py` - Memory system tests (mocked)
+
+- **Integration tests (require ChromaDB):**
+  - `tests/integration/test_chroma_adapter_integration.py` - Batch operations with real ChromaDB
+
+**Run ChromaDB tests:**
+```bash
+# Run integration tests (requires ChromaDB installed)
+pytest tests/integration/test_chroma_adapter_integration.py -v
+
+# Skip if ChromaDB not installed
+# Tests automatically skip with message: "ChromaDB not available"
+```
+
+**Auto-skip behavior:**
+```python
+# Tests check for ChromaDB availability
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+
+# Tests skip gracefully if not available
+if not CHROMADB_AVAILABLE:
+    pytest.skip("ChromaDB not available")
+```
+
+---
+
+### OpenAI API
+
+**Status:** 🔑 Optional - requires API key for marked tests
+
+**What it's used for:**
+- Generating embeddings for semantic search
+- Vector representations of text
+- Integration testing with real OpenAI models
+
+**Do I need an OpenAI API key?**
+Only if you want to run tests marked with `@pytest.mark.requires_openai`. Most tests use mocked OpenAI responses.
+
+**Cost Warning:** ⚠️ Tests marked with `requires_openai` make **real API calls** and will incur charges on your OpenAI account.
+
+**Setup:**
+
+**Step 1: Get an API key**
+1. Go to [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. Sign in or create an account
+3. Click "Create new secret key"
+4. Copy the key (starts with `sk-`)
+
+**Step 2: Set environment variable**
+
+```bash
+# Add to .env file (recommended)
+echo 'OPENAI_API_KEY=sk-your-actual-api-key-here' >> .env
+
+# Or export temporarily
+export OPENAI_API_KEY="sk-your-actual-api-key-here"
+
+# Verify it's set
+echo $OPENAI_API_KEY
+```
+
+**Step 3: Verify setup**
+```bash
+# This should not skip
+pytest -m requires_openai tests/integration/ -v
+
+# If API key is not set, you'll see:
+# SKIPPED [1] OpenAI API key not available (set OPENAI_API_KEY env var)
+```
+
+**Related tests:**
+
+- **Unit tests (mocked - no API key needed):**
+  - `tests/unit/test_chroma_adapter.py` - All unit tests use mocks
+  - All other tests referencing OpenAI
+
+- **Integration tests (require API key):**
+  - `tests/integration/test_chroma_adapter_integration.py::TestChromaBatchEmbeddingWithRealOpenAI`
+    - `test_real_batch_embedding_generation`
+    - `test_real_embeddings_quality`
+    - `test_performance_improvement_real_api`
+
+**Run OpenAI tests:**
+```bash
+# Run only tests requiring OpenAI API (will skip if key not set)
+pytest -m requires_openai -v
+
+# Skip OpenAI tests (default for local development)
+pytest -m "not requires_openai" -v
+
+# Run integration tests but skip OpenAI
+pytest -m "integration and not requires_openai" -v
+```
+
+**Auto-skip behavior:**
+```python
+# Tests check for API key presence
+import os
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+HAS_OPENAI_CREDENTIALS = OPENAI_API_KEY is not None
+
+# Tests skip gracefully if not available
+if not HAS_OPENAI_CREDENTIALS:
+    pytest.skip("OpenAI API key not available (set OPENAI_API_KEY env var)")
+```
+
+---
+
+### Google Calendar API
+
+**Status:** 🔑 Optional - requires OAuth credentials for marked tests
+
+**What it's used for:**
+- Calendar integration and event management
+- Time blocking and scheduling
+- Conflict detection
+
+**Do I need Google Calendar credentials?**
+Only if you want to run tests marked with `@pytest.mark.requires_google_calendar`. Most tests use mocked Google Calendar responses.
+
+**Setup:**
+
+**Step 1: Create Google Cloud Project**
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Create a new project (or select existing)
+3. Enable Google Calendar API:
+   - Go to "APIs & Services" → "Library"
+   - Search for "Google Calendar API"
+   - Click "Enable"
+
+**Step 2: Create OAuth 2.0 Credentials**
+1. Go to "APIs & Services" → "Credentials"
+2. Click "Create Credentials" → "OAuth client ID"
+3. Configure consent screen if prompted (internal or external)
+4. Application type: **Desktop app**
+5. Name: "Thanos Test Client" (or any name)
+6. Click "Create"
+7. Copy the **Client ID** and **Client Secret**
+
+**Step 3: Set environment variables**
+
+```bash
+# Add to .env file (recommended)
+cat >> .env <<EOF
+GOOGLE_CALENDAR_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret
+GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:8080/oauth2callback
+EOF
+
+# Or export temporarily
+export GOOGLE_CALENDAR_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export GOOGLE_CALENDAR_CLIENT_SECRET="your-client-secret"
+export GOOGLE_CALENDAR_REDIRECT_URI="http://localhost:8080/oauth2callback"
+```
+
+**Step 4: First-time OAuth flow**
+
+The first time you run Google Calendar tests, a browser window will open for OAuth consent:
+```bash
+pytest -m requires_google_calendar tests/integration/ -v
+```
+
+1. Browser opens automatically
+2. Sign in with your Google account
+3. Grant calendar access permissions
+4. Browser redirects to localhost (will show "cannot connect" - this is normal)
+5. Tests continue automatically
+
+Credentials are saved locally for future test runs.
+
+**Step 5: Verify setup**
+```bash
+# This should not skip
+pytest -m requires_google_calendar tests/integration/ -v
+
+# If credentials not set, you'll see:
+# SKIPPED [1] Google Calendar credentials not available
+```
+
+**Related tests:**
+
+- **Unit tests (mocked - no credentials needed):**
+  - `tests/unit/test_google_calendar_adapter.py` - All unit tests use mocks
+
+- **Integration tests (require credentials):**
+  - `tests/integration/test_calendar_integration.py::TestGoogleCalendarRealAPI`
+    - `test_real_authentication_flow`
+    - `test_real_event_crud_operations`
+    - `test_real_conflict_detection`
+
+**Run Google Calendar tests:**
+```bash
+# Run only tests requiring Google Calendar (will skip if credentials not set)
+pytest -m requires_google_calendar -v
+
+# Skip Google Calendar tests (default for local development)
+pytest -m "not requires_google_calendar" -v
+
+# Run integration tests but skip Google Calendar
+pytest -m "integration and not requires_google_calendar" -v
+```
+
+**Auto-skip behavior:**
+```python
+# Tests check for credentials
+import os
+GOOGLE_CALENDAR_CLIENT_ID = os.getenv("GOOGLE_CALENDAR_CLIENT_ID")
+GOOGLE_CALENDAR_CLIENT_SECRET = os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET")
+HAS_GOOGLE_CREDENTIALS = (
+    GOOGLE_CALENDAR_CLIENT_ID is not None
+    and GOOGLE_CALENDAR_CLIENT_SECRET is not None
+    and not GOOGLE_CALENDAR_CLIENT_ID.startswith("your-")
+)
+
+# Tests skip gracefully if not available
+if not HAS_GOOGLE_CREDENTIALS:
+    pytest.skip("Google Calendar credentials not available")
+```
+
+**Important:** Use a **test Google account**, not your personal calendar! Integration tests may create/modify calendar events.
+
+---
+
+### Other Services (Fully Mocked)
+
+These services are **always mocked** in tests - no setup required:
+
+#### Anthropic API (Claude)
+- **Used for:** LLM interactions via LiteLLM client
+- **Tests:** `tests/unit/test_client.py`, `tests/unit/test_litellm_client.py`
+- **Setup:** None - uses `mock_anthropic_client` fixture from `conftest.py`
+- **Environment variable:** `ANTHROPIC_API_KEY` (tests use mock value "test-key")
+
+```python
+# All tests use this mock fixture
+@pytest.fixture
+def mock_anthropic_client(monkeypatch):
+    mock_client = Mock()
+    mock_client.messages.create = Mock(return_value=mock_response)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    return mock_client
+```
+
+#### Oura Ring API
+- **Used for:** Health data integration (sleep, readiness, activity)
+- **Tests:** `tests/unit/test_adapters_oura.py`
+- **Setup:** None - uses mocked HTTP responses
+- **Environment variable:** `OURA_PERSONAL_ACCESS_TOKEN` (tests use mock value "test_token_12345")
+
+#### PostgreSQL / WorkOS
+- **Used for:** Database operations in WorkOS adapter
+- **Tests:** `tests/unit/test_adapters_workos.py`
+- **Setup:** None - uses mocked asyncpg connection pool
+- **Database:** No PostgreSQL server needed
+
+---
+
+### Environment Variables Summary
+
+**Quick reference for all environment variables:**
+
+```bash
+# Optional - for OpenAI integration tests only
+OPENAI_API_KEY=sk-your-actual-api-key-here
+
+# Optional - for Google Calendar integration tests only
+GOOGLE_CALENDAR_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret
+GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:8080/oauth2callback
+
+# Not needed - tests provide mock values
+# ANTHROPIC_API_KEY=test-key  (mocked)
+# OURA_PERSONAL_ACCESS_TOKEN=test_token  (mocked)
+```
+
+**Create a .env file:**
+```bash
+# Copy example (if available)
+cp .env.example .env
+
+# Or create new one
+cat > .env <<EOF
+# Optional: Only set these if running real API tests
+# OPENAI_API_KEY=sk-your-key-here
+# GOOGLE_CALENDAR_CLIENT_ID=your-client-id
+# GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret
+# GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:8080/oauth2callback
+EOF
+```
+
+**Verify environment variables:**
+```bash
+# Check what's set
+env | grep -E '(OPENAI|GOOGLE_CALENDAR|ANTHROPIC|OURA)'
+
+# Or use Python
+python -c "import os; print('OpenAI:', 'SET' if os.getenv('OPENAI_API_KEY') else 'NOT SET')"
+python -c "import os; print('Google Calendar:', 'SET' if os.getenv('GOOGLE_CALENDAR_CLIENT_ID') else 'NOT SET')"
+```
+
+---
+
+### Skip vs Mock Strategies
+
+Understanding when tests skip vs when they use mocks:
+
+**Always Mocked (Never Skip):**
+- **Neo4j** - All tests use `sys.modules['neo4j'] = MagicMock()`
+- **Anthropic** - All tests use `mock_anthropic_client` fixture
+- **Oura** - All tests use mocked HTTP responses
+- **PostgreSQL** - All tests use mocked `asyncpg` pool
+
+Tests run normally with mocked behavior. No external services needed.
+
+**Auto-Skip When Missing:**
+- **OpenAI API** - Tests marked `@pytest.mark.requires_openai` skip if `OPENAI_API_KEY` not set
+- **Google Calendar** - Tests marked `@pytest.mark.requires_google_calendar` skip if credentials not set
+- **ChromaDB** - Integration tests skip if `import chromadb` fails
+
+Tests skip gracefully with informative message. No test failures.
+
+**Strategy Decision Matrix:**
+
+| Dependency | Unit Tests | Integration Tests (unmarked) | Integration Tests (marked) |
+|------------|-----------|----------------------------|---------------------------|
+| Neo4j | Mock | Mock | Mock |
+| ChromaDB | Mock | Mock or Skip | Require (skip if missing) |
+| OpenAI | Mock | Mock | Require (skip if missing) |
+| Google Calendar | Mock | Mock | Require (skip if missing) |
+| Anthropic | Mock | Mock | Mock |
+| Oura | Mock | Mock | Mock |
+| PostgreSQL | Mock | Mock | Mock |
+
+**When to use each strategy:**
+
+**Mock (Default):**
+- Fastest execution
+- No external dependencies
+- Consistent, reproducible results
+- Perfect for unit tests and most integration tests
+- Use for 95%+ of your tests
+
+**Auto-skip (Opt-in):**
+- Testing real API integrations
+- Validating authentication flows
+- Checking actual API behavior
+- Performance testing with real services
+- Use sparingly due to cost and reliability concerns
+
+---
+
+### Common Workflows
+
+**Development (no external services):**
+```bash
+# Run all tests with default mocks
+pytest -v
+
+# Or explicitly skip API tests
+pytest -m "not requires_openai and not requires_google_calendar" -v
+```
+
+**Testing with ChromaDB:**
+```bash
+# Install ChromaDB
+pip install chromadb
+
+# Run ChromaDB integration tests
+pytest tests/integration/test_chroma_adapter_integration.py -v
+```
+
+**Testing with OpenAI (incurs costs):**
+```bash
+# Set API key
+export OPENAI_API_KEY="sk-your-key-here"
+
+# Run only OpenAI tests
+pytest -m requires_openai -v
+
+# Or run all tests (includes OpenAI)
+pytest -v
+```
+
+**Testing with Google Calendar:**
+```bash
+# Set credentials
+export GOOGLE_CALENDAR_CLIENT_ID="your-client-id"
+export GOOGLE_CALENDAR_CLIENT_SECRET="your-secret"
+
+# Run only Google Calendar tests
+pytest -m requires_google_calendar -v
+
+# First run will open browser for OAuth
+```
+
+**CI/CD (minimal dependencies):**
+```bash
+# Run everything except real API tests
+pytest -m "not requires_openai and not requires_google_calendar" --cov=. -v
+```
+
+**Full integration testing:**
+```bash
+# Set all credentials
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_CALENDAR_CLIENT_ID="..."
+export GOOGLE_CALENDAR_CLIENT_SECRET="..."
+
+# Install optional dependencies
+pip install chromadb
+
+# Run everything
+pytest -v --cov=. --cov-report=html
+```
+
+---
+
+### Troubleshooting Dependencies
+
+**"ModuleNotFoundError: No module named 'chromadb'"**
+
+This is expected if ChromaDB isn't installed. Either:
+```bash
+# Install ChromaDB
+pip install chromadb
+
+# Or skip ChromaDB tests (they auto-skip anyway)
+pytest -v  # ChromaDB tests will skip automatically
+```
+
+**"OpenAI API key not available" (tests skipped)**
+
+This is normal behavior. Tests are skipping because `OPENAI_API_KEY` is not set.
+
+To run these tests:
+```bash
+export OPENAI_API_KEY="sk-your-key-here"
+pytest -m requires_openai -v
+```
+
+**"Google Calendar credentials not available" (tests skipped)**
+
+This is normal behavior. Tests are skipping because credentials aren't configured.
+
+To run these tests:
+1. Follow setup steps in [Google Calendar API](#google-calendar-api) section
+2. Run: `pytest -m requires_google_calendar -v`
+
+**"Invalid API key" or "401 Unauthorized"**
+
+Your API credentials are set but invalid:
+- **OpenAI:** Verify key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- **Google Calendar:** Regenerate OAuth credentials in Google Cloud Console
+
+**"Rate limit exceeded"**
+
+You're making too many API calls:
+```bash
+# Skip real API tests to avoid rate limits
+pytest -m "not requires_openai and not requires_google_calendar" -v
+
+# Or run specific tests one at a time
+pytest tests/integration/test_chroma_adapter_integration.py::test_real_batch_embedding_generation -v
+```
+
+**Tests fail with "Neo4j connection error"**
+
+This shouldn't happen - all Neo4j tests use mocks. If you see this:
+1. Check test file imports mocks before adapter
+2. Verify `sys.modules['neo4j'] = MagicMock()` is called
+3. Report as a bug if issue persists
+
+---
+
+### Summary
+
+**Key Takeaways:**
+
+1. ✅ **Most tests need NO external dependencies** - mocked by default
+2. ✅ **No database servers required** - Neo4j, PostgreSQL fully mocked
+3. ✅ **Optional dependencies auto-skip** - no test failures if missing
+4. ✅ **CI-friendly design** - runs without external services
+5. 📦 **ChromaDB is optional** - install only for integration tests
+6. 🔑 **Real APIs are opt-in** - requires explicit credentials and markers
+
+**Installation checklist:**
+
+- [x] **Always required:** `pip install -r requirements-test.txt`
+- [ ] **Optional:** `pip install chromadb` (for ChromaDB integration tests)
+- [ ] **Optional:** Set `OPENAI_API_KEY` (for real OpenAI tests, incurs costs)
+- [ ] **Optional:** Set Google Calendar credentials (for real calendar tests)
+
+**Most common setup (runs 95% of tests):**
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+
+# Run all tests (API tests auto-skip)
+pytest -v
+```
+
+**Next section:** [Mocking Patterns and Fixtures](#mocking-patterns-and-fixtures) explains how to write tests using the mocking strategies described here.
 
 ## Mocking Patterns and Fixtures
 
