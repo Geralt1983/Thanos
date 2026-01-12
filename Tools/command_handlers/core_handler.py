@@ -102,7 +102,7 @@ class CoreHandler(BaseHandler):
   /a = /agent, /s = /state, /c = /commitments
   /r = /resume, /m = /model, /h = /help, /q = /quit
 
-{Colors.DIM}Tip: Use \"\"\" for multi-line input{Colors.RESET}
+{Colors.YELLOW}Tip: Use \"\"\" for multi-line input{Colors.RESET}
 """)
         return CommandResult()
 
