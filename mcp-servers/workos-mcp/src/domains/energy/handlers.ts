@@ -2,6 +2,8 @@ import type { Database, ToolHandler, ContentResponse } from "../../shared/types.
 import { successResponse, errorResponse } from "../../shared/types.js";
 import * as schema from "../../schema.js";
 import { desc } from "drizzle-orm";
+import { validateAndSanitize } from "../../shared/validation-schemas.js";
+import { LogEnergySchema, GetEnergySchema } from "./validation.js";
 
 // =============================================================================
 // ENERGY DOMAIN HANDLERS
@@ -20,6 +22,14 @@ export async function handleLogEnergy(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(LogEnergySchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   const { level, note, ouraReadiness, ouraHrv, ouraSleep } = args;
 
   const [entry] = await db
@@ -52,6 +62,14 @@ export async function handleGetEnergy(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetEnergySchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   const { limit = 5 } = args;
 
   const entries = await db
