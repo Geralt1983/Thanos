@@ -1,5 +1,8 @@
 # Integration Tests for ChromaDB Batch Embedding
 
+> **📖 For comprehensive testing documentation**, see [TESTING_GUIDE.md](../../TESTING_GUIDE.md)
+> in the project root. This README covers ChromaDB integration test specifics.
+
 This directory contains integration tests for the ChromaDB adapter batch embedding optimization.
 
 ## Overview
@@ -39,6 +42,10 @@ Tests that use both real ChromaDB and real OpenAI API.
 - Performance benchmarks with actual API latency
 
 ## Running Tests
+
+> For complete pytest command reference and advanced filtering options, see the
+> [Test Execution Commands](../../TESTING_GUIDE.md#test-execution-commands) section
+> in the main testing guide.
 
 ### All Integration Tests
 ```bash
