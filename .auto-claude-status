@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "001-add-calendar-integration-adapter",
+  "spec": "035-commitment-accountability-system",
   "state": "building",
   "subtasks": {
-    "completed": 0,
-    "total": 0,
+    "completed": 18,
+    "total": 23,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "",
-    "id": 0,
-    "total": 0
+    "current": "User Interface & Commands",
+    "id": null,
+    "total": 4
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 15,
-    "started_at": "2026-01-11T22:41:18.737296"
+    "number": 20,
+    "started_at": "2026-01-11T17:34:10.588702"
   },
-  "last_update": "2026-01-11T23:32:33.125519"
+  "last_update": "2026-01-11T18:45:04.762886"
 }
