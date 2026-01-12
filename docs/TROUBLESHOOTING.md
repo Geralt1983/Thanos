@@ -573,11 +573,147 @@ Memory/cache/
 
 ## Cache Corruption Detection
 
-The cache automatically detects three types of corruption:
+The cache automatically detects corruption during read operations using defensive exception handling. **No logging occurs** - corruption detection is entirely silent and transparent to the application.
 
-1. **JSON Decode Errors**: Invalid JSON syntax
-2. **Missing Keys**: File missing required fields (`timestamp`, `model`, `response`)
-3. **Invalid Values**: Unparseable timestamp format
+### Detection Mechanism
+
+**Detection Points**:
+1. **During cache reads** (`get()` method) - corruption treated as cache miss
+2. **During cleanup** (`clear_expired()` method) - corrupted files immediately deleted
+
+**How Detection Works**:
+```python
+# In ResponseCache.get() - Lines 113-121
+try:
+    cached = json.loads(cache_file.read_text())
+    cached_time = datetime.fromisoformat(cached["timestamp"])
+    if datetime.now() - cached_time < timedelta(seconds=self.ttl_seconds):
+        return cached["response"]
+    else:
+        cache_file.unlink()  # Remove expired cache
+except (json.JSONDecodeError, KeyError, ValueError):
+    pass  # ← Silent failure - treated as cache miss
+
+return None
+```
+
+### Three Types of Corruption Detected
+
+#### 1. JSON Decode Errors (json.JSONDecodeError)
+
+**What it detects**:
+- Invalid JSON syntax (unclosed braces, missing quotes)
+- Truncated files (incomplete write operations)
+- Binary data or non-JSON content
+- Corrupted file encoding
+
+**Example corrupted file**:
+```json
+{
+  "timestamp": "2026-01-11T12:00:00",
+  "model": "claude-opus-4-5-202
+```
+*(File truncated mid-write)*
+
+**Handling**: Silent failure, treated as cache miss
+
+#### 2. Missing Keys (KeyError)
+
+**What it detects**:
+- Cache file missing required fields: `timestamp`, `model`, or `response`
+- Schema changes in cached data structure
+- Partial write operations that completed JSON but missed fields
+
+**Example corrupted file**:
+```json
+{
+  "timestamp": "2026-01-11T12:00:00",
+  "model": "claude-opus-4-5-20251101"
+}
+```
+*(Missing "response" field)*
+
+**Handling**: Silent failure on read, automatic deletion on cleanup
+
+#### 3. Invalid Values (ValueError)
+
+**What it detects**:
+- Invalid ISO format in `timestamp` field
+- `datetime.fromisoformat()` parsing failures
+- Corrupted timestamp data
+
+**Example corrupted file**:
+```json
+{
+  "timestamp": "not-a-valid-timestamp",
+  "model": "claude-opus-4-5-20251101",
+  "response": "cached response"
+}
+```
+
+**Handling**: Same as JSONDecodeError - silent failure
+
+### What Is NOT Detected
+
+**File System Errors** (not caught by corruption detection):
+- `PermissionError`: File permission issues
+- `OSError`: Disk errors, file system failures
+- `IOError`: General I/O failures
+- Disk full conditions during writes
+
+These errors **propagate up** and may cause application failures. They require manual intervention.
+
+### Detection Characteristics
+
+| Aspect | Behavior |
+|--------|----------|
+| **Logging** | None - completely silent |
+| **Monitoring** | No built-in monitoring |
+| **Notifications** | None |
+| **Performance Impact** | Negligible (single exception catch) |
+| **User Visibility** | Zero - transparent to application |
+| **Automatic Cleanup** | Only during `clear_expired()` calls |
+| **Cache Miss Behavior** | Identical to expired or missing cache |
+
+### Detection Flow Diagram
+
+```
+Cache Read Request
+        ↓
+   File exists?
+    ↙       ↘
+  NO        YES
+   ↓         ↓
+Return   Read file
+ None      ↓
+      Parse JSON
+        ↓
+   Valid JSON?
+    ↙       ↘
+  NO        YES
+   ↓         ↓
+Catch     Extract
+exception  fields
+   ↓         ↓
+Return   Valid fields?
+ None    ↙       ↘
+       NO        YES
+        ↓         ↓
+      Catch    Check
+      exception  expiry
+        ↓         ↓
+      Return   Expired?
+       None   ↙       ↘
+            YES       NO
+             ↓         ↓
+           Delete   Return
+            file    response
+             ↓
+           Return
+            None
+```
+
+**Key Insight**: All corruption paths lead to `return None` (cache miss). The application sees identical behavior whether cache is corrupted, expired, or simply doesn't exist.
 
 ## Cache Error Types
 
@@ -636,6 +772,78 @@ The cache automatically detects three types of corruption:
 - Disk space recovered
 - No logging or notification
 - No way to track corruption incidents
+
+**Automatic Cleanup Details**:
+
+The `clear_expired()` method provides automatic corruption cleanup as a side effect of expiration cleanup:
+
+```python
+# In ResponseCache.clear_expired() - Lines 136-146
+def clear_expired(self):
+    """Remove expired cache entries."""
+    cutoff = datetime.now() - timedelta(seconds=self.ttl_seconds)
+    for cache_file in self.cache_path.glob("*.json"):
+        try:
+            cached = json.loads(cache_file.read_text())
+            cached_time = datetime.fromisoformat(cached["timestamp"])
+            if cached_time < cutoff:
+                cache_file.unlink()  # Delete expired
+        except (json.JSONDecodeError, KeyError, ValueError):
+            cache_file.unlink()  # ← Delete corrupted files immediately
+```
+
+**Cleanup Behavior**:
+
+| Scenario | Action | Disk Space | Logging |
+|----------|--------|------------|---------|
+| **Expired entry** | Deleted | Recovered | None |
+| **Corrupted entry** | Deleted | Recovered | None |
+| **Valid, not expired** | Kept | Consumed | None |
+| **File system error** | Propagates up | Not recovered | Exception raised |
+
+**Performance Characteristics**:
+- **Time Complexity**: O(n) where n = number of cache files
+- **I/O Operations**: One read + one delete per file
+- **Typical Duration**: <100ms for 1000 cache files
+- **Resource Usage**: Low CPU, moderate I/O, no memory accumulation
+- **Safe During Operations**: Can run while cache is actively being used
+
+**Self-Healing Behavior**:
+
+The combination of silent failures on read and automatic cleanup on maintenance creates a self-healing system:
+
+```
+Time T0: Cache file becomes corrupted
+         ↓
+Time T1: Application reads corrupted file
+         → Treats as cache miss
+         → Makes API call
+         → Caches new response
+         → May overwrite corrupted key
+         ↓
+Time T2: clear_expired() runs
+         → Finds corrupted file (if still present)
+         → Deletes immediately
+         → Disk space recovered
+         ↓
+Result: System fully recovered, no user intervention
+```
+
+**Important Notes**:
+
+⚠️ **No Scheduled Cleanup**: The ResponseCache class does not automatically schedule `clear_expired()`. It must be called explicitly by:
+- Application code
+- Cron jobs
+- Startup scripts
+- Manual execution
+
+⚠️ **Accumulation Risk**: Without scheduled cleanup, corrupted files accumulate indefinitely, consuming disk space despite being unusable.
+
+✅ **Recommendation**: Schedule `clear_expired()` to run at least daily:
+```bash
+# Add to crontab
+0 3 * * * cd /path/to/Thanos && python -c "from Tools.litellm.response_cache import ResponseCache; ResponseCache('Memory/cache', 86400).clear_expired()"
+```
 
 ### Disk Full During Cache Write
 
@@ -696,6 +904,228 @@ chmod 755 Memory/cache/
 ls -ld Memory/cache/
 ```
 
+## When Manual Intervention Is Needed
+
+While cache corruption is handled automatically in most cases, certain situations require user action:
+
+### 1. Repeated Cache Corruption
+
+**Symptoms**:
+- Frequent cache misses despite stable workload
+- Unexpectedly high API costs
+- Growing cache directory with many files
+
+**Possible Causes**:
+- Disk hardware issues (bad sectors, failing drive)
+- File system corruption
+- Insufficient disk space causing interrupted writes
+- Concurrent access conflicts
+
+**Action Required**:
+
+1. **Check disk health**:
+   ```bash
+   # macOS
+   diskutil verifyDisk disk0
+
+   # Linux with smartctl
+   sudo smartctl -H /dev/sda
+
+   # Check for file system errors
+   # (macOS) Disk Utility -> First Aid
+   # (Linux) sudo fsck /dev/sda1
+   ```
+
+2. **Verify file system integrity**:
+   ```bash
+   # Check for errors in system log
+   # macOS
+   log show --predicate 'eventMessage contains "disk"' --last 1d
+
+   # Linux
+   dmesg | grep -i "error\|warning" | grep -i "disk\|filesystem"
+   ```
+
+3. **Inspect cache corruption patterns**:
+   ```bash
+   # Test all cache files for corruption
+   corrupted_count=0
+   for f in Memory/cache/*.json; do
+       if ! jq empty "$f" 2>/dev/null; then
+           echo "Corrupted: $f"
+           corrupted_count=$((corrupted_count + 1))
+       fi
+   done
+   echo "Total corrupted files: $corrupted_count"
+   ```
+
+4. **Clear cache and monitor**:
+   ```bash
+   # Clear all cache
+   rm -rf Memory/cache/*.json
+
+   # Run application and monitor for new corruption
+   # Check again after 24 hours
+   ```
+
+5. **If corruption continues**: Consider hardware replacement or file system repair.
+
+### 2. Performance Degradation
+
+**Symptoms**:
+- Increased API response latency
+- Higher than expected API costs
+- Lower cache hit rates in monitoring
+
+**Diagnosis**:
+
+Check cache effectiveness:
+```bash
+# Count cache files
+echo "Cache files: $(ls Memory/cache/*.json 2>/dev/null | wc -l)"
+
+# Check cache directory size
+echo "Cache size: $(du -sh Memory/cache/ 2>/dev/null | cut -f1)"
+
+# Check for corrupted files
+echo "Testing cache integrity..."
+corrupted=0
+total=0
+for f in Memory/cache/*.json 2>/dev/null; do
+    total=$((total + 1))
+    jq empty "$f" 2>/dev/null || corrupted=$((corrupted + 1))
+done
+echo "Corrupted: $corrupted / $total files"
+```
+
+**Action Required**:
+
+1. If corruption rate > 5%: Clear cache and investigate root cause
+2. Monitor API usage before/after cache clear to verify impact
+3. Check disk space and ensure adequate free space (>10% of disk)
+
+### 3. Cache Directory Size Issues
+
+**Symptoms**:
+- Disk space warnings
+- Cache directory unexpectedly large
+- Write failures during cache operations
+
+**Diagnosis**:
+```bash
+# Check cache size and file count
+echo "Cache directory size:"
+du -sh Memory/cache/
+
+echo "Number of cache files:"
+find Memory/cache/ -name "*.json" | wc -l
+
+echo "Largest cache files:"
+ls -lhS Memory/cache/*.json | head -10
+
+echo "Available disk space:"
+df -h .
+```
+
+**Action Required**:
+
+1. **Clear expired entries**:
+   ```python
+   from Tools.litellm.response_cache import ResponseCache
+   cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=86400)
+   cache.clear_expired()
+   ```
+
+2. **Reduce cache TTL** if cache grows too quickly:
+   ```python
+   # In your configuration, reduce TTL
+   cache = ResponseCache(
+       cache_path="Memory/cache",
+       ttl_seconds=3600  # 1 hour instead of 24
+   )
+   ```
+
+3. **Schedule automatic cleanup**:
+   ```bash
+   # Add to crontab (runs daily at 2 AM)
+   0 2 * * * cd /path/to/Thanos && python -c "from Tools.litellm.response_cache import ResponseCache; ResponseCache('Memory/cache', 86400).clear_expired()"
+   ```
+
+### 4. Silent Corruption Accumulation
+
+**Symptom**: Cache directory growing but API costs also increasing (indicates corrupted cache not being used).
+
+**Detection Strategy**:
+
+Monitor cache hit rate over time:
+```bash
+# Create monitoring script: monitor_cache.sh
+#!/bin/bash
+
+CACHE_DIR="Memory/cache"
+FILE_COUNT=$(find "$CACHE_DIR" -name "*.json" 2>/dev/null | wc -l)
+CACHE_SIZE=$(du -sm "$CACHE_DIR" 2>/dev/null | cut -f1)
+CORRUPTED=0
+
+for f in "$CACHE_DIR"/*.json 2>/dev/null; do
+    jq empty "$f" 2>/dev/null || CORRUPTED=$((CORRUPTED + 1))
+done
+
+echo "$(date): Files=$FILE_COUNT, Size=${CACHE_SIZE}MB, Corrupted=$CORRUPTED" >> cache_monitor.log
+
+# Alert if corruption rate > 5%
+if [ "$FILE_COUNT" -gt 0 ]; then
+    CORRUPTION_RATE=$((CORRUPTED * 100 / FILE_COUNT))
+    if [ "$CORRUPTION_RATE" -gt 5 ]; then
+        echo "WARNING: Cache corruption rate is ${CORRUPTION_RATE}%"
+    fi
+fi
+```
+
+**Action Required**:
+- Run monitoring script daily or weekly
+- Investigate if corruption rate increases over time
+- Clear cache if corruption rate exceeds 5%
+
+### 5. No Automatic Cleanup Configured
+
+**Symptom**: Cache directory grows indefinitely, expired entries never removed.
+
+**Background**: The `clear_expired()` method must be called explicitly - there is no automatic scheduled cleanup in the ResponseCache class.
+
+**Action Required**:
+
+**Option 1: Scheduled Cleanup (Recommended)**
+```bash
+# Add to crontab for automatic cleanup
+# Run daily at 3 AM
+0 3 * * * cd /path/to/Thanos && python -c "from Tools.litellm.response_cache import ResponseCache; ResponseCache('Memory/cache', 86400).clear_expired()"
+```
+
+**Option 2: Application-Level Cleanup**
+```python
+# Add to your application startup or periodic maintenance
+from Tools.litellm.response_cache import ResponseCache
+import time
+
+def periodic_cache_cleanup():
+    cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=86400)
+    while True:
+        cache.clear_expired()
+        time.sleep(86400)  # Run daily
+
+# Run in background thread
+import threading
+cleanup_thread = threading.Thread(target=periodic_cache_cleanup, daemon=True)
+cleanup_thread.start()
+```
+
+**Option 3: Manual Cleanup**
+```bash
+# Run manually when needed
+python -c "from Tools.litellm.response_cache import ResponseCache; ResponseCache('Memory/cache', 86400).clear_expired()"
+```
+
 ## Cache Maintenance
 
 ### Manual Cache Cleanup
@@ -736,6 +1166,10 @@ ls -ld Memory/cache/
 
 ### Cache Monitoring
 
+Since cache corruption is silent and not logged, monitoring is essential for detecting issues:
+
+#### Basic Monitoring Commands
+
 **Monitor disk space**:
 ```bash
 # Add to cron or monitoring system
@@ -755,6 +1189,208 @@ for f in Memory/cache/*.json; do
 done
 ```
 
+#### Advanced Monitoring Script
+
+Create a comprehensive cache health monitoring script:
+
+```bash
+#!/bin/bash
+# cache_health_check.sh - Comprehensive cache monitoring
+
+CACHE_DIR="Memory/cache"
+LOG_FILE="cache_health.log"
+
+echo "=== Cache Health Check - $(date) ===" | tee -a "$LOG_FILE"
+
+# 1. Cache Size
+CACHE_SIZE_MB=$(du -sm "$CACHE_DIR" 2>/dev/null | cut -f1)
+echo "Cache Size: ${CACHE_SIZE_MB}MB" | tee -a "$LOG_FILE"
+
+# 2. File Count
+FILE_COUNT=$(find "$CACHE_DIR" -name "*.json" 2>/dev/null | wc -l)
+echo "Cache Files: $FILE_COUNT" | tee -a "$LOG_FILE"
+
+# 3. Corruption Check
+CORRUPTED=0
+VALID=0
+echo "Checking cache integrity..." | tee -a "$LOG_FILE"
+
+for f in "$CACHE_DIR"/*.json 2>/dev/null; do
+    if jq empty "$f" 2>/dev/null; then
+        VALID=$((VALID + 1))
+    else
+        CORRUPTED=$((CORRUPTED + 1))
+        echo "  Corrupted: $(basename "$f")" | tee -a "$LOG_FILE"
+    fi
+done
+
+echo "Valid Files: $VALID" | tee -a "$LOG_FILE"
+echo "Corrupted Files: $CORRUPTED" | tee -a "$LOG_FILE"
+
+# 4. Calculate Corruption Rate
+if [ "$FILE_COUNT" -gt 0 ]; then
+    CORRUPTION_RATE=$((CORRUPTED * 100 / FILE_COUNT))
+    echo "Corruption Rate: ${CORRUPTION_RATE}%" | tee -a "$LOG_FILE"
+
+    # Alert if corruption rate exceeds threshold
+    if [ "$CORRUPTION_RATE" -gt 5 ]; then
+        echo "⚠️  WARNING: High corruption rate detected!" | tee -a "$LOG_FILE"
+        echo "   Consider clearing cache and investigating root cause." | tee -a "$LOG_FILE"
+    fi
+else
+    echo "No cache files found" | tee -a "$LOG_FILE"
+fi
+
+# 5. Disk Space Check
+AVAILABLE_MB=$(df -m . | tail -1 | awk '{print $4}')
+echo "Available Disk Space: ${AVAILABLE_MB}MB" | tee -a "$LOG_FILE"
+
+if [ "$AVAILABLE_MB" -lt 1000 ]; then
+    echo "⚠️  WARNING: Low disk space!" | tee -a "$LOG_FILE"
+fi
+
+# 6. Oldest Cache File
+OLDEST=$(find "$CACHE_DIR" -name "*.json" -type f -print0 2>/dev/null | xargs -0 stat -f "%m %N" 2>/dev/null | sort -n | head -1 | cut -d' ' -f2-)
+if [ -n "$OLDEST" ]; then
+    OLDEST_DATE=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$OLDEST" 2>/dev/null)
+    echo "Oldest Cache File: $OLDEST_DATE" | tee -a "$LOG_FILE"
+fi
+
+echo "===========================================" | tee -a "$LOG_FILE"
+echo "" >> "$LOG_FILE"
+```
+
+**Usage**:
+```bash
+# Make executable
+chmod +x cache_health_check.sh
+
+# Run manually
+./cache_health_check.sh
+
+# Schedule in cron (daily at 2 AM)
+0 2 * * * cd /path/to/Thanos && ./cache_health_check.sh
+```
+
+#### Monitoring Metrics to Track
+
+| Metric | Normal Range | Action Threshold |
+|--------|--------------|------------------|
+| **Cache Size** | < 500MB | > 1GB - investigate |
+| **File Count** | 100-1000 | > 5000 - consider cleanup |
+| **Corruption Rate** | < 1% | > 5% - clear cache, investigate |
+| **Disk Space** | > 10GB free | < 1GB - urgent cleanup needed |
+| **Growth Rate** | Stable | Rapid growth - check for issues |
+
+#### Detecting Cache Corruption Impact
+
+Since corruption is silent, look for these indirect indicators:
+
+**1. Increased API Costs**:
+```bash
+# Compare API usage before/after cache clear
+# High costs despite large cache → corruption likely
+```
+
+**2. Higher Latency**:
+```bash
+# Monitor response times
+# Consistent cache hits should be <10ms
+# If latency high despite cache → corruption or cache bypass
+```
+
+**3. Unusual Disk Growth**:
+```bash
+# Track cache directory size over time
+# Steady growth without cleanup → accumulating corrupted files
+watch -n 60 'du -sh Memory/cache/'
+```
+
+#### Proactive Monitoring Strategy
+
+**Daily Monitoring** (automated):
+```bash
+# Check cache health daily
+0 2 * * * /path/to/cache_health_check.sh
+
+# Clear expired entries daily
+0 3 * * * cd /path/to/Thanos && python -c "from Tools.litellm.response_cache import ResponseCache; ResponseCache('Memory/cache', 86400).clear_expired()"
+```
+
+**Weekly Review** (manual):
+- Review `cache_health.log` for trends
+- Check corruption rate history
+- Investigate if corruption increasing
+- Verify disk space adequate
+
+**Monthly Maintenance**:
+```bash
+# Full cache clear to start fresh
+rm -rf Memory/cache/*.json
+
+# Monitor for 1 week to establish baseline
+# Compare corruption rates before/after clear
+```
+
+#### Cache Hit Rate Monitoring (Advanced)
+
+To track cache effectiveness, instrument your application:
+
+```python
+from Tools.litellm.response_cache import ResponseCache
+
+class MonitoredCache(ResponseCache):
+    """ResponseCache with hit/miss tracking."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.hits = 0
+        self.misses = 0
+        self.corrupted = 0
+
+    def get(self, prompt, model, params):
+        result = super().get(prompt, model, params)
+        if result is not None:
+            self.hits += 1
+        else:
+            # Could be miss, corruption, or expiration
+            cache_key = self._get_cache_key(prompt, model, params)
+            cache_file = self.cache_path / f"{cache_key}.json"
+            if cache_file.exists():
+                self.corrupted += 1
+            else:
+                self.misses += 1
+        return result
+
+    def get_stats(self):
+        total = self.hits + self.misses + self.corrupted
+        if total == 0:
+            return "No cache operations yet"
+
+        hit_rate = (self.hits / total) * 100
+        corruption_rate = (self.corrupted / total) * 100
+
+        return f"""
+Cache Statistics:
+  Hits: {self.hits} ({hit_rate:.1f}%)
+  Misses: {self.misses}
+  Corrupted: {self.corrupted} ({corruption_rate:.1f}%)
+  Total: {total}
+  Effectiveness: {hit_rate:.1f}%
+"""
+
+# Usage
+cache = MonitoredCache(cache_path="Memory/cache", ttl_seconds=3600)
+# ... use cache normally ...
+print(cache.get_stats())
+```
+
+**Interpreting Cache Stats**:
+- **Hit rate > 50%**: Cache working well
+- **Hit rate < 20%**: Investigate (corruption, short TTL, or unique queries)
+- **Corruption rate > 5%**: Serious issue, investigate disk health
+- **Corruption rate < 1%**: Normal operational noise
+
 ### Cache Configuration
 
 **TTL (Time-To-Live)**: Configured in `ResponseCache` initialization
@@ -767,7 +1403,11 @@ done
 
 ## Cache Error Prevention
 
-### Ensure Adequate Disk Space
+Prevention is better than recovery. Follow these best practices to minimize cache corruption:
+
+### 1. Ensure Adequate Disk Space
+
+**Goal**: Prevent interrupted writes due to disk full conditions.
 
 ❌ **Bad**: No monitoring, cache fills disk
 ```bash
@@ -779,16 +1419,34 @@ df -h .
 
 ✅ **Good**: Regular monitoring and cleanup
 ```bash
-# Monitor script
+# Monitor script - add to cron
 #!/bin/bash
 CACHE_SIZE=$(du -sm Memory/cache/ | cut -f1)
+DISK_FREE=$(df -m . | tail -1 | awk '{print $4}')
+
+# Alert if cache too large
 if [ "$CACHE_SIZE" -gt 1000 ]; then  # 1GB threshold
-    echo "Cache size: ${CACHE_SIZE}MB - clearing old entries"
+    echo "WARNING: Cache size: ${CACHE_SIZE}MB - clearing old entries"
     find Memory/cache/ -name "*.json" -mtime +7 -delete
+fi
+
+# Alert if disk space low
+if [ "$DISK_FREE" -lt 1000 ]; then  # Less than 1GB free
+    echo "CRITICAL: Only ${DISK_FREE}MB disk space remaining!"
+    # Aggressive cleanup
+    find Memory/cache/ -name "*.json" -mtime +3 -delete
 fi
 ```
 
-### Graceful Shutdown
+**Best Practice**:
+- Maintain at least 10% free disk space
+- Monitor disk usage daily
+- Set up alerts for low disk space
+- Schedule automatic cleanup
+
+### 2. Graceful Shutdown
+
+**Goal**: Allow cache write operations to complete before termination.
 
 ❌ **Bad**: Kill processes during cache writes
 ```bash
@@ -797,15 +1455,242 @@ kill -9 $(pgrep python)  # Force kill may corrupt cache
 
 ✅ **Good**: Allow graceful shutdown
 ```bash
+# Use SIGTERM instead of SIGKILL
 kill -TERM $(pgrep python)  # Graceful shutdown
-# Or use Ctrl+C in terminal
+
+# Or use Ctrl+C in terminal (sends SIGINT)
+# Python will catch signal and clean up
+
+# Wait for process to exit
+kill -TERM $PID && wait $PID
 ```
 
-### Avoid External Modifications
+**Best Practice**:
+- Always use `kill -TERM` (or just `kill`) instead of `kill -9`
+- Use `Ctrl+C` instead of `Ctrl+\` or force quit
+- Implement signal handlers in applications for cleanup
+- Wait for processes to exit before system shutdown
+
+### 3. Avoid External Modifications
+
+**Goal**: Prevent manual corruption of cache files.
 
 ❌ **Bad**: Manually editing cache files
+```bash
+# Don't do this!
+vim Memory/cache/a1b2c3d4e5f6.json
+nano Memory/cache/*.json
+sed -i 's/old/new/g' Memory/cache/*.json
+```
 
 ✅ **Good**: Clear entire cache or use programmatic access
+```bash
+# Safe cache operations
+rm -rf Memory/cache/*.json  # Clear all cache
+
+# Or use Python API
+python -c "from Tools.litellm.response_cache import ResponseCache; ResponseCache('Memory/cache', 86400).clear_expired()"
+```
+
+**Best Practice**:
+- Never manually edit cache files
+- Use provided APIs for cache operations
+- Clear and regenerate instead of editing
+- Document cache directory as "do not touch"
+
+### 4. Schedule Regular Cleanup
+
+**Goal**: Prevent accumulation of expired and corrupted cache entries.
+
+❌ **Bad**: No scheduled cleanup, cache grows forever
+```bash
+# Cache accumulates indefinitely
+$ du -sh Memory/cache/
+15G  Memory/cache/  # Growing without bounds
+```
+
+✅ **Good**: Automated daily cleanup
+```bash
+# Add to crontab
+# Run cleanup daily at 3 AM
+0 3 * * * cd /path/to/Thanos && python -c "from Tools.litellm.response_cache import ResponseCache; ResponseCache('Memory/cache', 86400).clear_expired()"
+
+# Or create cleanup script
+#!/bin/bash
+# cleanup_cache.sh
+cd /path/to/Thanos
+python3 << 'EOF'
+from Tools.litellm.response_cache import ResponseCache
+cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=86400)
+cache.clear_expired()
+print("Cache cleanup completed")
+EOF
+```
+
+**Best Practice**:
+- Schedule `clear_expired()` to run at least daily
+- Run during low-usage hours (e.g., 3 AM)
+- Log cleanup results for monitoring
+- Verify cron job is actually running (`grep CRON /var/log/syslog`)
+
+### 5. Use Appropriate TTL Values
+
+**Goal**: Balance cache effectiveness with freshness and disk usage.
+
+❌ **Bad**: Extremely long TTL causes accumulation
+```python
+# 30 days - cache rarely expires, grows very large
+cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=2592000)
+```
+
+❌ **Bad**: Extremely short TTL defeats caching purpose
+```python
+# 1 minute - constant cache misses, no benefit
+cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=60)
+```
+
+✅ **Good**: Appropriate TTL based on use case
+```python
+# Development: 1 hour (content changes frequently)
+cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=3600)
+
+# Production: 24 hours (balance freshness and cost)
+cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=86400)
+
+# Static content: 7 days (rarely changes)
+cache = ResponseCache(cache_path="Memory/cache", ttl_seconds=604800)
+```
+
+**Best Practice**:
+- Start with 24-hour TTL as default
+- Adjust based on how often content changes
+- Shorter TTL for development (1 hour)
+- Longer TTL for stable production workloads
+- Monitor cache hit rates to verify TTL effectiveness
+
+### 6. Monitor Disk Health
+
+**Goal**: Detect hardware issues before they cause widespread corruption.
+
+✅ **Good**: Regular disk health monitoring
+```bash
+# macOS: Check SMART status
+diskutil info disk0 | grep SMART
+
+# Linux: Detailed SMART analysis
+sudo smartctl -a /dev/sda
+
+# Check system logs for disk errors
+# macOS
+log show --predicate 'eventMessage contains "disk"' --last 7d | grep -i error
+
+# Linux
+dmesg | grep -i "error\|fail" | grep -i "disk\|sda"
+```
+
+**Best Practice**:
+- Check SMART status monthly
+- Monitor system logs for I/O errors
+- Set up disk health alerts
+- Replace failing drives proactively
+- Use redundant storage (RAID) if critical
+
+### 7. Implement Cache Validation
+
+**Goal**: Detect and clean corrupted cache proactively.
+
+✅ **Good**: Periodic validation script
+```bash
+#!/bin/bash
+# validate_cache.sh - Run weekly
+
+CACHE_DIR="Memory/cache"
+CORRUPTED_COUNT=0
+TOTAL_COUNT=0
+
+echo "Validating cache files..."
+
+for f in "$CACHE_DIR"/*.json; do
+    [ -f "$f" ] || continue
+    TOTAL_COUNT=$((TOTAL_COUNT + 1))
+
+    if ! jq empty "$f" 2>/dev/null; then
+        echo "Corrupted: $f"
+        CORRUPTED_COUNT=$((CORRUPTED_COUNT + 1))
+        # Optional: Auto-delete corrupted files
+        # rm "$f"
+    fi
+done
+
+CORRUPTION_RATE=0
+if [ "$TOTAL_COUNT" -gt 0 ]; then
+    CORRUPTION_RATE=$((CORRUPTED_COUNT * 100 / TOTAL_COUNT))
+fi
+
+echo "Validation complete:"
+echo "  Total: $TOTAL_COUNT"
+echo "  Corrupted: $CORRUPTED_COUNT"
+echo "  Corruption rate: ${CORRUPTION_RATE}%"
+
+# Alert if corruption rate high
+if [ "$CORRUPTION_RATE" -gt 5 ]; then
+    echo "⚠️  HIGH CORRUPTION RATE - Investigate disk health!"
+    exit 1
+fi
+```
+
+**Schedule validation**:
+```bash
+# Add to crontab - run weekly on Sunday at 1 AM
+0 1 * * 0 /path/to/validate_cache.sh
+```
+
+**Best Practice**:
+- Run validation weekly
+- Auto-delete corrupted files during validation
+- Alert on high corruption rates
+- Investigate root cause if corruption > 1%
+
+### 8. Avoid Concurrent Cache Access
+
+**Goal**: Prevent race conditions during cache writes.
+
+⚠️ **Current Limitation**: The ResponseCache does **not** implement file locking. Concurrent writes to the same cache key may corrupt the file.
+
+**Best Practice**:
+- Avoid running multiple instances writing to same cache
+- If multi-process access needed, implement external locking
+- Consider cache-per-process pattern
+- Or use a proper cache server (Redis, Memcached) for concurrent access
+
+**Example file locking implementation** (if needed):
+```python
+import fcntl
+
+def atomic_cache_write(cache_file, data):
+    """Write cache file with exclusive lock."""
+    with open(cache_file, 'w') as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        f.write(data)
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+```
+
+### Prevention Checklist
+
+Use this checklist to ensure robust cache operation:
+
+- [ ] Disk space monitoring configured (daily checks)
+- [ ] Alerts set up for low disk space (< 1GB)
+- [ ] Automated cache cleanup scheduled (daily at 3 AM)
+- [ ] TTL configured appropriately for use case
+- [ ] Graceful shutdown procedures documented
+- [ ] Cache directory marked as "do not edit manually"
+- [ ] Disk health monitoring (monthly SMART checks)
+- [ ] Cache validation script (weekly validation)
+- [ ] Corruption rate monitoring (track in logs)
+- [ ] Response plan for high corruption rates (> 5%)
+- [ ] Backup strategy documented (or cache regeneration plan)
+- [ ] No concurrent cache access (or locking implemented)
 
 ---
 
