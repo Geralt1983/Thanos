@@ -11,9 +11,6 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 # Check email with priority triage
 /pa:email summary
 
-# View today's calendar
-/pa:calendar view --today
-
 # View today's schedule
 /pa:schedule view
 
@@ -22,9 +19,6 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 
 # Process brain dump entries
 /pa:process
-
-# Export data for analysis
-/pa:export
 
 # Weekly review
 /pa:weekly
@@ -36,12 +30,10 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 |---------|---------|-------------|
 | `/pa:daily` | Morning briefing | `/pa:daily --quick` |
 | `/pa:email` | Email management | `/pa:email summary --timeframe 24h` |
-| `/pa:calendar` | Calendar sync & viewing | `/pa:calendar view --today` |
-| `/pa:schedule` | Schedule management | `/pa:schedule find --duration 30m` |
+| `/pa:schedule` | Calendar management | `/pa:schedule find --duration 30m` |
 | `/pa:tasks` | Task management | `/pa:tasks focus --energy high` |
 | `/pa:brainstorm` | Ideation & planning | `/pa:brainstorm "topic" --mode solve` |
 | `/pa:process` | Brain dump processing | `/pa:process --limit 20 --dry-run` |
-| `/pa:export` | Data export | `/pa:export --format csv --type tasks` |
 | `/pa:weekly` | Weekly review | `/pa:weekly review` |
 | `/pa:epic` | Epic consulting work | `/pa:epic status` |
 
@@ -76,9 +68,6 @@ Configure your task management integration:
 # Morning: Start with briefing
 /pa:daily
 
-# View today's calendar
-/pa:calendar view --today
-
 # Throughout day: Task focus
 /pa:tasks focus --duration 30m
 
@@ -99,8 +88,7 @@ Configure your task management integration:
 /pa:epic status
 /pa:process --limit 20
 
-# Friday: Export data and weekly reflection
-/pa:export --format csv --type all
+# Friday: Weekly reflection
 /pa:weekly reflect
 ```
 
@@ -109,23 +97,12 @@ Configure your task management integration:
 # Need to schedule a meeting
 /pa:schedule find --duration 1h --attendees "team"
 
-# Sync and check calendar
-/pa:calendar sync --week
-
-# Find available time slots
-/pa:calendar find "meeting slot"
-
 # Brainstorm a problem
 /pa:brainstorm "How to improve orderset adoption" --mode solve
 
 # Process captured ideas before they pile up
 /pa:process --dry-run  # Preview first
 /pa:process           # Then process for real
-
-# Export data for backup or analysis
-/pa:export --format json --type all           # Full backup
-/pa:export --format csv --type tasks          # Tasks for spreadsheet
-/pa:export --type habits --output ~/Documents # Custom location
 
 # Quick email check
 /pa:email summary --urgent
@@ -148,7 +125,6 @@ Edit the command files to adjust:
 These commands work alongside the SuperClaude framework:
 - Use `/sc:analyze` for code analysis
 - Use `/pa:tasks` for task management
-- Use `/pa:export` for data portability and analysis
 - Combine with `--think` flags for complex planning
 
 ## File Structure
@@ -159,12 +135,10 @@ These commands work alongside the SuperClaude framework:
 │   │   ├── README.md          # This file
 │   │   ├── daily.md           # Morning briefing
 │   │   ├── email.md           # Email management
-│   │   ├── calendar.py        # Calendar sync & viewing
-│   │   ├── schedule.md        # Schedule management
+│   │   ├── schedule.md        # Calendar management
 │   │   ├── tasks.md           # Task management
 │   │   ├── brainstorm.md      # Ideation
 │   │   ├── process.md         # Brain dump processing
-│   │   ├── export.md          # Data export
 │   │   ├── weekly.md          # Weekly review
 │   │   └── epic.md            # Epic consulting
 │   └── sc/                    # SuperClaude commands
