@@ -189,7 +189,7 @@
     "cargo_aliases": [],
     "shell_scripts": []
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/014-mcp-server-lacks-rate-limiting-and-input-bounds-ch",
-  "created_at": "2026-01-12T00:39:03.184141",
-  "project_hash": "5a2a5e2f7d08a1bea88982e94779ed94"
+  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/009-add-empty-state-messaging-to-web-viewer-feed",
+  "created_at": "2026-01-11T22:41:10.057793",
+  "project_hash": "401f19c566f54263745d681f76386a3b"
 }
