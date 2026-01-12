@@ -1,0 +1,38 @@
+{
+  "sessions": [
+    {
+      "timestamp": "2026-01-11T23:10:17.856918",
+      "model": "gpt-4o-mini",
+      "provider": "openai",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0.00095367431640625,
+      "operation": "chat_stream",
+      "metadata": {}
+    }
+  ],
+  "daily_totals": {
+    "2026-01-11": {
+      "tokens": 0,
+      "cost": 0.0,
+      "calls": 1
+    }
+  },
+  "model_breakdown": {
+    "gpt-4o-mini": {
+      "tokens": 0,
+      "cost": 0.0,
+      "calls": 1
+    }
+  },
+  "provider_breakdown": {
+    "openai": {
+      "tokens": 0,
+      "cost": 0.0,
+      "calls": 1
+    }
+  },
+  "last_updated": "2026-01-11T23:10:17.856976"
+}
