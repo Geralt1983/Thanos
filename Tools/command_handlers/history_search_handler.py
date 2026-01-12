@@ -46,6 +46,8 @@ See Also:
     - Tools.session_manager: SessionManager with indexing capabilities
 """
 
+import re
+
 from Tools.command_handlers.base import BaseHandler, CommandResult, Colors
 
 
@@ -88,6 +90,62 @@ class HistorySearchHandler(BaseHandler):
             thanos_dir,
             current_agent_getter,
         )
+
+    def _highlight_query_terms(self, content: str, query: str, max_length: int = 300) -> str:
+        """
+        Highlight query terms in content and create an intelligent preview.
+
+        Extracts a preview window around the first match if possible, otherwise
+        shows the beginning of the content. Highlights all occurrences of query
+        terms using BOLD formatting.
+
+        Args:
+            content: Full message content
+            query: Search query (may contain multiple words)
+            max_length: Maximum preview length in characters
+
+        Returns:
+            Formatted preview with highlighted query terms
+        """
+        if not content:
+            return ""
+
+        # Split query into words for highlighting
+        query_words = query.lower().split()
+
+        # Find first significant match position for context window
+        first_match_pos = len(content)  # Default to end if no match
+        for word in query_words:
+            if len(word) > 2:  # Skip very short words
+                pos = content.lower().find(word)
+                if pos != -1 and pos < first_match_pos:
+                    first_match_pos = pos
+
+        # Determine preview window
+        if first_match_pos < len(content):
+            # Center preview around first match
+            start = max(0, first_match_pos - max_length // 3)
+            end = min(len(content), start + max_length)
+            preview = content[start:end]
+            prefix = "..." if start > 0 else ""
+            suffix = "..." if end < len(content) else ""
+        else:
+            # No match found, show beginning
+            preview = content[:max_length]
+            prefix = ""
+            suffix = "..." if len(content) > max_length else ""
+
+        # Highlight query terms (case-insensitive)
+        for word in query_words:
+            if len(word) > 1:  # Skip single characters
+                # Create case-insensitive pattern that preserves original case
+                pattern = re.compile(re.escape(word), re.IGNORECASE)
+                preview = pattern.sub(
+                    lambda m: f"{Colors.BOLD}{m.group()}{Colors.RESET}",
+                    preview
+                )
+
+        return f"{prefix}{preview}{suffix}"
 
     def handle_history_search(self, args: str) -> CommandResult:
         """
@@ -156,8 +214,9 @@ class HistorySearchHandler(BaseHandler):
                 )
                 return CommandResult()
 
-            # Display results with context
-            print(f"\n{Colors.CYAN}Conversation History Search Results ({len(results)} matches):{Colors.RESET}\n")
+            # Display results with context and highlighting
+            print(f"\n{Colors.CYAN}Conversation History Search Results:{Colors.RESET}")
+            print(f"{Colors.DIM}Found {len(results)} semantically similar messages:{Colors.RESET}\n")
 
             for i, match in enumerate(results, 1):
                 content = match.get("content", "")
@@ -167,6 +226,7 @@ class HistorySearchHandler(BaseHandler):
                 # Extract metadata
                 session_id = metadata.get("session_id", "unknown")
                 date = metadata.get("date", "unknown")
+                timestamp = metadata.get("timestamp", "")
                 role = metadata.get("role", "unknown")
                 agent = metadata.get("agent", "unknown")
 
@@ -176,12 +236,34 @@ class HistorySearchHandler(BaseHandler):
                 # Color code by role
                 role_color = Colors.PURPLE if role == "user" else Colors.CYAN
 
-                # Display result
-                print(f"  {i}. {Colors.BOLD}[{score_pct:.1f}% match]{Colors.RESET} {Colors.DIM}{date} • {agent} • session {session_id[:4]}{Colors.RESET}")
-                print(f"     {role_color}{role}:{Colors.RESET} {content[:200]}{'...' if len(content) > 200 else ''}")
+                # Get time from timestamp if available
+                time_str = ""
+                if timestamp and "T" in timestamp:
+                    time_str = timestamp.split("T")[1][:5]  # HH:MM
+
+                # Format session context line
+                context_parts = [
+                    f"{date}",
+                    f"{time_str}" if time_str else None,
+                    f"agent:{agent}",
+                    f"session:{session_id[:8]}"
+                ]
+                context_str = " • ".join(p for p in context_parts if p)
+
+                # Display result with enhanced formatting
+                print(f"  {i}. {Colors.BOLD}[{score_pct:.1f}% match]{Colors.RESET}")
+                print(f"     {Colors.DIM}{context_str}{Colors.RESET}")
+
+                # Highlight query terms in content preview
+                highlighted_preview = self._highlight_query_terms(content, query, max_length=250)
+                print(f"     {role_color}{role}:{Colors.RESET} {highlighted_preview}")
                 print()
 
-            print(f"{Colors.DIM}Use /resume <session_id> to restore a session{Colors.RESET}\n")
+            # Show helpful tips
+            print(f"{Colors.DIM}💡 Tips:{Colors.RESET}")
+            print(f"{Colors.DIM}   • Use /resume <session_id> to restore a session{Colors.RESET}")
+            print(f"{Colors.DIM}   • Query terms are highlighted in {Colors.BOLD}bold{Colors.RESET}{Colors.DIM}{Colors.RESET}\n")
+
             return CommandResult()
 
         except Exception as e:
