@@ -141,7 +141,7 @@ class MemoryHandler(BaseHandler):
         memos = self._get_memos()
         if not memos:
             print(
-                f"{Colors.DIM}MemOS not available. "
+                f"{Colors.RED}MemOS not available. "
                 f"Check Neo4j/ChromaDB configuration.{Colors.RESET}"
             )
             return CommandResult(success=False)
@@ -213,7 +213,7 @@ class MemoryHandler(BaseHandler):
             return CommandResult()
         else:
             error = result.error if result else "Unknown error"
-            print(f"{Colors.DIM}Failed to store memory: {error}{Colors.RESET}")
+            print(f"{Colors.RED}Failed to store memory: {error}{Colors.RESET}")
             return CommandResult(success=False)
 
     def handle_recall(self, args: str) -> CommandResult:
