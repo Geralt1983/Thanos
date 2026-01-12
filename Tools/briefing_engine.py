@@ -25,6 +25,12 @@ try:
 except ImportError:
     HEALTH_TRACKER_AVAILABLE = False
 
+try:
+    import sqlite3
+    SQLITE3_AVAILABLE = True
+except ImportError:
+    SQLITE3_AVAILABLE = False
+
 
 class BriefingEngine:
     """
@@ -934,9 +940,38 @@ class BriefingEngine:
 
         # Morning-specific data
         if briefing_type == "morning":
+            # Get Oura readiness data for energy-aware features
+            oura_data = self.get_oura_readiness_today()
+            readiness_score = oura_data.get("readinessScore") if oura_data else None
+            sleep_score = oura_data.get("sleepScore") if oura_data else None
+
+            # Calculate energy level and daily goal adjustment
+            energy_level = self.map_readiness_to_energy_level(readiness_score)
+            goal_adjustment = self.calculate_daily_goal_adjustment(readiness_score)
+
+            # Format energy context for template
+            energy_context = {
+                "level": energy_level,
+                "readinessScore": readiness_score,
+                "sleepScore": sleep_score,
+                "hasData": readiness_score is not None,
+                "goalAdjustment": goal_adjustment,
+            }
+
+            # Generate suggested task approach based on energy level
+            if energy_level == "high":
+                task_approach = "🚀 High energy detected - perfect for deep work and complex tasks. This is your day for important milestones."
+            elif energy_level == "medium":
+                task_approach = "✅ Good energy - suitable for most tasks. Balance progress with sustainability."
+            else:  # low
+                task_approach = "🔋 Low energy - focus on lighter tasks and quick wins. Protect your streak without overextending."
+
+            energy_context["taskApproach"] = task_approach
+
             template_data.update({
                 "focus_areas": context.get("current_focus", {}).get("focus_areas", []),
                 "quick_wins": self._identify_quick_wins(context),
+                "energy_context": energy_context,
             })
 
         # Evening-specific data
@@ -1373,3 +1408,132 @@ class BriefingEngine:
                 )
 
         return insights
+
+    def get_oura_readiness_today(self) -> Optional[Dict[str, Any]]:
+        """
+        Get today's Oura readiness and sleep scores from cache database.
+
+        Returns:
+            Dictionary with readinessScore and sleepScore, or None if unavailable
+        """
+        if not SQLITE3_AVAILABLE:
+            return None
+
+        # Oura cache database path (matches oura-mcp configuration)
+        oura_cache_dir = os.getenv("OURA_CACHE_DIR", os.path.join(Path.home(), ".oura-cache"))
+        oura_db_path = Path(oura_cache_dir) / "oura-health.db"
+
+        if not oura_db_path.exists():
+            return None
+
+        try:
+            # Connect read-only to avoid locking issues
+            conn = sqlite3.connect(f"file:{oura_db_path}?mode=ro", uri=True)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            today_str = self.today.isoformat()
+
+            # Get readiness score
+            cursor.execute(
+                "SELECT score FROM readiness WHERE day = ? ORDER BY timestamp DESC LIMIT 1",
+                (today_str,)
+            )
+            readiness_row = cursor.fetchone()
+            readiness_score = readiness_row["score"] if readiness_row else None
+
+            # Get sleep score
+            cursor.execute(
+                "SELECT score FROM sleep WHERE day = ? ORDER BY timestamp DESC LIMIT 1",
+                (today_str,)
+            )
+            sleep_row = cursor.fetchone()
+            sleep_score = sleep_row["score"] if sleep_row else None
+
+            conn.close()
+
+            if readiness_score is not None or sleep_score is not None:
+                return {
+                    "readinessScore": readiness_score,
+                    "sleepScore": sleep_score,
+                    "source": "oura"
+                }
+
+            return None
+
+        except Exception as e:
+            # Silently fail if database access fails
+            return None
+
+    def calculate_daily_goal_adjustment(
+        self,
+        readiness_score: Optional[int],
+        base_target: int = 18
+    ) -> Dict[str, Any]:
+        """
+        Calculate daily goal adjustment based on readiness score.
+
+        Follows energy-aware algorithm:
+        - Readiness >= 85: +15% target increase
+        - Readiness 70-84: 0% adjustment (normal target)
+        - Readiness < 70: -25% target reduction
+
+        Args:
+            readiness_score: Oura readiness score (0-100) or None
+            base_target: Base target points (default: 18)
+
+        Returns:
+            Dictionary with originalTarget, adjustedTarget, adjustmentPercentage, reason
+        """
+        if readiness_score is None:
+            # No adjustment if no readiness data
+            return {
+                "originalTarget": base_target,
+                "adjustedTarget": base_target,
+                "adjustmentPercentage": 0,
+                "reason": "No readiness data available - using standard target"
+            }
+
+        # Calculate adjustment based on readiness thresholds
+        if readiness_score >= 85:
+            # High readiness - increase target
+            adjustment_pct = 15
+            reason = f"High readiness ({readiness_score}) - you've got capacity for more today"
+        elif readiness_score >= 70:
+            # Normal readiness - maintain target
+            adjustment_pct = 0
+            reason = f"Normal readiness ({readiness_score}) - maintaining standard target"
+        else:
+            # Low readiness - reduce target
+            adjustment_pct = -25
+            reason = f"Low readiness ({readiness_score}) - protecting your streak while respecting your state"
+
+        # Calculate adjusted target
+        adjusted_target = int(base_target * (1 + adjustment_pct / 100))
+
+        return {
+            "originalTarget": base_target,
+            "adjustedTarget": adjusted_target,
+            "adjustmentPercentage": adjustment_pct,
+            "reason": reason
+        }
+
+    def map_readiness_to_energy_level(self, readiness_score: Optional[int]) -> str:
+        """
+        Map Oura readiness score to energy level.
+
+        Args:
+            readiness_score: Oura readiness score (0-100) or None
+
+        Returns:
+            Energy level string: "high", "medium", or "low"
+        """
+        if readiness_score is None:
+            return "medium"
+
+        if readiness_score >= 85:
+            return "high"
+        elif readiness_score >= 70:
+            return "medium"
+        else:
+            return "low"
