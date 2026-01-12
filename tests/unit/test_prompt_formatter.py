@@ -3,12 +3,27 @@ Unit tests for PromptFormatter.
 
 Tests cover:
 - Compact, standard, and verbose formatting modes
-- Token count formatting (0, 999, 1000, 1M+)
+- Token count formatting (0, 999, 1000, 1M+, boundary values)
 - Cost formatting and color coding
-- Duration formatting (minutes, hours)
-- Color threshold logic
-- Edge cases (None values, zero tokens, negative costs, very large numbers)
+- Duration formatting (minutes, hours, days, weeks)
+- Color threshold logic and exact boundaries
+- Configuration loading and overrides
+- Edge cases including:
+  * None values, empty dicts, zero tokens
+  * Negative token counts, float token counts
+  * String values in stats (type validation)
+  * Missing keys, extra keys, partial stats
+  * Invalid modes, invalid stats types
+  * Very large numbers (millions of tokens, extreme costs)
+  * Very small costs (precision edge cases)
+  * Extremely long durations
+  * Unicode in default prompt
+  * Malformed and empty config files
+  * Multiple sequential format calls (statelessness)
+- Integration tests (session progression, mode comparison, color progression)
 - Graceful degradation when stats unavailable
+
+Total: 67 comprehensive unit tests
 """
 
 import pytest
@@ -511,6 +526,286 @@ class TestIntegration:
         assert Colors.RED in result_high
         assert Colors.GREEN not in result_high
         assert Colors.YELLOW not in result_high
+
+
+@pytest.mark.unit
+class TestAdditionalEdgeCases:
+    """Test additional edge cases for comprehensive coverage."""
+
+    @pytest.fixture
+    def formatter(self):
+        """Create formatter with colors disabled for easier testing."""
+        return PromptFormatter(enable_colors=False)
+
+    def test_negative_token_counts(self, formatter):
+        """Test handling of negative token counts (malformed stats)."""
+        stats = {
+            "total_input_tokens": -100,
+            "total_output_tokens": -200,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        # Implementation allows negative totals (shows them as-is)
+        result = formatter.format(stats)
+        assert "(-300 | $0.04) Thanos> " == result
+
+    def test_float_token_counts(self, formatter):
+        """Test handling of float token counts (should handle gracefully)."""
+        stats = {
+            "total_input_tokens": 500.7,
+            "total_output_tokens": 700.3,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        result = formatter.format(stats, mode="compact")
+        # Should convert floats to ints internally
+        assert "1.2K" in result or "1200" in result
+
+    def test_string_values_in_stats(self, formatter):
+        """Test handling of string values in stats (type validation)."""
+        stats = {
+            "total_input_tokens": "500",
+            "total_output_tokens": "700",
+            "total_cost": "0.04",
+            "duration_minutes": "15",
+            "message_count": "8"
+        }
+        # Implementation doesn't handle type coercion, will raise TypeError
+        with pytest.raises(TypeError):
+            formatter.format(stats)
+
+    def test_extremely_long_duration_days(self, formatter):
+        """Test handling of very long session durations (days)."""
+        stats = {
+            "total_input_tokens": 1000000,
+            "total_output_tokens": 2000000,
+            "total_cost": 50.00,
+            "duration_minutes": 1440,  # 24 hours = 1 day
+            "message_count": 500
+        }
+        result = formatter.format(stats, mode="standard")
+        # Should format as hours
+        assert "24h" in result
+
+    def test_extremely_long_duration_weeks(self, formatter):
+        """Test handling of very long session durations (weeks)."""
+        stats = {
+            "total_input_tokens": 5000000,
+            "total_output_tokens": 7000000,
+            "total_cost": 200.00,
+            "duration_minutes": 10080,  # 168 hours = 1 week
+            "message_count": 2000
+        }
+        result = formatter.format(stats, mode="standard")
+        # Should format as hours
+        assert "168h" in result
+
+    def test_token_count_boundary_999(self, formatter):
+        """Test exact boundary at 999 tokens (should not use K suffix)."""
+        assert formatter._format_token_count(999) == "999"
+
+    def test_token_count_boundary_1000(self, formatter):
+        """Test exact boundary at 1000 tokens (should use K suffix)."""
+        assert formatter._format_token_count(1000) == "1.0K"
+
+    def test_token_count_boundary_999999(self, formatter):
+        """Test exact boundary at 999999 tokens (should use K suffix)."""
+        assert formatter._format_token_count(999999) == "1000.0K"
+
+    def test_token_count_boundary_1000000(self, formatter):
+        """Test exact boundary at 1000000 tokens (should use M suffix)."""
+        assert formatter._format_token_count(1000000) == "1.0M"
+
+    def test_multiple_sequential_format_calls(self, formatter):
+        """Test that multiple format calls don't affect each other (stateless)."""
+        stats1 = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        stats2 = {
+            "total_input_tokens": 2000,
+            "total_output_tokens": 3000,
+            "total_cost": 1.50,
+            "duration_minutes": 45,
+            "message_count": 25
+        }
+
+        result1a = formatter.format(stats1, mode="compact")
+        result2 = formatter.format(stats2, mode="compact")
+        result1b = formatter.format(stats1, mode="compact")
+
+        # Should be identical (stateless)
+        assert result1a == result1b
+        assert result1a != result2
+
+    def test_very_small_cost_precision(self, formatter):
+        """Test handling of very small costs (precision edge case)."""
+        stats = {
+            "total_input_tokens": 10,
+            "total_output_tokens": 15,
+            "total_cost": 0.00001,
+            "duration_minutes": 1,
+            "message_count": 1
+        }
+        result = formatter.format(stats, mode="compact")
+        # Should format with 2 decimal places
+        assert "$0.00" in result
+
+    def test_unicode_in_default_prompt(self):
+        """Test using unicode characters in default prompt."""
+        formatter = PromptFormatter(default_prompt="Thanos 🤖> ")
+        result = formatter.format(None)
+        assert result == "Thanos 🤖> "
+        assert "🤖" in result
+
+    def test_stats_with_extra_keys(self, formatter):
+        """Test stats dict with extra unexpected keys."""
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8,
+            "extra_field": "unexpected",
+            "another_field": 123
+        }
+        result = formatter.format(stats, mode="compact")
+        # Should ignore extra keys and work normally
+        assert result == "(1.2K | $0.04) Thanos> "
+
+    def test_partial_stats_only_tokens(self, formatter):
+        """Test stats with only token fields present."""
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700
+        }
+        result = formatter.format(stats, mode="compact")
+        # Should use defaults for missing fields
+        assert "(1.2K | $0.00) Thanos> " == result
+
+    def test_partial_stats_only_cost(self, formatter):
+        """Test stats with only cost field present."""
+        stats = {
+            "total_cost": 0.50
+        }
+        result = formatter.format(stats, mode="compact")
+        # Implementation shows stats even with 0 tokens if there's a cost
+        assert result == "(0 | $0.50) Thanos> "
+
+    def test_maximum_integer_values(self, formatter):
+        """Test handling of extremely large integer values."""
+        stats = {
+            "total_input_tokens": 999999999,
+            "total_output_tokens": 999999999,
+            "total_cost": 99999.99,
+            "duration_minutes": 999999,
+            "message_count": 999999
+        }
+        result = formatter.format(stats, mode="verbose")
+        # Should handle large numbers without crashing
+        assert "Thanos>" in result
+        # Check that millions are formatted correctly
+        assert "M" in result
+
+    def test_cost_threshold_exact_boundaries(self, formatter):
+        """Test color selection at exact threshold boundaries."""
+        formatter_colored = PromptFormatter(
+            enable_colors=True,
+            low_cost_threshold=0.50,
+            medium_cost_threshold=2.00
+        )
+
+        # Exactly at low threshold (should be green)
+        assert formatter_colored._get_cost_color(0.50) == Colors.GREEN
+
+        # Just above low threshold (should be yellow)
+        assert formatter_colored._get_cost_color(0.50001) == Colors.YELLOW
+
+        # Exactly at medium threshold (should be yellow)
+        assert formatter_colored._get_cost_color(2.00) == Colors.YELLOW
+
+        # Just above medium threshold (should be red)
+        assert formatter_colored._get_cost_color(2.00001) == Colors.RED
+
+    def test_zero_duration(self, formatter):
+        """Test handling of zero duration (brand new session)."""
+        assert formatter._format_duration(0) == "0m"
+
+    def test_single_minute_duration(self, formatter):
+        """Test handling of single minute duration."""
+        assert formatter._format_duration(1) == "1m"
+
+    def test_mode_case_sensitivity(self, formatter):
+        """Test that mode parameter is case-sensitive."""
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        # Invalid mode (wrong case) should fall back to compact
+        result = formatter.format(stats, mode="COMPACT")
+        # Should fall back to compact mode
+        assert "(1.2K | $0.04) Thanos> " == result
+
+    def test_malformed_config_json(self):
+        """Test handling of corrupted config file."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write("{invalid json content")
+            config_path = f.name
+
+        # Should gracefully handle malformed JSON
+        formatter = PromptFormatter(config_path=config_path)
+        assert formatter.enabled is not None
+        assert formatter.default_mode is not None
+
+        # Cleanup
+        import os
+        os.unlink(config_path)
+
+    def test_empty_config_file(self):
+        """Test handling of empty config file."""
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write("{}")
+            config_path = f.name
+
+        # Should gracefully handle empty config
+        formatter = PromptFormatter(config_path=config_path)
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        result = formatter.format(stats, mode="compact")
+        assert "Thanos>" in result
+
+        # Cleanup
+        import os
+        os.unlink(config_path)
+
+    def test_cost_with_many_decimal_places(self, formatter):
+        """Test cost formatting with high precision floats."""
+        # Python float precision edge case
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.123456789,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        result = formatter.format(stats, mode="compact")
+        # Should round to 2 decimal places
+        assert "$0.12" in result
 
 
 @pytest.mark.unit
