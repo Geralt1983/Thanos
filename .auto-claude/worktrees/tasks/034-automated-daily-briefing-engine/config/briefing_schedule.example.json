@@ -1,0 +1,115 @@
+{
+  "$schema": "./briefing_schedule.schema.json",
+  "version": "1.0.0",
+  "description": "Example: Aggressive briefing schedule with all features enabled",
+
+  "briefings": {
+    "morning_weekday": {
+      "enabled": true,
+      "time": "06:30",
+      "timezone": "local",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": false,
+        "sunday": false
+      },
+      "template": "briefing_morning.md",
+      "delivery_channels": ["cli", "file", "notification"]
+    },
+    "morning_weekend": {
+      "enabled": true,
+      "time": "09:00",
+      "timezone": "local",
+      "days": {
+        "monday": false,
+        "tuesday": false,
+        "wednesday": false,
+        "thursday": false,
+        "friday": false,
+        "saturday": true,
+        "sunday": true
+      },
+      "template": "briefing_morning.md",
+      "delivery_channels": ["notification"]
+    },
+    "midday_checkin": {
+      "enabled": true,
+      "time": "12:00",
+      "timezone": "local",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": false,
+        "sunday": false
+      },
+      "template": "briefing_midday.md",
+      "delivery_channels": ["notification"]
+    },
+    "evening": {
+      "enabled": true,
+      "time": "18:30",
+      "timezone": "local",
+      "days": {
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": false,
+        "sunday": true
+      },
+      "template": "briefing_evening.md",
+      "delivery_channels": ["cli", "file"]
+    }
+  },
+
+  "delivery": {
+    "cli": {
+      "enabled": true,
+      "color": true
+    },
+    "file": {
+      "enabled": true,
+      "output_dir": "History/DailyBriefings",
+      "filename_pattern": "{date}_{type}_briefing.md"
+    },
+    "notification": {
+      "enabled": true,
+      "summary_only": true
+    }
+  },
+
+  "content": {
+    "max_priorities": 5,
+    "include_quick_wins": true,
+    "include_calendar": true,
+    "include_energy_prompts": true,
+    "weekend_mode": {
+      "enabled": true,
+      "exclude_work_tasks": true,
+      "focus_on_personal": true
+    }
+  },
+
+  "scheduler": {
+    "check_interval_minutes": 1,
+    "prevent_duplicate_runs": true,
+    "log_file": "logs/briefing_scheduler.log",
+    "error_notification": true
+  },
+
+  "advanced": {
+    "state_dir": "State",
+    "templates_dir": "Templates",
+    "use_llm_enhancement": true,
+    "llm_model": "gpt-4o-mini",
+    "pattern_learning_enabled": true
+  }
+}
