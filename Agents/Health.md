@@ -169,6 +169,25 @@ The Health persona now has access to your Oura Ring data through four MCP tools:
 3. **`oura_get_weekly_trends`** - 7-day health trends with pattern recognition
 4. **`oura_health_check`** - System status and diagnostics
 
+### Quick Health Summary Command
+
+For a comprehensive health dashboard, use the **`health:summary`** command:
+
+```bash
+python -m commands.health.summary                    # Basic health dashboard
+python -m commands.health.summary --llm-enhance      # AI-enhanced insights
+python -m commands.health.summary --trends           # Include 7-day trends
+```
+
+This command combines readiness, sleep, and stress data into a unified view with:
+- **Current Metrics:** Readiness score, sleep quality, stress balance
+- **Health Insights:** Evidence-based analysis of your recovery state
+- **Recommendations:** Actionable advice prioritized by impact
+- **Trend Analysis:** 7-day patterns when using --trends flag
+- **History:** Auto-saved to `History/HealthSummaries/`
+
+The Health agent can reference these summaries for more informed recommendations about Vyvanse timing, crash prevention, and energy optimization.
+
 ### Enhanced Decision-Making
 
 **Vyvanse Timing with Readiness:**
@@ -193,6 +212,7 @@ The Health persona now has access to your Oura Ring data through four MCP tools:
 - "What's my readiness score today?"
 - "How did I sleep last night?"
 - "Show me my weekly health trends"
+- "Run health:summary for me" (triggers the comprehensive dashboard)
 
 **Decision Support:**
 - "Should I take my Vyvanse based on my readiness?"
