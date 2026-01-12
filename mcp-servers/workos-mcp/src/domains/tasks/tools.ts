@@ -105,6 +105,11 @@ export function getTaskTools(): ToolDefinition[] {
             description: "Energy drain type: deep, shallow, admin",
             enum: ["deep", "shallow", "admin"],
           },
+          cognitiveLoad: {
+            type: "string",
+            description: "Cognitive load: low (admin/simple), medium (standard work), high (complex/deep work)",
+            enum: ["low", "medium", "high"],
+          },
         },
         required: ["title"],
       },

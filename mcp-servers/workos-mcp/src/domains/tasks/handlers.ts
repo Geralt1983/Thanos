@@ -279,7 +279,7 @@ export async function handleGetClients(
  * Uses write-through pattern: writes to Neon first, then syncs to cache
  * Automatically calculates sortOrder to place task at top of its status column
  *
- * @param args - { title: string, description?: string, clientId?: number, status?: string, category?: string, valueTier?: string, drainType?: string }
+ * @param args - { title: string, description?: string, clientId?: number, status?: string, category?: string, valueTier?: string, drainType?: string, cognitiveLoad?: string }
  * @param db - Database instance for creating the task
  * @returns Promise resolving to MCP ContentResponse with success status and created task object
  */
@@ -287,7 +287,7 @@ export async function handleCreateTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { title, description, clientId, status = "backlog", category = "work", valueTier = "progress", drainType } = args as any;
+  const { title, description, clientId, status = "backlog", category = "work", valueTier = "progress", drainType, cognitiveLoad } = args as any;
 
   if (!title) {
     return {
@@ -312,6 +312,7 @@ export async function handleCreateTask(
       category,
       valueTier,
       drainType: drainType || null,
+      cognitiveLoad: cognitiveLoad || null,
       sortOrder: minSortOrder - 1,
       updatedAt: new Date(),
     })
