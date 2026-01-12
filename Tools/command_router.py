@@ -77,6 +77,7 @@ class CommandRouter:
         self.thanos_dir = thanos_dir
         self.current_agent = "ops"  # Track current agent
         self.current_model = None  # None = use default from config
+        self.current_prompt_mode = None  # None = use default from config
 
         # Available models (from config/api.json)
         self._available_models = {
@@ -247,6 +248,8 @@ class CommandRouter:
             "cal": (self._cmd_calendar, "Show calendar (alias)", ["args"]),
             "schedule": (self._cmd_schedule, "Schedule a task", ["args"]),
             "free": (self._cmd_free, "Find free time slots", ["args"]),
+            "prompt": (self._cmd_prompt, "Switch prompt display mode", ["mode"]),
+            "p": (self._cmd_prompt, "Switch prompt mode (alias)", ["mode"]),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -442,6 +445,7 @@ class CommandRouter:
   /switch <ref>  - Switch to a different branch (by name or id)
   /patterns      - Show conversation patterns and usage analytics
   /model [name]  - Switch AI model (opus, sonnet, haiku)
+  /prompt [mode] - Switch prompt display (compact, standard, verbose)
   /calendar [when] - Show calendar events (today, tomorrow, week, YYYY-MM-DD)
   /schedule <task> - Schedule a task on calendar
   /free [when]   - Find free time slots (today, tomorrow, week)
@@ -452,7 +456,7 @@ class CommandRouter:
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
   /r = /resume, /m = /model, /h = /help, /q = /quit
-  /cal = /calendar
+  /p = /prompt, /cal = /calendar
 
 {Colors.DIM}Tip: Use \""" for multi-line input{Colors.RESET}
 """)
@@ -1029,6 +1033,39 @@ class CommandRouter:
         """Get the current model full name for API calls."""
         model_alias = self.current_model or self._default_model
         return self._available_models.get(model_alias, self._available_models[self._default_model])
+
+    def _cmd_prompt(self, args: str) -> CommandResult:
+        """Switch prompt display mode."""
+        available_modes = ["compact", "standard", "verbose"]
+
+        if not args:
+            # Show current mode and available options
+            current = self.current_prompt_mode or "compact"
+            print(f"\n{Colors.CYAN}Prompt Display Mode:{Colors.RESET}")
+            print(f"  Current: {current}")
+            print(f"\n{Colors.CYAN}Available Modes:{Colors.RESET}")
+            for mode in available_modes:
+                marker = "→" if mode == current else " "
+                if mode == "compact":
+                    desc = "Tokens and cost only - (1.2K | $0.04)"
+                elif mode == "standard":
+                    desc = "Adds session duration - (45m | 1.2K tokens | $0.04)"
+                else:  # verbose
+                    desc = "Full details - (45m | 12 msgs | 1.2K in | 3.4K out | $0.04)"
+                print(f"  {marker} {mode:10} {desc}")
+            print(f"\n{Colors.DIM}Usage: /prompt <compact|standard|verbose>{Colors.RESET}\n")
+            return CommandResult()
+
+        mode = args.lower().strip()
+        if mode in available_modes:
+            old_mode = self.current_prompt_mode or "compact"
+            self.current_prompt_mode = mode
+            print(f"{Colors.CYAN}Prompt mode switched:{Colors.RESET} {old_mode} → {mode}")
+            return CommandResult()
+        else:
+            print(f"{Colors.DIM}Unknown mode: {mode}{Colors.RESET}")
+            print(f"Available: {', '.join(available_modes)}")
+            return CommandResult(success=False)
 
     def _cmd_calendar(self, args: str) -> CommandResult:
         """Show calendar events for today or a specified date."""

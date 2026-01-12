@@ -127,8 +127,9 @@ class ThanosInteractive:
                 # Get current session stats for prompt
                 stats = self.session_manager.get_stats()
 
-                # Format prompt with stats (uses mode from config)
-                prompt = self.prompt_formatter.format(stats)
+                # Format prompt with stats (uses mode from command router or config default)
+                prompt_mode = self.command_router.current_prompt_mode
+                prompt = self.prompt_formatter.format(stats, mode=prompt_mode)
 
                 # Get user input
                 user_input = input(prompt).strip()
