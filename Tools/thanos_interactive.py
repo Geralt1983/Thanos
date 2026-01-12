@@ -101,7 +101,7 @@ class ThanosInteractive:
             thanos_dir=self.thanos_dir,
         )
 
-        # Initialize prompt formatter (start with compact mode)
+        # Initialize prompt formatter (loads config from config/api.json)
         self.prompt_formatter = PromptFormatter()
 
     def run(self) -> None:
@@ -127,8 +127,8 @@ class ThanosInteractive:
                 # Get current session stats for prompt
                 stats = self.session_manager.get_stats()
 
-                # Format prompt with stats
-                prompt = self.prompt_formatter.format(stats, mode="compact")
+                # Format prompt with stats (uses mode from config)
+                prompt = self.prompt_formatter.format(stats)
 
                 # Get user input
                 user_input = input(prompt).strip()

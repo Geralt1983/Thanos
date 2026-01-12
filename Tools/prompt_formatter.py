@@ -14,6 +14,7 @@ Key Features:
     - Session duration formatting (minutes and hours)
     - Configurable cost thresholds for color coding
     - Graceful degradation when stats are unavailable
+    - Configuration loading from config/api.json
 
 Key Classes:
     PromptFormatter: Main class for formatting interactive prompts
@@ -37,12 +38,27 @@ Usage:
     # Output: "(45m | 12 msgs | 1.2K in | 3.4K out | $0.04) Thanos> "
 
 Configuration:
-    Cost thresholds can be customized during initialization:
-    formatter = PromptFormatter(
-        low_cost_threshold=0.50,
-        medium_cost_threshold=2.00,
-        enable_colors=True
-    )
+    The formatter loads configuration from config/api.json under the
+    "interactive_prompt" key. Users can customize:
+    - Enable/disable prompt display
+    - Display mode (compact/standard/verbose)
+    - Color coding thresholds
+    - Show/hide duration and message count
+
+    Example config/api.json:
+    {
+      "interactive_prompt": {
+        "enabled": true,
+        "mode": "compact",
+        "color_coding": {
+          "enabled": true,
+          "thresholds": {
+            "low": 0.50,
+            "medium": 2.00
+          }
+        }
+      }
+    }
 
 Display Modes:
     - compact: Shows tokens and cost only (default)
@@ -60,6 +76,8 @@ See Also:
     - PROMPT_DESIGN.md: Complete design specification
 """
 
+import json
+from pathlib import Path
 from typing import Dict, Optional
 
 
@@ -83,7 +101,12 @@ class PromptFormatter:
     display modes and color-coded cost indicators. It handles edge cases like
     zero tokens, missing data, and very large numbers gracefully.
 
+    Configuration is loaded from config/api.json under "interactive_prompt" key.
+    Users can customize display mode, color coding, and thresholds.
+
     Attributes:
+        enabled (bool): Whether to show token/cost stats in prompt
+        default_mode (str): Default display mode (compact/standard/verbose)
         low_cost_threshold (float): Cost threshold for green/yellow boundary (default: $0.50)
         medium_cost_threshold (float): Cost threshold for yellow/red boundary (default: $2.00)
         enable_colors (bool): Whether to use color coding (default: True)
@@ -92,33 +115,90 @@ class PromptFormatter:
 
     def __init__(
         self,
-        low_cost_threshold: float = 0.50,
-        medium_cost_threshold: float = 2.00,
-        enable_colors: bool = True,
+        config_path: Optional[str] = None,
+        low_cost_threshold: Optional[float] = None,
+        medium_cost_threshold: Optional[float] = None,
+        enable_colors: Optional[bool] = None,
         default_prompt: str = "Thanos> "
     ):
         """
         Initialize PromptFormatter with configuration.
 
+        Configuration is loaded from config/api.json by default. Parameters passed
+        to __init__ override the config file values.
+
         Args:
-            low_cost_threshold: Dollar amount for green/yellow boundary (default: 0.50)
-            medium_cost_threshold: Dollar amount for yellow/red boundary (default: 2.00)
-            enable_colors: Enable color-coded cost indicators (default: True)
+            config_path: Path to configuration file (default: config/api.json)
+            low_cost_threshold: Dollar amount for green/yellow boundary (overrides config)
+            medium_cost_threshold: Dollar amount for yellow/red boundary (overrides config)
+            enable_colors: Enable color-coded cost indicators (overrides config)
             default_prompt: Fallback prompt when stats unavailable (default: "Thanos> ")
         """
-        self.low_cost_threshold = low_cost_threshold
-        self.medium_cost_threshold = medium_cost_threshold
-        self.enable_colors = enable_colors
+        # Load configuration from file
+        config = self._load_config(config_path)
+
+        # Set defaults from config or fallback to hardcoded defaults
+        self.enabled = config.get("enabled", True)
+        self.default_mode = config.get("mode", "compact")
+
+        # Color coding configuration
+        color_config = config.get("color_coding", {})
+        thresholds = color_config.get("thresholds", {})
+
+        # Use parameter values if provided, otherwise use config, otherwise use defaults
+        self.low_cost_threshold = (
+            low_cost_threshold if low_cost_threshold is not None
+            else thresholds.get("low", 0.50)
+        )
+        self.medium_cost_threshold = (
+            medium_cost_threshold if medium_cost_threshold is not None
+            else thresholds.get("medium", 2.00)
+        )
+        self.enable_colors = (
+            enable_colors if enable_colors is not None
+            else color_config.get("enabled", True)
+        )
+
         self.default_prompt = default_prompt
 
-    def format(self, stats: Optional[Dict] = None, mode: str = "compact") -> str:
+    def _load_config(self, config_path: Optional[str] = None) -> Dict:
+        """
+        Load configuration from config/api.json.
+
+        Args:
+            config_path: Optional path to config file
+
+        Returns:
+            Configuration dict with interactive_prompt settings
+        """
+        try:
+            # Determine config file path
+            if config_path is None:
+                base_dir = Path(__file__).parent.parent
+                config_path = base_dir / "config" / "api.json"
+            else:
+                config_path = Path(config_path)
+
+            # Load config file
+            if config_path.exists():
+                full_config = json.loads(config_path.read_text())
+                return full_config.get("interactive_prompt", {})
+        except Exception:
+            # Silently fall back to defaults if config fails to load
+            pass
+
+        # Return empty dict if config not found (will use defaults)
+        return {}
+
+    def format(self, stats: Optional[Dict] = None, mode: Optional[str] = None) -> str:
         """
         Format prompt with session statistics.
 
         Args:
             stats: Session stats dict with keys: total_input_tokens, total_output_tokens,
                    total_cost, duration_minutes, message_count. If None, returns default prompt.
-            mode: Display mode - "compact", "standard", or "verbose" (default: "compact")
+            mode: Display mode - "compact", "standard", or "verbose". If None, uses config
+                  default mode. (default: None, which uses configured mode)
 
         Returns:
             Formatted prompt string ready for display
@@ -137,6 +217,10 @@ class PromptFormatter:
             >>> formatter.format(stats, mode="standard")
             '(15m | 1.2K tokens | $0.04) Thanos> '
         """
+        # If disabled, always return default prompt
+        if not self.enabled:
+            return self.default_prompt
+
         # Handle missing or invalid stats
         if not stats or not isinstance(stats, dict):
             return self.default_prompt
@@ -156,13 +240,16 @@ class PromptFormatter:
         if total_tokens == 0 and total_cost == 0.0:
             return self.default_prompt
 
+        # Use provided mode or fall back to configured default mode
+        display_mode = mode if mode is not None else self.default_mode
+
         # Format based on mode
-        if mode == "verbose":
+        if display_mode == "verbose":
             return self._format_verbose(
                 total_input_tokens, total_output_tokens, total_cost,
                 duration_minutes, message_count
             )
-        elif mode == "standard":
+        elif display_mode == "standard":
             return self._format_standard(
                 total_tokens, total_cost, duration_minutes
             )
