@@ -48,6 +48,7 @@ Tools/
 │   ├── session_handler.py     # /clear, /save, /sessions, /resume, /branch, /branches, /switch
 │   ├── state_handler.py       # /state, /commitments, /context, /usage
 │   ├── memory_handler.py      # /remember, /recall, /memory
+│   ├── history_search_handler.py # /history-search
 │   ├── analytics_handler.py   # /patterns
 │   ├── model_handler.py       # /model, /m
 │   └── core_handler.py        # /help, /quit, /run
@@ -107,6 +108,7 @@ Handles intelligent agent detection and routing:
 | **SessionHandler** | `/clear`, `/save`, `/sessions`, `/resume`, `/branch`, `/branches`, `/switch` | Session management with git-like branching |
 | **StateHandler** | `/state`, `/commitments`, `/context`, `/usage` | View Thanos state and context information |
 | **MemoryHandler** | `/remember`, `/recall`, `/memory` | MemOS integration for persistent memory |
+| **HistorySearchHandler** | `/history-search` | Semantic search of conversation history using ChromaAdapter |
 | **AnalyticsHandler** | `/patterns` | Analyze session patterns and usage |
 | **ModelHandler** | `/model`, `/m` | Switch between Claude models (opus, sonnet, haiku) |
 | **CoreHandler** | `/help`, `/quit`, `/run` | Core system commands |
@@ -637,6 +639,86 @@ except ImportError:
 1. Verify mock objects match handler dependencies
 2. Check test fixtures are properly configured
 3. Ensure test imports match module structure
+
+## Command Usage Examples
+
+### /history-search - Semantic Search of Conversation History
+
+The `/history-search` command enables semantic search across all indexed conversation history using ChromaAdapter's vector search capabilities. Unlike keyword search, it finds messages that are semantically similar to your query, enabling natural language "what did we discuss about X?" queries.
+
+#### Basic Usage
+
+```bash
+# Simple search
+/history-search authentication
+
+# Multi-word query
+/history-search API implementation patterns
+
+# Context-aware search
+/history-search what did we decide about testing strategy
+```
+
+#### Filter Syntax
+
+Search results can be filtered using these optional filters:
+
+| Filter | Syntax | Description | Example |
+|--------|--------|-------------|---------|
+| **Agent** | `agent:<name>` | Filter by agent name | `agent:architect` |
+| **Date** | `date:<YYYY-MM-DD>` | Filter by specific date | `date:2026-01-11` |
+| **Session** | `session:<id>` | Filter by session ID (prefix matching) | `session:abc123` |
+| **After** | `after:<YYYY-MM-DD>` | Messages on or after date | `after:2026-01-01` |
+| **Before** | `before:<YYYY-MM-DD>` | Messages on or before date | `before:2026-01-31` |
+
+#### Advanced Examples
+
+```bash
+# Search with agent filter
+/history-search database schema agent:architect
+
+# Search with date filter
+/history-search API decisions date:2026-01-11
+
+# Search with session filter
+/history-search error handling session:abc123
+
+# Search with date range
+/history-search API work after:2026-01-01 before:2026-01-31
+
+# Combine multiple filters
+/history-search authentication agent:ops after:2026-01-10
+```
+
+#### Result Format
+
+Results include:
+
+- **Session Context**: Date, time, agent name, session ID
+- **Similarity Score**: Percentage showing relevance (higher = more relevant)
+- **Role**: User or assistant message
+- **Content Preview**: Excerpt with query terms highlighted in bold
+- **Helpful Tips**: Usage guidance and filter syntax
+
+#### How It Works
+
+1. **Message Indexing**: SessionManager automatically indexes messages to ChromaAdapter's 'conversations' collection with metadata (session_id, timestamp, role, agent, date)
+2. **Vector Search**: ChromaAdapter uses OpenAI embeddings to create vector representations of messages
+3. **Semantic Matching**: Query is embedded and compared to stored messages using cosine similarity
+4. **Filtered Results**: Optional filters are applied using ChromaDB's where clause syntax
+5. **Ranked Output**: Results are ranked by similarity score and displayed with context
+
+#### Prerequisites
+
+- **ChromaAdapter**: Must be configured with OpenAI embeddings
+- **Indexed Sessions**: Messages must be indexed (automatic for new sessions, use `scripts/index_sessions.py` for existing sessions)
+
+#### Related Commands
+
+- `/recall <query>` - Search MemOS hybrid memory (Neo4j + ChromaDB) for stored knowledge
+- `/memory` - Show memory system info including ChromaDB status
+- `/sessions` - List all saved sessions
+- `/resume <id>` - Resume a specific session
 
 ## Additional Resources
 
