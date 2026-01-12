@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "035-commitment-accountability-system",
+  "spec": "014-mcp-server-lacks-rate-limiting-and-input-bounds-ch",
   "state": "building",
   "subtasks": {
-    "completed": 18,
-    "total": 23,
+    "completed": 0,
+    "total": 0,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "User Interface & Commands",
+    "current": "Analysis and Design",
     "id": null,
-    "total": 4
+    "total": 3
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 20,
-    "started_at": "2026-01-11T17:34:10.588702"
+    "number": 2,
+    "started_at": "2026-01-12T00:38:48.656294"
   },
-  "last_update": "2026-01-11T18:45:04.762886"
+  "last_update": "2026-01-12T00:42:59.848003"
 }
