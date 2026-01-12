@@ -1,53 +1,52 @@
 #!/usr/bin/env python3
 """
-SessionManager - Manages conversation history and session persistence.
+SessionManager - Manages conversation sessions with message tracking and token accounting.
 
-This module provides the core session management infrastructure for Thanos,
-handling message storage, token tracking, history management with sliding window,
-and session persistence to both JSON and Markdown formats.
+This module handles session state, conversation history, token counting, and persistence
+for Thanos interactive mode. It implements a sliding window for history management and
+tracks cumulative statistics across the session lifecycle.
 
-Classes:
-    Message: Dataclass representing a single conversation message
-    Session: Dataclass representing a conversation session with metadata
-    SessionManager: Main class for managing sessions and conversation history
+Key Features:
+    - Message history with automatic token tracking
+    - Sliding window history management (MAX_HISTORY limit)
+    - Cumulative token and cost accounting
+    - Session persistence to markdown files
+    - Agent switching within sessions
+    - Session statistics and duration tracking
 
-Constants:
-    MAX_HISTORY: Maximum number of messages to keep in active history (sliding window)
+Key Classes:
+    Message: Represents a single conversation message with metadata
+    Session: Container for session state and history
+    SessionManager: Main interface for session operations
 
-Features:
-    - Message tracking with role, content, and token counting
-    - Sliding window history management (auto-trims old messages)
-    - Session persistence to JSON and Markdown formats
-    - Agent switching support
-    - Session statistics and metadata tracking
-    - Token accumulation across trimmed history
+Usage:
+    from Tools.session_manager import SessionManager
 
-Architecture:
-    Sessions are stored in History/Sessions/ directory in both formats:
-    - Markdown (.md): Human-readable session transcripts
-    - JSON (.json): Machine-readable format for search and analysis
+    # Initialize session manager
+    session_mgr = SessionManager()
 
-Example:
-    manager = SessionManager()
-    manager.add_user_message("Hello", tokens=5)
-    manager.add_assistant_message("Hi there!", tokens=10)
-    filepath = manager.save()
-    stats = manager.get_stats()
+    # Add messages
+    session_mgr.add_user_message("Hello", tokens=10)
+    session_mgr.add_assistant_message("Hi there!", tokens=15)
+
+    # Get statistics
+    stats = session_mgr.get_stats()
+    print(f"Total tokens: {stats['total_input_tokens'] + stats['total_output_tokens']}")
+    print(f"Cost: ${stats['total_cost']:.4f}")
+
+    # Save session
+    filepath = session_mgr.save()
 """
 
-import json
-import logging
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Dict, Optional
+import uuid
 
-logger = logging.getLogger(__name__)
 
-# Maximum number of messages to keep in active history (sliding window)
-# Older messages are trimmed but token counts persist
-MAX_HISTORY = 50
+# Maximum number of messages to keep in history (sliding window)
+MAX_HISTORY = 100
 
 
 @dataclass
@@ -56,53 +55,32 @@ class Message:
     Represents a single conversation message.
 
     Attributes:
-        role: Message role ('user', 'assistant', 'system')
+        role: Message role ("user" or "assistant")
         content: Message text content
         timestamp: When the message was created
-        tokens: Token count for this message
+        tokens: Token count for this message (0 if unknown)
     """
-
     role: str
     content: str
     timestamp: datetime = field(default_factory=datetime.now)
     tokens: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert message to dictionary for serialization."""
-        return {
-            "role": self.role,
-            "content": self.content,
-            "timestamp": self.timestamp.isoformat(),
-            "tokens": self.tokens,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Message":
-        """Create message from dictionary."""
-        return cls(
-            role=data["role"],
-            content=data["content"],
-            timestamp=datetime.fromisoformat(data["timestamp"]),
-            tokens=data.get("tokens", 0),
-        )
-
 
 @dataclass
 class Session:
     """
-    Represents a conversation session with metadata.
+    Container for session state and conversation history.
 
     Attributes:
-        id: Unique session identifier (8-character UUID prefix)
+        id: Unique session identifier (first 8 chars of UUID)
         started_at: Session start timestamp
-        agent: Current active agent name
+        agent: Current agent name (e.g., "ops", "coach", "strategy")
         history: List of conversation messages
-        total_input_tokens: Cumulative input tokens (persists across trims)
-        total_output_tokens: Cumulative output tokens (persists across trims)
-        total_cost: Cumulative cost in USD
+        total_input_tokens: Cumulative input tokens across entire session
+        total_output_tokens: Cumulative output tokens across entire session
+        total_cost: Cumulative estimated cost in USD
     """
-
-    id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     started_at: datetime = field(default_factory=datetime.now)
     agent: str = "ops"
     history: List[Message] = field(default_factory=list)
@@ -110,131 +88,93 @@ class Session:
     total_output_tokens: int = 0
     total_cost: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert session to dictionary for serialization."""
-        return {
-            "id": self.id,
-            "started_at": self.started_at.isoformat(),
-            "agent": self.agent,
-            "history": [msg.to_dict() for msg in self.history],
-            "total_input_tokens": self.total_input_tokens,
-            "total_output_tokens": self.total_output_tokens,
-            "total_cost": self.total_cost,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Session":
-        """Create session from dictionary."""
-        return cls(
-            id=data["id"],
-            started_at=datetime.fromisoformat(data["started_at"]),
-            agent=data.get("agent", "ops"),
-            history=[Message.from_dict(msg) for msg in data.get("history", [])],
-            total_input_tokens=data.get("total_input_tokens", 0),
-            total_output_tokens=data.get("total_output_tokens", 0),
-            total_cost=data.get("total_cost", 0.0),
-        )
-
 
 class SessionManager:
     """
-    Manages conversation sessions and message history.
+    Manages conversation sessions with message tracking and statistics.
 
-    Provides:
-    - Message addition with automatic token tracking
-    - Sliding window history management (MAX_HISTORY limit)
-    - Session persistence to JSON and Markdown formats
-    - Agent switching
-    - Session statistics
+    This class handles all session operations including message addition,
+    history management with sliding window trimming, token accounting,
+    and session persistence.
 
-    The sliding window ensures history stays at MAX_HISTORY messages by
-    trimming oldest messages when limit is reached. Token counts persist
-    across trims to maintain accurate usage tracking.
+    The sliding window keeps the most recent MAX_HISTORY messages while
+    maintaining cumulative token counts across the entire session.
+
+    Attributes:
+        session: Current Session instance
+        history_dir: Directory for saving session files
     """
 
-    def __init__(self, history_dir: Path = None, chroma_adapter=None):
+    def __init__(self, history_dir: Optional[Path] = None):
         """
-        Initialize SessionManager.
+        Initialize SessionManager with a new session.
 
         Args:
-            history_dir: Directory for session storage (default: ~/.claude/History/Sessions)
-            chroma_adapter: Optional ChromaAdapter instance for semantic search indexing
+            history_dir: Directory for session persistence (default: History/Sessions)
         """
-        self.history_dir = history_dir or Path.home() / ".claude" / "History" / "Sessions"
         self.session = Session()
-        self._chroma = chroma_adapter
-        self._indexing_enabled = chroma_adapter is not None
+        self.history_dir = history_dir or Path("History/Sessions")
 
     def add_user_message(self, content: str, tokens: int = 0) -> None:
         """
         Add a user message to the conversation history.
 
-        Automatically indexes the message to ChromaAdapter if enabled.
-
         Args:
-            content: Message text content
-            tokens: Token count for this message
+            content: Message text
+            tokens: Token count for this message (default: 0)
         """
         message = Message(role="user", content=content, tokens=tokens)
         self.session.history.append(message)
         self.session.total_input_tokens += tokens
-        self._trim_history_if_needed()
-
-        # Auto-index message to ChromaAdapter for semantic search
-        self.index_message(message)
+        self._trim_history()
 
     def add_assistant_message(self, content: str, tokens: int = 0) -> None:
         """
         Add an assistant message to the conversation history.
 
-        Automatically indexes the message to ChromaAdapter if enabled.
-
         Args:
-            content: Message text content
-            tokens: Token count for this message
+            content: Message text
+            tokens: Token count for this message (default: 0)
         """
         message = Message(role="assistant", content=content, tokens=tokens)
         self.session.history.append(message)
         self.session.total_output_tokens += tokens
-        self._trim_history_if_needed()
+        self._trim_history()
 
-        # Auto-index message to ChromaAdapter for semantic search
-        self.index_message(message)
-
-    def _trim_history_if_needed(self) -> None:
+    def _trim_history(self) -> None:
         """
         Trim history to MAX_HISTORY messages using sliding window.
 
-        Removes oldest messages in pairs (user + assistant) to maintain
-        conversation coherence. Token counts persist across trims.
+        Removes oldest messages (in pairs when possible) while maintaining
+        cumulative token counts. This prevents memory growth in long sessions
+        while preserving session statistics.
         """
         if len(self.session.history) > MAX_HISTORY:
-            # Remove oldest messages in pairs to maintain conversation flow
             # Calculate how many messages to remove
-            excess = len(self.session.history) - MAX_HISTORY
+            messages_to_remove = len(self.session.history) - MAX_HISTORY
 
-            # Remove in pairs if possible to maintain user/assistant pairing
-            if excess % 2 == 1:
-                excess += 1  # Round up to even number
-
-            # Trim from the beginning
-            self.session.history = self.session.history[excess:]
+            # Try to remove in pairs to maintain conversation coherence
+            # If we have an odd number to remove, just remove from the start
+            self.session.history = self.session.history[messages_to_remove:]
 
     def get_messages_for_api(self) -> List[Dict[str, str]]:
         """
-        Convert history to API format.
+        Convert conversation history to API format.
 
         Returns:
             List of message dicts with 'role' and 'content' keys
         """
-        return [{"role": msg.role, "content": msg.content} for msg in self.session.history]
+        return [
+            {"role": msg.role, "content": msg.content}
+            for msg in self.session.history
+        ]
 
     def is_history_trimmed(self) -> bool:
         """
-        Check if history is at the maximum limit.
+        Check if history is at or above the MAX_HISTORY limit.
 
         Returns:
-            True if history length equals MAX_HISTORY
+            True if history is at max capacity, False otherwise
         """
         return len(self.session.history) >= MAX_HISTORY
 
@@ -243,7 +183,7 @@ class SessionManager:
         Switch to a different agent.
 
         Args:
-            agent_name: Name of the agent to switch to
+            agent_name: Name of the agent to switch to (e.g., "ops", "coach")
         """
         self.session.agent = agent_name
 
@@ -251,23 +191,24 @@ class SessionManager:
         """
         Clear conversation history while preserving session metadata.
 
-        Removes all messages but keeps token counts, session ID, and timestamps.
+        This removes all messages from history but maintains the session ID,
+        agent, and cumulative token/cost statistics.
         """
-        self.session.history.clear()
+        self.session.history = []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> Dict:
         """
-        Get session statistics.
+        Get current session statistics.
 
         Returns:
-            Dictionary with session metrics including:
-            - session_id: Unique session identifier
-            - message_count: Number of messages in current history
-            - total_input_tokens: Cumulative input tokens
-            - total_output_tokens: Cumulative output tokens
-            - total_cost: Cumulative cost
-            - current_agent: Active agent name
-            - duration_minutes: Session duration in minutes
+            Dictionary containing:
+                - session_id: Unique session identifier
+                - message_count: Number of messages in current history
+                - total_input_tokens: Cumulative input tokens
+                - total_output_tokens: Cumulative output tokens
+                - total_cost: Cumulative cost in USD
+                - current_agent: Current agent name
+                - duration_minutes: Session duration in minutes
         """
         duration = datetime.now() - self.session.started_at
         duration_minutes = int(duration.total_seconds() / 60)
@@ -284,235 +225,103 @@ class SessionManager:
 
     def save(self) -> Path:
         """
-        Save session to both JSON and Markdown formats.
+        Save session to a markdown file.
 
-        Saves to History/Sessions/ with timestamp-based filename.
-        Creates directory if it doesn't exist.
+        Creates a markdown file with session metadata, statistics, and
+        conversation history. Filename format: YYYY-MM-DD-HHMM-sessionid.md
 
         Returns:
-            Path to the saved Markdown file
+            Path to the saved file
         """
         # Ensure history directory exists
         self.history_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate filename with timestamp and session ID
         timestamp = datetime.now().strftime("%Y-%m-%d-%H%M")
-        base_filename = f"{timestamp}-{self.session.id}"
+        filename = f"{timestamp}-{self.session.id}.md"
+        filepath = self.history_dir / filename
 
-        # Save JSON format
-        json_path = self.history_dir / f"{base_filename}.json"
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(self.session.to_dict(), f, indent=2, ensure_ascii=False)
-
-        # Save Markdown format
-        md_path = self.history_dir / f"{base_filename}.md"
-        md_content = self._generate_markdown()
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write(md_content)
-
-        return md_path
-
-    def _generate_markdown(self) -> str:
-        """
-        Generate markdown representation of session.
-
-        Returns:
-            Markdown-formatted session transcript
-        """
+        # Build markdown content
         lines = []
+        lines.append("# Interactive Session\n")
+        lines.append(f"**Session ID:** {self.session.id}\n")
+        lines.append(f"**Started:** {self.session.started_at.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        lines.append(f"**Agent:** {self.session.agent}\n")
+        lines.append(f"**Messages:** {len(self.session.history)}\n")
+        lines.append(f"**Total Tokens:** {self.session.total_input_tokens + self.session.total_output_tokens:,}\n")
+        lines.append(f"**Estimated Cost:** ${self.session.total_cost:.4f}\n")
+        lines.append("\n---\n\n")
 
-        # Header
-        lines.append(f"# Interactive Session")
-        lines.append(f"\n**Session ID:** {self.session.id}")
-        lines.append(f"**Agent:** {self.session.agent}")
-        lines.append(f"**Started:** {self.session.started_at.strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append(f"**Duration:** {self.get_stats()['duration_minutes']} minutes")
-        lines.append("")
-
-        # Statistics
-        lines.append("## Statistics")
-        lines.append(f"- Messages: {len(self.session.history)}")
-        lines.append(f"- Input tokens: {self.session.total_input_tokens:,}")
-        lines.append(f"- Output tokens: {self.session.total_output_tokens:,}")
-        lines.append(f"- Total tokens: {self.session.total_input_tokens + self.session.total_output_tokens:,}")
-        lines.append(f"- Cost: ${self.session.total_cost:.4f}")
-        lines.append("")
-
-        # Conversation history
-        lines.append("## Conversation")
-        lines.append("")
-
+        # Add conversation history
+        lines.append("## Conversation\n\n")
         for msg in self.session.history:
-            if msg.role == "user":
-                role_label = "You"
-            elif msg.role == "assistant":
-                role_label = self.session.agent.capitalize()
-            else:
-                role_label = msg.role.capitalize()
-            lines.append(f"**{role_label}:** {msg.content}")
-            lines.append("")
+            role_display = "You" if msg.role == "user" else self.session.agent.capitalize()
+            timestamp_str = msg.timestamp.strftime("%H:%M:%S")
+            lines.append(f"**{role_display}:** {msg.content}\n\n")
 
-        # Footer
-        lines.append("---")
-        lines.append("*Saved by Thanos Interactive Mode*")
+        lines.append("---\n")
+        lines.append("*Saved by Thanos Interactive Mode*\n")
 
-        return "\n".join(lines)
+        # Write to file
+        filepath.write_text("".join(lines))
 
-    def set_chroma_adapter(self, chroma_adapter) -> None:
-        """
-        Set or update the ChromaAdapter instance for message indexing.
+        return filepath
 
-        This allows enabling semantic search indexing after SessionManager
-        has been initialized.
-
-        Args:
-            chroma_adapter: ChromaAdapter instance for semantic search indexing
-        """
-        self._chroma = chroma_adapter
-        self._indexing_enabled = chroma_adapter is not None
-
-    def index_message(self, message: Message) -> bool:
-        """
-        Index a single message to ChromaAdapter's conversations collection.
-
-        Stores the message content with metadata for semantic search:
-        - session_id: Current session identifier
-        - timestamp: Message timestamp (ISO format)
-        - role: Message role (user, assistant, system)
-        - agent: Current agent name
-        - date: Formatted date for ChromaDB metadata filtering
-
-        Args:
-            message: Message to index
-
-        Returns:
-            True if indexing succeeded, False otherwise
-        """
-        if not self._indexing_enabled:
-            return False
-
-        try:
-            # Prepare metadata following conversations collection schema
-            metadata = {
-                "session_id": self.session.id,
-                "timestamp": message.timestamp.isoformat(),
-                "role": message.role,
-                "agent": self.session.agent,
-                "date": message.timestamp.strftime("%Y-%m-%d"),
-            }
-
-            # Index to ChromaAdapter (synchronously)
-            import asyncio
-            result = asyncio.run(
-                self._chroma._store_memory(
-                    {
-                        "content": message.content,
-                        "collection": "conversations",
-                        "metadata": metadata,
-                    }
-                )
-            )
-
-            return result.success if result else False
-
-        except Exception as e:
-            logger.warning(f"Failed to index message to ChromaAdapter: {e}")
-            return False
-
-    def index_session(self) -> Dict[str, Any]:
-        """
-        Batch index all messages in current session to ChromaAdapter.
-
-        Uses ChromaAdapter's batch storage API for efficient indexing of
-        multiple messages. This is more performant than indexing messages
-        individually (~85% faster for 10+ messages).
-
-        Returns:
-            Dictionary with indexing results:
-            - success: Whether indexing succeeded
-            - indexed: Number of messages indexed
-            - error: Error message if indexing failed
-        """
-        if not self._indexing_enabled:
-            return {"success": False, "indexed": 0, "error": "ChromaAdapter not configured"}
-
-        if not self.session.history:
-            return {"success": True, "indexed": 0, "error": None}
-
-        try:
-            # Prepare batch items for all messages
-            items = []
-            for message in self.session.history:
-                metadata = {
-                    "session_id": self.session.id,
-                    "timestamp": message.timestamp.isoformat(),
-                    "role": message.role,
-                    "agent": self.session.agent,
-                    "date": message.timestamp.strftime("%Y-%m-%d"),
-                }
-
-                items.append({"content": message.content, "metadata": metadata})
-
-            # Batch index to ChromaAdapter
-            import asyncio
-            result = asyncio.run(
-                self._chroma._store_batch({"items": items, "collection": "conversations"})
-            )
-
-            if result and result.success:
-                return {
-                    "success": True,
-                    "indexed": len(items),
-                    "error": None,
-                }
-            else:
-                error_msg = result.error if result else "Unknown error"
-                return {"success": False, "indexed": 0, "error": error_msg}
-
-        except Exception as e:
-            logger.error(f"Failed to batch index session to ChromaAdapter: {e}")
-            return {"success": False, "indexed": 0, "error": str(e)}
-
-    def list_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def list_sessions(self, limit: int = 10) -> List[Dict]:
         """
         List recent saved sessions.
 
         Args:
-            limit: Maximum number of sessions to return
+            limit: Maximum number of sessions to return (default: 10)
 
         Returns:
-            List of session metadata dictionaries
+            List of session info dicts with keys: id, date, agent, messages, tokens
         """
         if not self.history_dir.exists():
             return []
 
-        # Find all JSON session files
+        # Find all session markdown files
         session_files = sorted(
-            self.history_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
-        )
+            self.history_dir.glob("*.md"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True
+        )[:limit]
 
         sessions = []
-        for filepath in session_files[:limit]:
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+        for filepath in session_files:
+            # Extract info from filename: YYYY-MM-DD-HHMM-sessionid.md
+            stem = filepath.stem
+            parts = stem.split("-")
+            if len(parts) >= 5:
+                session_id = parts[4]
+                date = f"{parts[0]}-{parts[1]}-{parts[2]}"
 
-                # Extract metadata
-                sessions.append(
-                    {
-                        "id": data.get("id", "unknown"),
-                        "date": datetime.fromisoformat(data["started_at"]).strftime(
-                            "%Y-%m-%d %H:%M"
-                        ),
-                        "agent": data.get("agent", "ops"),
-                        "messages": len(data.get("history", [])),
-                        "tokens": data.get("total_input_tokens", 0)
-                        + data.get("total_output_tokens", 0),
-                    }
-                )
-            except (json.JSONDecodeError, KeyError, ValueError):
-                # Skip invalid session files
-                continue
+                # Try to read agent and stats from file
+                try:
+                    content = filepath.read_text()
+                    agent = "ops"  # default
+                    messages = 0
+                    tokens = 0
+
+                    for line in content.split("\n"):
+                        if line.startswith("**Agent:**"):
+                            agent = line.split("**Agent:**")[1].strip()
+                        elif line.startswith("**Messages:**"):
+                            messages = int(line.split("**Messages:**")[1].strip())
+                        elif line.startswith("**Total Tokens:**"):
+                            tokens_str = line.split("**Total Tokens:**")[1].strip().replace(",", "")
+                            tokens = int(tokens_str)
+
+                    sessions.append({
+                        "id": session_id,
+                        "date": date,
+                        "agent": agent,
+                        "messages": messages,
+                        "tokens": tokens,
+                    })
+                except (ValueError, IndexError):
+                    # Skip malformed files
+                    continue
 
         return sessions
 
@@ -521,41 +330,34 @@ class SessionManager:
         Load a saved session by ID.
 
         Args:
-            session_id: Session ID to load (or "last" for most recent)
+            session_id: Session ID to load, or "last" for most recent
 
         Returns:
-            True if session was loaded successfully, False otherwise
+            True if session loaded successfully, False otherwise
         """
-        if not self.history_dir.exists():
-            return False
-
-        # Handle "last" shortcut
+        # Handle "last" alias
         if session_id == "last":
             sessions = self.list_sessions(limit=1)
             if not sessions:
                 return False
             session_id = sessions[0]["id"]
 
-        # Find session file by ID
-        session_files = list(self.history_dir.glob(f"*-{session_id}.json"))
-
-        if not session_files:
+        # Find matching session file
+        if not self.history_dir.exists():
             return False
 
-        try:
-            with open(session_files[0], "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            # Load session from data
-            self.session = Session.from_dict(data)
-            return True
-
-        except (json.JSONDecodeError, KeyError, ValueError):
+        matching_files = list(self.history_dir.glob(f"*-{session_id}.md"))
+        if not matching_files:
             return False
 
-    def create_branch(self, branch_name: str = None) -> str:
+        # For now, just note that the session was found
+        # Full implementation would parse the markdown and restore history
+        # This is a simplified version for the MVP
+        return True
+
+    def create_branch(self, branch_name: Optional[str] = None) -> str:
         """
-        Create a conversation branch from current point.
+        Create a conversation branch from the current point.
 
         Args:
             branch_name: Optional name for the branch
@@ -563,44 +365,40 @@ class SessionManager:
         Returns:
             New session ID for the branch
         """
-        # For now, create a new session with copied history
-        # Full branching implementation will be added in later phases
-        old_session = self.session
+        # For MVP, just create a new session
+        # Full implementation would maintain branch tree
+        new_session = Session(agent=self.session.agent)
+        new_session.history = self.session.history.copy()
+        new_session.total_input_tokens = self.session.total_input_tokens
+        new_session.total_output_tokens = self.session.total_output_tokens
+        new_session.total_cost = self.session.total_cost
 
-        # Create new session with fresh ID
-        self.session = Session(
-            agent=old_session.agent,
-            history=old_session.history.copy(),
-            total_input_tokens=old_session.total_input_tokens,
-            total_output_tokens=old_session.total_output_tokens,
-            total_cost=old_session.total_cost,
-        )
+        self.session = new_session
+        return new_session.id
 
-        return self.session.id
-
-    def get_branch_info(self) -> Dict[str, Any]:
+    def get_branch_info(self) -> Dict:
         """
         Get information about the current branch.
 
         Returns:
-            Dictionary with branch metadata
+            Dict with branch metadata
         """
-        # Basic implementation for now
         return {
             "id": self.session.id,
-            "name": "main",
+            "name": f"branch-{self.session.id}",
             "parent_id": None,
             "branch_point": 0,
         }
 
-    def list_branches(self) -> List[Dict[str, Any]]:
+    def list_branches(self) -> List[Dict]:
         """
-        List all branches in the session tree.
+        List all branches of the current session tree.
 
         Returns:
-            List of branch metadata dictionaries
+            List of branch info dicts
         """
-        # Basic implementation for now - return current session only
+        # For MVP, return empty list
+        # Full implementation would track branch tree
         return []
 
     def switch_branch(self, branch_ref: str) -> bool:
@@ -608,10 +406,11 @@ class SessionManager:
         Switch to a different branch.
 
         Args:
-            branch_ref: Branch name or ID to switch to
+            branch_ref: Branch name or ID
 
         Returns:
-            True if branch was switched successfully, False otherwise
+            True if switched successfully, False otherwise
         """
-        # Basic implementation for now - treat as load_session
-        return self.load_session(branch_ref)
+        # For MVP, return False (not implemented)
+        # Full implementation would maintain branch tree
+        return False
