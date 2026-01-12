@@ -392,14 +392,14 @@ class MemoryHandler(BaseHandler):
                     if result and result.success:
                         print("    ✓ Neo4j connected")
                 except Exception:
-                    print("    ⚠ Neo4j connection issue")
+                    print(f"    {Colors.YELLOW}⚠ Neo4j connection issue{Colors.RESET}")
         else:
             if MEMOS_AVAILABLE:
-                print("    ⚠ MemOS available but not initialized")
-                print("    💡 MemOS will initialize on first /remember or /recall")
+                print(f"    {Colors.YELLOW}⚠ MemOS available but not initialized{Colors.RESET}")
+                print(f"    {Colors.YELLOW}💡 MemOS will initialize on first /remember or /recall{Colors.RESET}")
             else:
                 print("    ✗ MemOS not available")
-                print("    💡 Install neo4j and chromadb packages")
+                print(f"    {Colors.YELLOW}💡 Install neo4j and chromadb packages{Colors.RESET}")
 
         print()
 

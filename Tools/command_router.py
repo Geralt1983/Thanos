@@ -457,7 +457,7 @@ class CommandRouter:
   /r = /resume, /m = /model, /h = /help, /q = /quit
   /cal = /calendar
 
-{Colors.DIM}Tip: Use \""" for multi-line input{Colors.RESET}
+{Colors.YELLOW}Tip: Use \""" for multi-line input{Colors.RESET}
 """)
         return CommandResult()
 
@@ -780,14 +780,14 @@ class CommandRouter:
                     if result and result.success:
                         print("    ✓ Neo4j connected")
                 except Exception:
-                    print("    ⚠ Neo4j connection issue")
+                    print(f"    {Colors.YELLOW}⚠ Neo4j connection issue{Colors.RESET}")
         else:
             if MEMOS_AVAILABLE:
-                print("    ⚠ MemOS available but not initialized")
-                print("    💡 MemOS will initialize on first /remember or /recall")
+                print(f"    {Colors.YELLOW}⚠ MemOS available but not initialized{Colors.RESET}")
+                print(f"    {Colors.YELLOW}💡 MemOS will initialize on first /remember or /recall{Colors.RESET}")
             else:
                 print("    ✗ MemOS not available")
-                print("    💡 Install neo4j and chromadb packages")
+                print(f"    {Colors.YELLOW}💡 Install neo4j and chromadb packages{Colors.RESET}")
 
         print()
 
@@ -1142,8 +1142,8 @@ class CommandRouter:
 
             # This is a placeholder - the actual scheduling logic should be in the agent
             # For now, just inform the user to use natural language with the agent
-            print(f"\n{Colors.DIM}Tip: For intelligent scheduling, ask the agent in natural language:{Colors.RESET}")
-            print(f'{Colors.DIM}Example: "Schedule this task for tomorrow morning"{Colors.RESET}\n')
+            print(f"\n{Colors.YELLOW}Tip: For intelligent scheduling, ask the agent in natural language:{Colors.RESET}")
+            print(f'{Colors.YELLOW}Example: "Schedule this task for tomorrow morning"{Colors.RESET}\n')
 
             return CommandResult()
 
