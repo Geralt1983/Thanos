@@ -37,6 +37,10 @@ class TestBriefingScheduler(unittest.TestCase):
         self.templates_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
+        # Create History/DailyBriefings directory for file delivery tests
+        self.history_dir = Path(self.temp_dir) / "History" / "DailyBriefings"
+        self.history_dir.mkdir(parents=True, exist_ok=True)
+
         # Create minimal valid config
         self.config_path = self.config_dir / "briefing_schedule.json"
         self.default_config = {
@@ -79,7 +83,7 @@ class TestBriefingScheduler(unittest.TestCase):
                 "cli": {"enabled": True, "color": True},
                 "file": {
                     "enabled": True,
-                    "output_dir": str(self.temp_dir / "History" / "DailyBriefings"),
+                    "output_dir": str(Path(self.temp_dir) / "History" / "DailyBriefings"),
                     "filename_pattern": "{date}_{type}_briefing.md"
                 }
             },

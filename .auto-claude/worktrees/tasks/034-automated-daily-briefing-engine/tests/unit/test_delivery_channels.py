@@ -41,8 +41,10 @@ class TestCLIChannel(unittest.TestCase):
 
     def test_initialization(self):
         """Test CLIChannel initialization."""
-        self.assertIsInstance(self.channel, CLIChannel)
-        self.assertTrue(self.channel.use_color)
+        with patch('sys.stdout.isatty', return_value=True):
+            channel = CLIChannel(config={'color': True})
+            self.assertIsInstance(channel, CLIChannel)
+            self.assertTrue(channel.use_color)
 
     def test_initialization_no_color(self):
         """Test CLIChannel initialization with color disabled."""
@@ -51,8 +53,9 @@ class TestCLIChannel(unittest.TestCase):
 
     def test_initialization_default_config(self):
         """Test CLIChannel initialization with default config."""
-        channel = CLIChannel()
-        self.assertTrue(channel.use_color)
+        with patch('sys.stdout.isatty', return_value=True):
+            channel = CLIChannel()
+            self.assertTrue(channel.use_color)
 
     @patch('sys.stdout', new_callable=StringIO)
     def test_deliver_with_color(self, mock_stdout):
@@ -526,9 +529,10 @@ class TestFactoryFunction(unittest.TestCase):
 
     def test_create_cli_channel(self):
         """Test creating CLI channel."""
-        channel = create_delivery_channel('cli', {'color': True})
-        self.assertIsInstance(channel, CLIChannel)
-        self.assertTrue(channel.use_color)
+        with patch('sys.stdout.isatty', return_value=True):
+            channel = create_delivery_channel('cli', {'color': True})
+            self.assertIsInstance(channel, CLIChannel)
+            self.assertTrue(channel.use_color)
 
     def test_create_file_channel(self):
         """Test creating File channel."""
