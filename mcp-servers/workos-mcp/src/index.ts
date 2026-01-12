@@ -8,6 +8,7 @@ import {
 
 // Shared utilities
 import { getDb } from "./shared/db.js";
+import { getRateLimiter } from "./shared/rate-limiter.js";
 
 // Cache imports
 import {
@@ -50,6 +51,14 @@ async function ensureCache(): Promise<boolean> {
 }
 
 // =============================================================================
+// RATE LIMITING
+// =============================================================================
+// Initialize rate limiter singleton
+// Configuration is loaded from RATE_LIMIT_CONFIG in validation-constants.ts
+// which respects environment variables (RATE_LIMIT_ENABLED, etc.)
+const rateLimiter = getRateLimiter();
+
+// =============================================================================
 // MCP SERVER SETUP
 // =============================================================================
 const server = new Server(
@@ -84,6 +93,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // =============================================================================
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
+
+  // ===== RATE LIMITING CHECK =====
+  // Check if request is allowed under current rate limits
+  const rateLimitResult = rateLimiter.checkRateLimit(name);
+
+  if (!rateLimitResult.allowed) {
+    // Log rate limit violation for monitoring
+    console.error(
+      `[Rate Limit] Blocked ${name}: ${rateLimitResult.limitType} limit exceeded ` +
+      `(${rateLimitResult.current}/${rateLimitResult.limit}), ` +
+      `retry after ${rateLimitResult.retryAfterSeconds}s`
+    );
+
+    // Return error response with user-friendly message
+    return {
+      content: [
+        {
+          type: "text",
+          text: rateLimitResult.message || "Rate limit exceeded. Please try again later.",
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  // Record the request for sliding window tracking
+  rateLimiter.recordRequest(name);
+
+  // ===== EXISTING ROUTING =====
   const db = getDb();
 
   try {
