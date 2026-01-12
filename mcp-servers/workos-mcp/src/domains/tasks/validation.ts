@@ -40,8 +40,8 @@ import {
  */
 export const GetTasksSchema = z.object({
   status: taskStatusSchema.optional(),
-  clientId: clientIdSchema,
-  limit: queryLimitSchema,
+  clientId: clientIdSchema.optional(),
+  limit: queryLimitSchema.optional(),
 });
 
 /**
@@ -58,8 +58,8 @@ export const GetTasksSchema = z.object({
  */
 export const CreateTaskSchema = z.object({
   title: taskTitleSchema,
-  description: taskDescriptionSchema,
-  clientId: clientIdSchema,
+  description: taskDescriptionSchema.optional(),
+  clientId: clientIdSchema.optional(),
   status: taskStatusSchema
     .refine((val) => val !== "done", {
       message: "Cannot create a task with status 'done'",
@@ -86,8 +86,8 @@ export const CreateTaskSchema = z.object({
 export const UpdateTaskSchema = z.object({
   taskId: taskIdSchema,
   title: taskTitleSchema.optional(),
-  description: taskDescriptionSchema,
-  clientId: clientIdSchema,
+  description: taskDescriptionSchema.optional(),
+  clientId: clientIdSchema.optional(),
   status: taskStatusSchema.optional(),
   valueTier: valueTierSchema.optional(),
   drainType: drainTypeSchema.optional(),
