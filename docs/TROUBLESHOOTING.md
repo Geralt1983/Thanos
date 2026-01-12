@@ -89,6 +89,56 @@ The LiteLLM client implements a **fallback chain mechanism** that automatically 
 
 **Important**: There is NO exponential backoff or waiting between attempts. The system immediately tries the next model.
 
+### Fallback Chain vs. Retry Logic
+
+**Critical Distinction**: The fallback chain is **NOT retry logic** - these are separate mechanisms with different purposes.
+
+| Feature | Fallback Chain | Retry Logic |
+|---------|---------------|-------------|
+| **What it does** | Tries different models | Retries same model |
+| **When triggered** | On any API error | On transient failures only |
+| **Delay between attempts** | None (immediate) | Exponential backoff |
+| **Purpose** | Alternative models/providers | Handle temporary issues |
+| **Location** | LiteLLM Client | External RetryMiddleware |
+| **User Action** | Configure in `config/api.json` | Configured separately |
+
+**How They Work Together**:
+
+```
+User Request
+    │
+    ▼
+┌─────────────────────┐
+│  Fallback Chain     │  ← Tries different MODELS
+│  (Client-level)     │     (immediate, no delay)
+└──────────┬──────────┘
+           │
+           ▼
+     ┌─────────┐
+     │ Model 1 │ → Fail → Try Model 2 → Fail → Try Model 3 → Success
+     └─────────┘
+           │
+           ▼
+   ┌─────────────────┐
+   │ Retry Logic     │  ← Retries SAME model
+   │ (Middleware)    │     (with backoff delay)
+   └─────────────────┘
+```
+
+**Example Scenario**:
+```
+1. Request sent to claude-opus-4-5-20251101
+2. Retry Middleware: Tries same model 3 times with backoff
+3. All retries fail → RateLimitError raised
+4. Fallback Chain: Immediately tries claude-sonnet-4-20250514
+5. Success → Response returned to user
+```
+
+**Key Takeaway**:
+- **Fallback** = Model-level (try different models)
+- **Retry** = Request-level (retry same request)
+- Both work together for maximum reliability
+
 ## API Error Types
 
 ### RateLimitError
@@ -362,6 +412,135 @@ echo "OpenAI: $(test_openai)"
 - `ANTHROPIC_API_KEY`: Anthropic API key
 - `OPENAI_API_KEY`: OpenAI API key
 - `LITELLM_LOG_LEVEL`: Set to `DEBUG` for detailed logging
+
+## Fallback Chain Behavior Details
+
+### Silent Failures and Logging
+
+**Important**: Individual model failures in the fallback chain are **silent by default**.
+
+**What This Means**:
+- When a model fails, the system immediately tries the next model
+- No log entry is created for intermediate failures
+- Only the final result (success or exhaustion) is visible
+- You cannot see which models were tried or why they failed
+
+**Automatic Behavior**:
+- ✅ Seamless user experience
+- ✅ No interruption on transient failures
+- ❌ No visibility into failure patterns
+- ❌ Hard to debug recurring issues
+
+**User Action for Debugging**:
+
+Enable verbose logging to see fallback chain progression:
+
+```bash
+# Set environment variable for detailed logging
+export LITELLM_LOG_LEVEL=DEBUG
+
+# Run your application
+# You'll see detailed logs for each fallback attempt
+```
+
+**Example Debug Output**:
+```
+[DEBUG] Attempting model: claude-opus-4-5-20251101
+[DEBUG] APIError: Rate limit exceeded
+[DEBUG] Attempting fallback model: claude-sonnet-4-20250514
+[DEBUG] Success with fallback model
+```
+
+**When to Enable Debug Logging**:
+- Diagnosing rate limit patterns
+- Understanding which models are failing
+- Monitoring fallback chain effectiveness
+- Troubleshooting persistent API issues
+
+### Cache Behavior with Fallbacks
+
+**Important**: Cache keys include the **originally requested model**, not the fallback model that actually processed the request.
+
+**How Cache Works**:
+1. Cache key calculated from: `(prompt, selected_model, parameters)`
+2. Request for Model A fails → fallback to Model B succeeds
+3. Response cached against Model A (not Model B)
+4. Next identical request → cache lookup for Model A
+5. Cache hit returns previous response
+
+**Implications**:
+
+❌ **Cache Miss After Fallback**:
+```
+Request 1: Model A → fails → Model B succeeds → cached as "Model A"
+Request 2: Model A → cache miss (was cached as "Model A" but actually from Model B)
+          → Model A tries again → may succeed or fallback
+```
+
+✅ **Cache Hit (Same Model)**:
+```
+Request 1: Model A → succeeds → cached as "Model A"
+Request 2: Model A → cache hit → returns cached response
+```
+
+**Why This Matters**:
+- Cache efficiency may be lower than expected after fallbacks
+- Subsequent requests may retry failed models instead of using cache
+- Cache doesn't "remember" which fallback model succeeded
+
+**User Action**: None required - this is expected behavior. Be aware that fallback responses don't improve cache hit rates for the original model.
+
+### Usage Tracking with Fallbacks
+
+**Important**: Usage tracking records the **requested model**, not the fallback model that actually processed the request.
+
+**How Tracking Works**:
+```python
+# User requests: claude-opus-4-5-20251101
+# Actual model used: claude-sonnet-4-20250514 (after fallback)
+# Tracked as: claude-opus-4-5-20251101 ← INCORRECT
+```
+
+**Implications**:
+
+❌ **Inaccurate Cost Calculation**:
+- Cost calculated for requested model, not actual model
+- If fallback model has different pricing → cost tracking is wrong
+- Budget monitoring may be inaccurate
+
+❌ **No Fallback Visibility**:
+- Usage stats don't show which model actually processed requests
+- Can't identify fallback patterns from usage data
+- Monitoring doesn't reflect actual provider usage
+
+❌ **Token Attribution**:
+- Tokens attributed to requested model
+- Actual model's token usage not recorded
+- Provider-specific statistics are incorrect
+
+**User Action for Accurate Tracking**:
+
+Currently, there's no built-in way to track actual fallback model usage. If accurate tracking is critical:
+
+1. **Monitor Provider Dashboards**:
+   ```bash
+   # Check actual usage at provider level
+   # - Anthropic: https://console.anthropic.com
+   # - OpenAI: https://platform.openai.com/usage
+   ```
+
+2. **Enable Debug Logging** (see above) and parse logs for fallback patterns
+
+3. **Consider Custom Logging** in production:
+   - Log which model actually responds
+   - Track fallback occurrences separately
+   - Correlate with provider billing
+
+**When This Matters**:
+- Strict budget tracking required
+- Billing reconciliation with providers
+- Monitoring fallback frequency
+- Understanding actual model usage patterns
 
 ---
 
