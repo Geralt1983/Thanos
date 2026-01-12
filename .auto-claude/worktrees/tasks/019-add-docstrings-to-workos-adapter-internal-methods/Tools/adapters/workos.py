@@ -251,7 +251,49 @@ class WorkOSAdapter(BaseAdapter):
             return ToolResult.ok([self._row_to_dict(r) for r in rows])
 
     async def _get_today_metrics(self, pool: asyncpg.Pool) -> ToolResult:
-        """Get today's work progress metrics."""
+        """
+        Calculate and retrieve today's work progress metrics and goals.
+
+        Aggregates data from completed tasks, active/queued task counts, and streak
+        information to provide a comprehensive view of daily progress. Uses EST timezone
+        for determining "today" boundaries.
+
+        Args:
+            pool: asyncpg connection pool for database access.
+
+        Returns:
+            ToolResult containing a dictionary with the following fields:
+                completed_count (int): Number of tasks completed today.
+                earned_points (int): Total points earned from completed tasks today.
+                target_points (int): Daily target goal (18 points).
+                minimum_points (int): Daily minimum goal (12 points).
+                progress_percentage (int): Percentage of target achieved (0-100, capped).
+                streak (int): Current streak from daily_goals table (0 if no data).
+                active_count (int): Count of tasks with 'active' status.
+                queued_count (int): Count of tasks with 'queued' status.
+                goal_met (bool): True if earned_points >= minimum_points.
+                target_met (bool): True if earned_points >= target_points.
+
+        Timezone handling:
+            - "Today" is calculated in EST timezone (America/New_York).
+            - Queries use midnight EST converted to UTC for database comparison.
+
+        Points calculation hierarchy:
+            For each completed task, points are determined using the first non-null value:
+            1. points_final (manually set final points)
+            2. points_ai_guess (AI-estimated points)
+            3. effort_estimate (user-provided estimate)
+            4. Default value of 2 points
+
+        Streak retrieval:
+            - Retrieved from the daily_goals table (most recent entry).
+            - Returns 0 if no daily_goals records exist.
+
+        Progress calculation:
+            - Target: 18 points per day (optimal goal).
+            - Minimum: 12 points per day (acceptable threshold).
+            - Progress percentage: (earned_points / target_points) * 100, capped at 100%.
+        """
         async with pool.acquire() as conn:
             today_start = self._get_est_today_start()
 
