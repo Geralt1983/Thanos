@@ -55,6 +55,7 @@ python orchestrator.py agent/health "Your health question"
 ## Skills Access
 - Skills/Health/
 - History/DailyLogs/
+- History/HealthSummaries/ (health:summary output)
 - Memory/ (health-related queries)
 - State/Today.md (current energy)
 
@@ -87,7 +88,7 @@ python orchestrator.py agent/health "Your health question"
 **Decision factors:**
 1. What time do you need to wind down?
 2. How critical is the work?
-3. Sleep quality last night?
+3. Sleep quality last night? (Check with `health:summary` for Oura readiness)
 4. Last meal?
 
 ### Energy Crash Protocol
@@ -97,6 +98,7 @@ python orchestrator.py agent/health "Your health question"
 2. Eaten protein in last 3 hours?
 3. Water intake today?
 4. Current stress level?
+5. Check `health:summary` for sleep quality and readiness indicators
 
 **If Vyvanse crash (4-6 hours post-dose):**
 - Protein + complex carbs
@@ -159,6 +161,8 @@ If it's a Vyvanse crash (4-6 hours post-dose), you need:
 What's available to eat right now?"
 
 ## Oura Ring Integration
+
+> **Quick Start:** Run `python -m commands.health.summary` for an instant health dashboard with readiness, sleep, and stress metrics. Add `--trends` for 7-day patterns or `--llm-enhance` for AI-powered insights.
 
 ### Available Health Metrics
 

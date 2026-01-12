@@ -17,7 +17,7 @@ Model: gpt-4o-mini (simple task - cost effective)
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from zoneinfo import ZoneInfo
 
 # Add project root to path
@@ -156,7 +156,7 @@ def _analyze_weekly_trends(data: dict) -> dict:
     return trends
 
 
-def _calculate_trend_stats(scores: list[int], metric_name: str) -> dict:
+def _calculate_trend_stats(scores: List[int], metric_name: str) -> Dict[str, Any]:
     """
     Calculate statistical analysis for a metric's trend.
 
@@ -185,7 +185,7 @@ def _calculate_trend_stats(scores: list[int], metric_name: str) -> dict:
     }
 
 
-def _get_trend_direction(scores: list[int]) -> str:
+def _get_trend_direction(scores: List[int]) -> str:
     """
     Determine if a metric is improving, declining, or stable.
 
@@ -295,7 +295,7 @@ def _format_duration(seconds: int) -> str:
     return f"{minutes}m"
 
 
-def _analyze_sleep_quality(sleep: dict) -> list[str]:
+def _analyze_sleep_quality(sleep: Dict[str, Any]) -> List[str]:
     """
     Analyze sleep data and generate insights.
 
@@ -355,7 +355,7 @@ def _analyze_sleep_quality(sleep: dict) -> list[str]:
     return insights
 
 
-def _analyze_readiness(readiness: dict) -> list[str]:
+def _analyze_readiness(readiness: Dict[str, Any]) -> List[str]:
     """
     Analyze readiness data and generate insights.
 
@@ -423,7 +423,7 @@ def _analyze_readiness(readiness: dict) -> list[str]:
     return insights
 
 
-def _analyze_stress(stress: dict) -> list[str]:
+def _analyze_stress(stress: Dict[str, Any]) -> List[str]:
     """
     Analyze stress data and generate insights.
 
@@ -461,7 +461,7 @@ def _analyze_stress(stress: dict) -> list[str]:
     return insights
 
 
-def _generate_recommendations(data: dict) -> list[str]:
+def _generate_recommendations(data: Dict[str, Any]) -> List[str]:
     """
     Generate personalized recommendations based on health data.
 

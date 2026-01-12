@@ -10,6 +10,12 @@ python -m commands.health.summary
 
 # Generate enhanced summary with LLM insights
 python -m commands.health.summary --llm-enhance
+
+# Include 7-day trend analysis
+python -m commands.health.summary --trends
+
+# Combined: trends + LLM enhancement
+python -m commands.health.summary --trends --llm-enhance
 ```
 
 ## Available Commands
@@ -88,6 +94,26 @@ Adds personalized insights using GPT-4o-mini:
 - Correlation analysis between health factors
 - More detailed explanations
 
+### 7-Day Trends Analysis
+
+```bash
+python -m commands.health.summary --trends
+```
+
+Adds weekly trend visualization showing:
+- Average readiness and sleep scores over 7 days
+- Min/max ranges for each metric
+- Trend direction (improving/declining/stable)
+- Pattern detection (e.g., declining recovery, improving sleep)
+- Weekly insights and recommendations
+
+**Combined usage:**
+```bash
+python -m commands.health.summary --trends --llm-enhance
+```
+
+This combines trend analysis with personalized LLM insights for maximum context.
+
 ## Output Format
 
 ### Dashboard Structure
@@ -134,6 +160,33 @@ Adds personalized insights using GPT-4o-mini:
 ## 🎯 Recommendations
 1. 💪 Great recovery state - good day for challenging work or training
 ```
+
+### Trends Output (--trends flag)
+
+When using `--trends`, an additional section is appended:
+
+```markdown
+## 📊 7-Day Trends
+
+**Readiness** 📈
+- Average: 82.3 (🟡)
+- Range: 72 - 91
+- Trend: Improving
+
+**Sleep** ➡️
+- Average: 78.5 (🟡)
+- Range: 68 - 86
+- Trend: Stable
+
+**Patterns Detected:**
+- ✅ Positive trend: Both sleep and recovery improving
+- 📊 Metrics stable across the week
+```
+
+**Trend Direction Indicators:**
+- 📈 Improving: Second half of week shows >5% improvement
+- 📉 Declining: Second half of week shows >5% decline
+- ➡️ Stable: Variation less than 5%
 
 ### Status Indicators
 
@@ -294,18 +347,21 @@ python -m commands.health.summary
 # Before workout: Verify readiness
 python -m commands.health.summary | grep "Readiness"
 
-# Evening: Review day's metrics
-python -m commands.health.summary
+# Evening: Review day's metrics with trends
+python -m commands.health.summary --trends
 ```
 
 ### Weekly Review
 
 ```bash
-# Review health trends
+# Monday morning: Check weekly trends
+python -m commands.health.summary --trends --llm-enhance
+
+# Review health history files
 ls -lt History/HealthSummaries/ | head -7
 cat History/HealthSummaries/health_*.md
 
-# Compare readiness scores
+# Compare readiness scores across week
 grep "Readiness:" History/HealthSummaries/health_*.md
 ```
 
@@ -370,16 +426,35 @@ asyncio.run(check_health())
 ### Data Sources
 
 **OuraAdapter Methods:**
-- `get_today_health()`: Complete health snapshot (used by this command)
+- `get_today_health()`: Complete health snapshot (used for daily summary)
+- `get_daily_summary()`: Multi-day data retrieval (used for --trends)
 - `get_daily_readiness()`: Detailed readiness data
 - `get_daily_sleep()`: Detailed sleep analysis
 - `get_daily_stress()`: Stress and recovery metrics
-- `get_weekly_trends()`: 7-day trend data (future enhancement)
 
 ### Models Used
 
 - **LLM Enhancement:** GPT-4o-mini (cost-effective for simple analysis)
 - **Temperature:** 0.7 (balanced creativity and consistency)
+
+### Trends Calculation
+
+**Trend Direction Algorithm:**
+- Compares first half of week to second half
+- **Improving:** Second half average is >5% higher
+- **Declining:** Second half average is >5% lower
+- **Stable:** Variation is ≤5%
+
+**Pattern Detection:**
+- Identifies correlated trends (both sleep and readiness declining)
+- Detects specific issues (readiness declining while sleep stable)
+- Flags below-optimal averages (<70 for week)
+- Provides context-specific recommendations
+
+**Data Range:**
+- Fetches last 7 days (including today)
+- Calculates min, max, and average for each metric
+- Handles missing days gracefully
 
 ### File Locations
 
@@ -417,14 +492,15 @@ See `.auto-claude/specs/005-add-health-metrics-summary-command/manual-testing-gu
 
 ## Future Enhancements
 
-Potential additions (currently optional):
+Potential additions for future development:
 
-1. **Weekly Trends:** Show 7-day trend visualizations
-2. **Comparison Mode:** Compare to previous days/weeks
-3. **Goal Tracking:** Track progress toward health goals
-4. **Alerts:** Notify when metrics fall below thresholds
-5. **Export Formats:** JSON, CSV for data analysis
-6. **Charts:** ASCII or image-based visualizations
+1. **Comparison Mode:** Compare to previous days/weeks/months
+2. **Goal Tracking:** Track progress toward health goals
+3. **Alerts:** Notify when metrics fall below thresholds
+4. **Export Formats:** JSON, CSV for data analysis
+5. **Charts:** ASCII or image-based visualizations
+6. **Advanced Correlations:** Correlate health metrics with productivity, mood, etc.
+7. **Integration with Health Agent:** Automatic recommendations for daily planning
 
 ## Related Documentation
 
@@ -444,6 +520,7 @@ For issues or questions:
 
 ---
 
-**Version:** 1.0.0
-**Last Updated:** January 11, 2026
+**Version:** 1.1.0
+**Last Updated:** January 12, 2026
 **Status:** Production Ready ✅
+**New in v1.1.0:** 7-day trends analysis with `--trends` flag
