@@ -3,14 +3,14 @@
   "spec": "037-energy-aware-task-prioritization",
   "state": "building",
   "subtasks": {
-    "completed": 0,
-    "total": 0,
+    "completed": 4,
+    "total": 28,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Database Schema & Core Infrastructure",
-    "id": 1,
+    "current": "Energy-Aware Prioritization Service",
+    "id": 2,
     "total": 4
   },
   "workers": {
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 2,
+    "number": 6,
     "started_at": "2026-01-11T20:10:49.556404"
   },
-  "last_update": "2026-01-11T20:15:14.274287"
+  "last_update": "2026-01-11T20:23:06.581494"
 }
