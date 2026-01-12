@@ -25,6 +25,12 @@ try:
 except ImportError:
     HEALTH_TRACKER_AVAILABLE = False
 
+try:
+    import sqlite3
+    SQLITE3_AVAILABLE = True
+except ImportError:
+    SQLITE3_AVAILABLE = False
+
 
 class BriefingEngine:
     """
@@ -934,9 +940,38 @@ class BriefingEngine:
 
         # Morning-specific data
         if briefing_type == "morning":
+            # Get Oura readiness data for energy-aware features
+            oura_data = self.get_oura_readiness_today()
+            readiness_score = oura_data.get("readinessScore") if oura_data else None
+            sleep_score = oura_data.get("sleepScore") if oura_data else None
+
+            # Calculate energy level and daily goal adjustment
+            energy_level = self.map_readiness_to_energy_level(readiness_score)
+            goal_adjustment = self.calculate_daily_goal_adjustment(readiness_score)
+
+            # Format energy context for template
+            energy_context = {
+                "level": energy_level,
+                "readinessScore": readiness_score,
+                "sleepScore": sleep_score,
+                "hasData": readiness_score is not None,
+                "goalAdjustment": goal_adjustment,
+            }
+
+            # Generate suggested task approach based on energy level
+            if energy_level == "high":
+                task_approach = "🚀 High energy detected - perfect for deep work and complex tasks. This is your day for important milestones."
+            elif energy_level == "medium":
+                task_approach = "✅ Good energy - suitable for most tasks. Balance progress with sustainability."
+            else:  # low
+                task_approach = "🔋 Low energy - focus on lighter tasks and quick wins. Protect your streak without overextending."
+
+            energy_context["taskApproach"] = task_approach
+
             template_data.update({
                 "focus_areas": context.get("current_focus", {}).get("focus_areas", []),
                 "quick_wins": self._identify_quick_wins(context),
+                "energy_context": energy_context,
             })
 
         # Evening-specific data
@@ -1150,3 +1185,355 @@ class BriefingEngine:
         except Exception as e:
             print(f"Warning: Error getting health trend: {e}")
             return None
+
+    # =============================================================================
+    # ENERGY-AWARE COACH EXPLANATION HELPERS
+    # =============================================================================
+
+    def format_energy_context_for_coach(
+        self,
+        energy_level: str,
+        readiness_score: Optional[int] = None,
+        sleep_score: Optional[int] = None,
+        source: str = "default"
+    ) -> Dict[str, Any]:
+        """
+        Format energy context data for Coach explanations.
+
+        Args:
+            energy_level: Current energy level (high, medium, low)
+            readiness_score: Oura readiness score (0-100) if available
+            sleep_score: Oura sleep score (0-100) if available
+            source: Source of energy data (oura, manual, default)
+
+        Returns:
+            Dictionary with formatted energy context for Coach templates
+        """
+        return {
+            "energy_level": energy_level,
+            "readiness_score": readiness_score,
+            "sleep_score": sleep_score,
+            "source": source,
+            "readiness_display": f"{readiness_score}" if readiness_score else "N/A",
+            "sleep_display": f"{sleep_score}" if sleep_score else "N/A",
+            "energy_emoji": {
+                "high": "🚀",
+                "medium": "✅",
+                "low": "🔋"
+            }.get(energy_level, "ℹ️"),
+            "is_high_energy": energy_level == "high",
+            "is_medium_energy": energy_level == "medium",
+            "is_low_energy": energy_level == "low"
+        }
+
+    def explain_task_suggestion(
+        self,
+        task_title: str,
+        cognitive_load: str,
+        value_tier: Optional[str],
+        energy_level: str,
+        readiness_score: Optional[int],
+        match_reason: str
+    ) -> str:
+        """
+        Generate Coach-style explanation for why a task was suggested.
+
+        Args:
+            task_title: Name of the suggested task
+            cognitive_load: Task's cognitive load (low, medium, high)
+            value_tier: Task's value tier (checkbox, progress, milestone, deliverable)
+            energy_level: Current energy level (high, medium, low)
+            readiness_score: Oura readiness score if available
+            match_reason: Technical match reason from energy-prioritization service
+
+        Returns:
+            Human-readable Coach explanation string
+        """
+        readiness_display = f"readiness: {readiness_score}" if readiness_score else "estimated energy"
+
+        if energy_level == "high":
+            if cognitive_load == "high":
+                return f"I'm suggesting '{task_title}' because you're at peak energy today ({readiness_display}). This is perfect for complex work like this."
+            elif value_tier in ["milestone", "deliverable"]:
+                return f"Your readiness of {readiness_score} means you can tackle that {value_tier} task '{task_title}' you've been putting off."
+            else:
+                return f"High energy day - let's knock out '{task_title}'. These are the days to make real progress."
+
+        elif energy_level == "medium":
+            if cognitive_load == "medium":
+                return f"At {readiness_score} readiness, you're in a good place for '{task_title}'. Not your peak, but definitely capable."
+            elif value_tier == "progress":
+                return f"Your energy is solid today ({readiness_display}). '{task_title}' is a progress task that moves things forward without overwhelming you."
+            else:
+                return f"Medium energy - perfect for steady progress. '{task_title}' builds momentum without burning you out."
+
+        else:  # low energy
+            if cognitive_load == "low":
+                return f"Your readiness is {readiness_score} today. '{task_title}' is a low-cognitive task that keeps momentum without pushing too hard."
+            elif value_tier == "checkbox":
+                return f"At {readiness_score} readiness, be gentle with yourself. '{task_title}' is a quick win that builds momentum without draining you further."
+            else:
+                return f"Low energy doesn't mean no progress. '{task_title}' lets you stay productive while respecting your state."
+
+    def explain_goal_adjustment(
+        self,
+        original_target: int,
+        adjusted_target: int,
+        adjustment_percentage: float,
+        readiness_score: Optional[int],
+        sleep_score: Optional[int],
+        energy_level: str
+    ) -> str:
+        """
+        Generate Coach-style explanation for daily goal adjustment.
+
+        Args:
+            original_target: Original target points
+            adjusted_target: Adjusted target points
+            adjustment_percentage: Percentage adjustment (e.g., 15, 0, -25)
+            readiness_score: Oura readiness score if available
+            sleep_score: Oura sleep score if available
+            energy_level: Current energy level (high, medium, low)
+
+        Returns:
+            Human-readable Coach explanation string
+        """
+        readiness_display = f"{readiness_score}" if readiness_score else "N/A"
+        sleep_display = f"{sleep_score}" if sleep_score else "N/A"
+
+        if adjustment_percentage > 0:
+            # Target increased (high energy)
+            if sleep_score:
+                return f"I increased your target from {original_target} to {adjusted_target} points (+{int(adjustment_percentage)}%) because your readiness is {readiness_display} and sleep is {sleep_display}. You've got the capacity for more today."
+            else:
+                return f"Your body says you're ready - readiness at {readiness_display}. I'm confident you can handle the higher target of {adjusted_target} points."
+
+        elif adjustment_percentage == 0:
+            # Target maintained (medium energy)
+            return f"Your readiness is {readiness_display} - right in the normal range. Keeping your target at {original_target} points."
+
+        else:
+            # Target reduced (low energy)
+            if sleep_score:
+                return f"I dropped your target from {original_target} to {adjusted_target} points ({int(adjustment_percentage)}%) because your readiness is {readiness_display} and sleep is {sleep_display}. This protects your streak while respecting your state."
+            else:
+                return f"At {readiness_display} readiness, pushing for {original_target} points would hurt more than help. {adjusted_target} points lets you maintain progress and protect your streak."
+
+    def detect_energy_task_mismatch(
+        self,
+        task_title: str,
+        cognitive_load: str,
+        energy_level: str,
+        readiness_score: Optional[int]
+    ) -> Optional[str]:
+        """
+        Detect potential energy-task mismatches and generate warnings.
+
+        Args:
+            task_title: Name of the task being attempted
+            cognitive_load: Task's cognitive load (low, medium, high)
+            energy_level: Current energy level (high, medium, low)
+            readiness_score: Oura readiness score if available
+
+        Returns:
+            Warning message if mismatch detected, None otherwise
+        """
+        readiness_display = f"{readiness_score}" if readiness_score else "low"
+
+        # High cognitive load on low energy
+        if cognitive_load == "high" and energy_level == "low":
+            return f"⚠️ I notice you're looking at '{task_title}' which requires deep focus, but your readiness is {readiness_display}. Consider tackling this when you're fresher, or break it into smaller chunks."
+
+        # Low cognitive load on high energy (possible avoidance)
+        if cognitive_load == "low" and energy_level == "high":
+            return f"You're choosing '{task_title}' even with high readiness ({readiness_display}). Any reason you're not tackling bigger stuff? Avoidance or strategy?"
+
+        # Medium/high cognitive on low energy
+        if cognitive_load == "medium" and energy_level == "low" and readiness_score and readiness_score < 60:
+            return f"'{task_title}' is medium complexity and you're at {readiness_display} readiness. Doable, but it'll cost more energy than it's worth. Want to see lighter options?"
+
+        return None
+
+    def generate_energy_pattern_insights(
+        self,
+        recent_readiness_scores: List[int],
+        recent_energy_levels: List[str],
+        days_count: int = 7
+    ) -> List[str]:
+        """
+        Generate Coach-style insights about energy patterns.
+
+        Args:
+            recent_readiness_scores: List of readiness scores from recent days
+            recent_energy_levels: List of energy levels from recent days
+            days_count: Number of days to analyze (default: 7)
+
+        Returns:
+            List of insight strings
+        """
+        insights = []
+
+        if not recent_readiness_scores:
+            return insights
+
+        # Calculate average
+        avg_readiness = sum(recent_readiness_scores) / len(recent_readiness_scores)
+
+        # Detect consistent low energy
+        low_energy_days = sum(1 for r in recent_readiness_scores if r < 70)
+        if low_energy_days >= 3:
+            scores_str = ", ".join(str(r) for r in recent_readiness_scores[:low_energy_days])
+            insights.append(
+                f"I'm seeing a pattern: readiness below 70 for {low_energy_days} days (scores: {scores_str}). "
+                "You're completing tasks but this isn't sustainable. What needs to change?"
+            )
+
+        # Detect declining trend
+        if len(recent_readiness_scores) >= 3:
+            first_half = recent_readiness_scores[:len(recent_readiness_scores)//2]
+            second_half = recent_readiness_scores[len(recent_readiness_scores)//2:]
+            if sum(second_half)/len(second_half) < sum(first_half)/len(first_half) - 10:
+                insights.append(
+                    f"Your readiness is declining: started at {first_half[0]}, now at {recent_readiness_scores[-1]}. "
+                    "What's blocking recovery?"
+                )
+
+        # Detect high variability
+        if len(recent_readiness_scores) >= 5:
+            variance = max(recent_readiness_scores) - min(recent_readiness_scores)
+            if variance > 30:
+                insights.append(
+                    f"Your energy is swinging wildly: {min(recent_readiness_scores)} to {max(recent_readiness_scores)} "
+                    "this week. That's a {variance}-point swing. What's causing the instability?"
+                )
+
+        return insights
+
+    def get_oura_readiness_today(self) -> Optional[Dict[str, Any]]:
+        """
+        Get today's Oura readiness and sleep scores from cache database.
+
+        Returns:
+            Dictionary with readinessScore and sleepScore, or None if unavailable
+        """
+        if not SQLITE3_AVAILABLE:
+            return None
+
+        # Oura cache database path (matches oura-mcp configuration)
+        oura_cache_dir = os.getenv("OURA_CACHE_DIR", os.path.join(Path.home(), ".oura-cache"))
+        oura_db_path = Path(oura_cache_dir) / "oura-health.db"
+
+        if not oura_db_path.exists():
+            return None
+
+        try:
+            # Connect read-only to avoid locking issues
+            conn = sqlite3.connect(f"file:{oura_db_path}?mode=ro", uri=True)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            today_str = self.today.isoformat()
+
+            # Get readiness score
+            cursor.execute(
+                "SELECT score FROM readiness WHERE day = ? ORDER BY timestamp DESC LIMIT 1",
+                (today_str,)
+            )
+            readiness_row = cursor.fetchone()
+            readiness_score = readiness_row["score"] if readiness_row else None
+
+            # Get sleep score
+            cursor.execute(
+                "SELECT score FROM sleep WHERE day = ? ORDER BY timestamp DESC LIMIT 1",
+                (today_str,)
+            )
+            sleep_row = cursor.fetchone()
+            sleep_score = sleep_row["score"] if sleep_row else None
+
+            conn.close()
+
+            if readiness_score is not None or sleep_score is not None:
+                return {
+                    "readinessScore": readiness_score,
+                    "sleepScore": sleep_score,
+                    "source": "oura"
+                }
+
+            return None
+
+        except Exception as e:
+            # Silently fail if database access fails
+            return None
+
+    def calculate_daily_goal_adjustment(
+        self,
+        readiness_score: Optional[int],
+        base_target: int = 18
+    ) -> Dict[str, Any]:
+        """
+        Calculate daily goal adjustment based on readiness score.
+
+        Follows energy-aware algorithm:
+        - Readiness >= 85: +15% target increase
+        - Readiness 70-84: 0% adjustment (normal target)
+        - Readiness < 70: -25% target reduction
+
+        Args:
+            readiness_score: Oura readiness score (0-100) or None
+            base_target: Base target points (default: 18)
+
+        Returns:
+            Dictionary with originalTarget, adjustedTarget, adjustmentPercentage, reason
+        """
+        if readiness_score is None:
+            # No adjustment if no readiness data
+            return {
+                "originalTarget": base_target,
+                "adjustedTarget": base_target,
+                "adjustmentPercentage": 0,
+                "reason": "No readiness data available - using standard target"
+            }
+
+        # Calculate adjustment based on readiness thresholds
+        if readiness_score >= 85:
+            # High readiness - increase target
+            adjustment_pct = 15
+            reason = f"High readiness ({readiness_score}) - you've got capacity for more today"
+        elif readiness_score >= 70:
+            # Normal readiness - maintain target
+            adjustment_pct = 0
+            reason = f"Normal readiness ({readiness_score}) - maintaining standard target"
+        else:
+            # Low readiness - reduce target
+            adjustment_pct = -25
+            reason = f"Low readiness ({readiness_score}) - protecting your streak while respecting your state"
+
+        # Calculate adjusted target
+        adjusted_target = int(base_target * (1 + adjustment_pct / 100))
+
+        return {
+            "originalTarget": base_target,
+            "adjustedTarget": adjusted_target,
+            "adjustmentPercentage": adjustment_pct,
+            "reason": reason
+        }
+
+    def map_readiness_to_energy_level(self, readiness_score: Optional[int]) -> str:
+        """
+        Map Oura readiness score to energy level.
+
+        Args:
+            readiness_score: Oura readiness score (0-100) or None
+
+        Returns:
+            Energy level string: "high", "medium", or "low"
+        """
+        if readiness_score is None:
+            return "medium"
+
+        if readiness_score >= 85:
+            return "high"
+        elif readiness_score >= 70:
+            return "medium"
+        else:
+            return "low"

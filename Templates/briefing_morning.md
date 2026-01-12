@@ -2,7 +2,31 @@
 
 Good morning! Here's your personalized briefing for today.
 
-{% if health_state %}
+{% if energy_context and energy_context.hasData %}
+---
+
+## ⚡ Energy & Readiness
+
+**Today's Readiness:** {{ energy_context.readinessScore }}{% if energy_context.sleepScore %} | **Sleep Score:** {{ energy_context.sleepScore }}{% endif %}
+
+**Energy Level:** {{ energy_context.level|upper }}
+
+### 🎯 Suggested Approach
+{{ energy_context.taskApproach }}
+
+### 📊 Daily Goal Adjustment
+{% if energy_context.goalAdjustment.adjustmentPercentage != 0 %}
+**Adjusted Target:** {{ energy_context.goalAdjustment.adjustedTarget }} points ({{ energy_context.goalAdjustment.adjustmentPercentage }}% adjustment from {{ energy_context.goalAdjustment.originalTarget }} points)
+
+**Reasoning:** {{ energy_context.goalAdjustment.reason }}
+{% else %}
+**Target:** {{ energy_context.goalAdjustment.originalTarget }} points (standard target)
+
+**Reasoning:** {{ energy_context.goalAdjustment.reason }}
+{% endif %}
+
+---
+{% elif health_state %}
 ---
 
 ## 🏥 Health State
@@ -14,9 +38,9 @@ Good morning! Here's your personalized briefing for today.
 - Average Sleep: {{ health_state.trend.avg_sleep|round(1) }} hours
 {% if health_state.trend.best_day %}- Your best day: {{ health_state.trend.best_day }} ({{ health_state.trend.best_energy }}/10)
 {% endif %}{% endif %}
-{% endif %}
 
 ---
+{% endif %}
 
 ## 🎯 Top 3 Priorities
 {% if top_priorities %}
