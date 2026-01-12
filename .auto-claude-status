@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "035-commitment-accountability-system",
+  "spec": "020-add-error-handling-and-troubleshooting-section-for",
   "state": "building",
   "subtasks": {
-    "completed": 18,
-    "total": 23,
+    "completed": 0,
+    "total": 18,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "User Interface & Commands",
-    "id": null,
-    "total": 4
+    "current": "",
+    "id": 0,
+    "total": 0
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 20,
-    "started_at": "2026-01-11T17:34:10.588702"
+    "number": 16,
+    "started_at": "2026-01-11T22:43:33.758507"
   },
-  "last_update": "2026-01-11T18:45:04.762886"
+  "last_update": "2026-01-11T23:35:42.312993"
 }
