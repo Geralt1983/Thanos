@@ -136,12 +136,15 @@ export function mapReadinessToEnergyLevel(readiness: number): EnergyLevel {
  * - Perfect cognitive load match: +100 points
  * - Adjacent cognitive load match: +50 points
  * - Mismatched cognitive load: 0 points
- * - High value tier bonus: +20 points (milestone/deliverable on high energy)
- * - Low drain type bonus: +10 points (admin tasks on low energy)
+ * - Value tier alignment: +20 points (milestone/deliverable on high, checkbox on low)
+ * - Drain type alignment: +10 points (deep on high, admin on low)
+ * - Effort consideration: +5-15 points (quick wins on low energy)
+ * - Status bonus: +5 points (active tasks to maintain momentum)
+ * - Category consideration: +5 points (personal tasks easier on low energy)
  *
  * @param task - Task to score
  * @param energyLevel - Current energy level
- * @returns Score (0-130) and explanation of match
+ * @returns Score (0-165) and explanation of match
  */
 export function calculateEnergyScore(
   task: Task,
@@ -173,6 +176,11 @@ export function calculateEnergyScore(
       score += 10;
       reasons.push("Bonus: Deep work suited for high energy");
     }
+    // Larger tasks are fine on high energy
+    if (task.effortEstimate && task.effortEstimate >= 5) {
+      score += 10;
+      reasons.push("Bonus: High energy allows tackling larger tasks");
+    }
   } else if (energyLevel === "medium") {
     if (cognitiveLoad === "medium") {
       score += 100;
@@ -190,6 +198,11 @@ export function calculateEnergyScore(
     if (task.drainType === "shallow") {
       score += 10;
       reasons.push("Bonus: Shallow work matches medium energy");
+    }
+    // Medium-sized tasks are good for medium energy
+    if (task.effortEstimate && task.effortEstimate >= 2 && task.effortEstimate <= 4) {
+      score += 5;
+      reasons.push("Bonus: Medium-sized tasks fit medium energy well");
     }
   } else {
     // Low energy
@@ -212,6 +225,22 @@ export function calculateEnergyScore(
       score += 10;
       reasons.push("Bonus: Admin work ideal when energy is low");
     }
+    // Quick wins on low energy (effort <= 2)
+    if (task.effortEstimate && task.effortEstimate <= 2) {
+      score += 15;
+      reasons.push("Bonus: Quick wins help build momentum on low energy");
+    }
+    // Personal tasks might be easier on low energy
+    if (task.category === "personal") {
+      score += 5;
+      reasons.push("Bonus: Personal tasks often easier when energy is low");
+    }
+  }
+
+  // Cross-energy bonuses: Encourage finishing what's started
+  if (task.status === "active") {
+    score += 5;
+    reasons.push("Bonus: Finish active tasks to maintain momentum");
   }
 
   return {
