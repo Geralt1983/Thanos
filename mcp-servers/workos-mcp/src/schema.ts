@@ -59,6 +59,10 @@ export const dailyGoals = pgTable("daily_goals", {
   dailyDebt: integer("daily_debt").default(0),
   weeklyDebt: integer("weekly_debt").default(0),
   pressureLevel: integer("pressure_level").default(0),
+  adjustedTargetPoints: integer("adjusted_target_points"), // Energy-adjusted target points
+  readinessScore: integer("readiness_score"), // Oura readiness score (0-100)
+  energyLevel: text("energy_level"), // Derived energy level: high, medium, low
+  adjustmentReason: text("adjustment_reason"), // Why target was adjusted
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 })
 
