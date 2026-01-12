@@ -2,7 +2,7 @@
   "feature": "Add token count and cost estimate to CLI prompt",
   "description": "Display running token usage and estimated cost in the CLI prompt or status bar so users can monitor their API spend during interactive sessions.",
   "created_at": "2026-01-11T00:03:27.291Z",
-  "updated_at": "2026-01-12T04:35:22.600Z",
+  "updated_at": "2026-01-12T04:44:56.056Z",
   "status": "in_progress",
   "planStatus": "in_progress",
   "phases": [
@@ -134,8 +134,8 @@
           "files": [
             "tests/unit/test_prompt_formatter.py"
           ],
-          "status": "pending",
-          "notes": ""
+          "status": "completed",
+          "notes": "Created comprehensive unit tests with 67 total tests (added 23 new edge case tests to the existing 44). Coverage includes: negative token counts, float values, type validation, string values in stats, extremely long durations, exact token count boundaries, multiple sequential format calls (statelessness), very small cost precision, unicode in default prompt, stats with extra/missing keys, partial stats, maximum integer values, exact cost threshold boundaries, mode case sensitivity, malformed and empty config files, and cost with many decimal places. All 67 tests passing."
         },
         {
           "subtask_id": "4.2",
@@ -144,8 +144,8 @@
           "files": [
             "tests/integration/test_interactive_prompt.py"
           ],
-          "status": "pending",
-          "notes": ""
+          "status": "completed",
+          "notes": "Created 16 comprehensive integration tests covering: prompt updates in all display modes (compact/standard/verbose), session stats progression (tokens/cost/duration), command integration (/prompt, /clear, /agent), configuration integration (enable/disable, custom thresholds), multi-message conversation flows, error handling and edge cases, color threshold progression. All tests passing (16/16). Tests verify prompt correctly reflects real-time session statistics using mock orchestrator and session manager."
         },
         {
           "subtask_id": "4.3",
