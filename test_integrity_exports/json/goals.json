@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2026-01-12",
+    "current_streak": 15,
+    "earned_points": 18.5,
+    "target_points": 18.0,
+    "goal_met": true
+  },
+  {
+    "date": "2026-01-12",
+    "current_streak": 0,
+    "earned_points": 0.0,
+    "target_points": 18.0,
+    "goal_met": false
+  }
+]

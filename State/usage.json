@@ -1,38 +1,98 @@
 {
   "sessions": [
     {
-      "timestamp": "2026-01-11T23:10:17.856918",
-      "model": "gpt-4o-mini",
-      "provider": "openai",
+      "timestamp": "2026-01-12T18:29:06.285440",
+      "model": "claude-3-5-haiku-20241022",
+      "provider": "anthropic",
       "input_tokens": 0,
       "output_tokens": 0,
       "total_tokens": 0,
       "cost_usd": 0.0,
       "latency_ms": 0.00095367431640625,
-      "operation": "chat_stream",
+      "operation": "command:pa:export",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-12T18:29:06.386303",
+      "model": "claude-3-5-haiku-20241022",
+      "provider": "anthropic",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0.0011920928955078125,
+      "operation": "command:pa:export",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-12T18:29:06.488174",
+      "model": "claude-3-5-haiku-20241022",
+      "provider": "anthropic",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "operation": "chat:Ops",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-12T18:30:33.595826",
+      "model": "claude-3-5-haiku-20241022",
+      "provider": "anthropic",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "operation": "chat:Ops",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-12T18:30:34.566252",
+      "model": "claude-3-5-haiku-20241022",
+      "provider": "anthropic",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "operation": "command:pa:export",
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-12T18:30:35.514155",
+      "model": "claude-3-5-haiku-20241022",
+      "provider": "anthropic",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "cost_usd": 0.0,
+      "latency_ms": 0.0,
+      "operation": "command:pa:export",
       "metadata": {}
     }
   ],
   "daily_totals": {
-    "2026-01-11": {
+    "2026-01-12": {
       "tokens": 0,
       "cost": 0.0,
-      "calls": 1
+      "calls": 6
     }
   },
   "model_breakdown": {
-    "gpt-4o-mini": {
+    "claude-3-5-haiku-20241022": {
       "tokens": 0,
       "cost": 0.0,
-      "calls": 1
+      "calls": 6
     }
   },
   "provider_breakdown": {
-    "openai": {
+    "anthropic": {
       "tokens": 0,
       "cost": 0.0,
-      "calls": 1
+      "calls": 6
     }
   },
-  "last_updated": "2026-01-11T23:10:17.856976"
+  "last_updated": "2026-01-12T18:30:35.514253"
 }

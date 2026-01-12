@@ -1,0 +1,5 @@
+created_at,current_streak,description,id,is_active,last_completed_date,last_completion,longest_streak,sort_order,title,updated_at
+2026-01-12T18:39:40.108620,42,"Multi
+line
+description",1,True,2026-01-12,2026-01-12T18:39:40.108620,100,1,"Habit, with ""commas"" and quotes",2026-01-12T18:39:40.108620
+2026-01-12T18:39:40.108620,0,,2,False,,,10,,Inactive habit with nulls,2026-01-12T18:39:40.108620

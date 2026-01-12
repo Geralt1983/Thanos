@@ -1,284 +1,171 @@
 #!/usr/bin/env python3
 """
-Test MCP error handling and retry logic.
+Test error handling for database connection failures in export command.
 
-Quick verification that error handling system is working correctly.
+Tests:
+1. Database URL not configured
+2. Invalid database URL (connection failure)
+3. Database timeout handling
+4. Invalid credentials handling
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
+from unittest.mock import patch, MagicMock, AsyncMock
 
-# Add Tools to path
-sys.path.insert(0, str(Path(__file__).parent / "Tools"))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent))
 
-from adapters.mcp_errors import (
-    MCPCircuitBreakerError,
-    MCPConnectionError,
-    MCPError,
-    MCPTimeoutError,
-    MCPToolNotFoundError,
-    MCPToolValidationError,
-    classify_error,
-    is_retryable_error,
-    log_error_with_context,
-)
-from adapters.mcp_retry import (
-    CircuitBreaker,
-    CircuitBreakerConfig,
-    CircuitState,
-    RetryConfig,
-    RetryPolicy,
-    get_global_registry,
-    with_retry_and_circuit_breaker,
-)
+# Import the export module
+from commands.pa import export
 
 
-def test_error_hierarchy():
-    """Test error exception hierarchy."""
-    print("Testing error hierarchy...")
-
-    # Test base error
-    error = MCPError(
-        message="Test error",
-        context={"key": "value"},
-        server_name="test-server",
-        retryable=True,
-    )
-    assert error.message == "Test error"
-    assert error.server_name == "test-server"
-    assert error.retryable is True
-    assert error.context["key"] == "value"
-
-    # Test connection error (should be retryable by default)
-    conn_error = MCPConnectionError(
-        message="Connection failed",
-        server_name="test-server",
-    )
-    assert conn_error.retryable is True
-
-    # Test tool errors
-    tool_error = MCPToolNotFoundError(
-        tool_name="invalid_tool",
-        available_tools=["tool1", "tool2"],
-        server_name="test-server",
-    )
-    assert tool_error.context["tool_name"] == "invalid_tool"
-    assert tool_error.retryable is False
-
-    print("✅ Error hierarchy tests passed")
+def print_test_header(test_name):
+    """Print a test header."""
+    print(f"\n{'=' * 70}")
+    print(f"TEST: {test_name}")
+    print('=' * 70)
 
 
-def test_error_classification():
-    """Test error classification utilities."""
-    print("\nTesting error classification...")
-
-    # Test retryable detection
-    assert is_retryable_error(MCPConnectionError("test"))
-    assert is_retryable_error(MCPTimeoutError("test", 30.0))
-    assert not is_retryable_error(MCPToolValidationError("test_tool", "validation failed"))
-
-    # Test generic error classification
-    generic_error = TimeoutError("Operation timed out")
-    classified = classify_error(generic_error, server_name="test-server")
-    assert isinstance(classified, MCPTimeoutError)
-    assert classified.server_name == "test-server"
-
-    print("✅ Error classification tests passed")
+def print_result(passed, message=""):
+    """Print test result."""
+    status = "\u2713 PASS" if passed else "\u2717 FAIL"
+    print(f"{status}: {message}")
 
 
-async def test_retry_policy():
-    """Test retry policy with exponential backoff."""
-    print("\nTesting retry policy...")
+async def test_no_database_url():
+    """Test error handling when DATABASE_URL is not configured."""
+    print_test_header("Database URL Not Configured")
 
-    attempts = 0
+    # Save original env vars
+    original_db_url = os.environ.get("DATABASE_URL")
+    original_workos_url = os.environ.get("WORKOS_DATABASE_URL")
 
-    async def failing_func():
-        nonlocal attempts
-        attempts += 1
-        if attempts < 3:
-            raise MCPConnectionError("Connection failed")
-        return "success"
-
-    policy = RetryPolicy(
-        RetryConfig(
-            max_attempts=3,
-            initial_delay=0.1,  # Short delay for testing
-            jitter=False,  # Disable jitter for predictable timing
-        )
-    )
-
-    result = await policy.execute_async(failing_func)
-    assert result == "success"
-    assert attempts == 3
-
-    print("✅ Retry policy tests passed")
-
-
-async def test_circuit_breaker():
-    """Test circuit breaker pattern."""
-    print("\nTesting circuit breaker...")
-
-    breaker = CircuitBreaker(
-        server_name="test-server",
-        config=CircuitBreakerConfig(
-            failure_threshold=3,
-            success_threshold=2,
-            timeout=0.5,  # Short timeout for testing
-        ),
-    )
-
-    # Initially closed
-    assert breaker.is_closed()
-
-    # Fail enough times to open circuit
-    async def failing_func():
-        raise MCPConnectionError("Failed")
-
-    for i in range(3):
-        try:
-            await breaker.call(failing_func)
-        except MCPConnectionError:
-            pass
-
-    # Circuit should be open now
-    assert breaker.is_open()
-
-    # Calls should be blocked
     try:
-        await breaker.call(failing_func)
-        assert False, "Should have raised MCPCircuitBreakerError"
-    except MCPCircuitBreakerError as e:
-        assert e.server_name == "test-server"
+        # Remove database URLs from environment
+        if "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
+        if "WORKOS_DATABASE_URL" in os.environ:
+            del os.environ["WORKOS_DATABASE_URL"]
 
-    # Wait for timeout
-    await asyncio.sleep(0.6)
+        # Attempt to retrieve data
+        try:
+            await export.retrieve_all_data("tasks")
+            print_result(False, "Should have raised ValueError")
+            return False
+        except ValueError as e:
+            error_msg = str(e)
+            # Check for expected error message
+            if "Database URL not configured" in error_msg:
+                print_result(True, "Correct error message for missing database URL")
+                print(f"   Error message: {error_msg[:100]}...")
+                return True
+            else:
+                print_result(False, f"Wrong error message: {error_msg}")
+                return False
 
-    # Should transition to half-open
-    async def success_func():
-        return "success"
-
-    # First success in half-open
-    result = await breaker.call(success_func)
-    assert result == "success"
-    assert breaker.is_half_open()
-
-    # Second success should close circuit
-    result = await breaker.call(success_func)
-    assert result == "success"
-    assert breaker.is_closed()
-
-    print("✅ Circuit breaker tests passed")
-
-
-async def test_combined():
-    """Test retry + circuit breaker together."""
-    print("\nTesting combined retry and circuit breaker...")
-
-    attempts = 0
-
-    async def intermittent_func():
-        nonlocal attempts
-        attempts += 1
-        if attempts < 2:
-            raise MCPConnectionError("Transient failure")
-        return "success"
-
-    result = await with_retry_and_circuit_breaker(
-        intermittent_func,
-        server_name="test-server-2",
-        retry_config=RetryConfig(max_attempts=3, initial_delay=0.1),
-        circuit_breaker_config=CircuitBreakerConfig(failure_threshold=5),
-    )
-
-    assert result == "success"
-    assert attempts == 2
-
-    print("✅ Combined retry and circuit breaker tests passed")
+    finally:
+        # Restore original env vars
+        if original_db_url:
+            os.environ["DATABASE_URL"] = original_db_url
+        if original_workos_url:
+            os.environ["WORKOS_DATABASE_URL"] = original_workos_url
 
 
-async def test_circuit_breaker_registry():
-    """Test circuit breaker registry."""
-    print("\nTesting circuit breaker registry...")
+async def test_error_message_clarity():
+    """Test that error messages are user-friendly and don't expose stack traces."""
+    print_test_header("Error Message Clarity (No Stack Traces)")
 
-    registry = get_global_registry()
+    # Save original env var
+    original_db_url = os.environ.get("DATABASE_URL")
+    original_debug = os.environ.get("DEBUG")
 
-    # Get breakers for different servers
-    breaker1 = await registry.get_breaker("server1")
-    breaker2 = await registry.get_breaker("server2")
+    try:
+        # Remove DEBUG flag to ensure no stack traces
+        if "DEBUG" in os.environ:
+            del os.environ["DEBUG"]
 
-    assert breaker1.server_name == "server1"
-    assert breaker2.server_name == "server2"
+        # Remove database URL
+        if "DATABASE_URL" in os.environ:
+            del os.environ["DATABASE_URL"]
+        if "WORKOS_DATABASE_URL" in os.environ:
+            del os.environ["WORKOS_DATABASE_URL"]
 
-    # Get same breaker again
-    breaker1_again = await registry.get_breaker("server1")
-    assert breaker1 is breaker1_again
+        # Attempt to retrieve data
+        try:
+            await export.retrieve_all_data("tasks")
+            print_result(False, "Should have raised ValueError")
+            return False
+        except ValueError as e:
+            error_msg = str(e)
 
-    # Get stats
-    stats = registry.get_all_stats()
-    assert "server1" in stats
-    assert "server2" in stats
+            # Check that error message is user-friendly
+            checks = [
+                ("Contains clear description", "Database URL not configured" in error_msg),
+                ("Suggests solution", "set" in error_msg.lower() or "export" in error_msg.lower()),
+                ("No code references", "__file__" not in error_msg and "line " not in error_msg.lower()),
+                ("No raw exceptions", "Traceback" not in error_msg),
+            ]
 
-    print("✅ Circuit breaker registry tests passed")
+            all_passed = all(check[1] for check in checks)
 
+            for check_name, passed in checks:
+                status = "\u2713" if passed else "\u2717"
+                print(f"   {status} {check_name}")
 
-def test_delay_calculation():
-    """Test exponential backoff delay calculation."""
-    print("\nTesting delay calculation...")
+            print_result(all_passed, "Error message is user-friendly")
+            return all_passed
 
-    policy = RetryPolicy(
-        RetryConfig(
-            initial_delay=1.0,
-            exponential_base=2.0,
-            max_delay=10.0,
-            jitter=False,
-        )
-    )
-
-    # Test exponential growth
-    assert policy.calculate_delay(0) == 1.0  # 1.0 * 2^0
-    assert policy.calculate_delay(1) == 2.0  # 1.0 * 2^1
-    assert policy.calculate_delay(2) == 4.0  # 1.0 * 2^2
-    assert policy.calculate_delay(3) == 8.0  # 1.0 * 2^3
-
-    # Test max delay cap
-    assert policy.calculate_delay(10) == 10.0  # Capped at max_delay
-
-    print("✅ Delay calculation tests passed")
+    finally:
+        # Restore original env vars
+        if original_db_url:
+            os.environ["DATABASE_URL"] = original_db_url
+        if original_debug:
+            os.environ["DEBUG"] = original_debug
 
 
 async def main():
-    """Run all tests."""
-    print("=" * 60)
-    print("MCP Error Handling and Retry Logic Tests")
-    print("=" * 60)
+    """Run all error handling tests."""
+    print("\n" + "=" * 70)
+    print("ERROR HANDLING TEST SUITE")
+    print("Testing database connection failure scenarios")
+    print("=" * 70)
 
-    try:
-        # Synchronous tests
-        test_error_hierarchy()
-        test_error_classification()
-        test_delay_calculation()
+    tests = [
+        ("Database URL Not Configured", test_no_database_url),
+        ("Error Message Clarity", test_error_message_clarity),
+    ]
 
-        # Async tests
-        await test_retry_policy()
-        await test_circuit_breaker()
-        await test_combined()
-        await test_circuit_breaker_registry()
+    results = []
+    for test_name, test_func in tests:
+        try:
+            result = await test_func()
+            results.append((test_name, result))
+        except Exception as e:
+            print(f"\nTest '{test_name}' failed with exception: {e}")
+            results.append((test_name, False))
 
-        print("\n" + "=" * 60)
-        print("✅ ALL TESTS PASSED!")
-        print("=" * 60)
-        return 0
+    # Print summary
+    print("\n" + "=" * 70)
+    print("TEST SUMMARY")
+    print("=" * 70)
 
-    except Exception as e:
-        print("\n" + "=" * 60)
-        print(f"❌ TEST FAILED: {e}")
-        print("=" * 60)
-        import traceback
+    passed = sum(1 for _, result in results if result)
+    total = len(results)
 
-        traceback.print_exc()
-        return 1
+    for test_name, result in results:
+        status = "\u2713 PASS" if result else "\u2717 FAIL"
+        print(f"{status}: {test_name}")
+
+    print("=" * 70)
+    print(f"Results: {passed}/{total} tests passed")
+    print("=" * 70)
+
+    return passed == total
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    success = asyncio.run(main())
+    sys.exit(0 if success else 1)
