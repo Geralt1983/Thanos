@@ -65,6 +65,50 @@ npm run dev
 
 The server will start and listen for MCP protocol requests over stdio.
 
+## 🔒 Security
+
+The WorkOS MCP server implements comprehensive security measures to protect against abuse, resource exhaustion, and malicious inputs:
+
+### Rate Limiting
+
+Three-tier rate limiting prevents denial of service and resource exhaustion:
+
+- **Global Limit**: 100 requests/minute (all operations combined)
+- **Write Operations**: 20 requests/minute (creates, updates, deletes)
+- **Read Operations**: 60 requests/minute (queries, retrievals)
+
+Uses a sliding window algorithm to prevent burst traffic at window boundaries.
+
+### Input Validation
+
+All tool inputs are validated with Zod schemas enforcing:
+
+- **String Length Limits**: Task titles (200 chars), descriptions (2000 chars), habit names (100 chars), brain dump content (5000 chars), notes (500 chars)
+- **Numeric Ranges**: Query limits (1-100), positive IDs, bounded health metrics
+- **Enum Validation**: Status, category, frequency, and other enumerated fields
+- **Sanitization**: Automatic string trimming and value normalization
+
+Invalid inputs are rejected immediately with clear, user-friendly error messages.
+
+### Configuration
+
+Rate limits can be adjusted via environment variables:
+
+```bash
+# Disable rate limiting (testing only)
+export RATE_LIMIT_ENABLED=false
+
+# Adjust global limits
+export RATE_LIMIT_GLOBAL_PER_MINUTE=200
+export RATE_LIMIT_GLOBAL_PER_HOUR=6000
+
+# Adjust operation-specific limits
+export RATE_LIMIT_WRITE_PER_MINUTE=40
+export RATE_LIMIT_READ_PER_MINUTE=120
+```
+
+📖 **See [VALIDATION.md](VALIDATION.md) for detailed security documentation, validation rules, and examples**
+
 ## 🛠️ Available Tools
 
 ### Task Management (11 tools)

@@ -1,6 +1,12 @@
 import type { ToolHandler, Database, ContentResponse } from "../../shared/types.js";
 import * as schema from "../../schema.js";
 import { eq, desc, and } from "drizzle-orm";
+import { validateAndSanitize } from "../../shared/validation-schemas.js";
+import {
+  BrainDumpSchema,
+  GetBrainDumpSchema,
+  ProcessBrainDumpSchema,
+} from "./validation.js";
 
 // =============================================================================
 // BRAIN DUMP DOMAIN - HANDLER IMPLEMENTATIONS
@@ -18,6 +24,15 @@ export const handleBrainDump: ToolHandler = async (
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> => {
+  // Validate input
+  const validation = validateAndSanitize(BrainDumpSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
   const { content, category } = args;
 
   const [entry] = await db
@@ -45,6 +60,15 @@ export const handleGetBrainDump: ToolHandler = async (
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> => {
+  // Validate input
+  const validation = validateAndSanitize(GetBrainDumpSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
   const { includeProcessed = false, limit = 20 } = args;
 
   const conditions = includeProcessed ? [] : [eq(schema.brainDump.processed, 0)];
@@ -76,6 +100,15 @@ export const handleProcessBrainDump: ToolHandler = async (
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> => {
+  // Validate input
+  const validation = validateAndSanitize(ProcessBrainDumpSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
   const { entryId, convertToTask = false, taskCategory = "personal" } = args;
 
   // Get the entry first

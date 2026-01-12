@@ -5,6 +5,8 @@ import type { EnergyLevel } from "../../schema.js";
 import { desc, eq } from "drizzle-orm";
 import { getESTTodayStart } from "../../shared/utils.js";
 import { applyDailyGoalAdjustment } from "../../services/energy-prioritization.js";
+import { validateAndSanitize } from "../../shared/validation-schemas.js";
+import { LogEnergySchema, GetEnergySchema } from "./validation.js";
 
 // =============================================================================
 // ENERGY DOMAIN HANDLERS
@@ -23,6 +25,15 @@ export async function handleLogEnergy(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(LogEnergySchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
   const { level, note, ouraReadiness, ouraHrv, ouraSleep } = args;
 
   const [entry] = await db
@@ -55,6 +66,15 @@ export async function handleGetEnergy(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetEnergySchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
   const { limit = 5 } = args;
 
   const entries = await db
