@@ -169,6 +169,8 @@ class SessionManager:
         """
         Add a user message to the conversation history.
 
+        Automatically indexes the message to ChromaAdapter if enabled.
+
         Args:
             content: Message text content
             tokens: Token count for this message
@@ -178,9 +180,14 @@ class SessionManager:
         self.session.total_input_tokens += tokens
         self._trim_history_if_needed()
 
+        # Auto-index message to ChromaAdapter for semantic search
+        self.index_message(message)
+
     def add_assistant_message(self, content: str, tokens: int = 0) -> None:
         """
         Add an assistant message to the conversation history.
+
+        Automatically indexes the message to ChromaAdapter if enabled.
 
         Args:
             content: Message text content
@@ -190,6 +197,9 @@ class SessionManager:
         self.session.history.append(message)
         self.session.total_output_tokens += tokens
         self._trim_history_if_needed()
+
+        # Auto-index message to ChromaAdapter for semantic search
+        self.index_message(message)
 
     def _trim_history_if_needed(self) -> None:
         """
