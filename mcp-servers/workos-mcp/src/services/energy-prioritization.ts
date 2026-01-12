@@ -3,6 +3,7 @@ import type { Task, EnergyLevel, CognitiveLoad } from "../schema.js";
 import { eq, desc } from "drizzle-orm";
 import * as schema from "../schema.js";
 import { getESTDateString } from "../shared/utils.js";
+import { getTodayOuraData } from "./oura-cache.js";
 
 // =============================================================================
 // TYPES
@@ -14,6 +15,7 @@ import { getESTDateString } from "../shared/utils.js";
 export interface EnergyContext {
   energyLevel: EnergyLevel;
   readinessScore: number | null;
+  sleepScore: number | null;
   source: "oura" | "manual" | "default";
   timestamp: Date;
 }
@@ -36,6 +38,7 @@ export interface GoalAdjustment {
   reason: string;
   energyLevel: EnergyLevel;
   readinessScore: number | null;
+  sleepScore: number | null;
 }
 
 // =============================================================================
@@ -43,16 +46,19 @@ export interface GoalAdjustment {
 // =============================================================================
 
 /**
- * Get current energy context from Oura data or manual energy logs
- * Priority: 1) Today's energy_states entry, 2) Oura readiness (via separate call), 3) Default to medium
+ * Get current energy context by combining multiple data sources
+ *
+ * Priority order:
+ * 1. Today's manual energy_states entry (highest priority - user knows best)
+ * 2. Today's Oura readiness & sleep scores from oura-mcp cache
+ * 3. Historical energy_states with Oura data
+ * 4. Default to medium energy
  *
  * @param db - Database instance
- * @param ouraReadiness - Optional Oura readiness score (0-100) from external call
- * @returns Promise resolving to EnergyContext with current energy level and source
+ * @returns Promise resolving to EnergyContext with current energy level, readiness, sleep scores, and source
  */
 export async function getEnergyContext(
-  db: Database,
-  ouraReadiness?: number | null
+  db: Database
 ): Promise<EnergyContext> {
   const today = getESTDateString();
 
@@ -63,34 +69,42 @@ export async function getEnergyContext(
     .orderBy(desc(schema.energyStates.recordedAt))
     .limit(1);
 
-  // If we have a manual energy log from today, use it
+  // If we have a manual energy log from today, use it (but still fetch Oura scores for context)
   if (latestEnergyState) {
     const logDate = getESTDateString(new Date(latestEnergyState.recordedAt));
     if (logDate === today) {
+      // Try to enrich with today's Oura data for additional context
+      const ouraData = getTodayOuraData();
+
       return {
         energyLevel: latestEnergyState.level as EnergyLevel,
-        readinessScore: latestEnergyState.ouraReadiness,
+        readinessScore: ouraData.readinessScore ?? latestEnergyState.ouraReadiness,
+        sleepScore: ouraData.sleepScore,
         source: "manual",
         timestamp: new Date(latestEnergyState.recordedAt),
       };
     }
   }
 
-  // Second priority: Use Oura readiness if provided
-  if (ouraReadiness !== undefined && ouraReadiness !== null) {
+  // Second priority: Use today's Oura data from cache
+  const ouraData = getTodayOuraData();
+
+  if (ouraData.readinessScore !== null) {
     return {
-      energyLevel: mapReadinessToEnergyLevel(ouraReadiness),
-      readinessScore: ouraReadiness,
+      energyLevel: mapReadinessToEnergyLevel(ouraData.readinessScore),
+      readinessScore: ouraData.readinessScore,
+      sleepScore: ouraData.sleepScore,
       source: "oura",
       timestamp: new Date(),
     };
   }
 
-  // Third priority: Check if Oura data exists in energy_states
+  // Third priority: Check if historical Oura data exists in energy_states
   if (latestEnergyState?.ouraReadiness) {
     return {
       energyLevel: mapReadinessToEnergyLevel(latestEnergyState.ouraReadiness),
       readinessScore: latestEnergyState.ouraReadiness,
+      sleepScore: null,
       source: "oura",
       timestamp: new Date(latestEnergyState.recordedAt),
     };
@@ -100,6 +114,7 @@ export async function getEnergyContext(
   return {
     energyLevel: "medium",
     readinessScore: null,
+    sleepScore: null,
     source: "default",
     timestamp: new Date(),
   };
@@ -290,11 +305,13 @@ export function rankTasksByEnergy(
  * - Readiness < 70 (low): Reduce by 20-30% (use -25%)
  *
  * @param readinessScore - Oura readiness score (0-100), or null for no adjustment
+ * @param sleepScore - Oura sleep score (0-100), or null if unavailable
  * @param baseTarget - Base daily target points (default: 18)
  * @returns GoalAdjustment with original target, adjusted target, and explanation
  */
 export function calculateDailyGoalAdjustment(
   readinessScore: number | null,
+  sleepScore: number | null = null,
   baseTarget: number = 18
 ): GoalAdjustment {
   // No adjustment if no readiness score
@@ -306,6 +323,7 @@ export function calculateDailyGoalAdjustment(
       reason: "No energy data available, using standard target",
       energyLevel: "medium",
       readinessScore: null,
+      sleepScore: null,
     };
   }
 
@@ -314,21 +332,25 @@ export function calculateDailyGoalAdjustment(
   let reason = "";
   let adjustedTarget = baseTarget;
 
+  // Build reason with both readiness and sleep context
+  const sleepContext =
+    sleepScore !== null ? ` Sleep quality: ${sleepScore}/100.` : "";
+
   if (readinessScore >= 85) {
     // High energy: +15% increase
     adjustmentPercentage = 15;
     adjustedTarget = Math.round(baseTarget * 1.15);
-    reason = `High readiness (${readinessScore}/100) - increased target by 15% to leverage peak energy`;
+    reason = `High readiness (${readinessScore}/100) - increased target by 15% to leverage peak energy.${sleepContext}`;
   } else if (readinessScore >= 70) {
     // Medium energy: No adjustment
     adjustmentPercentage = 0;
     adjustedTarget = baseTarget;
-    reason = `Good readiness (${readinessScore}/100) - maintaining standard target`;
+    reason = `Good readiness (${readinessScore}/100) - maintaining standard target.${sleepContext}`;
   } else {
     // Low energy: -25% reduction
     adjustmentPercentage = -25;
     adjustedTarget = Math.round(baseTarget * 0.75);
-    reason = `Low readiness (${readinessScore}/100) - reduced target by 25% to prevent burnout and protect wellbeing`;
+    reason = `Low readiness (${readinessScore}/100) - reduced target by 25% to prevent burnout and protect wellbeing.${sleepContext}`;
   }
 
   return {
@@ -338,6 +360,7 @@ export function calculateDailyGoalAdjustment(
     reason,
     energyLevel,
     readinessScore,
+    sleepScore,
   };
 }
 
@@ -347,15 +370,21 @@ export function calculateDailyGoalAdjustment(
  *
  * @param db - Database instance
  * @param readinessScore - Oura readiness score (0-100), or null
+ * @param sleepScore - Oura sleep score (0-100), or null
  * @param baseTarget - Base daily target points (default: 18)
  * @returns Promise resolving to GoalAdjustment with updated values
  */
 export async function applyDailyGoalAdjustment(
   db: Database,
   readinessScore: number | null,
+  sleepScore: number | null = null,
   baseTarget: number = 18
 ): Promise<GoalAdjustment> {
-  const adjustment = calculateDailyGoalAdjustment(readinessScore, baseTarget);
+  const adjustment = calculateDailyGoalAdjustment(
+    readinessScore,
+    sleepScore,
+    baseTarget
+  );
   const today = getESTDateString();
 
   // Update or create today's daily goal
