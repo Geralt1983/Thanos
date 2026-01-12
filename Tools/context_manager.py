@@ -61,3 +61,36 @@ OUTPUT_RESERVE: int = 8_000
 # Initialized to None and lazily loaded via _get_cached_encoder()
 # Thread-safe: tiktoken encoders are stateless and safe for concurrent access
 _CACHED_ENCODER: Optional[Any] = None
+
+
+def _get_cached_encoder() -> Optional[Any]:
+    """
+    Get or initialize the cached tiktoken encoder instance.
+
+    This function implements lazy initialization of the tiktoken encoder.
+    On first call, it initializes the encoder using tiktoken.get_encoding('cl100k_base')
+    and caches it in the module-level _CACHED_ENCODER variable for reuse.
+
+    The cl100k_base encoding is used by GPT-4 and Claude models for token counting.
+
+    Returns:
+        Optional[Any]: The cached tiktoken encoder instance, or None if tiktoken
+                       is unavailable or initialization fails.
+
+    Note:
+        This function modifies the module-level _CACHED_ENCODER variable.
+        Subsequent calls return the cached instance without re-initialization.
+    """
+    global _CACHED_ENCODER
+
+    # Return cached encoder if already initialized
+    if _CACHED_ENCODER is not None:
+        return _CACHED_ENCODER
+
+    # Check if tiktoken is available
+    if not TIKTOKEN_AVAILABLE:
+        return None
+
+    # Initialize encoder on first use
+    _CACHED_ENCODER = tiktoken.get_encoding("cl100k_base")
+    return _CACHED_ENCODER
