@@ -307,25 +307,35 @@ class TestMainInteractiveCommand:
     """Test main() interactive command handling."""
 
     @patch("thanos.ThanosOrchestrator")
-    @patch("Tools.thanos_interactive.ThanosInteractive")
-    def test_interactive_command(self, mock_interactive_class, mock_orch):
+    def test_interactive_command(self, mock_orch_class):
         """Test 'interactive' command launches interactive mode."""
+        mock_orch = Mock()
+        mock_orch_class.return_value = mock_orch
+
+        # Create mock interactive class
+        mock_interactive_class = Mock()
         mock_instance = Mock()
         mock_interactive_class.return_value = mock_instance
 
         with patch.object(sys, "argv", ["thanos", "interactive"]):
             with patch.dict(
-                "sys.modules",
+                sys.modules,
                 {"Tools.thanos_interactive": Mock(ThanosInteractive=mock_interactive_class)},
             ):
-                # We need to re-import to pick up the mock
-                with patch("thanos.ThanosOrchestrator", mock_orch):
-                    # The import happens inside main(), so we patch it there
-                    pass
+                # Call main() which will use the mocked module
+                main()
+
+        # Verify interactive mode was launched
+        mock_interactive_class.assert_called_once_with(mock_orch)
+        mock_instance.run.assert_called_once()
 
     @patch("thanos.ThanosOrchestrator")
-    def test_i_alias(self, mock_orch):
+    def test_i_alias(self, mock_orch_class):
         """Test 'i' alias launches interactive mode."""
+        mock_orch = Mock()
+        mock_orch_class.return_value = mock_orch
+
+        # Create mock interactive class
         mock_interactive_class = Mock()
         mock_instance = Mock()
         mock_interactive_class.return_value = mock_instance
@@ -335,8 +345,12 @@ class TestMainInteractiveCommand:
                 sys.modules,
                 {"Tools.thanos_interactive": Mock(ThanosInteractive=mock_interactive_class)},
             ):
-                # The import is dynamic, so we need to test differently
-                pass
+                # Call main() which will use the mocked module
+                main()
+
+        # Verify interactive mode was launched
+        mock_interactive_class.assert_called_once_with(mock_orch)
+        mock_instance.run.assert_called_once()
 
 
 class TestMainChatCommand:
