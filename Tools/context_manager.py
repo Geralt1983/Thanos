@@ -91,6 +91,11 @@ def _get_cached_encoder() -> Optional[Any]:
     if not TIKTOKEN_AVAILABLE:
         return None
 
-    # Initialize encoder on first use
-    _CACHED_ENCODER = tiktoken.get_encoding("cl100k_base")
-    return _CACHED_ENCODER
+    # Initialize encoder on first use with error handling
+    try:
+        _CACHED_ENCODER = tiktoken.get_encoding("cl100k_base")
+        return _CACHED_ENCODER
+    except Exception as e:
+        # If initialization fails (network issues, corrupted cache, etc.),
+        # return None to allow fallback to heuristic token estimation
+        return None
