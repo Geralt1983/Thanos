@@ -2,6 +2,27 @@
 
 Comprehensive guide for diagnosing and resolving common runtime errors in Thanos, including API failures, cache corruption, and hook execution issues.
 
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Quick Reference](#quick-reference) - Start here for common issues
+3. [System Architecture](#system-architecture)
+4. [API Error Handling](#api-error-handling)
+   - Error Types & Resolution
+   - Fallback Chain Mechanism
+   - Prevention Best Practices
+5. [Cache Error Handling](#cache-error-handling)
+   - Corruption Detection
+   - Automatic Cleanup
+   - Monitoring & Maintenance
+6. [Hook Error Handling](#hook-error-handling)
+   - Fail-Safe Design
+   - Debugging & Log Management
+7. [Common Troubleshooting Scenarios](#common-troubleshooting-scenarios) - 11 detailed scenarios
+8. [Best Practices](#best-practices)
+9. [Related Documentation](#related-documentation)
+10. [Glossary](#glossary)
+
 ## Overview
 
 Thanos implements robust error handling across three major subsystems:
@@ -248,8 +269,8 @@ User Request
 
 3. Verify DNS resolution:
    ```bash
-   nslookup api.anthropic.com
-   nslookup api.openai.com
+   host api.anthropic.com
+   host api.openai.com
    ```
 
 4. Review system logs for network errors:
@@ -2440,7 +2461,14 @@ Response returned to user
 
 # Common Troubleshooting Scenarios
 
-## Scenario 1: "All API calls are failing"
+These scenarios are organized by severity and impact. Each includes symptoms, diagnosis commands, common causes, and step-by-step resolution.
+
+**Severity Levels**:
+- **CRITICAL**: Immediate impact on functionality, requires urgent action
+- **WARNING**: Degraded functionality, investigate soon
+- **INFO**: Informational or convenience feature affected
+
+## Scenario 1: "All API calls are failing" [CRITICAL]
 
 **Symptoms**:
 - Every request fails
@@ -2476,7 +2504,7 @@ tail -50 ~/.claude/logs/thanos.log | grep -i error
 3. Review provider status pages
 4. Temporarily simplify to single known-working model
 
-## Scenario 2: "Responses are slow"
+## Scenario 2: "Responses are slow" [WARNING]
 
 **Symptoms**:
 - Noticeable delays in responses
@@ -2511,7 +2539,7 @@ done | head -10
 3. Check network performance to API endpoints
 4. Free up disk space
 
-## Scenario 3: "Missing session history"
+## Scenario 3: "Missing session history" [INFO]
 
 **Symptoms**:
 - No files in `History/Sessions/`
@@ -2544,7 +2572,7 @@ ls -lt History/Sessions/ | head -10
 3. Verify Claude Code hook configuration
 4. Review hook logs for specific errors
 
-## Scenario 4: "High disk usage"
+## Scenario 4: "High disk usage" [WARNING]
 
 **Symptoms**:
 - Disk space running low
@@ -2588,7 +2616,7 @@ du -sh Memory/cache/ && df -h .
 # 0 2 * * * find /path/to/Memory/cache/ -name "*.json" -mtime +30 -delete
 ```
 
-## Scenario 5: "API key rotation"
+## Scenario 5: "API key rotation" [INFO]
 
 **Symptoms**:
 - Need to update API keys
@@ -2621,7 +2649,7 @@ export ANTHROPIC_API_KEY="$NEW_ANTHROPIC_KEY"
 - Keep fallback chain functional during rotation
 - Invalidate old keys only after confirming new ones work
 
-## Scenario 6: "No morning context shown at session start"
+## Scenario 6: "No morning context shown at session start" [INFO]
 
 **Symptoms**:
 - Claude Code session starts without morning brief
@@ -2682,7 +2710,7 @@ tail -10 ~/.claude/logs/hooks.log
 - Missing convenience feature only
 - Can continue without morning context
 
-## Scenario 7: "Cache not improving performance"
+## Scenario 7: "Cache not improving performance" [WARNING]
 
 **Symptoms**:
 - API calls still slow despite cache
@@ -2754,7 +2782,7 @@ chmod 755 Memory/cache/
 - **Good Hit Rate**: > 50% for production workloads
 - **Poor Hit Rate**: < 20% indicates caching ineffective
 
-## Scenario 8: "Intermittent API failures"
+## Scenario 8: "Intermittent API failures" [WARNING]
 
 **Symptoms**:
 - Some requests succeed, others fail
@@ -2827,7 +2855,7 @@ cat config/api.json | jq '.litellm.fallback_chain'
 - Configure reasonable timeout values
 - Consider request throttling for burst protection
 
-## Scenario 9: "Inconsistent responses from same prompt"
+## Scenario 9: "Inconsistent responses from same prompt" [INFO]
 
 **Symptoms**:
 - Same prompt returns different responses unexpectedly
@@ -2895,7 +2923,7 @@ rm -rf Memory/cache/*.json
 - For debugging: Enable DEBUG logging to see which model responds
 - For cost tracking: Monitor provider dashboards directly
 
-## Scenario 10: "Cannot write session logs"
+## Scenario 10: "Cannot write session logs" [WARNING]
 
 **Symptoms**:
 - No session files appearing in `History/Sessions/`
@@ -2970,7 +2998,7 @@ chmod -R 755 History Memory State ~/.claude
 df -h . | tail -1 | awk '{if ($5+0 > 90) print "WARNING: Disk usage high: " $5}'
 ```
 
-## Scenario 11: "Fallback chain exhausted too quickly"
+## Scenario 11: "Fallback chain exhausted too quickly" [CRITICAL]
 
 **Symptoms**:
 - All models in fallback chain fail rapidly
@@ -3246,6 +3274,34 @@ For detailed hook configuration and development:
 For MCP server integration and deployment:
 - **[MCP Integration Guide](./mcp-integration-guide.md)**: Integrating MCP servers with Thanos
 - **[MCP Deployment Guide](./mcp-deployment-guide.md)**: Deploying and operating MCP servers
+
+---
+
+# Glossary
+
+**API**: Application Programming Interface - how Thanos communicates with LLM providers (Anthropic, OpenAI, etc.)
+
+**Cache**: Temporary storage of API responses to improve performance and reduce costs
+
+**Circuit Breaker**: A pattern that prevents repeated calls to a failing service (used in MCP, not LiteLLM)
+
+**Fallback Chain**: Ordered list of alternative models to try when API calls fail
+
+**Hook**: A lifecycle event handler (e.g., morning-brief, session-end) that runs at specific times
+
+**Jitter**: Random variation added to retry delays to prevent thundering herd problems
+
+**JSON**: JavaScript Object Notation - a text format for structured data
+
+**MCP**: Model Context Protocol - a protocol for extending LLM capabilities with external tools
+
+**Retry Logic**: Automatically re-attempting a failed operation with delays (different from fallback chain)
+
+**Silent Failure**: Error handling that catches and suppresses errors without notifying the user
+
+**TTL**: Time-To-Live - how long cached data remains valid before expiring
+
+**Usage Tracking**: Recording which models/providers are used for cost and monitoring purposes
 
 ---
 
