@@ -23,7 +23,7 @@ import argparse
 import asyncio
 import csv
 import json
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 import sys
 from typing import Optional, List, Dict, Any, Tuple
@@ -246,7 +246,7 @@ def format_value_for_csv(value: Any) -> str:
     Format a value for CSV export.
 
     Handles various data types including:
-    - datetime objects (convert to ISO format)
+    - datetime and date objects (convert to ISO format)
     - None values (convert to empty string)
     - Nested structures like dicts/lists (JSON-encode)
     - Other types (convert to string)
@@ -259,8 +259,8 @@ def format_value_for_csv(value: Any) -> str:
     """
     if value is None:
         return ""
-    elif isinstance(value, datetime):
-        # Convert datetime to ISO format string
+    elif isinstance(value, (datetime, date)):
+        # Convert datetime/date to ISO format string
         return value.isoformat()
     elif isinstance(value, (dict, list)):
         # JSON-encode complex structures
@@ -366,13 +366,13 @@ def export_to_csv(
 
 class DateTimeEncoder(json.JSONEncoder):
     """
-    Custom JSON encoder that handles datetime objects.
+    Custom JSON encoder that handles datetime and date objects.
 
-    Converts datetime objects to ISO format strings for JSON serialization.
+    Converts datetime and date objects to ISO format strings for JSON serialization.
     """
 
     def default(self, obj):
-        if isinstance(obj, datetime):
+        if isinstance(obj, (datetime, date)):
             return obj.isoformat()
         return super().default(obj)
 
