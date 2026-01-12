@@ -156,7 +156,9 @@ class TestBriefingCommand(unittest.TestCase):
         mock_engine.render_briefing.assert_called_once_with(
             briefing_type="morning",
             context=mock_engine.gather_context.return_value,
-            energy_level=7
+            energy_level=7,
+            health_state=mock_engine.prompt_for_health_state.return_value,
+            reflection_data=None
         )
 
     @patch('commands.pa.briefing.BriefingEngine')
