@@ -511,3 +511,136 @@ class TestIntegration:
         assert Colors.RED in result_high
         assert Colors.GREEN not in result_high
         assert Colors.YELLOW not in result_high
+
+
+@pytest.mark.unit
+class TestConfiguration:
+    """Test configuration loading and application."""
+
+    def test_default_config_loads(self):
+        """Test that formatter loads config from default path."""
+        # This should not raise an error even if config doesn't exist
+        formatter = PromptFormatter()
+        assert formatter.enabled is not None
+        assert formatter.default_mode is not None
+
+    def test_config_enabled_flag(self):
+        """Test that enabled flag is respected."""
+        # Create formatter with enabled=True (via parameter override)
+        formatter_enabled = PromptFormatter(enable_colors=True)
+
+        # Temporarily override enabled for testing
+        formatter_enabled.enabled = True
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        result_enabled = formatter_enabled.format(stats)
+        assert "1.2K" in result_enabled or "Thanos>" in result_enabled
+
+        # Test with enabled=False
+        formatter_enabled.enabled = False
+        result_disabled = formatter_enabled.format(stats)
+        assert result_disabled == "Thanos> "
+
+    def test_config_default_mode(self):
+        """Test that default mode from config is used when mode not specified."""
+        formatter = PromptFormatter(enable_colors=False)
+
+        # Override default_mode for testing
+        formatter.default_mode = "verbose"
+
+        stats = {
+            "total_input_tokens": 5000,
+            "total_output_tokens": 7000,
+            "total_cost": 0.50,
+            "duration_minutes": 45,
+            "message_count": 20
+        }
+
+        # When mode is not specified, should use default_mode
+        result = formatter.format(stats)
+        assert "msgs" in result  # Verbose mode includes "msgs"
+        assert "in" in result  # Verbose mode includes "in" and "out"
+        assert "out" in result
+
+    def test_config_thresholds(self):
+        """Test that color thresholds from config are used."""
+        # Create formatter with custom thresholds
+        formatter = PromptFormatter(
+            enable_colors=True,
+            low_cost_threshold=1.00,
+            medium_cost_threshold=5.00
+        )
+
+        # Cost of $0.75 should be green (below 1.00 threshold)
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.75,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        result = formatter.format(stats, mode="compact")
+        assert Colors.GREEN in result
+
+        # Cost of $2.00 should be yellow (between 1.00 and 5.00)
+        stats["total_cost"] = 2.00
+        result = formatter.format(stats, mode="compact")
+        assert Colors.YELLOW in result
+
+        # Cost of $6.00 should be red (above 5.00)
+        stats["total_cost"] = 6.00
+        result = formatter.format(stats, mode="compact")
+        assert Colors.RED in result
+
+    def test_parameter_overrides_config(self):
+        """Test that parameters passed to __init__ override config values."""
+        # Create formatter with explicit parameter overrides
+        formatter = PromptFormatter(
+            enable_colors=False,
+            low_cost_threshold=10.00,
+            medium_cost_threshold=20.00
+        )
+
+        # Verify overrides were applied
+        assert formatter.enable_colors is False
+        assert formatter.low_cost_threshold == 10.00
+        assert formatter.medium_cost_threshold == 20.00
+
+    def test_mode_parameter_overrides_config_mode(self):
+        """Test that mode parameter to format() overrides config default."""
+        formatter = PromptFormatter(enable_colors=False)
+        formatter.default_mode = "verbose"
+
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+
+        # Explicitly request compact mode (should override config)
+        result = formatter.format(stats, mode="compact")
+        assert result == "(1.2K | $0.04) Thanos> "
+        assert "msgs" not in result  # Compact mode doesn't include msgs
+
+    def test_config_graceful_fallback(self):
+        """Test that formatter gracefully handles missing config."""
+        # Pass non-existent config path
+        formatter = PromptFormatter(config_path="/nonexistent/path/config.json")
+
+        # Should still work with default values
+        stats = {
+            "total_input_tokens": 500,
+            "total_output_tokens": 700,
+            "total_cost": 0.04,
+            "duration_minutes": 15,
+            "message_count": 8
+        }
+        result = formatter.format(stats, mode="compact")
+        assert "Thanos>" in result

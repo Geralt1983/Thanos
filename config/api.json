@@ -89,5 +89,18 @@
     "max_tokens": 4096,
     "temperature": 1.0,
     "stream": false
+  },
+  "interactive_prompt": {
+    "enabled": true,
+    "mode": "compact",
+    "show_duration": true,
+    "show_message_count": false,
+    "color_coding": {
+      "enabled": true,
+      "thresholds": {
+        "low": 0.50,
+        "medium": 2.00
+      }
+    }
   }
 }
