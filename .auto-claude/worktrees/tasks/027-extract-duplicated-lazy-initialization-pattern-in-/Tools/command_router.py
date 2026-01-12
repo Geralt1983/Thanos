@@ -11,7 +11,7 @@ from enum import Enum
 import os
 from pathlib import Path
 import re
-from typing import Callable, Optional
+from typing import Callable, Generic, Optional, TypeVar
 
 
 # MemOS integration (optional - graceful degradation if unavailable)
@@ -77,6 +77,238 @@ class CommandResult:
     success: bool = True
 
 
+# Type variable for generic lazy initialization
+T = TypeVar('T')
+
+
+class LazyInitializer(Generic[T]):
+    """
+    Generic lazy initialization helper with graceful degradation.
+
+    Encapsulates the common pattern of checking availability, initializing only once,
+    trying existing instance first, falling back to new initialization, handling
+    async/sync scenarios, and catching all exceptions.
+
+    This pattern enables graceful degradation when dependencies are unavailable or
+    fail to initialize, which is critical for optional adapters like MemOS, WorkOS,
+    Oura, etc.
+
+    Benefits:
+        - Code reduction: Eliminates 20-25 lines per adapter
+        - Consistency: Same pattern everywhere, bugs fixed in one place
+        - Safety: Never crashes on initialization failure
+        - Flexibility: Supports sync/async, with/without existing instance getter
+        - Testability: Easy to test, mock, and reset
+
+    Usage Example (MemOS - async with existing getter):
+        # In __init__:
+        self._memos_lazy = LazyInitializer(
+            name="MemOS",
+            available=MEMOS_AVAILABLE,
+            get_existing=get_memos,
+            initializer=init_memos,
+            is_async=True
+        )
+
+        # In methods:
+        def _get_memos(self) -> Optional[MemOS]:
+            return self._memos_lazy.get()
+
+    Usage Example (WorkOS - sync, no existing getter):
+        self._workos_lazy = LazyInitializer(
+            name="WorkOS",
+            available=WORKOS_AVAILABLE,
+            initializer=lambda: WorkOSAdapter(),
+            is_async=False
+        )
+
+    Usage Example (Oura - async initialization):
+        self._oura_lazy = LazyInitializer(
+            name="Oura",
+            available=OURA_AVAILABLE,
+            initializer=lambda: OuraAdapter(),
+            is_async=False
+        )
+
+    Design Notes:
+        - Not thread-safe (CommandRouter is single-threaded)
+        - Prioritizes safety (graceful degradation) over performance
+        - Returns None on any failure rather than raising exceptions
+    """
+
+    def __init__(
+        self,
+        name: str,
+        available: bool,
+        initializer: Callable[[], T],
+        get_existing: Optional[Callable[[], T]] = None,
+        is_async: bool = False,
+    ):
+        """
+        Initialize the lazy initializer.
+
+        Args:
+            name: Component name (for debugging/logging)
+            available: Whether component is available (e.g., MEMOS_AVAILABLE)
+            initializer: Function to create new instance (e.g., init_memos)
+            get_existing: Optional function to get existing instance (e.g., get_memos)
+            is_async: Whether initializer (and get_existing) are async functions
+
+        Example:
+            lazy = LazyInitializer(
+                name="MemOS",
+                available=MEMOS_AVAILABLE,
+                get_existing=get_memos,
+                initializer=init_memos,
+                is_async=True
+            )
+        """
+        self.name = name
+        self.available = available
+        self.initializer = initializer
+        self.get_existing = get_existing
+        self.is_async = is_async
+
+        self._instance: Optional[T] = None
+        self._initialized = False
+
+    def get(self) -> Optional[T]:
+        """
+        Get or initialize the instance.
+
+        Implements the 6-step lazy initialization pattern:
+        1. Check availability flag
+        2. Check if already initialized (idempotency)
+        3. Try to get existing instance first (if get_existing provided)
+        4. Initialize new instance if needed
+        5. Handle async/sync scenarios
+        6. Return instance or None
+
+        Returns:
+            Instance if available and initialized successfully, None otherwise
+
+        Example:
+            memos = self._memos_lazy.get()
+            if memos:
+                # Use memos...
+        """
+        # Step 1: Check availability
+        if not self.available:
+            return None
+
+        # Step 2: Check if already initialized (idempotency)
+        if not self._initialized:
+            # Step 3: Try to get existing instance first
+            if self.get_existing:
+                try:
+                    if self.is_async:
+                        self._instance = self._run_async(self.get_existing())
+                    else:
+                        self._instance = self.get_existing()
+
+                    if self._instance is not None:
+                        self._initialized = True
+                        return self._instance
+                except Exception:
+                    pass  # Fall through to initialization
+
+            # Step 4: Initialize new instance
+            try:
+                if self.is_async:
+                    self._instance = self._run_async(self.initializer())
+                else:
+                    self._instance = self.initializer()
+
+                if self._instance is not None:
+                    self._initialized = True
+            except Exception:
+                # Step 5: Graceful failure
+                self._instance = None
+
+        # Step 6: Return instance or None
+        return self._instance
+
+    def _run_async(self, coro):
+        """
+        Run async coroutine from sync context.
+
+        Handles the complexity of checking if event loop is running, avoiding
+        nested loop issues, and graceful error handling.
+
+        Strategy:
+            - If no event loop is running: create one and run coroutine
+            - If event loop is running: return None (can't nest run_until_complete)
+            - On any error: return None (graceful degradation)
+
+        Args:
+            coro: Coroutine to run
+
+        Returns:
+            Result of coroutine, or None on error
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Can't run_until_complete in running loop
+                # Return None rather than crash
+                return None
+            else:
+                return loop.run_until_complete(coro)
+        except Exception:
+            return None
+
+    def reset(self):
+        """
+        Reset initialization state.
+
+        Useful for:
+            - Testing: Reset between test cases
+            - Error recovery: Force re-initialization after failure
+            - State management: Clear cached instance
+
+        Example:
+            # In tests:
+            self._memos_lazy.reset()
+            assert not self._memos_lazy.is_initialized
+        """
+        self._instance = None
+        self._initialized = False
+
+    @property
+    def is_initialized(self) -> bool:
+        """
+        Check if initialization has been attempted.
+
+        Returns True even if initialization failed (instance is None).
+        Use has_instance to check if instance exists.
+
+        Returns:
+            True if initialization was attempted, False otherwise
+
+        Example:
+            if self._memos_lazy.is_initialized:
+                # Initialization was attempted (may have succeeded or failed)
+        """
+        return self._initialized
+
+    @property
+    def has_instance(self) -> bool:
+        """
+        Check if instance exists (successful initialization).
+
+        Returns True only if initialization succeeded and instance is not None.
+
+        Returns:
+            True if instance exists, False otherwise
+
+        Example:
+            if self._memos_lazy.has_instance:
+                # Instance definitely exists and is not None
+                instance = self._memos_lazy.get()
+        """
+        return self._initialized and self._instance is not None
+
+
 class CommandRouter:
     """Routes and executes slash commands"""
 
@@ -117,18 +349,43 @@ class CommandRouter:
         # MemOS integration (lazy initialization)
         self._memos: Optional[MemOS] = None
         self._memos_initialized = False
+        self._memos_lazy = LazyInitializer(
+            name="MemOS",
+            available=MEMOS_AVAILABLE,
+            get_existing=get_memos,
+            initializer=init_memos,
+            is_async=True
+        )
 
         # WorkOS integration (lazy initialization)
         self._workos: Optional[WorkOSAdapter] = None
         self._workos_initialized = False
+        self._workos_lazy = LazyInitializer(
+            name="WorkOS",
+            available=WORKOS_AVAILABLE,
+            initializer=lambda: WorkOSAdapter(),
+            is_async=False
+        )
 
         # Oura integration (lazy initialization)
         self._oura: Optional[OuraAdapter] = None
         self._oura_initialized = False
+        self._oura_lazy = LazyInitializer(
+            name="Oura",
+            available=OURA_AVAILABLE,
+            initializer=lambda: OuraAdapter(),
+            is_async=False
+        )
 
         # AdapterManager integration (lazy initialization)
         self._adapter_manager: Optional[AdapterManager] = None
         self._adapter_manager_initialized = False
+        self._adapter_manager_lazy = LazyInitializer(
+            name="AdapterManager",
+            available=ADAPTER_MANAGER_AVAILABLE,
+            initializer=get_default_manager,
+            is_async=True
+        )
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
@@ -152,123 +409,78 @@ class CommandRouter:
                 self._trigger_patterns[agent_name] = patterns
 
     def _get_memos(self) -> Optional["MemOS"]:
-        """Get MemOS instance, initializing if needed."""
-        if not MEMOS_AVAILABLE:
-            return None
+        """
+        Get MemOS instance, initializing if needed.
 
-        if not self._memos_initialized:
-            try:
-                # Try to get existing instance
-                self._memos = get_memos()
-                self._memos_initialized = True
-            except Exception:
-                # Initialize new instance
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Can't use asyncio.run in running loop
-                        self._memos = None
-                    else:
-                        self._memos = loop.run_until_complete(init_memos())
-                        self._memos_initialized = True
-                except Exception:
-                    self._memos = None
+        Uses lazy initialization with graceful degradation via LazyInitializer.
 
-        return self._memos
+        Returns:
+            MemOS instance or None if unavailable
+        """
+        instance = self._memos_lazy.get()
+
+        # Update instance variables for backward compatibility
+        if instance is not None:
+            self._memos = instance
+            self._memos_initialized = True
+
+        return instance
 
     def _get_workos(self) -> Optional["WorkOSAdapter"]:
         """
         Get WorkOS adapter instance, initializing if needed.
 
-        Uses lazy initialization with graceful degradation - returns None
-        if WorkOS is unavailable or initialization fails.
+        Uses lazy initialization with graceful degradation via LazyInitializer.
 
         Returns:
             WorkOSAdapter instance or None if unavailable
         """
-        # Step 1: Check availability flag
-        if not WORKOS_AVAILABLE:
-            return None
+        instance = self._workos_lazy.get()
 
-        # Step 2: Check if already initialized (idempotency)
-        if not self._workos_initialized:
-            try:
-                # Step 3: Initialize WorkOS adapter
-                # WorkOS requires DATABASE_URL or WORKOS_DATABASE_URL env var
-                self._workos = WorkOSAdapter()
-                self._workos_initialized = True
-            except Exception:
-                # Step 4: Graceful failure - adapter will remain None
-                self._workos = None
+        # Update instance variables for backward compatibility
+        if instance is not None:
+            self._workos = instance
+            self._workos_initialized = True
 
-        # Step 5: Return instance or None
-        return self._workos
+        return instance
 
     def _get_oura(self) -> Optional["OuraAdapter"]:
         """
         Get Oura adapter instance, initializing if needed.
 
-        Uses lazy initialization with graceful degradation - returns None
-        if Oura is unavailable or initialization fails.
+        Uses lazy initialization with graceful degradation via LazyInitializer.
 
         Returns:
             OuraAdapter instance or None if unavailable
         """
-        # Step 1: Check availability flag
-        if not OURA_AVAILABLE:
-            return None
+        instance = self._oura_lazy.get()
 
-        # Step 2: Check if already initialized (idempotency)
-        if not self._oura_initialized:
-            try:
-                # Step 3: Initialize Oura adapter
-                # Oura requires OURA_PERSONAL_ACCESS_TOKEN env var
-                self._oura = OuraAdapter()
-                self._oura_initialized = True
-            except Exception:
-                # Step 4: Graceful failure - adapter will remain None
-                self._oura = None
+        # Update instance variables for backward compatibility
+        if instance is not None:
+            self._oura = instance
+            self._oura_initialized = True
 
-        # Step 5: Return instance or None
-        return self._oura
+        return instance
 
     def _get_adapter_manager(self) -> Optional["AdapterManager"]:
         """
         Get AdapterManager instance, initializing if needed.
 
-        Uses lazy initialization with graceful degradation - returns None
-        if AdapterManager is unavailable or initialization fails.
-
+        Uses lazy initialization with graceful degradation via LazyInitializer.
         The AdapterManager provides unified access to all adapters (WorkOS,
         Oura, Neo4j, ChromaDB) through a single interface.
 
         Returns:
             AdapterManager instance or None if unavailable
         """
-        # Step 1: Check availability flag
-        if not ADAPTER_MANAGER_AVAILABLE:
-            return None
+        instance = self._adapter_manager_lazy.get()
 
-        # Step 2: Check if already initialized (idempotency)
-        if not self._adapter_manager_initialized:
-            try:
-                # Step 3: Initialize AdapterManager (async initialization required)
-                # AdapterManager requires get_default_manager() which is async
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Can't use asyncio.run in running loop
-                    # Try to schedule it or skip initialization
-                    self._adapter_manager = None
-                else:
-                    # Run the async initialization
-                    self._adapter_manager = loop.run_until_complete(get_default_manager())
-                    self._adapter_manager_initialized = True
-            except Exception:
-                # Step 4: Graceful failure - adapter will remain None
-                self._adapter_manager = None
+        # Update instance variables for backward compatibility
+        if instance is not None:
+            self._adapter_manager = instance
+            self._adapter_manager_initialized = True
 
-        # Step 5: Return instance or None
-        return self._adapter_manager
+        return instance
 
     def _run_async(self, coro):
         """Run async coroutine from sync context."""

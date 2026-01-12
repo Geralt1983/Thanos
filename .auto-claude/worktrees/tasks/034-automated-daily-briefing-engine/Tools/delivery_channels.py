@@ -539,6 +539,7 @@ class StateSyncChannel(DeliveryChannel):
 
             # Read existing content or create new
             existing_content = self._read_existing_content()
+            is_new_file = not existing_content.strip()  # Track if file is new
 
             # Parse existing sections
             sections = self._parse_sections(existing_content)
@@ -553,7 +554,7 @@ class StateSyncChannel(DeliveryChannel):
             sections[section_name] = section_content
 
             # Rebuild the file content
-            new_content = self._rebuild_content(sections)
+            new_content = self._rebuild_content(sections, is_new_file)
 
             # Write to file
             file_path = Path(self.state_file)
@@ -631,12 +632,13 @@ class StateSyncChannel(DeliveryChannel):
 
         return sections
 
-    def _rebuild_content(self, sections: Dict[str, str]) -> str:
+    def _rebuild_content(self, sections: Dict[str, str], is_new_file: bool = False) -> str:
         """
         Rebuild file content from sections.
 
         Args:
             sections: Dictionary of section headers to content.
+            is_new_file: Whether this is a new file being created.
 
         Returns:
             Reconstructed file content.
@@ -647,11 +649,9 @@ class StateSyncChannel(DeliveryChannel):
         if '# header' in sections:
             parts.append(sections['# header'].strip())
             del sections['# header']
-        else:
-            # Add default header if file is being created
-            if not sections:
-                parts.append("# Today")
-                parts.append(f"*Date: {datetime.now().strftime('%Y-%m-%d')}*\n")
+        elif is_new_file:  # Add header for new files
+            parts.append("# Today")
+            parts.append(f"*Date: {datetime.now().strftime('%Y-%m-%d')}*\n")
 
         # Define section order for briefings
         section_order = ['## Morning Brief', '## Evening Brief']
