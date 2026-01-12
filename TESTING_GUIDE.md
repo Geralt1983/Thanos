@@ -2644,7 +2644,850 @@ For comprehensive mocking documentation, see:
 
 ## Coverage Reporting
 
-*This section will be completed in subtask 2.6*
+Code coverage measures how much of your codebase is executed during testing. This section explains how to generate coverage reports, interpret the metrics, and use coverage data to improve your test suite.
+
+### Overview
+
+**What is coverage?**
+
+Coverage analysis tracks which lines of code are executed when tests run. It helps identify:
+- ✅ **Well-tested code** - Code that's covered by tests
+- ⚠️ **Untested code** - Code that never executes during tests
+- 📊 **Coverage gaps** - Areas where more tests are needed
+- 🎯 **Test effectiveness** - How thoroughly your tests exercise the codebase
+
+**Coverage tools:**
+- **pytest-cov** - pytest plugin for coverage (installed via requirements-test.txt)
+- **coverage.py** - Underlying coverage measurement tool
+- **HTML reports** - Interactive, detailed coverage visualization
+
+**Important:** High coverage doesn't guarantee quality tests, but low coverage definitely indicates untested code!
+
+---
+
+### Quick Start: Generate Coverage Report
+
+**Fastest way to see coverage:**
+
+```bash
+# Run tests with coverage and generate HTML report
+pytest --cov=. --cov-report=html
+
+# Open the report
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+start htmlcov/index.html  # Windows
+```
+
+This gives you a beautiful, interactive HTML report showing exactly which lines are covered and which aren't.
+
+---
+
+### Generating Coverage Reports
+
+#### Terminal Reports
+
+**Basic coverage output:**
+```bash
+# Simple coverage summary
+pytest --cov=.
+
+# Output:
+# ---------- coverage: platform darwin, python 3.11.0 -----------
+# Name                                      Stmts   Miss  Cover
+# -------------------------------------------------------------
+# core/client.py                              156     42    73%
+# core/commitment_tracker.py                   89     12    87%
+# Tools/adapters/chroma_adapter.py            234     89    62%
+# ...
+# -------------------------------------------------------------
+# TOTAL                                      2456    678    72%
+```
+
+**Detailed terminal report with missing lines:**
+```bash
+# Show which lines are not covered
+pytest --cov=. --cov-report=term-missing
+
+# Output:
+# Name                                      Stmts   Miss  Cover   Missing
+# -----------------------------------------------------------------------
+# core/client.py                              156     42    73%   45-52, 78-89, 145
+# core/commitment_tracker.py                   89     12    87%   34, 67-71, 98-101
+```
+
+This shows exactly which line numbers aren't covered, helping you target new tests effectively.
+
+**Compact terminal output:**
+```bash
+# Shorter output without line numbers
+pytest --cov=. --cov-report=term
+```
+
+#### HTML Reports (Recommended)
+
+**Generate interactive HTML report:**
+```bash
+# Create HTML report in htmlcov/ directory
+pytest --cov=. --cov-report=html
+
+# Open in browser
+open htmlcov/index.html
+```
+
+**What's in the HTML report:**
+- **Index page** - Summary of all modules with coverage percentages
+- **File pages** - Each source file with line-by-line coverage
+- **Color coding:**
+  - 🟢 **Green** - Lines covered by tests
+  - 🔴 **Red** - Lines not covered
+  - 🟡 **Yellow** - Lines partially covered (branches)
+  - ⚪ **White** - Non-executable lines (comments, blank lines)
+- **Interactive** - Click files to see detailed line coverage
+- **Sortable** - Sort by coverage percentage, filename, etc.
+
+**HTML report with unit tests only (faster):**
+```bash
+# Generate coverage from only unit tests
+pytest -m unit --cov=. --cov-report=html
+```
+
+#### XML Reports (for CI/CD)
+
+**Generate XML report for CI tools:**
+```bash
+# Create coverage.xml for CI/CD integration
+pytest --cov=. --cov-report=xml
+
+# Often used with coverage badges or quality gates
+```
+
+XML reports are machine-readable and work with:
+- GitHub Actions coverage reports
+- Codecov / Coveralls services
+- SonarQube / Code Climate integration
+- GitLab coverage visualization
+
+#### JSON Reports (for automation)
+
+**Generate JSON report for programmatic access:**
+```bash
+# Create coverage.json
+pytest --cov=. --cov-report=json
+```
+
+Useful for custom scripts or automated analysis.
+
+#### Multiple Report Types
+
+**Generate several report types at once:**
+```bash
+# Terminal + HTML + XML
+pytest --cov=. --cov-report=term-missing --cov-report=html --cov-report=xml
+
+# Or shorter
+pytest --cov=. --cov-report=term-missing --cov-report=html --cov-report=xml
+```
+
+**Skip coverage output to terminal:**
+```bash
+# Only generate HTML, don't print to terminal
+pytest --cov=. --cov-report=html --cov-report=''
+```
+
+---
+
+### Targeting Specific Modules
+
+Instead of measuring coverage for the entire codebase, target specific modules:
+
+#### Single Module Coverage
+
+```bash
+# Coverage for core/ module only
+pytest --cov=core --cov-report=html
+
+# Coverage for adapters/ module only
+pytest --cov=adapters --cov-report=html
+
+# Coverage for Tools/ module only
+pytest --cov=Tools --cov-report=html
+```
+
+#### Multiple Module Coverage
+
+```bash
+# Coverage for core and adapters only
+pytest --cov=core --cov=adapters --cov-report=html
+
+# Coverage for specific files
+pytest --cov=core/client --cov=core/commitment_tracker --cov-report=html
+```
+
+#### Coverage for Specific Test Suite
+
+**Unit tests coverage:**
+```bash
+# What does our unit test suite cover?
+pytest -m unit --cov=. --cov-report=html
+```
+
+**Integration tests coverage:**
+```bash
+# What additional coverage do integration tests provide?
+pytest -m integration --cov=. --cov-report=html
+```
+
+**Specific test file coverage:**
+```bash
+# Coverage from running one test file
+pytest tests/unit/test_client.py --cov=core/client --cov-report=term-missing
+```
+
+This helps answer: "Do I have enough tests for module X?"
+
+---
+
+### Understanding Coverage Metrics
+
+Coverage reports show several key metrics:
+
+#### Statements (Stmts)
+
+**Total number of executable lines** in the code.
+
+```python
+# This file has 5 statements:
+def add(a, b):          # Statement 1: function definition
+    result = a + b      # Statement 2: assignment
+    if result > 10:     # Statement 3: if condition
+        print("big")    # Statement 4: print
+    return result       # Statement 5: return
+```
+
+#### Miss
+
+**Number of statements not executed** during tests.
+
+If only 3 of the 5 statements above run during tests, Miss = 2.
+
+#### Cover (Coverage Percentage)
+
+**Percentage of statements executed:**
+
+```
+Cover = (Stmts - Miss) / Stmts * 100
+```
+
+Example: `(5 - 2) / 5 * 100 = 60%`
+
+**What's a good coverage percentage?**
+- **80%+** - Good coverage (recommended minimum)
+- **90%+** - Excellent coverage
+- **95%+** - Very thorough coverage
+- **100%** - Complete coverage (rare and not always necessary)
+
+**Note:** Coverage percentage alone doesn't guarantee quality! You can have 100% coverage with poor tests that don't assert anything meaningful.
+
+#### Branch Coverage
+
+**Branch coverage** tracks whether both paths of conditional statements are tested:
+
+```python
+def check_value(x):
+    if x > 0:           # Branch point
+        return "positive"    # Branch 1
+    else:
+        return "negative"    # Branch 2
+```
+
+Full branch coverage means tests execute both the `if` and `else` paths.
+
+**Enable branch coverage:**
+```bash
+# Add branch coverage tracking
+pytest --cov=. --cov-branch --cov-report=html
+```
+
+In the HTML report, yellow highlighting indicates branches that weren't fully tested.
+
+#### Missing Lines
+
+**Specific line numbers not covered:**
+
+```
+Missing: 45-52, 78-89, 145
+```
+
+This means:
+- Lines 45 through 52 not covered (range)
+- Lines 78 through 89 not covered (range)
+- Line 145 not covered (single line)
+
+Use this to identify exactly where to add tests!
+
+---
+
+### Viewing and Interpreting HTML Reports
+
+#### Opening the HTML Report
+
+After running:
+```bash
+pytest --cov=. --cov-report=html
+```
+
+Open `htmlcov/index.html` in your browser:
+```bash
+# macOS
+open htmlcov/index.html
+
+# Linux
+xdg-open htmlcov/index.html
+
+# Windows
+start htmlcov/index.html
+
+# Or use Python's HTTP server
+cd htmlcov && python -m http.server 8000
+# Then visit http://localhost:8000 in browser
+```
+
+#### Understanding the Index Page
+
+**Main dashboard shows:**
+
+1. **Total coverage** - Overall percentage for entire codebase
+2. **Module list** - All Python files with individual coverage
+3. **Columns:**
+   - **Module** - File path
+   - **statements** - Total executable lines
+   - **missing** - Lines not covered
+   - **excluded** - Lines explicitly excluded from coverage
+   - **coverage** - Percentage covered
+
+**Visual indicators:**
+- 🟢 **Green bar** - High coverage (typically >80%)
+- 🟡 **Yellow bar** - Medium coverage (50-80%)
+- 🔴 **Red bar** - Low coverage (<50%)
+
+**Sorting:**
+- Click column headers to sort
+- Find lowest coverage files first
+- Identify high-priority areas for new tests
+
+#### Understanding File Detail Pages
+
+Click any module to see line-by-line coverage:
+
+**Color coding:**
+```python
+# Green (covered) - This line was executed during tests
+def covered_function():
+    return "tested"
+
+# Red (uncovered) - This line was NOT executed
+def uncovered_function():
+    return "not tested"
+
+# Yellow (partial) - Only some branches were tested
+def partial_coverage(x):
+    if x > 0:
+        return "positive"  # Covered
+    else:
+        return "negative"  # Not covered (yellow highlighting on 'if')
+```
+
+**Line numbers:**
+- Click line numbers to get permalink
+- Share specific lines with team members
+- Reference in pull request comments
+
+**Context:**
+- See surrounding code for context
+- Understand why lines might not be covered
+- Identify dead code vs. edge cases
+
+#### Finding Coverage Gaps
+
+**Strategy for improving coverage:**
+
+1. **Sort by coverage percentage** - Start with lowest-covered files
+2. **Check missing lines** - See what's not tested
+3. **Prioritize critical code:**
+   - Core business logic (should have >90% coverage)
+   - Error handling paths
+   - Edge cases and boundary conditions
+4. **Ignore less critical code:**
+   - CLI argument parsing (hard to test)
+   - Debug/logging code
+   - Deprecated functions
+
+---
+
+### Coverage Configuration
+
+#### .coveragerc Configuration
+
+Coverage behavior is configured in `.coveragerc` or `pyproject.toml`:
+
+**Example `.coveragerc`:**
+```ini
+[run]
+# Which directories to measure
+source = .
+
+# Exclude test files from coverage measurement
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */venv/*
+    */env/*
+
+# Enable branch coverage
+branch = True
+
+[report]
+# Precision for coverage percentages
+precision = 2
+
+# Show missing line numbers
+show_missing = True
+
+# Sort report by coverage percentage
+sort = Cover
+
+[html]
+# Output directory for HTML reports
+directory = htmlcov
+
+[xml]
+# Output file for XML reports
+output = coverage.xml
+```
+
+**Or in `pyproject.toml`:**
+```toml
+[tool.coverage.run]
+source = ["."]
+omit = ["*/tests/*", "*/test_*.py", "*/__pycache__/*"]
+branch = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+sort = "Cover"
+
+[tool.coverage.html]
+directory = "htmlcov"
+```
+
+#### Excluding Code from Coverage
+
+**Exclude specific lines:**
+```python
+def debug_function():
+    if DEBUG:  # pragma: no cover
+        print("Debug info")
+```
+
+The `# pragma: no cover` comment tells coverage to ignore this line.
+
+**Exclude entire blocks:**
+```python
+if TYPE_CHECKING:  # pragma: no cover
+    from typing import SomeType
+```
+
+**Exclude functions:**
+```python
+def deprecated_function():  # pragma: no cover
+    """Old function, don't test."""
+    pass
+```
+
+**When to exclude:**
+- Debug/development code
+- Type checking imports
+- Defensive programming that can't be triggered
+- Platform-specific code
+- Deprecated functions
+
+**When NOT to exclude:**
+- Production code paths
+- Error handling
+- Business logic
+- Anything that runs in production
+
+---
+
+### Setting Coverage Thresholds
+
+#### Fail Tests if Coverage Too Low
+
+**Enforce minimum coverage:**
+```bash
+# Fail if coverage below 80%
+pytest --cov=. --cov-fail-under=80
+
+# Output if fails:
+# FAIL Required test coverage of 80% not reached. Total coverage: 72.45%
+```
+
+**Use in CI/CD:**
+```yaml
+# .github/workflows/test.yml
+- name: Run tests with coverage threshold
+  run: pytest --cov=. --cov-fail-under=80 --cov-report=xml
+```
+
+This ensures coverage never drops below acceptable levels.
+
+#### Module-Specific Thresholds
+
+Test specific modules with higher standards:
+
+```bash
+# Core module must have 90%+ coverage
+pytest tests/unit/test_client.py --cov=core/client --cov-fail-under=90
+
+# Integration tests need at least 70%
+pytest -m integration --cov=. --cov-fail-under=70
+```
+
+#### Progressive Coverage Goals
+
+**Strategy for improving coverage over time:**
+
+1. **Establish baseline:** `pytest --cov=. --cov-report=term` (say 65%)
+2. **Set achievable goal:** `--cov-fail-under=70`
+3. **Write tests to reach goal**
+4. **Increase threshold:** `--cov-fail-under=75`
+5. **Repeat until target reached** (e.g., 85%)
+
+This prevents coverage from decreasing while gradually improving it.
+
+---
+
+### Common Coverage Workflows
+
+#### Development Workflow
+
+**While writing new features:**
+
+```bash
+# 1. Run tests for your new module with coverage
+pytest tests/unit/test_new_feature.py --cov=core/new_feature --cov-report=term-missing
+
+# 2. See what's not covered
+# Missing: 45-52, 89
+
+# 3. Write tests for missing lines
+# (add tests)
+
+# 4. Re-run to verify
+pytest tests/unit/test_new_feature.py --cov=core/new_feature --cov-report=term-missing
+
+# 5. Repeat until satisfied with coverage
+```
+
+#### Pre-Commit Workflow
+
+**Before committing:**
+
+```bash
+# Check coverage for changed files
+pytest --cov=. --cov-report=term-missing --cov-fail-under=75
+
+# If coverage too low, add tests before committing
+```
+
+#### CI/CD Workflow
+
+**In continuous integration:**
+
+```bash
+# Run full test suite with coverage
+pytest -v \
+  --cov=. \
+  --cov-report=term-missing \
+  --cov-report=xml \
+  --cov-report=html \
+  --cov-fail-under=80
+
+# Upload coverage report to service (e.g., Codecov)
+# bash <(curl -s https://codecov.io/bash)
+```
+
+#### Coverage Investigation Workflow
+
+**Find and fix coverage gaps:**
+
+```bash
+# 1. Generate comprehensive HTML report
+pytest --cov=. --cov-report=html --cov-branch
+
+# 2. Open report and identify low-coverage files
+open htmlcov/index.html
+
+# 3. For each low-coverage file, run tests and see what's missing
+pytest tests/unit/test_low_coverage_module.py --cov=module --cov-report=term-missing -v
+
+# 4. Add tests for uncovered lines
+# 5. Verify improvement
+pytest --cov=module --cov-report=term-missing
+```
+
+---
+
+### Best Practices for Coverage
+
+**✅ DO:**
+
+1. **Aim for 80%+ overall coverage** - Good baseline for quality
+   ```bash
+   pytest --cov=. --cov-fail-under=80
+   ```
+
+2. **Focus on critical code first** - Core business logic needs highest coverage
+   ```bash
+   pytest --cov=core --cov-fail-under=90
+   ```
+
+3. **Use HTML reports for exploration** - Visual interface is easier to navigate
+   ```bash
+   pytest --cov=. --cov-report=html && open htmlcov/index.html
+   ```
+
+4. **Enable branch coverage** - Catch untested conditional paths
+   ```bash
+   pytest --cov=. --cov-branch --cov-report=html
+   ```
+
+5. **Run coverage regularly** - Track trends over time
+   ```bash
+   # Add to pre-commit hook or CI pipeline
+   pytest --cov=. --cov-fail-under=80
+   ```
+
+6. **Use coverage to find missing tests** - Not as quality metric alone
+   ```bash
+   # Find what's not tested, then write meaningful tests
+   pytest --cov=. --cov-report=term-missing
+   ```
+
+**❌ DON'T:**
+
+1. **Don't obsess over 100% coverage** - Diminishing returns after ~90%
+   - Some code is hard to test (CLI parsing, error paths)
+   - Focus on meaningful tests, not coverage numbers
+
+2. **Don't test just for coverage** - Write tests that verify behavior
+   ```python
+   # Bad: Test that adds no value
+   def test_coverage_only():
+       my_function()  # No assertions!
+
+   # Good: Test that verifies behavior
+   def test_behavior():
+       result = my_function()
+       assert result == expected_value
+   ```
+
+3. **Don't ignore coverage in tests themselves** - Tests can have bugs too
+   ```bash
+   # Consider test quality, not just coverage
+   pytest --cov=tests --cov-report=html  # See test coverage
+   ```
+
+4. **Don't exclude code without good reason** - `# pragma: no cover` should be rare
+   ```python
+   # Bad: Excluding production code
+   def important_function():  # pragma: no cover
+       return critical_calculation()
+
+   # Good: Excluding debug code
+   if DEBUG:  # pragma: no cover
+       print("Debug output")
+   ```
+
+5. **Don't skip edge cases** - High coverage with no edge case tests = false confidence
+   ```python
+   # Make sure to test boundaries
+   def test_edge_cases():
+       assert function(0) == expected_zero
+       assert function(-1) == expected_negative
+       assert function(MAX_INT) == expected_max
+   ```
+
+---
+
+### Understanding Coverage Limitations
+
+**What coverage DOES tell you:**
+- ✅ Which lines execute during tests
+- ✅ Which code paths are completely untested
+- ✅ Where to focus testing efforts
+
+**What coverage DOESN'T tell you:**
+- ❌ Whether tests are meaningful
+- ❌ Whether assertions are correct
+- ❌ Whether edge cases are covered
+- ❌ Code quality or design issues
+
+**Example:**
+
+```python
+def divide(a, b):
+    return a / b
+
+# Bad test: 100% coverage but no value
+def test_divide():
+    result = divide(10, 2)
+    # No assertion! Test passes but verifies nothing
+
+# Good test: Same coverage, verifies behavior
+def test_divide():
+    assert divide(10, 2) == 5
+    assert divide(1, 2) == 0.5
+
+# Better test: Also tests edge cases
+def test_divide_edge_cases():
+    assert divide(10, 2) == 5
+    with pytest.raises(ZeroDivisionError):
+        divide(10, 0)  # Edge case!
+```
+
+All three have 100% coverage, but quality varies dramatically!
+
+---
+
+### Troubleshooting Coverage Issues
+
+#### "Coverage not showing for my module"
+
+**Check --cov path:**
+```bash
+# Wrong: Module not found
+pytest --cov=nonexistent_module
+
+# Right: Valid module path
+pytest --cov=core --cov=adapters
+```
+
+**Check omit patterns:**
+Coverage might be excluding your files. Check `.coveragerc` or `pyproject.toml`.
+
+#### "No coverage data collected"
+
+**Make sure pytest-cov is installed:**
+```bash
+pip install pytest-cov
+
+# Verify
+pytest --version
+# Should show: plugins: cov-4.1.0, ...
+```
+
+**Check that tests actually run:**
+```bash
+# This should show tests running
+pytest -v --cov=.
+```
+
+#### "Coverage seems wrong/inaccurate"
+
+**Clear coverage cache:**
+```bash
+# Remove old coverage data
+rm -rf .coverage htmlcov/ coverage.xml
+
+# Re-run tests
+pytest --cov=. --cov-report=html
+```
+
+**Check for import-time side effects:**
+Code that runs on import may be covered even if not tested:
+```python
+# This runs when module is imported
+print("Module loaded")  # Shows as covered even if not tested
+```
+
+#### "HTML report shows red lines that ARE tested"
+
+**Possible causes:**
+1. **Tests skip without running code** - Check `pytest.skip()` calls
+2. **Code in `if __name__ == "__main__"`** - Not executed during tests
+3. **Import guards** - Code behind `if TYPE_CHECKING:` blocks
+4. **Defensive code** - Error paths that can't be triggered in tests
+
+#### "Coverage slows down tests significantly"
+
+**Coverage adds overhead:**
+```bash
+# Tests without coverage: 10 seconds
+pytest
+
+# Tests with coverage: 15 seconds
+pytest --cov=.
+```
+
+**Strategies:**
+- Run coverage only when needed, not on every test run
+- Use faster coverage: `pytest --cov=. --no-cov-on-fail`
+- Target specific modules: `pytest --cov=core` instead of `--cov=.`
+- Run in parallel: `pytest -n auto --cov=.`
+
+---
+
+### Quick Reference
+
+**Common coverage commands:**
+
+| Goal | Command |
+|------|---------|
+| Basic coverage | `pytest --cov=.` |
+| HTML report | `pytest --cov=. --cov-report=html` |
+| Show missing lines | `pytest --cov=. --cov-report=term-missing` |
+| Branch coverage | `pytest --cov=. --cov-branch` |
+| Specific module | `pytest --cov=core` |
+| Multiple modules | `pytest --cov=core --cov=adapters` |
+| Coverage threshold | `pytest --cov=. --cov-fail-under=80` |
+| XML for CI | `pytest --cov=. --cov-report=xml` |
+| Multiple reports | `pytest --cov=. --cov-report=html --cov-report=xml` |
+| Unit tests coverage | `pytest -m unit --cov=. --cov-report=html` |
+
+**Quick workflow:**
+```bash
+# Generate and view HTML report (recommended)
+pytest --cov=. --cov-report=html && open htmlcov/index.html
+
+# Terminal report with missing lines
+pytest --cov=. --cov-report=term-missing
+
+# Enforce minimum coverage
+pytest --cov=. --cov-fail-under=80
+```
+
+---
+
+### Summary
+
+Coverage reporting helps you:
+1. 📊 **Measure test completeness** - See what's tested and what's not
+2. 🎯 **Identify gaps** - Find code that needs more tests
+3. 📈 **Track progress** - Monitor coverage trends over time
+4. ✅ **Enforce standards** - Use thresholds to maintain quality
+
+**Remember:**
+- Coverage is a **tool**, not a **goal**
+- High coverage ≠ good tests (but low coverage = untested code)
+- Focus on **meaningful tests**, not just hitting coverage numbers
+- Use HTML reports for detailed analysis
+- Aim for 80%+ overall coverage with 90%+ for critical code
+
+**Next section:** [Troubleshooting](#troubleshooting) addresses common issues when running tests.
 
 ## Troubleshooting
 
