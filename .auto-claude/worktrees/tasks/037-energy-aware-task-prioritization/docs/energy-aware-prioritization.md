@@ -21,8 +21,9 @@ The Energy-Aware Task Prioritization system intelligently matches tasks to your 
 3. [How Daily Goals Are Adjusted](#how-daily-goals-are-adjusted)
 4. [Overriding Energy Suggestions](#overriding-energy-suggestions)
 5. [Available MCP Tools](#available-mcp-tools)
-6. [Examples & Workflows](#examples--workflows)
-7. [Best Practices](#best-practices)
+6. [Coach Persona Integration](#coach-persona-integration)
+7. [Examples & Workflows](#examples--workflows)
+8. [Best Practices](#best-practices)
 
 ---
 
@@ -547,6 +548,472 @@ Record whether energy-task match was helpful.
   ]
 }
 ```
+
+---
+
+## Coach Persona Integration
+
+The Coach persona has been enhanced with energy-aware capabilities to help you understand your energy patterns, explain prioritization decisions, and optimize your workflow.
+
+### What Coach Can Do
+
+**1. Explain Prioritization Decisions**
+
+Coach can explain why specific tasks were recommended for your current energy level:
+
+- **Task Suggestion Reasoning** - Why a task is perfect for your current energy
+- **Daily Goal Adjustments** - Why your target was increased/reduced today
+- **Mismatch Warnings** - When you're working against your energy level
+
+**2. Detect Energy Patterns**
+
+Coach analyzes your historical data to identify patterns:
+
+- **Energy Timing** - When is your energy typically highest/lowest?
+- **Task Completion** - What tasks do you complete on high vs low energy days?
+- **Sustainability** - Are you pushing through low energy too often?
+- **Avoidance** - Are you avoiding high-cognitive tasks when energy is high?
+- **Recovery** - How well do you recover from low energy days?
+
+**3. Provide Actionable Insights**
+
+Coach translates data into ADHD-friendly recommendations:
+
+- Personalized strategies based on your patterns
+- Specific suggestions for improving energy-task alignment
+- Encouragement and validation when you work with your energy
+- Gentle accountability when patterns show potential burnout
+
+---
+
+### Questions to Ask Coach
+
+#### Energy-Aware Morning Brief
+
+When you start your day, Coach can provide energy context:
+
+**"What's my energy level today and what should I focus on?"**
+
+Coach will:
+- Report your Oura readiness and sleep scores
+- Map readiness to energy level (high/medium/low)
+- Explain how your daily goal was adjusted and why
+- Recommend 3-5 tasks that match your current energy
+- Explain the reasoning behind each recommendation
+
+**Example Coach Response:**
+```
+Your Oura readiness is 58/100 with a sleep score of 62/100. This indicates low
+energy today. I've reduced your daily target from 18 to 14 points (-25%) to
+prevent burnout and protect your wellbeing.
+
+Given your low energy, here's what I recommend focusing on today:
+
+1. [LOW] File expense reports (Score: 145)
+   → Perfect match: Low cognitive load task. This is checkbox work that's
+     satisfying to complete and requires minimal mental effort. Quick win
+     bonus for momentum building.
+
+2. [LOW] Respond to team emails (Score: 135)
+   → Perfect match: Admin work ideal for low energy. Clear, finite tasks
+     that you can knock out without draining yourself further.
+
+3. [MEDIUM] Update meeting notes (Score: 65)
+   → Acceptable match: Light documentation work that doesn't require deep
+     thinking. Save deeper work for when your energy improves.
+
+Remember: Working with your brain today, not against it. These tasks will
+help you maintain momentum and protect your streak without pushing through
+exhaustion. 🧠✨
+```
+
+---
+
+#### Energy Pattern Detection
+
+Ask Coach to analyze your historical patterns:
+
+**"When is my energy highest during the week?"**
+
+Coach analyzes `energy_states` and Oura data from the past 30-90 days:
+
+```
+Looking at your energy patterns over the past 60 days:
+
+📊 Your energy peaks:
+- Tuesdays and Wednesdays (average readiness: 82)
+- Mid-morning (9am-11am) after medication
+
+📉 Your energy dips:
+- Mondays (average readiness: 68) - recovery from weekend
+- Friday afternoons (average readiness: 71) - accumulated fatigue
+
+💡 Recommendation: Schedule high-cognitive work (architecture, design,
+complex debugging) for Tuesday and Wednesday mornings. Save admin work
+and meetings for Monday mornings and Friday afternoons.
+```
+
+**"What tasks do I complete on high vs low energy days?"**
+
+```
+Analyzing your task completion patterns:
+
+⚡ High Energy Days (readiness 85+):
+- You complete 2.3x more high-cognitive tasks
+- Average: 3 milestone/deliverable tasks completed
+- Deep work sessions average 4.2 hours
+- 89% success rate on complex tasks
+
+🔋 Low Energy Days (readiness < 70):
+- You complete 4.1x more checkbox/admin tasks
+- Average: 8 low-cognitive tasks completed
+- Quick wins (≤2 hrs) have 94% completion rate
+- High-cognitive tasks have only 31% completion rate on these days
+
+📌 Insight: You're effectively working with your energy! On low energy days,
+you pivot to admin work rather than forcing complex tasks. This is exactly
+the ADHD-friendly approach I recommend.
+```
+
+**"Am I pushing through low energy days too often?"**
+
+```
+Checking your energy sustainability over the past 30 days:
+
+⚠️ Sustainability Concerns:
+- 8 out of 12 low energy days (67%) you still attempted high-cognitive tasks
+- Average completion rate on those tasks: 38%
+- 5 days where you worked past burnout signals
+
+✅ Good Patterns:
+- 4 low energy days where you focused on admin/checkbox work
+- 100% completion rate on appropriate energy-task matches
+- Faster recovery (1.8 days vs 2.4 days) when you honor low energy
+
+💡 Recommendation: Trust the low energy signals more. When readiness < 70,
+pivot to admin work immediately. You'll recover faster and maintain better
+long-term productivity. Your brain is asking for rest, not push-through.
+```
+
+**"Are there tasks I'm avoiding when my energy is high?"**
+
+```
+Analyzing avoidance patterns on high energy days:
+
+🎯 High Energy Opportunities (last 15 days):
+- 7 days with readiness >= 85
+- You had 12 high-cognitive tasks available
+
+📊 What Actually Happened:
+- You completed 3 high-cognitive tasks (25% of opportunities)
+- Spent 60% of high-energy time on medium-cognitive work
+- 4 high-cognitive tasks marked as "priority" but still incomplete
+
+🚩 Potential Avoidance:
+- "Write technical architecture doc" - available on 4 high-energy days, not started
+- "Refactor authentication system" - available on 3 high-energy days, not started
+
+💡 Pattern Detected: You may be avoiding complex tasks even when energy is
+optimal. This is common with ADHD - the hardest part is starting. Consider:
+1. Breaking these into smaller first steps
+2. Using high energy for just 1 hour on the avoided task
+3. Pairing with a body double or accountability partner
+
+Your brain is capable of this work when energy is high - let's work on the
+starting friction. 🧠
+```
+
+---
+
+### How Coach Explains Prioritization
+
+#### Task Suggestion Reasoning
+
+When Coach recommends tasks, the explanation includes:
+
+**High Energy Day Example:**
+```
+Task: "Architect new microservice" (Score: 138)
+
+Why this task matches your HIGH energy:
+✓ High cognitive load requirement aligns perfectly with your peak capacity
+✓ Milestone-level work (+20 bonus) - great for when you can handle complexity
+✓ Deep work drain type (+10 bonus) - you have the focus for this right now
+✓ Large task estimate (+10 bonus) - you have sustained energy for extended work
+
+This is exactly the kind of complex, strategic work to tackle when your brain
+is firing on all cylinders. Don't waste this energy window on email! 🚀
+```
+
+**Low Energy Day Example:**
+```
+Task: "File expense reports" (Score: 145)
+
+Why this task matches your LOW energy:
+✓ Low cognitive load - minimal mental effort required
+✓ Checkbox tier (+20 bonus) - satisfying to complete, maintains momentum
+✓ Admin work (+10 bonus) - clear steps, no creative thinking needed
+✓ Quick win (+15 bonus) - can finish in under 2 hours, build momentum
+
+This is perfect for today. Admin work feels accomplishing without draining
+you further. You're working WITH your brain, not against it. 🧠✨
+```
+
+#### Daily Goal Adjustment Reasoning
+
+Coach explains goal adjustments with context:
+
+**Increase Goal (+15%):**
+```
+Your Oura readiness is 92/100 (sleep: 88/100). You're at peak capacity!
+
+I've increased your daily target from 18 to 21 points (+15%) because:
+- High readiness indicates you have the energy for higher output
+- Sleep quality is excellent - recovery was effective
+- This leverages your peak performance window
+- You can handle more complex/valuable work today
+
+Use this energy window strategically. Schedule your most important high-cognitive
+work for this morning when you're at your best. 💪
+```
+
+**Maintain Goal (0%):**
+```
+Your Oura readiness is 77/100 (sleep: 75/100). Solid baseline!
+
+Your daily target stays at 18 points because:
+- Good readiness in the healthy middle range
+- Sleep was adequate - you're rested but not exceptional
+- Standard target is appropriate for this energy level
+- You can handle your usual mix of work
+
+This is a "normal good day" - proceed with your planned tasks. Mix of medium
+and some high-cognitive work is fine. ✅
+```
+
+**Reduce Goal (-25%):**
+```
+Your Oura readiness is 55/100 (sleep: 62/100). Recovery mode today.
+
+I've reduced your daily target from 18 to 14 points (-25%) because:
+- Low readiness indicates your body needs recovery time
+- Sleep wasn't restorative - you need to honor that
+- Pushing through low energy leads to burnout and slower recovery
+- Protecting your wellbeing and long-term sustainability
+
+This isn't giving up - this is strategic rest. Focus on admin/checkbox work,
+maintain your streak, and you'll recover faster. Your brain will thank you. 🛡️
+```
+
+#### Energy-Task Mismatch Warnings
+
+Coach detects when you're working against your energy:
+
+**High-Cognitive Task on Low Energy:**
+```
+⚠️ Energy Mismatch Detected
+
+You're attempting "Debug complex authentication issue" (high cognitive load)
+while your energy is LOW (readiness: 58).
+
+This is a poor match because:
+- Complex debugging requires sustained focus and deep thinking
+- Low energy makes it harder to hold multiple variables in working memory
+- Frustration risk is high when capacity doesn't match task demands
+- You're likely to spin your wheels and feel discouraged
+
+Alternative approach:
+1. Pause this task - it's not going away
+2. Switch to admin/checkbox work to build momentum
+3. Revisit this tomorrow when energy improves
+4. OR override to high energy if medication/coffee just kicked in
+
+Your brain isn't broken - the timing is just wrong. 🧠
+```
+
+**Low-Cognitive Tasks on High Energy:**
+```
+💡 Energy Optimization Suggestion
+
+You've been doing admin work for 2 hours while your energy is HIGH
+(readiness: 88). You're underutilizing your peak capacity!
+
+Available high-cognitive tasks that match this energy:
+1. "Architect payment processing service" (Score: 138)
+2. "Write technical spec for API redesign" (Score: 132)
+3. "Debug race condition in scheduler" (Score: 128)
+
+Consider: Can admin work wait until afternoon when energy dips? Your high
+energy window is precious - use it for work that requires your best thinking.
+
+This isn't pressure - it's optimization. But if you need easy wins today for
+momentum, that's valid too. You're the expert on what you need. 🎯
+```
+
+---
+
+### Coach in Morning Briefings
+
+Your morning brief automatically includes energy context when you use the briefing engine:
+
+```
+Good morning! Let's plan your Monday.
+
+🧠 Energy & Readiness
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Oura Readiness: 72/100
+Sleep Score: 74/100
+Energy Level: Medium
+Daily Goal: 18 points (no adjustment)
+
+You're at a solid baseline today. Good readiness in the healthy range -
+you can handle your usual mix of work. Not a peak day, but definitely not
+a recovery day either.
+
+Suggested approach: Mix of medium-cognitive and some high-cognitive tasks.
+Start with a quick win to build momentum, then tackle 1-2 important tasks
+during your morning focus window.
+
+📋 Recommended Tasks
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Based on your medium energy, here are today's top recommendations:
+
+1. [MEDIUM] Implement user profile API endpoints
+   → Perfect match for medium energy. Progress tier work that moves projects
+     forward without requiring peak cognitive capacity.
+
+2. [MEDIUM] Write documentation for onboarding flow
+   → Good medium-cognitive work. Familiar domain, clear structure.
+
+3. [LOW] Review and merge dependency updates
+   → Quick win to start - builds momentum without draining energy.
+
+4. [HIGH] Design caching strategy for analytics
+   → Stretch goal if you hit flow state. Available if energy peaks.
+
+5. [LOW] Respond to team emails and schedule 1:1s
+   → Save for afternoon if energy dips.
+
+🎯 Strategy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Start with #3 (quick win), move to #1 and #2 (medium work), attempt #4 if
+you're in flow. Keep #5 in your back pocket for end of day.
+
+Remember: You're working WITH your brain today, not against it. 🧠✨
+```
+
+---
+
+### Asking Coach for Pattern Insights
+
+You can ask Coach these questions anytime:
+
+**Energy Timing Patterns:**
+- "When is my energy highest during the day?"
+- "What days of the week am I most productive?"
+- "How long does my medication window last?"
+- "Do I have consistent energy dips? When?"
+
+**Task Completion Patterns:**
+- "What types of tasks do I complete most on high energy days?"
+- "Am I getting enough high-cognitive work done?"
+- "What's my completion rate for different cognitive loads?"
+- "Which tasks do I avoid even on high energy days?"
+
+**Sustainability & Recovery:**
+- "Am I pushing through low energy too often?"
+- "How long does it take me to recover from low energy days?"
+- "What happens when I ignore low energy signals?"
+- "Am I protecting my streak without burning out?"
+
+**Override & Feedback:**
+- "When do I most often override energy suggestions?"
+- "How accurate are the energy-task matches for me?"
+- "What patterns show up in my override reasons?"
+- "Does providing feedback help improve recommendations?"
+
+Coach uses data from:
+- `energy_states` table (manual logs + Oura snapshots)
+- `tasks` table (cognitive load, completion status, timestamps)
+- `daily_goals` table (adjustments, actual performance)
+- `energy_feedback` table (your feedback on matches)
+- Oura cache database (historical readiness and sleep scores)
+
+---
+
+### ADHD-Friendly Coach Features
+
+**Validates Your Experience:**
+```
+"I see you overrode to high energy 30 minutes after logging low. That's
+completely normal with ADHD medication timing! The system doesn't know about
+your meds, but YOU do. This override data helps me learn your patterns."
+```
+
+**Removes Guilt:**
+```
+"You've had 4 low energy days this week. That's not laziness - that's biology.
+Your Oura readiness has been below 70 all week. Reducing your target isn't
+giving up, it's strategic rest. You'll recover faster this way."
+```
+
+**Celebrates Working With Energy:**
+```
+"Great job! You focused on admin work today despite having 3 high-cognitive
+tasks available. Your readiness was 62 - low energy. You honored that signal
+instead of pushing through. This is exactly the ADHD-friendly approach that
+protects long-term productivity. 🎉"
+```
+
+**Encourages Starting:**
+```
+"You've avoided 'Write architecture doc' on 4 high energy days. Your brain CAN
+do this work - the hard part is starting. What if you committed to just 30
+minutes tomorrow morning when your medication kicks in? Starting is everything
+with ADHD. You've got this. 💪"
+```
+
+**Provides Context, Not Pressure:**
+```
+"Your energy is high (readiness: 89), but you've been doing admin work. That's
+okay! If you need easy wins today for momentum or emotional reasons, that's
+valid. But if you're avoiding hard work out of anxiety, I want you to know:
+your capacity is there today if you want to use it. Your choice. 🧠"
+```
+
+---
+
+### Implementation Details
+
+**Coach Persona Documentation:**
+- Full prompt and pattern detection queries: `Agents/Coach.md`
+- Energy explanation templates built into Coach persona
+- Pattern detection SQL queries analyze historical data
+
+**Briefing Engine Integration:**
+- Energy context automatically included in morning briefs
+- `Tools/briefing_engine.py` handles energy context formatting
+- Helper methods: `format_energy_context_for_coach()`, `explain_task_suggestion()`, `explain_goal_adjustment()`
+
+**Data Sources:**
+- Oura readiness/sleep: `~/.oura-cache/oura-health.db` (via `oura-cache.ts`)
+- Energy logs: `energy_states` table in WorkOS database
+- Task data: `tasks` table with `cognitive_load` field
+- Daily goals: `daily_goals` table with adjustment tracking
+- Feedback: `energy_feedback` table for learning
+
+---
+
+### Next Steps with Coach
+
+1. **Start Using Morning Briefs** - Get energy context automatically each day
+2. **Ask Pattern Questions** - "When is my energy highest?" to understand your rhythms
+3. **Trust the Recommendations** - Especially on low energy days
+4. **Override When You Know Better** - Medication, urgency, external factors
+5. **Provide Feedback** - Help Coach learn what works for you
+6. **Track Patterns Over Time** - Weekly reviews with Coach to spot trends
+
+**Remember:** Coach is your ally in working with your brain, not against it. The goal isn't perfect productivity every day - it's sustainable productivity over time. 🧠✨
 
 ---
 
