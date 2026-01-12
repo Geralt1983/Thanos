@@ -144,6 +144,7 @@ class TestCommandRouter:
         assert result.success is False
         captured = capsys.readouterr()
         assert "Unknown command" in captured.out
+        assert Colors.RED in captured.out
 
     def test_command_aliases(self, router):
         """Test command aliases route to same handler"""
@@ -171,6 +172,7 @@ class TestAgentCommand:
         assert router.current_agent == "strategy"
         captured = capsys.readouterr()
         assert "Switched to" in captured.out
+        assert Colors.GREEN in captured.out
 
     def test_agent_switch_invalid(self, router, capsys):
         """Test switching to invalid agent"""
@@ -180,6 +182,7 @@ class TestAgentCommand:
         assert router.current_agent == "ops"  # Unchanged
         captured = capsys.readouterr()
         assert "Unknown agent" in captured.out
+        assert Colors.RED in captured.out
 
     def test_agent_no_args(self, router, capsys):
         """Test /agent without arguments shows current and available"""
@@ -264,6 +267,7 @@ class TestCommitmentsCommand:
             assert result.success is False
             captured = capsys.readouterr()
             assert "No commitments file found" in captured.out
+            assert Colors.RED in captured.out
 
     def test_commitments_read_error(self, router, capsys):
         """Test commitments command handles read errors"""
@@ -274,6 +278,7 @@ class TestCommitmentsCommand:
                 assert result.success is False
                 captured = capsys.readouterr()
                 assert "Error reading commitments" in captured.out
+                assert Colors.RED in captured.out
 
     def test_commitments_alias(self, router, capsys):
         """Test /c alias works"""
@@ -330,6 +335,7 @@ class TestClearCommand:
         mock_dependencies["session_manager"].clear.assert_called_once()
         captured = capsys.readouterr()
         assert "Conversation cleared" in captured.out
+        assert Colors.GREEN in captured.out
 
 
 class TestSaveCommand:
@@ -343,6 +349,7 @@ class TestSaveCommand:
         mock_dependencies["session_manager"].save.assert_called_once()
         captured = capsys.readouterr()
         assert "Session saved" in captured.out
+        assert Colors.GREEN in captured.out
 
 
 class TestRunCommand:
@@ -375,6 +382,7 @@ class TestRunCommand:
         assert result.success is False
         captured = capsys.readouterr()
         assert "Error running command" in captured.out
+        assert Colors.RED in captured.out
 
 
 class TestListAgentsCommand:
@@ -487,6 +495,9 @@ class TestColors:
         """Test all color codes are defined"""
         assert hasattr(Colors, "PURPLE")
         assert hasattr(Colors, "CYAN")
+        assert hasattr(Colors, "RED")
+        assert hasattr(Colors, "YELLOW")
+        assert hasattr(Colors, "GREEN")
         assert hasattr(Colors, "DIM")
         assert hasattr(Colors, "RESET")
         assert hasattr(Colors, "BOLD")
@@ -494,6 +505,184 @@ class TestColors:
         # Check they are strings
         assert isinstance(Colors.PURPLE, str)
         assert isinstance(Colors.CYAN, str)
+        assert isinstance(Colors.RED, str)
+        assert isinstance(Colors.YELLOW, str)
+        assert isinstance(Colors.GREEN, str)
         assert isinstance(Colors.DIM, str)
         assert isinstance(Colors.RESET, str)
         assert isinstance(Colors.BOLD, str)
+
+
+class TestColorDifferentiation:
+    """Test color differentiation for errors (RED), warnings (YELLOW), and successes (GREEN)"""
+
+    # ========================================================================
+    # Error Messages (RED)
+    # ========================================================================
+
+    def test_error_unknown_command_uses_red(self, router, capsys):
+        """Test that unknown command errors use RED color"""
+        router.route_command("/nonexistent")
+        captured = capsys.readouterr()
+        assert "Unknown command" in captured.out
+        assert Colors.RED in captured.out
+        # Verify it's not using other semantic colors
+        assert Colors.GREEN not in captured.out
+        assert Colors.YELLOW not in captured.out
+
+    def test_error_invalid_agent_uses_red(self, router, capsys):
+        """Test that invalid agent errors use RED color"""
+        router.route_command("/agent invalidagent")
+        captured = capsys.readouterr()
+        assert "Unknown agent" in captured.out
+        assert Colors.RED in captured.out
+        assert Colors.GREEN not in captured.out
+
+    def test_error_missing_file_uses_red(self, router, capsys):
+        """Test that missing file errors use RED color"""
+        with patch("pathlib.Path.exists", return_value=False):
+            router.route_command("/commitments")
+            captured = capsys.readouterr()
+            assert "No commitments file found" in captured.out
+            assert Colors.RED in captured.out
+            assert Colors.GREEN not in captured.out
+
+    def test_error_read_failure_uses_red(self, router, capsys):
+        """Test that read failures use RED color"""
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("pathlib.Path.read_text", side_effect=OSError("Read error")):
+                router.route_command("/commitments")
+                captured = capsys.readouterr()
+                assert "Error reading commitments" in captured.out
+                assert Colors.RED in captured.out
+                assert Colors.GREEN not in captured.out
+
+    def test_error_command_execution_uses_red(self, router, mock_dependencies, capsys):
+        """Test that command execution errors use RED color"""
+        mock_dependencies["orchestrator"].run_command.side_effect = Exception(
+            "Execution failed"
+        )
+        router.route_command("/run pa:daily")
+        captured = capsys.readouterr()
+        assert "Error running command" in captured.out
+        assert Colors.RED in captured.out
+        assert Colors.GREEN not in captured.out
+
+    # ========================================================================
+    # Warning Messages (YELLOW)
+    # ========================================================================
+
+    def test_warning_neo4j_connection_uses_yellow(self, router, capsys):
+        """Test that Neo4j connection warnings use YELLOW color"""
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            # Set router's memos to initialized state to trigger Neo4j check
+            router._memos_initialized = True
+            # Mock get_memos to raise exception simulating Neo4j connection issue
+            with patch.object(router, "_get_memos") as mock_get_memos:
+                mock_memos = Mock()
+                mock_memos.neo4j_db.verify_connectivity.side_effect = Exception("Connection error")
+                mock_get_memos.return_value = mock_memos
+                router.route_command("/agents")
+                captured = capsys.readouterr()
+                if "Neo4j connection issue" in captured.out:
+                    assert Colors.YELLOW in captured.out
+                    assert Colors.RED not in captured.out
+
+    def test_warning_memos_not_initialized_uses_yellow(self, router, capsys):
+        """Test that MemOS initialization warnings use YELLOW color"""
+        with patch("Tools.command_router.MEMOS_AVAILABLE", True):
+            # Ensure router is not initialized
+            router._memos_initialized = False
+            router.route_command("/agents")
+            captured = capsys.readouterr()
+            if "MemOS available but not initialized" in captured.out:
+                assert Colors.YELLOW in captured.out
+                assert Colors.RED not in captured.out
+
+    def test_warning_memos_install_tip_uses_yellow(self, router, capsys):
+        """Test that MemOS installation tips use YELLOW color"""
+        with patch("Tools.command_router.MEMOS_AVAILABLE", False):
+            router.route_command("/agents")
+            captured = capsys.readouterr()
+            if "Install neo4j and chromadb packages" in captured.out:
+                assert Colors.YELLOW in captured.out
+                assert Colors.RED not in captured.out
+
+    def test_warning_help_tips_use_yellow(self, router, capsys):
+        """Test that usage tips in help use YELLOW color"""
+        router.route_command("/help")
+        captured = capsys.readouterr()
+        assert 'Tip: Use """ for multi-line input' in captured.out
+        assert Colors.YELLOW in captured.out
+
+    # ========================================================================
+    # Success Messages (GREEN)
+    # ========================================================================
+
+    def test_success_agent_switch_uses_green(self, router, capsys):
+        """Test that successful agent switch uses GREEN color"""
+        router.route_command("/agent strategy")
+        captured = capsys.readouterr()
+        assert "Switched to" in captured.out
+        assert Colors.GREEN in captured.out
+        # Verify it's not using error colors
+        assert Colors.RED not in captured.out
+
+    def test_success_clear_history_uses_green(self, router, capsys):
+        """Test that clear history success uses GREEN color"""
+        router.route_command("/clear")
+        captured = capsys.readouterr()
+        assert "Conversation cleared" in captured.out
+        assert Colors.GREEN in captured.out
+        assert Colors.RED not in captured.out
+
+    def test_success_save_session_uses_green(self, router, capsys):
+        """Test that save session success uses GREEN color"""
+        router.route_command("/save")
+        captured = capsys.readouterr()
+        assert "Session saved" in captured.out
+        assert Colors.GREEN in captured.out
+        assert Colors.RED not in captured.out
+
+    # ========================================================================
+    # Color Consistency Tests
+    # ========================================================================
+
+    def test_multiple_errors_all_use_red(self, router, capsys):
+        """Test that multiple error scenarios consistently use RED"""
+        error_commands = [
+            "/nonexistent",
+            "/agent invalidagent",
+        ]
+
+        for cmd in error_commands:
+            capsys.readouterr()  # Clear previous output
+            router.route_command(cmd)
+            captured = capsys.readouterr()
+            assert Colors.RED in captured.out, f"Command {cmd} should use RED for errors"
+
+    def test_multiple_successes_all_use_green(self, router, capsys):
+        """Test that multiple success scenarios consistently use GREEN"""
+        success_commands = [
+            "/clear",
+            "/save",
+            "/agent ops",
+        ]
+
+        for cmd in success_commands:
+            capsys.readouterr()  # Clear previous output
+            router.route_command(cmd)
+            captured = capsys.readouterr()
+            assert Colors.GREEN in captured.out, f"Command {cmd} should use GREEN for success"
+
+    def test_color_codes_are_properly_reset(self, router, capsys):
+        """Test that color codes are properly reset after use"""
+        # Test error message
+        router.route_command("/nonexistent")
+        captured = capsys.readouterr()
+        assert Colors.RESET in captured.out
+
+        # Test success message
+        router.route_command("/save")
+        captured = capsys.readouterr()
+        assert Colors.RESET in captured.out

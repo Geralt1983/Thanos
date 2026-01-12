@@ -59,6 +59,9 @@ class Colors:
 
     PURPLE = "\033[35m"
     CYAN = "\033[36m"
+    RED = "\033[31m"
+    YELLOW = "\033[33m"
+    GREEN = "\033[32m"
     DIM = "\033[2m"
     RESET = "\033[0m"
     BOLD = "\033[1m"

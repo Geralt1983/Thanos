@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "004-add-session-history-search-command",
+  "spec": "008-improve-cli-error-message-visibility-with-color-di",
   "state": "building",
   "subtasks": {
-    "completed": 11,
+    "completed": 12,
     "total": 13,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Testing & Documentation",
-    "id": 4,
-    "total": 4
+    "current": "",
+    "id": 0,
+    "total": 0
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 215,
-    "started_at": "2026-01-12T01:35:09.015660"
+    "number": 14,
+    "started_at": "2026-01-11T22:40:48.603059"
   },
-  "last_update": "2026-01-12T03:16:11.155197"
+  "last_update": "2026-01-11T23:11:34.323957"
 }

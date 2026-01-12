@@ -103,7 +103,7 @@ class CoreHandler(BaseHandler):
   /a = /agent, /s = /state, /c = /commitments
   /r = /resume, /m = /model, /h = /help, /q = /quit
 
-{Colors.DIM}Tip: Use \"\"\" for multi-line input{Colors.RESET}
+{Colors.YELLOW}Tip: Use \"\"\" for multi-line input{Colors.RESET}
 """)
         return CommandResult()
 
@@ -152,5 +152,5 @@ class CoreHandler(BaseHandler):
             self.orchestrator.run_command(args, stream=True)
             return CommandResult()
         except Exception as e:
-            print(f"{Colors.DIM}Error running command: {e}{Colors.RESET}")
+            print(f"{Colors.RED}Error running command: {e}{Colors.RESET}")
             return CommandResult(success=False)
