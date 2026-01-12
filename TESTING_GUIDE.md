@@ -3491,7 +3491,803 @@ Coverage reporting helps you:
 
 ## Troubleshooting
 
-*This section will be completed in subtask 2.7*
+This section covers common issues you might encounter when running tests and how to resolve them.
+
+### Quick Troubleshooting Checklist
+
+Before diving into specific errors, try these common fixes:
+
+```bash
+# 1. Update test dependencies
+pip install -r requirements-test.txt
+
+# 2. Clear pytest cache
+pytest --cache-clear
+
+# 3. Verify Python version (3.8+ required)
+python --version
+
+# 4. Run a simple test to verify setup
+pytest tests/unit/test_client.py -v
+```
+
+---
+
+### Missing Dependencies
+
+#### Error: ModuleNotFoundError: No module named 'pytest'
+
+**Cause:** Test dependencies not installed.
+
+**Solution:**
+```bash
+# Install all test dependencies
+pip install -r requirements-test.txt
+
+# Or install individually
+pip install pytest pytest-cov pytest-mock pytest-asyncio
+```
+
+**Verification:**
+```bash
+pytest --version
+# Should show: pytest 7.4.0 or higher
+```
+
+---
+
+#### Error: ModuleNotFoundError: No module named 'chromadb'
+
+**Cause:** ChromaDB is an optional dependency not installed.
+
+**Solution:**
+
+**Option 1: Skip ChromaDB tests (recommended for most development)**
+```bash
+# ChromaDB tests are integration tests, skip them
+pytest -m "not integration"
+
+# Or run only unit tests
+pytest -m unit
+```
+
+**Option 2: Install ChromaDB for integration testing**
+```bash
+pip install chromadb
+
+# Then run integration tests
+pytest -m integration
+```
+
+**Note:** Most tests mock ChromaDB, so you don't need it installed for normal development.
+
+---
+
+#### Error: No module named 'google.auth' or 'googleapiclient'
+
+**Cause:** Google Calendar API dependencies not installed.
+
+**Solution:**
+
+These are automatically mocked in unit tests. If you see this error:
+
+1. **For unit tests:** The test should be using `sys.modules` mocking. Example:
+   ```python
+   # This should already be in the test file
+   sys.modules["google.oauth2.credentials"] = Mock()
+   sys.modules["googleapiclient.discovery"] = Mock()
+   ```
+
+2. **For integration tests:** Install Google Calendar dependencies:
+   ```bash
+   pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
+   ```
+
+3. **Or skip these tests:**
+   ```bash
+   pytest -m "not requires_google_calendar"
+   ```
+
+---
+
+#### Error: coverage.py error: No data was collected
+
+**Cause:** Coverage can't find source code, or no tests ran.
+
+**Solution:**
+
+1. **Check if tests actually ran:**
+   ```bash
+   # Run without coverage first
+   pytest -v
+   ```
+
+2. **Use correct coverage path:**
+   ```bash
+   # Correct: specify source directory
+   pytest --cov=. --cov-report=term
+
+   # Or target specific modules
+   pytest --cov=Tools --cov=Engine
+   ```
+
+3. **Check .coveragerc configuration:**
+   ```bash
+   # If .coveragerc exists, ensure [run] section includes:
+   # source = .
+   # omit = tests/*, venv/*, .venv/*
+   ```
+
+---
+
+### API Key and Credential Errors
+
+#### Tests with @pytest.mark.requires_openai are skipped
+
+**Cause:** OpenAI API key not configured.
+
+**Expected Behavior:** This is normal! Tests requiring OpenAI are **automatically skipped** if no API key is set.
+
+**To run OpenAI tests (optional):**
+```bash
+# Set your API key
+export OPENAI_API_KEY='sk-your-key-here'
+
+# Run OpenAI tests
+pytest -m requires_openai -v
+```
+
+**See test output:**
+```
+tests/integration/test_chroma_adapter_integration.py::test_semantic_search SKIPPED
+Reason: OpenAI API key not configured
+```
+
+**Note:**
+- These tests will incur API costs if you run them
+- Most development doesn't require running these tests
+- CI/CD should skip these tests unless specifically configured
+
+---
+
+#### Tests with @pytest.mark.requires_google_calendar are skipped
+
+**Cause:** Google Calendar credentials not configured.
+
+**Expected Behavior:** This is normal! Tests requiring Google Calendar are **automatically skipped** if credentials aren't set.
+
+**To run Google Calendar tests (optional):**
+
+1. **Set up credentials (see External Dependencies section)**
+2. **Set environment variables:**
+   ```bash
+   export GOOGLE_CALENDAR_CLIENT_ID='your-client-id'
+   export GOOGLE_CALENDAR_CLIENT_SECRET='your-client-secret'
+   export GOOGLE_CALENDAR_REDIRECT_URI='http://localhost:8080/oauth2callback'
+   ```
+
+3. **Run the tests:**
+   ```bash
+   pytest -m requires_google_calendar -v
+   ```
+
+**Note:** Use a test Google account, not your production account!
+
+---
+
+#### Error: pytest.skip("Google Calendar credentials not available...")
+
+**Cause:** Test is checking for credentials and explicitly skipping.
+
+**This is expected!** The test is working correctly by skipping when credentials aren't available.
+
+**If you want to run the test:**
+- Follow the setup in the "External Dependencies" section
+- Or accept that these tests are optional for most development
+
+---
+
+### Database Connection Errors
+
+#### Error: neo4j.exceptions.ServiceUnavailable: Failed to establish connection
+
+**Cause:** Test is trying to connect to a real Neo4j database.
+
+**Solution:**
+
+**This should NOT happen!** All Neo4j connections are mocked in the test suite.
+
+1. **Check the test is using mocks:**
+   ```python
+   # Tests should have this pattern:
+   sys.modules["neo4j"] = Mock()
+   ```
+
+2. **If you see this in a new test you're writing:**
+   - Add Neo4j mocking in the test file
+   - See `tests/unit/test_neo4j_session_pool.py` for examples
+
+3. **For integration tests:**
+   - Neo4j is still mocked, not a real connection
+   - Check conftest.py fixtures
+
+**Note:** The Thanos test suite does NOT require a real Neo4j database.
+
+---
+
+#### Error: Connection to ChromaDB failed
+
+**Cause:** Integration test trying to use ChromaDB, but it's not available.
+
+**Solution:**
+
+1. **For development, skip integration tests:**
+   ```bash
+   pytest -m "not integration"
+   ```
+
+2. **To run ChromaDB integration tests:**
+   ```bash
+   # Install ChromaDB
+   pip install chromadb
+
+   # Run integration tests
+   pytest tests/integration/test_chroma_adapter_integration.py -v
+   ```
+
+**Note:** ChromaDB integration tests use temporary, in-memory instances - no persistent database needed.
+
+---
+
+### Import Errors
+
+#### Error: ImportError: cannot import name 'X' from 'Tools.adapters.Y'
+
+**Cause:** Import path incorrect or module not in PYTHONPATH.
+
+**Solution:**
+
+1. **Verify you're running pytest from project root:**
+   ```bash
+   # Check current directory
+   pwd
+   # Should be: /path/to/Thanos
+
+   # Run from project root
+   cd /path/to/Thanos
+   pytest
+   ```
+
+2. **Check PYTHONPATH (usually not needed):**
+   ```bash
+   # pytest should find modules automatically
+   # If not, try:
+   export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+   pytest
+   ```
+
+3. **Verify the module exists:**
+   ```bash
+   # Check the file exists
+   ls -l Tools/adapters/
+   ```
+
+4. **Check for circular imports:**
+   ```bash
+   # Run a single test file to isolate the issue
+   pytest tests/unit/test_client.py -v
+   ```
+
+---
+
+#### Error: ImportError: attempted relative import with no known parent package
+
+**Cause:** Running test file directly instead of using pytest.
+
+**Solution:**
+
+**Don't do this:**
+```bash
+python tests/unit/test_client.py  # ❌ Wrong
+```
+
+**Do this:**
+```bash
+pytest tests/unit/test_client.py  # ✅ Correct
+```
+
+**Why:** Pytest sets up the import paths correctly; running Python directly doesn't.
+
+---
+
+#### Error: fixture 'X' not found
+
+**Cause:** Fixture defined in wrong conftest.py or not in test's scope.
+
+**Solution:**
+
+1. **Check fixture location:**
+   ```bash
+   # Fixtures in tests/conftest.py are available to all tests
+   # Fixtures in tests/unit/conftest.py only available to tests/unit/
+   grep -r "def mock_anthropic_client" tests/
+   ```
+
+2. **Common fixtures and their locations:**
+   - `mock_anthropic_client` → `tests/conftest.py`
+   - `mock_client_session` → `tests/conftest_mcp.py`
+   - `get_mock_event` → `tests/fixtures/calendar_fixtures.py`
+
+3. **For calendar fixtures, import explicitly:**
+   ```python
+   # In your test file
+   from tests.fixtures.calendar_fixtures import get_mock_event
+
+   def test_something():
+       event = get_mock_event()  # Function, not fixture
+   ```
+
+4. **Create conftest.py if missing:**
+   ```bash
+   # For a new test directory
+   touch tests/new_directory/conftest.py
+   ```
+
+5. **Check fixture spelling:**
+   ```python
+   # Common typo:
+   def test_something(mock_antropic_client):  # ❌ Wrong
+   def test_something(mock_anthropic_client):  # ✅ Correct
+   ```
+
+---
+
+### Async Test Errors
+
+#### Error: RuntimeError: no running event loop
+
+**Cause:** Async test missing `@pytest.mark.asyncio` decorator.
+
+**Solution:**
+
+Add the `@pytest.mark.asyncio` marker:
+
+```python
+# ❌ Wrong - missing marker
+async def test_async_function():
+    result = await some_async_function()
+    assert result is not None
+
+# ✅ Correct - with marker
+@pytest.mark.asyncio
+async def test_async_function():
+    result = await some_async_function()
+    assert result is not None
+```
+
+**Check pytest-asyncio is installed:**
+```bash
+pip install pytest-asyncio
+pytest --version  # Should show pytest-asyncio plugin
+```
+
+---
+
+#### Error: coroutine 'X' was never awaited
+
+**Cause:** Called async function without `await` keyword.
+
+**Solution:**
+
+```python
+# ❌ Wrong - missing await
+@pytest.mark.asyncio
+async def test_async_function():
+    result = some_async_function()  # Wrong!
+    assert result is not None
+
+# ✅ Correct - with await
+@pytest.mark.asyncio
+async def test_async_function():
+    result = await some_async_function()  # Correct!
+    assert result is not None
+```
+
+---
+
+#### Error: Task was destroyed but it is pending!
+
+**Cause:** Async test not properly cleaning up tasks.
+
+**Solution:**
+
+1. **Use AsyncMock for mocking async functions:**
+   ```python
+   from unittest.mock import AsyncMock
+
+   @pytest.mark.asyncio
+   async def test_with_async_mock():
+       mock_func = AsyncMock(return_value="result")
+       result = await mock_func()
+       mock_func.assert_awaited_once()
+   ```
+
+2. **Ensure all async operations complete:**
+   ```python
+   @pytest.mark.asyncio
+   async def test_cleanup():
+       client = AsyncClient()
+       try:
+           result = await client.fetch_data()
+       finally:
+           await client.close()  # Ensure cleanup
+   ```
+
+3. **Check conftest.py event loop configuration:**
+   ```bash
+   grep -A 10 "event_loop" tests/conftest_mcp.py
+   ```
+
+---
+
+#### Error: assert_awaited_once() vs assert_called_once()
+
+**Cause:** Using wrong assertion method for async mocks.
+
+**Solution:**
+
+```python
+from unittest.mock import AsyncMock, Mock
+
+# For async functions - use AsyncMock and assert_awaited
+mock_async = AsyncMock()
+await mock_async()
+mock_async.assert_awaited_once()  # ✅ Correct
+
+# For regular functions - use Mock and assert_called
+mock_sync = Mock()
+mock_sync()
+mock_sync.assert_called_once()  # ✅ Correct
+
+# ❌ Wrong combinations:
+# mock_async.assert_called_once()  # Wrong!
+# mock_sync.assert_awaited_once()  # Wrong!
+```
+
+---
+
+### Test Collection and Discovery Errors
+
+#### Warning: PytestUnknownMarkWarning: Unknown pytest.mark.X
+
+**Cause:** Marker used but not registered in pytest.ini.
+
+**Solution:**
+
+1. **Check if marker is in pytest.ini:**
+   ```bash
+   grep "markers" pytest.ini
+   ```
+
+2. **Add missing marker to pytest.ini:**
+   ```ini
+   markers =
+       unit: Unit tests (fast, isolated)
+       integration: Integration tests (slower, external dependencies)
+       slow: Slow running tests
+       your_new_marker: Description of your marker
+   ```
+
+3. **Or use `--strict-markers` to enforce registration:**
+   ```bash
+   pytest --strict-markers  # Fail on unknown markers
+   ```
+
+---
+
+#### Error: No tests ran / Empty test suite
+
+**Cause:** Pytest can't find test files or functions.
+
+**Solution:**
+
+1. **Check test discovery patterns:**
+   ```bash
+   # pytest.ini specifies:
+   # python_files = test_*.py
+   # python_classes = Test*
+   # python_functions = test_*
+   ```
+
+2. **Verify file names follow convention:**
+   ```bash
+   # ✅ These will be discovered:
+   # test_client.py
+   # test_integration_calendar.py
+
+   # ❌ These will NOT be discovered:
+   # client_test.py
+   # my_tests.py
+   ```
+
+3. **Check function names:**
+   ```python
+   # ✅ Discovered
+   def test_something():
+       pass
+
+   class TestClient:
+       def test_init(self):
+           pass
+
+   # ❌ NOT discovered
+   def check_something():  # Missing 'test_' prefix
+       pass
+
+   class ClientTests:  # Should be 'TestClient'
+       pass
+   ```
+
+4. **See what pytest would collect:**
+   ```bash
+   pytest --collect-only
+   ```
+
+---
+
+### Performance and Timeout Issues
+
+#### Tests are very slow
+
+**Solution:**
+
+1. **Run tests in parallel:**
+   ```bash
+   # Install pytest-xdist
+   pip install pytest-xdist
+
+   # Run with parallel workers
+   pytest -n auto
+   ```
+
+2. **Skip slow tests during development:**
+   ```bash
+   pytest -m "not slow"
+   ```
+
+3. **Identify slowest tests:**
+   ```bash
+   pytest --durations=10
+   ```
+
+4. **Run only unit tests (fastest):**
+   ```bash
+   pytest -m unit
+   ```
+
+---
+
+#### Test hangs or times out
+
+**Cause:** Test waiting indefinitely for async operation or external service.
+
+**Solution:**
+
+1. **Add timeout to specific test:**
+   ```python
+   @pytest.mark.timeout(5)  # 5 second timeout
+   def test_something():
+       pass
+   ```
+
+2. **Check for unmocked external calls:**
+   ```bash
+   # Run with verbose output to see where it hangs
+   pytest -v -s tests/path/to/test.py
+   ```
+
+3. **For async tests, ensure proper event loop:**
+   ```python
+   @pytest.mark.asyncio
+   async def test_with_timeout():
+       import asyncio
+       try:
+           result = await asyncio.wait_for(
+               some_async_function(),
+               timeout=5.0
+           )
+       except asyncio.TimeoutError:
+           pytest.fail("Operation timed out")
+   ```
+
+---
+
+### Coverage Reporting Issues
+
+#### Coverage report shows 0% for everything
+
+**Cause:** Coverage not measuring the right files, or tests not running.
+
+**Solution:**
+
+1. **Verify tests ran successfully:**
+   ```bash
+   pytest -v  # First run without coverage
+   ```
+
+2. **Check coverage source path:**
+   ```bash
+   # Use explicit source paths
+   pytest --cov=Tools --cov=Engine --cov-report=term
+   ```
+
+3. **Check omit patterns in .coveragerc:**
+   ```ini
+   [run]
+   source = .
+   omit =
+       tests/*
+       venv/*
+       .venv/*
+       */site-packages/*
+   ```
+
+4. **Ensure source files are being imported:**
+   ```bash
+   # Run with coverage debug
+   coverage debug sys
+   ```
+
+---
+
+#### Can't see HTML coverage report
+
+**Cause:** HTML report not generated or browser can't open it.
+
+**Solution:**
+
+1. **Generate HTML report explicitly:**
+   ```bash
+   pytest --cov=. --cov-report=html
+   ```
+
+2. **Check htmlcov directory was created:**
+   ```bash
+   ls -la htmlcov/
+   ```
+
+3. **Open report manually:**
+   ```bash
+   # macOS
+   open htmlcov/index.html
+
+   # Linux
+   xdg-open htmlcov/index.html
+
+   # Windows
+   start htmlcov/index.html
+   ```
+
+---
+
+### General Debugging Tips
+
+#### Run a single test for debugging
+
+```bash
+# Run one specific test
+pytest tests/unit/test_client.py::TestThanos::test_initialization -v
+
+# Run with print statements visible
+pytest tests/unit/test_client.py::test_specific -v -s
+
+# Drop into debugger on failure
+pytest tests/unit/test_client.py --pdb
+
+# Drop into debugger on first line of test
+pytest tests/unit/test_client.py --trace
+```
+
+---
+
+#### See detailed error output
+
+```bash
+# Show full diff for assertions
+pytest -vv
+
+# Show full traceback
+pytest --tb=long
+
+# Show local variables in traceback
+pytest -l
+
+# Combine options
+pytest -vv -l --tb=long
+```
+
+---
+
+#### Check test environment
+
+```bash
+# Show pytest version and plugins
+pytest --version
+
+# Show which tests would run
+pytest --collect-only
+
+# Show available fixtures
+pytest --fixtures
+
+# Show available markers
+pytest --markers
+```
+
+---
+
+### Still Having Issues?
+
+If you're still encountering problems:
+
+1. **Clear all caches:**
+   ```bash
+   # Clear pytest cache
+   pytest --cache-clear
+
+   # Remove __pycache__ directories
+   find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+
+   # Remove .pyc files
+   find . -type f -name "*.pyc" -delete
+   ```
+
+2. **Reinstall test dependencies:**
+   ```bash
+   pip uninstall pytest pytest-cov pytest-mock pytest-asyncio -y
+   pip install -r requirements-test.txt
+   ```
+
+3. **Check Python version:**
+   ```bash
+   python --version
+   # Requires Python 3.8 or higher
+   ```
+
+4. **Run from project root:**
+   ```bash
+   cd /path/to/Thanos
+   pwd  # Verify location
+   pytest
+   ```
+
+5. **Check for conflicting packages:**
+   ```bash
+   pip list | grep -i pytest
+   pip list | grep -i test
+   ```
+
+6. **Consult existing test documentation:**
+   - [TEST_INVENTORY.md](./TEST_INVENTORY.md) - What tests exist
+   - [TEST_DEPENDENCIES.md](./TEST_DEPENDENCIES.md) - Dependency details
+   - [TEST_MOCKING_PATTERNS.md](./TEST_MOCKING_PATTERNS.md) - How mocking works
+   - [tests/integration/README.md](./tests/integration/README.md) - Integration test specifics
+
+7. **Check recent changes:**
+   ```bash
+   git status
+   git diff
+   ```
+
+---
+
+**Remember:** Most test errors are due to:
+1. Missing `@pytest.mark.asyncio` for async tests
+2. Running from wrong directory
+3. Missing test dependencies
+4. Typos in fixture names
+
+The test suite is designed to be offline-first with extensive mocking, so you should rarely need external services!
 
 ## CI/CD Integration
 
