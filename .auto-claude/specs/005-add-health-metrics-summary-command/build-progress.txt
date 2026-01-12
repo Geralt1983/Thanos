@@ -444,3 +444,309 @@ The command has been thoroughly tested and verified to work correctly with:
 Committed: Created comprehensive test suite and documentation
 Next: Proceed to subtask 3.3 - Create command documentation (README.md)
 
+#### Subtask 3.3: Create command documentation ✓
+
+[2026-01-12 - README.md Documentation Complete]
+==========================================
+
+Documentation Enhancement:
+- Enhanced existing comprehensive README.md in commands/health/ directory
+- README was already present but missing complete --trends flag documentation
+- Added comprehensive documentation for the 7-day trends feature
+
+Enhancements Added:
+
+1. **Quick Start Section** - Added trends examples
+   ✓ Basic summary command
+   ✓ LLM-enhanced summary
+   ✓ Trends-only mode
+   ✓ Combined trends + LLM mode
+
+2. **Usage Examples Section** - New trends subsection
+   ✓ Documented --trends flag usage
+   ✓ Explained trend visualization output
+   ✓ Listed trend components (average, range, direction, patterns)
+   ✓ Documented combined usage (--trends --llm-enhance)
+
+3. **Output Format Section** - Added trends output example
+   ✓ Sample trends dashboard with markdown formatting
+   ✓ Trend direction indicators (📈 improving, 📉 declining, ➡️ stable)
+   ✓ Pattern detection examples
+   ✓ Status emoji explanations
+
+4. **Command Patterns Section** - Updated with trends
+   ✓ Daily health check examples include trends
+   ✓ Weekly review pattern uses trends + LLM enhancement
+   ✓ Integration workflows updated
+
+5. **Technical Details Section** - Added trends calculation
+   ✓ Trend Direction Algorithm explained:
+     - Compares first half to second half of week
+     - >5% change = improving/declining
+     - ≤5% change = stable
+   ✓ Pattern Detection logic documented:
+     - Correlated trends (both metrics declining)
+     - Specific issues (readiness declining, sleep stable)
+     - Below-optimal averages flagged (<70)
+     - Context-specific recommendations
+   ✓ Data Range details:
+     - Fetches last 7 days including today
+     - Calculates min, max, average
+     - Handles missing days gracefully
+   ✓ Updated Data Sources section:
+     - Added get_daily_summary() for trends
+     - Clarified which methods are used for what
+
+6. **Future Enhancements Section** - Updated
+   ✓ Removed weekly trends (now implemented)
+   ✓ Added new enhancement ideas (correlations, health agent integration)
+
+7. **Version Update**
+   ✓ Version bumped to 1.1.0
+   ✓ Updated date to January 12, 2026
+   ✓ Added "New in v1.1.0" note about trends feature
+
+Complete README Coverage:
+========================
+The README.md now comprehensively covers:
+✓ Quick start guide with all command modes
+✓ Available commands table
+✓ Setup requirements (Oura account, token, dependencies)
+✓ Usage examples (basic, LLM-enhanced, trends, combined)
+✓ Output format with examples for all modes
+✓ Status indicators and their meanings
+✓ Trend direction indicators
+✓ History files information
+✓ Integration notes (PA commands, Health agent, API)
+✓ Customization guide (analysis logic, recommendations, formatting, LLM)
+✓ Troubleshooting section (credentials, API errors, missing data, LLM, history)
+✓ Command patterns (daily check, weekly review, workflows)
+✓ Advanced usage (piping, filtering, cron, programmatic)
+✓ Technical details (data sources, models, trends algorithm, file structure)
+✓ Testing information (unit tests, manual testing guide)
+✓ Future enhancements
+✓ Related documentation links
+✓ Support information
+
+Quality Metrics:
+================
+✓ Follows pa/README.md pattern
+✓ Clear, scannable structure
+✓ Practical examples for all features
+✓ Comprehensive troubleshooting
+✓ Technical depth for developers
+✓ User-friendly for end users
+✓ Documents all flags (--llm-enhance, --trends)
+✓ Version tracking
+
+Committed: "auto-claude: 3.3 - Add comprehensive documentation for health:summary command" (327fe8a)
+Status: COMPLETE ✅
+
+Next: Proceed to subtask 3.4 - Update COMMANDS.md
+
+#### Subtask 3.4: Update COMMANDS.md ✓
+
+[2026-01-12 - COMMANDS.md Updated]
+==========================================
+
+Documentation Enhancement:
+- Updated COMMANDS.md to expand health:summary command documentation
+- Transformed one-liner into detailed command specification matching major commands
+
+Changes Made:
+
+1. **YAML Frontmatter Added**
+   ✓ command: "/health:summary"
+   ✓ category: "Health & Wellness"
+   ✓ purpose: "Unified health metrics dashboard with Oura Ring integration"
+   ✓ wave-enabled: false (straightforward data fetch and format)
+   ✓ performance-profile: "standard" (balanced performance)
+
+2. **Auto-Persona** - Health, Analyzer
+   - Health persona for wellness-focused analysis
+   - Analyzer persona for data interpretation
+
+3. **MCP Integration**
+   ✓ Sequential (data analysis)
+   ✓ Context7 (patterns)
+
+4. **Tool Orchestration**
+   ✓ [Read, Write, Bash]
+   - Read for config/data files
+   - Write for history files
+   - Bash for command execution
+
+5. **Arguments Documented**
+   ✓ --llm-enhance (AI-powered personalized analysis)
+   ✓ --trends (7-day trend visualization)
+
+6. **Features Section Added**
+   ✓ Real-time Oura Ring data (readiness, sleep, stress)
+   ✓ Evidence-based insights
+   ✓ Actionable recommendations
+   ✓ ADHD-friendly formatting
+   ✓ Auto-saves to History/HealthSummaries/
+
+Pattern Compliance:
+===================
+✓ Follows same structure as /build, /implement, /analyze, /improve
+✓ YAML frontmatter with all required fields
+✓ Detailed breakdown of capabilities
+✓ Clear argument documentation
+✓ Feature highlights for user benefit
+
+Quality Verification:
+====================
+✓ Consistent formatting with existing commands
+✓ Professional documentation style
+✓ Complete feature coverage
+✓ Matches implementation capabilities exactly
+✓ Proper categorization in Command Categories section
+
+Committed: "auto-claude: 3.4 - Add health:summary to the main COMMANDS.md documentation with description and usage" (dca8b19)
+Status: COMPLETE ✅
+
+Impact:
+=======
+The health:summary command is now properly documented in the main COMMANDS.md file with:
+- Professional presentation matching tier-1 commands
+- Complete feature documentation
+- Clear usage guidance
+- Integration details for MCP and personas
+
+Phase 3 (Testing and Documentation) is now COMPLETE! ✅
+
+All required subtasks completed:
+✓ 3.1 - Unit tests (67 tests passing)
+✓ 3.2 - Manual testing (6 scenarios verified)
+✓ 3.3 - README.md (comprehensive documentation)
+✓ 3.4 - COMMANDS.md (detailed command specification)
+
+Next: Phase 4 optional enhancements (weekly trends already implemented, Health agent integration pending)
+
+
+### Phase 4: Integration and Enhancement
+
+#### Subtask 4.1: Add weekly trends visualization ✓
+
+[2026-01-12 - Trends Feature Verification]
+==========================================
+
+Status: ALREADY COMPLETE ✅
+
+Verification Results:
+The weekly trends feature was already fully implemented in the codebase. All required
+functionality is present and working correctly.
+
+Implementation Verified:
+========================
+
+1. **fetch_weekly_trends()** (lines 80-106)
+   ✓ Fetches last 7 days of data from OuraAdapter
+   ✓ Uses get_daily_summary() with date range (today - 6 days to today)
+   ✓ Timezone-aware using America/New_York
+   ✓ Proper error handling and resource cleanup
+   ✓ Returns analyzed trend data
+
+2. **_analyze_weekly_trends()** (lines 109-156)
+   ✓ Extracts readiness and sleep scores from weekly data
+   ✓ Calculates statistics for both metrics
+   ✓ Identifies patterns (improving, declining, stable, low averages)
+   ✓ Generates actionable insights based on trends
+   ✓ Returns structured trend dictionary
+
+3. **_calculate_trend_stats()** (lines 159-185)
+   ✓ Calculates average, min, max for each metric
+   ✓ Determines trend direction
+   ✓ Counts days with data
+   ✓ Handles missing data gracefully
+
+4. **_get_trend_direction()** (lines 188-213)
+   ✓ Compares first half to second half of week
+   ✓ Calculates percentage change
+   ✓ Returns "improving", "declining", or "stable"
+   ✓ Uses 5% threshold for significance
+
+5. **_format_weekly_trends()** (lines 216-272)
+   ✓ Formats trend data into markdown
+   ✓ Includes emoji indicators (📈 improving, 📉 declining, ➡️ stable)
+   ✓ Shows averages with status emojis (🟢🟡🟠🔴)
+   ✓ Displays range (min - max)
+   ✓ Lists detected patterns with actionable recommendations
+
+6. **Integration in execute()** (lines 730-741)
+   ✓ Accepts show_trends parameter
+   ✓ Fetches trends when requested
+   ✓ Appends formatted trends to summary
+   ✓ Proper flow control
+
+7. **CLI Flag Support** (lines 798-801)
+   ✓ Parses --trends flag from sys.argv
+   ✓ Passes flag to execute()
+   ✓ Works standalone or combined with --llm-enhance
+
+8. **Test Coverage**
+   ✓ TestWeeklyTrends class in test_commands_health.py
+   ✓ test_fetch_weekly_trends_success
+   ✓ test_fetch_weekly_trends_error
+   ✓ test_calculate_trend_stats_improving
+   ✓ test_calculate_trend_stats_declining
+   ✓ test_get_trend_direction (multiple scenarios)
+   ✓ test_format_weekly_trends
+
+9. **Documentation**
+   ✓ Usage documented in README.md (lines 14-15, 97-112, 164-187)
+   ✓ Examples with --trends flag
+   ✓ Technical details on trend calculation algorithm
+   ✓ Pattern detection logic explained
+   ✓ Version bumped to 1.1.0 noting trends feature
+
+Feature Capabilities:
+=====================
+
+✓ Shows 7-day averages for readiness and sleep
+✓ Displays min and max values to show variability
+✓ Indicates trend direction with visual indicators
+✓ Detects patterns across metrics:
+  - Both declining (prioritize recovery)
+  - Both improving (positive trend)
+  - Readiness declining, sleep stable (check stress)
+  - Sleep declining (review sleep environment)
+  - Week averages below optimal (actionable advice)
+✓ Provides context-specific recommendations
+✓ Integrates seamlessly with base summary
+✓ Works with or without --llm-enhance flag
+
+Testing:
+========
+✓ Comprehensive unit tests exist and pass
+✓ Integration verified with summary command
+✓ Error handling for missing data
+✓ Graceful degradation when data unavailable
+
+Example Output:
+===============
+
+## 📊 7-Day Trends
+
+**Readiness** 📈
+- Average: 78.4 (🟡)
+- Range: 72 - 85
+- Trend: Improving
+
+**Sleep** ➡️
+- Average: 81.2 (🟢)
+- Range: 76 - 87
+- Trend: Stable
+
+**Patterns Detected:**
+- ✅ Positive trend: Both sleep and recovery improving
+- 📊 Metrics stable across the week
+
+Status: COMPLETE ✅
+No additional implementation needed. Feature is production-ready.
+
+Updated implementation_plan.json to mark subtask 4.1 as completed.
+
+Next: Subtask 4.2 (Health agent integration) remains optional and pending.
+

@@ -143,8 +143,8 @@
           "subtask_id": "3.4",
           "title": "Update COMMANDS.md",
           "description": "Add health:summary to the main COMMANDS.md documentation with description and usage",
-          "status": "pending",
-          "notes": "",
+          "status": "completed",
+          "notes": "Expanded health:summary documentation in COMMANDS.md following the pattern of other major commands (/build, /implement, /analyze, /improve). Added YAML frontmatter with command metadata (category, purpose, wave-enabled: false, performance-profile: standard), detailed Auto-Persona (Health, Analyzer), MCP Integration (Sequential, Context7), Tool Orchestration (Read, Write, Bash), Arguments (--llm-enhance, --trends), and Features section describing capabilities. Committed as dca8b19.",
           "files_to_modify": [
             "COMMANDS.md"
           ],
@@ -161,8 +161,8 @@
           "subtask_id": "4.1",
           "title": "Add weekly trends visualization",
           "description": "Enhance summary command to optionally show 7-day trends using the oura_get_weekly_trends data",
-          "status": "pending",
-          "notes": "Optional enhancement - can be skipped if basic functionality is sufficient",
+          "status": "completed",
+          "notes": "Feature already fully implemented with fetch_weekly_trends(), _analyze_weekly_trends(), _calculate_trend_stats(), _get_trend_direction(), and _format_weekly_trends() functions. Includes --trends CLI flag, pattern detection (improving/declining/stable), actionable insights, emoji indicators, and comprehensive test coverage. Documented in README.md with usage examples.",
           "files_to_modify": [
             "commands/health/summary.py"
           ],
