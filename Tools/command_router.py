@@ -303,7 +303,7 @@ class CommandRouter:
         if agent_name in self.orchestrator.agents:
             self.current_agent = agent_name
             agent = self.orchestrator.agents[agent_name]
-            print(f"{Colors.DIM}Switched to {agent.name} ({agent.role}){Colors.RESET}")
+            print(f"{Colors.GREEN}Switched to {agent.name} ({agent.role}){Colors.RESET}")
             return CommandResult()
         else:
             print(f"{Colors.RED}Unknown agent: {agent_name}{Colors.RESET}")
@@ -313,13 +313,13 @@ class CommandRouter:
     def _cmd_clear(self, args: str) -> CommandResult:
         """Clear conversation history."""
         self.session.clear()
-        print(f"{Colors.DIM}Conversation cleared.{Colors.RESET}")
+        print(f"{Colors.GREEN}Conversation cleared.{Colors.RESET}")
         return CommandResult()
 
     def _cmd_save(self, args: str) -> CommandResult:
         """Save session to History/Sessions/."""
         filepath = self.session.save()
-        print(f"{Colors.DIM}Session saved: {filepath}{Colors.RESET}")
+        print(f"{Colors.GREEN}Session saved: {filepath}{Colors.RESET}")
         return CommandResult()
 
     def _cmd_usage(self, args: str) -> CommandResult:
@@ -525,7 +525,7 @@ class CommandRouter:
             # Update current agent to match restored session
             self.current_agent = self.session.session.agent
             stats = self.session.get_stats()
-            print(f"{Colors.CYAN}Session restored:{Colors.RESET}")
+            print(f"{Colors.GREEN}Session restored:{Colors.RESET}")
             print(f"  ID: {stats['session_id']}")
             print(f"  Agent: {stats['current_agent']}")
             print(f"  Messages: {stats['message_count']}")
@@ -533,7 +533,7 @@ class CommandRouter:
                 f"  Previous tokens: {stats['total_input_tokens'] + stats['total_output_tokens']:,}"
             )
             print(
-                f"\n{Colors.DIM}Conversation history loaded. "
+                f"\n{Colors.GREEN}Conversation history loaded. "
                 f"Continue where you left off.{Colors.RESET}\n"
             )
             return CommandResult()
@@ -619,7 +619,7 @@ class CommandRouter:
         )
 
         if result and result.success:
-            print(f"\n{Colors.CYAN}Memory stored:{Colors.RESET}")
+            print(f"\n{Colors.GREEN}Memory stored:{Colors.RESET}")
             print(f"  Type: {memory_type}")
             print(f"  Domain: {domain}")
             if entities:
@@ -839,13 +839,13 @@ class CommandRouter:
         new_id = self.session.create_branch(branch_name)
         branch_info = self.session.get_branch_info()
 
-        print(f"\n{Colors.CYAN}Branch created:{Colors.RESET}")
+        print(f"\n{Colors.GREEN}Branch created:{Colors.RESET}")
         print(f"  Name: {branch_info['name']}")
         print(f"  ID: {new_id}")
         print(f"  Branched from: {branch_info['parent_id']}")
         print(f"  At message: {branch_info['branch_point']}")
         print(
-            f"\n{Colors.DIM}Continue conversation on this branch. "
+            f"\n{Colors.GREEN}Continue conversation on this branch. "
             f"Use /branches to list all.{Colors.RESET}\n"
         )
         return CommandResult()
@@ -885,11 +885,11 @@ class CommandRouter:
             branch_info = self.session.get_branch_info()
             stats = self.session.get_stats()
 
-            print(f"\n{Colors.CYAN}Switched to branch:{Colors.RESET}")
+            print(f"\n{Colors.GREEN}Switched to branch:{Colors.RESET}")
             print(f"  Name: {branch_info['name']}")
             print(f"  ID: {branch_info['id']}")
             print(f"  Messages: {stats['message_count']}")
-            print(f"\n{Colors.DIM}Conversation restored from branch point.{Colors.RESET}\n")
+            print(f"\n{Colors.GREEN}Conversation restored from branch point.{Colors.RESET}\n")
             return CommandResult()
         else:
             print(f"{Colors.RED}Branch not found: {branch_ref}{Colors.RESET}")
@@ -1020,8 +1020,8 @@ class CommandRouter:
         if model_name in self._available_models:
             old_model = self.current_model or self._default_model
             self.current_model = model_name
-            print(f"{Colors.CYAN}Model switched:{Colors.RESET} {old_model} → {model_name}")
-            print(f"{Colors.DIM}Using: {self._available_models[model_name]}{Colors.RESET}")
+            print(f"{Colors.GREEN}Model switched:{Colors.RESET} {old_model} → {model_name}")
+            print(f"{Colors.GREEN}Using: {self._available_models[model_name]}{Colors.RESET}")
             return CommandResult()
         else:
             print(f"{Colors.RED}Unknown model: {model_name}{Colors.RESET}")
