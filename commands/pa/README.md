@@ -17,6 +17,9 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 # Get next task recommendation
 /pa:tasks focus
 
+# Process brain dump entries
+/pa:process
+
 # Weekly review
 /pa:weekly
 ```
@@ -30,6 +33,7 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 | `/pa:schedule` | Calendar management | `/pa:schedule find --duration 30m` |
 | `/pa:tasks` | Task management | `/pa:tasks focus --energy high` |
 | `/pa:brainstorm` | Ideation & planning | `/pa:brainstorm "topic" --mode solve` |
+| `/pa:process` | Brain dump processing | `/pa:process --limit 20 --dry-run` |
 | `/pa:weekly` | Weekly review | `/pa:weekly review` |
 | `/pa:epic` | Epic consulting work | `/pa:epic status` |
 
@@ -128,6 +132,7 @@ These commands work alongside the SuperClaude framework:
 │   │   ├── schedule.md        # Calendar management
 │   │   ├── tasks.md           # Task management
 │   │   ├── brainstorm.md      # Ideation
+│   │   ├── process.md         # Brain dump processing
 │   │   ├── weekly.md          # Weekly review
 │   │   └── epic.md            # Epic consulting
 │   └── sc/                    # SuperClaude commands
