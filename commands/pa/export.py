@@ -300,7 +300,7 @@ def export_to_csv(
     """
     exported_files = []
 
-    print("📝 Exporting to CSV format...")
+    print("📝 Exporting to CSV format...", flush=True)
     print()
 
     for data_key, records in data.items():
@@ -312,7 +312,7 @@ def export_to_csv(
 
         # Skip if no records
         if not records or len(records) == 0:
-            print(f"   ⚠️  Skipping {data_key} (no data)")
+            print(f"   ⚠️  Skipping {data_key} (no data)", flush=True)
             continue
 
         # Create filename
@@ -348,11 +348,11 @@ def export_to_csv(
             # Get file size
             file_size = filepath.stat().st_size
 
-            print(f"   ✓ {data_key}.csv - {len(records)} records ({format_file_size(file_size)})")
+            print(f"   ✓ {data_key}.csv - {len(records)} records ({format_file_size(file_size)})", flush=True)
             exported_files.append((data_key, filepath))
 
         except Exception as e:
-            print(f"   ❌ Error exporting {data_key}: {e}")
+            print(f"   ❌ Error exporting {data_key}: {e}", flush=True)
             continue
 
     print()
@@ -403,13 +403,13 @@ def export_to_json(
     """
     exported_files = []
 
-    print("📝 Exporting to JSON format...")
+    print("📝 Exporting to JSON format...", flush=True)
     print()
 
     for data_key, records in data.items():
         # Skip if no records
         if not records or (isinstance(records, list) and len(records) == 0):
-            print(f"   ⚠️  Skipping {data_key} (no data)")
+            print(f"   ⚠️  Skipping {data_key} (no data)", flush=True)
             continue
 
         # Create filename
@@ -433,11 +433,11 @@ def export_to_json(
             # Count records
             record_count = len(records) if isinstance(records, list) else 1
 
-            print(f"   ✓ {data_key}.json - {record_count} record(s) ({format_file_size(file_size)})")
+            print(f"   ✓ {data_key}.json - {record_count} record(s) ({format_file_size(file_size)})", flush=True)
             exported_files.append((data_key, filepath))
 
         except Exception as e:
-            print(f"   ❌ Error exporting {data_key}: {e}")
+            print(f"   ❌ Error exporting {data_key}: {e}", flush=True)
             continue
 
     print()
@@ -546,9 +546,12 @@ def format_file_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} TB"
 
 
-def save_export_summary(output_dir: Path, summary: str):
+def save_to_history(output_dir: Path, summary: str):
     """
     Save export summary to the History directory.
+
+    Follows the standard PA command pattern for saving command outputs
+    to the History directory for future reference.
 
     Args:
         output_dir: Directory where exports were saved
@@ -597,16 +600,16 @@ def execute(args: Optional[str] = None) -> str:
         output_dir = get_output_directory(parsed_args.output)
 
         # Print header
-        print("📦 Data Export")
-        print("=" * 60)
-        print(f"Format: {parsed_args.format.upper()}")
-        print(f"Type: {parsed_args.type}")
-        print(f"Output: {output_dir}")
-        print("=" * 60)
+        print("📦 Data Export", flush=True)
+        print("=" * 60, flush=True)
+        print(f"Format: {parsed_args.format.upper()}", flush=True)
+        print(f"Type: {parsed_args.type}", flush=True)
+        print(f"Output: {output_dir}", flush=True)
+        print("=" * 60, flush=True)
         print()
 
         # Retrieve data from database
-        print("🔄 Starting data retrieval...")
+        print("🔄 Starting data retrieval...", flush=True)
         print()
         data = asyncio.run(retrieve_all_data(parsed_args.type))
         print()
@@ -618,7 +621,7 @@ def execute(args: Optional[str] = None) -> str:
         )
 
         if total_records == 0:
-            print("⚠️  No data found to export.")
+            print("⚠️  No data found to export.", flush=True)
             print()
             summary = f"""## Export Summary
 
@@ -630,18 +633,18 @@ def execute(args: Optional[str] = None) -> str:
 
 ⚠️ No data found to export.
 """
-            save_export_summary(output_dir, summary)
+            save_to_history(output_dir, summary)
             return summary
 
         # Display data retrieval summary
-        print("✅ Data retrieval complete!")
+        print("✅ Data retrieval complete!", flush=True)
         print()
-        print("📊 Retrieved data:")
+        print("📊 Retrieved data:", flush=True)
         for data_type_name, records in data.items():
             if isinstance(records, list):
-                print(f"   • {data_type_name.title()}: {len(records)} records")
+                print(f"   • {data_type_name.title()}: {len(records)} records", flush=True)
             else:
-                print(f"   • {data_type_name.title()}: 1 record")
+                print(f"   • {data_type_name.title()}: 1 record", flush=True)
         print()
 
         # Export data based on format
@@ -682,34 +685,34 @@ def execute(args: Optional[str] = None) -> str:
         elif parsed_args.format == "json":
             summary += "✅ JSON export complete\n"
 
-        # Save summary
-        save_export_summary(output_dir, summary)
+        # Save summary to history
+        save_to_history(output_dir, summary)
 
         # Print final summary
-        print("-" * 60)
+        print("-" * 60, flush=True)
         if exported_files:
-            print(f"✅ Export complete! {len(exported_files)} file(s) created")
-            print(f"📁 Location: {output_dir}")
+            print(f"✅ Export complete! {len(exported_files)} file(s) created", flush=True)
+            print(f"📁 Location: {output_dir}", flush=True)
         else:
-            print("⚠️  No files exported")
-        print(f"📄 Summary saved to History/Exports/")
-        print("-" * 60)
+            print("⚠️  No files exported", flush=True)
+        print(f"📄 Summary saved to History/Exports/", flush=True)
+        print("-" * 60, flush=True)
 
         return summary
 
     except argparse.ArgumentError as e:
         error_msg = f"❌ Argument error: {e}\n\nUse --help for usage information."
-        print(error_msg)
+        print(error_msg, flush=True)
         return error_msg
 
     except ValueError as e:
         error_msg = f"❌ Error: {e}"
-        print(error_msg)
+        print(error_msg, flush=True)
         return error_msg
 
     except Exception as e:
         error_msg = f"❌ Unexpected error: {e}"
-        print(error_msg)
+        print(error_msg, flush=True)
         import traceback
         traceback.print_exc()
         return error_msg
