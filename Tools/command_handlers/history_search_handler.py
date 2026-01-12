@@ -147,6 +147,72 @@ class HistorySearchHandler(BaseHandler):
 
         return f"{prefix}{preview}{suffix}"
 
+    def _parse_filters(self, args: str) -> tuple:
+        """
+        Parse search query and optional filters from command arguments.
+
+        Supports filter syntax:
+        - agent:<name> - Filter by agent name
+        - date:<YYYY-MM-DD> - Filter by specific date
+        - session:<id> - Filter by session ID
+        - after:<YYYY-MM-DD> - Filter messages after date (inclusive)
+        - before:<YYYY-MM-DD> - Filter messages before date (inclusive)
+
+        Examples:
+        - "authentication agent:architect"
+        - "API decisions date:2026-01-11"
+        - "error handling session:abc123"
+        - "database changes after:2026-01-01 before:2026-01-31"
+
+        Args:
+            args: Raw command arguments with query and filters
+
+        Returns:
+            Tuple of (query_string, where_clause_dict)
+        """
+        # Pattern to match key:value filters
+        filter_pattern = r'(\w+):([^\s]+)'
+
+        # Extract all filters
+        filters = {}
+        matches = re.findall(filter_pattern, args)
+
+        for key, value in matches:
+            filters[key] = value
+
+        # Remove filters from query to get clean search query
+        query = re.sub(filter_pattern, '', args).strip()
+
+        # Build ChromaDB where clause
+        where_clause = {}
+
+        # Direct equality filters
+        if 'agent' in filters:
+            where_clause['agent'] = filters['agent']
+
+        if 'session' in filters or 'session_id' in filters:
+            session_id = filters.get('session') or filters.get('session_id')
+            where_clause['session_id'] = session_id
+
+        if 'date' in filters:
+            where_clause['date'] = filters['date']
+
+        # Date range filters (ChromaDB uses $gte and $lte operators)
+        if 'after' in filters and 'before' in filters:
+            # Combined range: after <= date <= before
+            where_clause['date'] = {
+                '$gte': filters['after'],
+                '$lte': filters['before']
+            }
+        elif 'after' in filters:
+            # Only after: date >= after
+            where_clause['date'] = {'$gte': filters['after']}
+        elif 'before' in filters:
+            # Only before: date <= before
+            where_clause['date'] = {'$lte': filters['before']}
+
+        return query, where_clause if where_clause else None
+
     def handle_history_search(self, args: str) -> CommandResult:
         """
         Handle /history-search command - Search conversation history using semantic similarity.
@@ -159,20 +225,38 @@ class HistorySearchHandler(BaseHandler):
         - Basic: /history-search authentication
         - Multi-word: /history-search API implementation patterns
         - Context-aware: /history-search what did we decide about testing
+        - With filters: /history-search database changes agent:architect date:2026-01-11
+        - Date range: /history-search API work after:2026-01-01 before:2026-01-31
+
+        Supported filters:
+        - agent:<name> - Filter by agent name
+        - date:<YYYY-MM-DD> - Filter by specific date
+        - session:<id> - Filter by session ID (prefix matching supported)
+        - after:<YYYY-MM-DD> - Messages on or after this date
+        - before:<YYYY-MM-DD> - Messages on or before this date
 
         Args:
-            args: Search query (natural language)
+            args: Search query (natural language) with optional filters
 
         Returns:
             CommandResult with action and success status
         """
         if not args:
-            print(f"{Colors.DIM}Usage: /history-search <query>{Colors.RESET}")
+            print(f"{Colors.DIM}Usage: /history-search <query> [filters]{Colors.RESET}")
             print(f"{Colors.DIM}Example: /history-search authentication implementation{Colors.RESET}")
+            print(f"{Colors.DIM}Filters: agent:<name> date:<YYYY-MM-DD> session:<id>{Colors.RESET}")
+            print(f"{Colors.DIM}         after:<date> before:<date>{Colors.RESET}")
             print(f"{Colors.DIM}Tip: Use natural language to search past conversations{Colors.RESET}")
             return CommandResult()
 
-        query = args.strip()
+        # Parse query and filters
+        query, where_filter = self._parse_filters(args)
+
+        # Validate that we have a query after filter extraction
+        if not query:
+            print(f"{Colors.DIM}Error: No search query provided{Colors.RESET}")
+            print(f"{Colors.DIM}Filters must be combined with a search query{Colors.RESET}")
+            return CommandResult(success=False)
 
         # Check if SessionManager has ChromaAdapter configured
         if not hasattr(self.session, "_chroma") or self.session._chroma is None:
@@ -187,14 +271,21 @@ class HistorySearchHandler(BaseHandler):
 
         # Perform semantic search on conversations collection
         try:
+            # Build search parameters
+            search_params = {
+                "query": query,
+                "collection": "conversations",
+                "limit": 10,
+            }
+
+            # Add where clause if filters were provided
+            if where_filter:
+                search_params["where"] = where_filter
+
             result = self._run_async(
                 self.session._chroma.call_tool(
                     "semantic_search",
-                    {
-                        "query": query,
-                        "collection": "conversations",
-                        "limit": 10,
-                    },
+                    search_params,
                 )
             )
 
@@ -216,6 +307,23 @@ class HistorySearchHandler(BaseHandler):
 
             # Display results with context and highlighting
             print(f"\n{Colors.CYAN}Conversation History Search Results:{Colors.RESET}")
+
+            # Show active filters if any
+            if where_filter:
+                filter_parts = []
+                for key, value in where_filter.items():
+                    if isinstance(value, dict):
+                        # Date range filter
+                        if '$gte' in value and '$lte' in value:
+                            filter_parts.append(f"{key}: {value['$gte']} to {value['$lte']}")
+                        elif '$gte' in value:
+                            filter_parts.append(f"{key} >= {value['$gte']}")
+                        elif '$lte' in value:
+                            filter_parts.append(f"{key} <= {value['$lte']}")
+                    else:
+                        filter_parts.append(f"{key}={value}")
+                print(f"{Colors.DIM}Active filters: {', '.join(filter_parts)}{Colors.RESET}")
+
             print(f"{Colors.DIM}Found {len(results)} semantically similar messages:{Colors.RESET}\n")
 
             for i, match in enumerate(results, 1):
@@ -262,7 +370,9 @@ class HistorySearchHandler(BaseHandler):
             # Show helpful tips
             print(f"{Colors.DIM}💡 Tips:{Colors.RESET}")
             print(f"{Colors.DIM}   • Use /resume <session_id> to restore a session{Colors.RESET}")
-            print(f"{Colors.DIM}   • Query terms are highlighted in {Colors.BOLD}bold{Colors.RESET}{Colors.DIM}{Colors.RESET}\n")
+            print(f"{Colors.DIM}   • Query terms are highlighted in {Colors.BOLD}bold{Colors.RESET}{Colors.DIM}{Colors.RESET}")
+            print(f"{Colors.DIM}   • Add filters: agent:<name> date:<YYYY-MM-DD> session:<id>{Colors.RESET}")
+            print(f"{Colors.DIM}   • Date ranges: after:<date> before:<date>{Colors.RESET}\n")
 
             return CommandResult()
 
