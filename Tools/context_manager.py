@@ -42,3 +42,13 @@ try:
     TIKTOKEN_AVAILABLE = True
 except ImportError:
     TIKTOKEN_AVAILABLE = False
+
+
+# Token limits for different Claude models
+# These represent the maximum context window size for each model
+MODEL_LIMITS: Dict[str, int] = {
+    "claude-opus-4-5-20251101": 200_000,      # Claude Opus 4.5: 200k tokens
+    "claude-sonnet-4-20250514": 200_000,      # Claude Sonnet 4: 200k tokens
+    "claude-3-5-sonnet-20241022": 200_000,    # Claude 3.5 Sonnet: 200k tokens
+    "default": 100_000,                        # Default fallback: 100k tokens
+}
