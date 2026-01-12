@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "title": "Test Task 1",
+    "description": "This is a test task",
+    "status": "active",
+    "client_id": 1,
+    "client_name": "Test Client",
+    "sort_order": 1,
+    "created_at": "2026-01-10T10:00:00",
+    "completed_at": null,
+    "updated_at": "2026-01-12T10:00:00",
+    "effort_estimate": "medium",
+    "points_final": 3,
+    "points_ai_guess": 3
+  },
+  {
+    "id": 2,
+    "title": "Test Task 2",
+    "description": "Another test task with special chars: commas, \"quotes\"",
+    "status": "done",
+    "client_id": 1,
+    "client_name": "Test Client",
+    "sort_order": 2,
+    "created_at": "2026-01-09T10:00:00",
+    "completed_at": "2026-01-11T15:30:00",
+    "updated_at": "2026-01-11T15:30:00",
+    "effort_estimate": "small",
+    "points_final": 1,
+    "points_ai_guess": 2
+  }
+]
