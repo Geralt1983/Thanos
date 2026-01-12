@@ -23,14 +23,20 @@ import argparse
 import asyncio
 import csv
 import json
+import os
 from datetime import datetime, date
 from pathlib import Path
 import sys
 from typing import Optional, List, Dict, Any, Tuple
 
-
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+# Import asyncpg for specific error handling
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None
 
 from Tools.adapters.workos import WorkOSAdapter
 
@@ -192,9 +198,19 @@ async def retrieve_all_data(data_type: str) -> Dict[str, Any]:
         Dictionary with retrieved data organized by type
 
     Raises:
-        ValueError: If database connection fails
+        ValueError: If database URL is not configured or connection fails
+        asyncio.TimeoutError: If database query times out
         Exception: For other errors during data retrieval
     """
+    # Check database configuration before attempting connection
+    database_url = os.environ.get("WORKOS_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise ValueError(
+            "Database URL not configured.\n"
+            "Please set WORKOS_DATABASE_URL or DATABASE_URL environment variable.\n"
+            "Example: export DATABASE_URL='postgresql://user:pass@host:port/dbname'"
+        )
+
     adapter = WorkOSAdapter()
     data = {}
 
@@ -225,15 +241,61 @@ async def retrieve_all_data(data_type: str) -> Dict[str, Any]:
         return data
 
     except ValueError as e:
-        # Database connection error
-        raise ValueError(f"Database connection failed: {e}")
+        # Database URL not configured or validation error
+        raise ValueError(str(e))
+    except asyncio.TimeoutError:
+        # Query timeout
+        raise asyncio.TimeoutError(
+            "Database query timed out after 30 seconds.\n"
+            "The database may be slow or unresponsive. Please try again later."
+        )
     except Exception as e:
-        # Other errors during retrieval
-        raise Exception(f"Error retrieving data: {e}")
+        # Handle specific asyncpg errors if available
+        if asyncpg:
+            # Connection-related errors
+            if isinstance(e, (asyncpg.PostgresConnectionError, asyncpg.CannotConnectNowError)):
+                raise ValueError(
+                    f"Cannot connect to database.\n"
+                    f"The database server may be offline or unreachable.\n"
+                    f"Error: {str(e)}"
+                )
+            # Query canceled (timeout from pool)
+            elif isinstance(e, asyncpg.QueryCanceledError):
+                raise asyncio.TimeoutError(
+                    "Database query was canceled (timeout).\n"
+                    "The query took longer than 30 seconds to execute."
+                )
+            # Invalid credentials or permissions
+            elif isinstance(e, asyncpg.InvalidAuthorizationSpecificationError):
+                raise ValueError(
+                    f"Database authentication failed.\n"
+                    f"Check your database credentials in DATABASE_URL.\n"
+                    f"Error: {str(e)}"
+                )
+            # Invalid catalog (database doesn't exist)
+            elif isinstance(e, asyncpg.InvalidCatalogNameError):
+                raise ValueError(
+                    f"Database does not exist.\n"
+                    f"Check the database name in your DATABASE_URL.\n"
+                    f"Error: {str(e)}"
+                )
+            # Generic postgres error
+            elif isinstance(e, asyncpg.PostgresError):
+                raise ValueError(
+                    f"Database error: {str(e)}\n"
+                    f"Check your database configuration and try again."
+                )
+
+        # Fallback for unknown errors
+        raise Exception(f"Error retrieving data: {str(e)}")
     finally:
         # Always close the adapter
-        await adapter.close()
-        print("🔌 Database connection closed", flush=True)
+        try:
+            await adapter.close()
+            print("🔌 Database connection closed", flush=True)
+        except Exception:
+            # Ignore errors during cleanup
+            pass
 
 
 # =============================================================================
@@ -703,19 +765,39 @@ def execute(args: Optional[str] = None) -> str:
     except argparse.ArgumentError as e:
         error_msg = f"❌ Argument error: {e}\n\nUse --help for usage information."
         print(error_msg, flush=True)
-        return error_msg
+        sys.exit(1)
 
     except ValueError as e:
-        error_msg = f"❌ Error: {e}"
+        # Database configuration or connection errors
+        error_msg = f"❌ Database Error\n\n{str(e)}"
         print(error_msg, flush=True)
-        return error_msg
+        sys.exit(1)
+
+    except asyncio.TimeoutError as e:
+        # Query timeout errors
+        error_msg = f"❌ Timeout Error\n\n{str(e)}"
+        print(error_msg, flush=True)
+        sys.exit(1)
+
+    except KeyboardInterrupt:
+        # User canceled operation
+        error_msg = "\n\n❌ Export canceled by user."
+        print(error_msg, flush=True)
+        sys.exit(130)  # Standard exit code for SIGINT
 
     except Exception as e:
-        error_msg = f"❌ Unexpected error: {e}"
+        # Unexpected errors
+        error_msg = f"❌ Unexpected error: {str(e)}"
         print(error_msg, flush=True)
-        import traceback
-        traceback.print_exc()
-        return error_msg
+
+        # Only show stack trace in debug mode (if DEBUG env var is set)
+        if os.environ.get("DEBUG"):
+            import traceback
+            traceback.print_exc()
+        else:
+            print("\nFor more details, run with DEBUG=1 environment variable.", flush=True)
+
+        sys.exit(1)
 
 
 def main():
