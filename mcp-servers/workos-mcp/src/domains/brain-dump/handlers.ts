@@ -29,6 +29,7 @@ export const handleBrainDump: ToolHandler = async (
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -64,6 +65,7 @@ export const handleGetBrainDump: ToolHandler = async (
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
@@ -103,6 +105,7 @@ export const handleProcessBrainDump: ToolHandler = async (
   if (!validation.success) {
     return {
       content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
     };
   }
 
