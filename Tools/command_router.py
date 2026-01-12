@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 from typing import Callable, Optional
 
+from Tools.command_handlers.history_search_handler import HistorySearchHandler
 
 # MemOS integration (optional - graceful degradation if unavailable)
 try:
@@ -93,6 +94,16 @@ class CommandRouter:
         # Calendar adapter integration (lazy initialization)
         self._calendar_adapter = None
         self._calendar_initialized = False
+
+        # Initialize command handlers
+        self._history_search_handler = HistorySearchHandler(
+            orchestrator=orchestrator,
+            session_manager=session_manager,
+            context_manager=context_manager,
+            state_reader=state_reader,
+            thanos_dir=thanos_dir,
+            current_agent_getter=lambda: self.current_agent,
+        )
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
@@ -235,6 +246,7 @@ class CommandRouter:
             "resume": (self._cmd_resume, "Resume a session", ["session_id"]),
             "r": (self._cmd_resume, "Resume session (alias)", ["session_id"]),
             "recall": (self._cmd_recall, "Search past sessions", ["query"]),
+            "history-search": (self._cmd_history_search, "Semantic search of conversation history", ["query"]),
             "remember": (self._cmd_remember, "Store a memory in MemOS", ["content"]),
             "memory": (self._cmd_memory, "Memory system info", []),
             "branch": (self._cmd_branch, "Create conversation branch", ["name"]),
@@ -746,6 +758,10 @@ class CommandRouter:
             print(f"{Colors.DIM}Use /resume <session_id> to restore a session{Colors.RESET}\n")
 
         return CommandResult()
+
+    def _cmd_history_search(self, args: str) -> CommandResult:
+        """Search conversation history using semantic similarity."""
+        return self._history_search_handler.handle_history_search(args)
 
     def _cmd_memory(self, args: str) -> CommandResult:
         """Display memory system information including MemOS (Neo4j + ChromaDB)."""
