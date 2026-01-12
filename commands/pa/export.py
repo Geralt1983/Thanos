@@ -21,10 +21,12 @@ Model: Direct data export (no LLM required)
 
 import argparse
 import asyncio
+import csv
+import json
 from datetime import datetime
 from pathlib import Path
 import sys
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 
 # Add project root to path
@@ -235,6 +237,129 @@ async def retrieve_all_data(data_type: str) -> Dict[str, Any]:
 
 
 # =============================================================================
+# CSV EXPORT FUNCTIONS
+# =============================================================================
+
+
+def format_value_for_csv(value: Any) -> str:
+    """
+    Format a value for CSV export.
+
+    Handles various data types including:
+    - datetime objects (convert to ISO format)
+    - None values (convert to empty string)
+    - Nested structures like dicts/lists (JSON-encode)
+    - Other types (convert to string)
+
+    Args:
+        value: The value to format
+
+    Returns:
+        String representation suitable for CSV
+    """
+    if value is None:
+        return ""
+    elif isinstance(value, datetime):
+        # Convert datetime to ISO format string
+        return value.isoformat()
+    elif isinstance(value, (dict, list)):
+        # JSON-encode complex structures
+        return json.dumps(value)
+    elif isinstance(value, bool):
+        # Convert boolean to string
+        return str(value)
+    else:
+        # Convert to string
+        return str(value)
+
+
+def export_to_csv(
+    data: Dict[str, Any],
+    data_type: str,
+    output_dir: Path
+) -> List[Tuple[str, Path]]:
+    """
+    Export data to CSV format.
+
+    Creates separate CSV files for each data type with proper headers.
+    Handles nested data structures by JSON-encoding them and converts
+    timestamps to ISO format strings.
+
+    Args:
+        data: Dictionary containing data to export, organized by type
+        data_type: Type of data being exported (tasks/habits/goals/metrics/all)
+        output_dir: Path to output directory
+
+    Returns:
+        List of tuples containing (data_type, file_path) for each created file
+
+    Example:
+        >>> data = {"tasks": [...], "habits": [...]}
+        >>> files = export_to_csv(data, "all", Path("./exports"))
+        >>> # Returns: [("tasks", Path("./exports/tasks.csv")), ...]
+    """
+    exported_files = []
+
+    print("📝 Exporting to CSV format...")
+    print()
+
+    for data_key, records in data.items():
+        # Handle metrics (single dict) vs other data types (list of dicts)
+        if data_key == "metrics":
+            # Metrics is a single dictionary, convert to list with one item
+            if not isinstance(records, list):
+                records = [records]
+
+        # Skip if no records
+        if not records or len(records) == 0:
+            print(f"   ⚠️  Skipping {data_key} (no data)")
+            continue
+
+        # Create filename
+        filename = f"{data_key}.csv"
+        filepath = output_dir / filename
+
+        try:
+            # Get all unique keys from all records to create comprehensive headers
+            all_keys = set()
+            for record in records:
+                if isinstance(record, dict):
+                    all_keys.update(record.keys())
+
+            # Sort keys for consistent column order
+            fieldnames = sorted(all_keys)
+
+            # Write CSV file
+            with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                # Write header
+                writer.writeheader()
+
+                # Write data rows
+                for record in records:
+                    # Format all values for CSV
+                    formatted_record = {
+                        key: format_value_for_csv(record.get(key))
+                        for key in fieldnames
+                    }
+                    writer.writerow(formatted_record)
+
+            # Get file size
+            file_size = filepath.stat().st_size
+
+            print(f"   ✓ {data_key}.csv - {len(records)} records ({format_file_size(file_size)})")
+            exported_files.append((data_key, filepath))
+
+        except Exception as e:
+            print(f"   ❌ Error exporting {data_key}: {e}")
+            continue
+
+    print()
+    return exported_files
+
+
+# =============================================================================
 # ARGUMENT PARSING
 # =============================================================================
 
@@ -434,54 +559,64 @@ The following will be implemented in subsequent phases:
         print("✅ Data retrieval complete!")
         print()
         print("📊 Retrieved data:")
-        for data_type, records in data.items():
+        for data_type_name, records in data.items():
             if isinstance(records, list):
-                print(f"   • {data_type.title()}: {len(records)} records")
+                print(f"   • {data_type_name.title()}: {len(records)} records")
             else:
-                print(f"   • {data_type.title()}: 1 record")
+                print(f"   • {data_type_name.title()}: 1 record")
         print()
 
-        # Placeholder for export functionality (will be implemented in 1.3 and 1.4)
-        print("⚠️  Export to file functionality not yet implemented.")
-        print()
-        print(f"To: {output_dir}")
-        print(f"As: {parsed_args.format.upper()} files")
-        print()
+        # Export data based on format
+        exported_files = []
+        if parsed_args.format == "csv":
+            exported_files = export_to_csv(data, parsed_args.type, output_dir)
+        else:
+            # JSON export will be implemented in subtask 1.4
+            print("⚠️  JSON export functionality not yet implemented.")
+            print()
 
+        # Generate summary
         summary = f"""## Export Summary
 
+**Date:** {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
 **Format:** {parsed_args.format.upper()}
 **Data Type:** {parsed_args.type}
-**Output Directory:** {output_dir}
+**Output Directory:** `{output_dir}`
 
 ## Data Retrieved
 
 """
-        for data_type, records in data.items():
+        for data_type_name, records in data.items():
             if isinstance(records, list):
-                summary += f"- **{data_type.title()}**: {len(records)} records\n"
+                summary += f"- **{data_type_name.title()}**: {len(records)} records\n"
             else:
-                summary += f"- **{data_type.title()}**: 1 record\n"
+                summary += f"- **{data_type_name.title()}**: 1 record\n"
 
-        summary += """
-## Status
+        # Add exported files info
+        if exported_files:
+            summary += "\n## Exported Files\n\n"
+            for data_type_name, filepath in exported_files:
+                file_size = filepath.stat().st_size
+                summary += f"- `{filepath.name}` - {format_file_size(file_size)}\n"
+            summary += f"\n**Total Files:** {len(exported_files)}\n"
 
-✅ Data retrieval complete
-⚠️ Export to file functionality will be implemented in next subtasks
-
-## Next Steps
-
-1. CSV export functionality (Subtask 1.3)
-2. JSON export functionality (Subtask 1.4)
-3. Progress streaming and history saving (Subtask 1.5)
-"""
+        summary += "\n## Status\n\n"
+        if parsed_args.format == "csv":
+            summary += "✅ CSV export complete\n"
+        else:
+            summary += "⚠️ JSON export functionality will be implemented in subtask 1.4\n"
 
         # Save summary
         save_export_summary(output_dir, summary)
 
+        # Print final summary
         print("-" * 60)
-        print("✅ Data retrieval working correctly")
-        print(f"📁 Summary saved to History/Exports/")
+        if exported_files:
+            print(f"✅ Export complete! {len(exported_files)} file(s) created")
+            print(f"📁 Location: {output_dir}")
+        else:
+            print("⚠️  No files exported")
+        print(f"📄 Summary saved to History/Exports/")
         print("-" * 60)
 
         return summary
