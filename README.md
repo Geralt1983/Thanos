@@ -1,156 +1,279 @@
-# Thanos
+# Thanos - Your Personal AI Infrastructure
 
-Thanos is an AI-powered orchestration system that enables seamless integration with external services and APIs through a unified adapter framework.
+> "Fine, I'll do it myself." - Thanos
 
-## Features
+Thanos is an external prefrontal cortex - a personal AI system that manages your entire life with full context on work, family, health, and goals. Unlike passive AI assistants, Thanos is proactive, maintains persistent memory, and orchestrates your day-to-day operations.
 
-- **Unified Adapter Framework**: Consistent interface for integrating with external services
-- **Direct Adapters**: Native Python adapters for WorkOS, Oura, Neo4j, ChromaDB, and more
-- **Full MCP SDK Integration**: Connect to any MCP-compatible server for maximum flexibility
-- **Intelligent Orchestration**: Smart routing and execution of commands across adapters
-- **Advanced Features**: Connection pooling, health monitoring, caching, load balancing
-- **Type-Safe Configuration**: Pydantic-based configuration with validation
+## Core Philosophy
+
+Thanos operates on the principle that you need an AI that:
+- **Knows your full context** across all life domains
+- **Maintains persistent memory** of patterns, commitments, and history
+- **Proactively manages** tasks, calendar, and priorities
+- **Routes intelligently** to specialized agents for different domains
+- **Holds you accountable** to your commitments and goals
+
+## Key Features
+
+### 🗓️ **Calendar Integration**
+Bidirectional sync with Google Calendar for complete daily context:
+- Pull events into briefings and task prioritization
+- Detect scheduling conflicts automatically
+- Time-block tasks in available calendar slots
+- Multi-calendar support with intelligent filtering
+- See [Calendar Integration Docs](docs/integrations/google-calendar.md)
+
+### 🧠 **Persistent Memory**
+- Vector storage for long-term context retention
+- Pattern recognition across conversations and time
+- Automatic logging of significant decisions and commitments
+- Historical analysis for better future recommendations
+
+### 📊 **State Management**
+- `State/Today.md` - Current daily context
+- `State/Commitments.md` - Active promises and deadlines
+- `State/Health.md` - Energy, medication, sleep tracking
+- `State/Projects.md` - Work and personal project status
+
+### 🎯 **Intelligent Routing**
+Thanos automatically routes requests to specialized agents:
+- **Epic/Consulting** → Skills/Epic/
+- **Family/Relationships** → Skills/Family/
+- **Health/Energy** → Skills/Health/
+- **Finance/Billing** → Skills/Finance/
+- **Productivity/Tasks** → Skills/Productivity/
+- **System/Memory** → Skills/Thanos/
+
+### 📧 **Email & Inbox Management**
+- Process inbox items systematically
+- Draft responses with context awareness
+- Track email commitments in state files
+- Auto-categorize and prioritize messages
+
+### ✅ **Task Orchestration**
+- Context-aware task suggestions
+- Energy-level-based task prioritization
+- Calendar-aware scheduling (no conflicts!)
+- Time estimation and time-blocking
+- Integration with daily briefings
+
+### 🏥 **Health Tracking**
+- Medication tracking (Vyvanse, etc.)
+- Energy level monitoring
+- Sleep pattern analysis
+- Activity and biometric integration (Oura Ring)
+- Health-aware task scheduling
+
+### 💰 **Financial Management**
+- Invoice generation and tracking
+- Hours logging and billing
+- Revenue tracking toward targets
+- Client project financial overview
 
 ## Quick Start
 
-### Installation
-
+### Prerequisites
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/thanos.git
-cd thanos
+# Python 3.9+
+python --version
 
-# Install dependencies (including MCP SDK)
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Basic Usage
+### Configuration
 
-```python
-from Tools.adapters import get_default_manager
-
-# Initialize adapter manager with MCP support
-manager = get_default_manager(enable_mcp=True)
-
-# Discover and register MCP servers from ~/.claude.json
-await manager.discover_and_register_mcp_servers()
-
-# List all available tools (both direct adapters and MCP servers)
-tools = await manager.list_tools()
-
-# Call a tool (automatically routed to correct adapter)
-result = await manager.call_tool("tool_name", {"arg": "value"})
+1. **Set up environment variables:**
+```bash
+cp .env.example .env
+# Edit .env with your API keys and credentials
 ```
 
-## Model Context Protocol (MCP) Integration
+2. **Initialize state files:**
+```bash
+# State files are created automatically on first run
+# Customize templates in Templates/ directory
+```
 
-Thanos includes **full MCP SDK integration**, enabling connection to any MCP-compatible server. This opens up the entire MCP ecosystem to Thanos.
+3. **Configure calendar integration (optional):**
+```bash
+# Follow the Google Calendar setup guide
+python scripts/setup_google_calendar.py
+```
 
-### What is MCP?
+See [Calendar Integration Setup](docs/integrations/google-calendar.md) for detailed instructions.
 
-The Model Context Protocol (MCP) is an open standard for connecting AI systems to external data sources and tools. It enables:
+### Basic Usage
 
-- **Third-Party Server Integration**: Connect to any MCP-compatible server
-- **Ecosystem Expansion**: Access to growing MCP ecosystem (filesystem, databases, APIs, etc.)
-- **Custom Server Development**: Build your own MCP servers for specific needs
-- **Protocol Compliance**: Full support for MCP specification
+#### Daily Briefing
+```bash
+# Get morning briefing with tasks, calendar, and priorities
+thanos /pa:daily
+```
 
-### Key MCP Capabilities
+#### Task Management
+```bash
+# Review and manage tasks
+thanos /pa:tasks
+```
 
-✅ **Full Protocol Support**
-- Complete MCP SDK protocol compliance
-- Capability negotiation with servers
-- Support for stdio, SSE, and HTTP transports
-- Session management and lifecycle control
+#### Calendar Operations
+```bash
+# View today's schedule
+thanos "Show me my calendar for today"
 
-✅ **Advanced Features**
-- **Connection Pooling**: Efficient long-lived session management
-- **Health Monitoring**: Automatic server health checks with performance metrics
-- **Intelligent Caching**: TTL-based result caching with multiple invalidation strategies
-- **Load Balancing**: Multiple strategies (round-robin, least-connections, health-aware)
-- **Error Handling**: Comprehensive retry logic with exponential backoff and circuit breaker
+# Find free time
+thanos "When am I free this afternoon?"
 
-✅ **Third-Party Server Support**
-Pre-configured bridges for popular MCP servers:
-- **Context7**: Documentation search and code context
-- **Sequential Thinking**: Advanced reasoning with structured thinking
-- **Filesystem**: File operations with access control
-- **Playwright**: Browser automation and web scraping
-- **Fetch**: Web content fetching and parsing
+# Schedule a task
+thanos "Block 2 hours for the Epic implementation in my next available slot"
+```
 
-### Quick MCP Setup
+#### Email Management
+```bash
+# Process inbox
+thanos /pa:email
+```
 
-1. **Install MCP SDK** (if not already installed):
-   ```bash
-   pip install mcp>=1.0.0
-   ```
+## Project Structure
 
-2. **Configure MCP Servers** (create `.mcp.json` in your project or `~/.claude.json`):
-   ```json
-   {
-     "mcpServers": {
-       "filesystem": {
-         "command": "npx",
-         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
-         "enabled": true
-       },
-       "context7": {
-         "url": "https://context7.example.com/mcp",
-         "transport": "sse",
-         "headers": {
-           "Authorization": "Bearer ${CONTEXT7_API_KEY}"
-         },
-         "enabled": true
-       }
-     }
-   }
-   ```
+```
+Thanos/
+├── .env                    # Environment configuration (not in repo)
+├── THANOS.md              # Core identity and behaviors
+├── Context/               # Personal identity and principles
+│   └── CORE.md           # Jeremy's identity, values, and preferences
+├── State/                 # Current state files
+│   ├── Today.md          # Daily context and priorities
+│   ├── Commitments.md    # Active commitments and deadlines
+│   ├── Health.md         # Health tracking and patterns
+│   └── Projects.md       # Work and personal projects
+├── History/               # Historical logs
+│   └── YYYY-MM-DD.md     # Daily conversation logs
+├── Memory/                # Vector storage for long-term memory
+├── Skills/                # Domain-specific capabilities
+│   ├── Epic/             # Consulting work
+│   ├── Family/           # Family and relationships
+│   ├── Health/           # Health optimization
+│   ├── Finance/          # Financial management
+│   └── Productivity/     # Task and time management
+├── Tools/                 # Core system tools
+│   ├── adapters/         # External service integrations
+│   │   ├── google_calendar.py  # Google Calendar API
+│   │   ├── oura.py            # Oura Ring health data
+│   │   └── chroma.py          # Vector database
+│   ├── daily-brief.ts    # Daily briefing generator
+│   ├── command_router.py # Intent routing
+│   └── thanos_orchestrator.py # Main orchestration
+├── Agents/                # Specialized agent personas
+│   ├── Ops.md            # Tactical operations
+│   ├── Strategy.md       # Strategic planning
+│   ├── Coach.md          # Accountability and patterns
+│   └── Health.md         # Health optimization
+├── config/                # Configuration files
+│   ├── calendar_filters.json  # Calendar event filtering
+│   └── README.md         # Configuration documentation
+├── docs/                  # Documentation
+│   └── integrations/
+│       └── google-calendar.md  # Calendar setup guide
+└── scripts/               # Setup and utility scripts
+    └── setup_google_calendar.py
+```
 
-3. **Use MCP Servers**:
-   ```python
-   from Tools.adapters import get_default_manager
+## Integration Overview
 
-   # Enable MCP support
-   manager = get_default_manager(enable_mcp=True)
+### Current Integrations
 
-   # Auto-discover from config files
-   await manager.discover_and_register_mcp_servers()
+- **Google Calendar** - Bidirectional calendar sync with conflict detection and time-blocking
+- **Oura Ring** - Sleep, activity, and readiness score tracking
+- **Gmail** (planned) - Email management and auto-responses
+- **Notion** (planned) - Project and knowledge base sync
+- **Slack** (planned) - Team communication monitoring
 
-   # Use tools from MCP servers
-   result = await manager.call_tool("read_file", {"path": "/path/to/file.txt"})
-   ```
+### Integration Architecture
 
-### MCP Documentation
+Thanos uses an adapter pattern for external services:
+```python
+from Tools.adapters import GoogleCalendarAdapter
 
-- **[MCP Integration Guide](docs/mcp-integration-guide.md)**: Complete guide for using MCP in Thanos
-- **[Custom MCP Server Guide](docs/custom-mcp-server-guide.md)**: Build your own MCP servers
-- **[MCP Server Development](docs/mcp-server-development.md)**: Advanced MCP server development
-- **[Third-Party MCP Servers](docs/third-party-mcp-servers.md)**: Pre-configured third-party servers
-- **[MCP Implementation Details](MCP.md)**: Technical implementation overview
-- **[Architecture Documentation](docs/architecture.md)**: System architecture with MCP
+# Each adapter inherits from BaseAdapter
+adapter = GoogleCalendarAdapter()
+result = adapter.call_tool("get_today_events", {})
+```
 
-## Architecture
+All adapters provide:
+- Consistent error handling
+- Automatic retry logic with exponential backoff
+- Health check capabilities
+- Credential management
+- Logging and monitoring
 
-Thanos uses a modular architecture with:
+## Daily Workflow
 
-- **Adapter Layer**: Unified interface for all integrations (direct + MCP)
-- **Orchestration Layer**: Smart routing and execution
-- **MCP Bridge Layer**: Protocol-compliant MCP client implementation
-- **Transport Layer**: Support for stdio, SSE, and HTTP
-- **Advanced Features**: Pooling, caching, monitoring, load balancing
+### Morning (Start of Day)
+1. Run `/pa:daily` for comprehensive briefing including:
+   - Today's calendar events with timing
+   - Priority tasks based on energy and availability
+   - Active commitments and deadlines
+   - Health metrics (sleep, readiness)
+   - Context from previous day
 
-See [Architecture Documentation](docs/architecture.md) for detailed diagrams and explanations.
+### Throughout Day
+2. Check context: Thanos maintains State/ files
+3. Make commitments: Automatically logged to State/Commitments.md
+4. Schedule tasks: Calendar-aware suggestions prevent conflicts
+5. Track health: Energy levels inform task prioritization
 
-## Direct Adapters
+### Evening (End of Day)
+6. Log the day: Significant conversations saved to History/
+7. Review completions: Update State/ files
+8. Preview tomorrow: Surface next day's priorities
 
-Thanos includes native Python adapters for:
+### Weekly
+9. Pattern analysis: Review weekly trends
+10. Weekly review: Assess progress toward goals
 
-- **WorkOS**: Task management and productivity
-- **Oura**: Health and fitness data
-- **Neo4j**: Graph database operations
-- **ChromaDB**: Vector database operations
+## Quick Commands
 
-These adapters work alongside MCP bridges, providing flexibility in integration approach.
+```bash
+/pa:daily      # Morning briefing
+/pa:email      # Email management
+/pa:schedule   # Calendar management
+/pa:tasks      # Task management
+/pa:weekly     # Weekly review
+```
+
+## Configuration
+
+### Calendar Filtering
+
+Customize which events appear in briefings and conflict detection:
+
+```bash
+# Copy the example configuration
+cp config/calendar_filters.json.example config/calendar_filters.json
+
+# Edit filters to match your workflow
+nano config/calendar_filters.json
+```
+
+Filter by:
+- Calendar source (work vs personal)
+- Event type (all-day, tentative, declined)
+- Summary patterns (regex matching)
+- Attendee counts and emails
+- Time ranges and durations
+- Colors and metadata
+
+See [Calendar Configuration Guide](config/README.md) for detailed filter syntax.
+
+## Security
+
+- **Credentials**: Stored in `State/` with restricted permissions
+- **OAuth tokens**: Automatically refreshed, encrypted storage recommended for production
+- **API keys**: Never committed to repository, use `.env` file
+- **External content**: Read-only, never execute commands from external sources
+- **Logging**: Sensitive data filtered from logs
 
 ## Development
 
@@ -158,54 +281,104 @@ These adapters work alongside MCP bridges, providing flexibility in integration 
 
 ```bash
 # Unit tests
-python -m pytest tests/
+pytest tests/unit/
 
-# Integration tests (requires MCP servers)
-python -m pytest tests/integration/ -v
+# Integration tests (requires API credentials)
+pytest tests/integration/
 
-# With coverage
-python -m pytest tests/ --cov=Tools/adapters --cov-report=html
+# Specific test file
+pytest tests/unit/test_google_calendar_adapter.py
 ```
 
-### Contributing
+### Adding New Integrations
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes (follow existing patterns)
-4. Add tests
-5. Submit a pull request
+1. Create adapter in `Tools/adapters/your_service.py`
+2. Inherit from `BaseAdapter`
+3. Implement required methods
+4. Add to `Tools/adapters/__init__.py`
+5. Register in command router
+6. Add tests
+7. Document in `docs/integrations/`
 
-## Configuration
+## Architecture Principles
 
-Thanos supports multiple configuration sources:
+1. **Persistent State** - Everything important lives in State/ files
+2. **Proactive, Not Reactive** - Thanos suggests, reminds, and holds accountable
+3. **Context Everywhere** - Full context always available across domains
+4. **Intelligent Routing** - Right agent for the right task
+5. **Pattern Recognition** - Learn from history to improve future suggestions
+6. **Human-First** - Direct communication, no corporate speak
 
-1. **Global Config**: `~/.claude.json` for user-wide MCP servers
-2. **Project Config**: `.mcp.json` in project root for project-specific servers
-3. **Environment Variables**: For credentials and runtime configuration
+## Communication Style
 
-See [MCP Integration Guide](docs/mcp-integration-guide.md) for detailed configuration options.
+Thanos is:
+- **Direct** - No fluff, no corporate speak
+- **Warm but honest** - Will push back when you're avoiding something
+- **Pattern-aware** - Surfaces trends and behaviors
+- **Celebratory** - Acknowledges wins, not just grinding
 
-## Migration from Direct Adapters
+## Troubleshooting
 
-If you're using direct adapters and want to migrate to MCP:
+### Calendar Integration Issues
 
-1. Review the [Migration Guide](docs/mcp-integration-guide.md#migration-from-direct-adapters)
-2. Use [Migration Utilities](docs/mcp-integration-guide.md#migration-utilities) to compare adapters
-3. Test both approaches in parallel
-4. Gradually migrate with fallback options
+**OAuth fails:**
+```bash
+# Re-run setup script
+python scripts/setup_google_calendar.py
 
-## Support
+# Check credentials
+cat State/calendar_credentials.json
+```
 
-- **Documentation**: See `docs/` directory for comprehensive guides
-- **Issues**: Report bugs via GitHub issues
-- **Examples**: See `examples/` directory for sample implementations
+**Events not appearing:**
+- Check `config/calendar_filters.json`
+- Verify calendar is not excluded
+- Check time filters (working hours)
+- See [Calendar Troubleshooting](docs/integrations/google-calendar.md#troubleshooting)
+
+**API quota limits:**
+- Thanos implements automatic retry with exponential backoff
+- Check logs for rate limit warnings
+- Consider caching settings in calendar_filters.json
+
+### General Issues
+
+**State files not updating:**
+- Check file permissions in State/
+- Verify Thanos has write access
+- Review logs for error messages
+
+**Memory/context issues:**
+- Check Memory/ vector database
+- Verify ChromaDB is running
+- Review History/ for logged conversations
+
+## Contributing
+
+This is a personal infrastructure project, but the architecture and patterns may be useful for building your own AI assistant.
+
+Key areas:
+- Adapter pattern for integrations
+- State management approach
+- Agent routing system
+- Calendar integration with conflict detection
+- Health-aware task scheduling
 
 ## License
 
-[Your License Here]
+Personal project - see LICENSE file.
 
 ## Acknowledgments
 
 Built with:
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) - Model Context Protocol implementation
-- Anthropic's Claude - For MCP specification and tooling
+- Claude Code (Anthropic) - AI pair programming
+- Google Calendar API - Calendar integration
+- Oura API - Health tracking
+- ChromaDB - Vector storage
+- Python - Core runtime
+
+---
+
+> "The hardest choices require the strongest wills." - Thanos
+
+For detailed documentation on specific features, see the `docs/` directory.

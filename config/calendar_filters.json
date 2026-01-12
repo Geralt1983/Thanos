@@ -1,0 +1,123 @@
+{
+  "enabled": true,
+  "description": "Calendar filtering configuration for including/excluding events in Thanos context",
+  "filter_mode": "exclude",
+  "calendars": {
+    "include": [],
+    "exclude": [],
+    "primary_only": false
+  },
+  "event_types": {
+    "include_all_day_events": true,
+    "include_declined_events": false,
+    "include_cancelled_events": false,
+    "include_tentative_events": true,
+    "event_type_filters": {
+      "focus_time": {
+        "enabled": true,
+        "action": "include",
+        "description": "Events marked as focus time or deep work"
+      },
+      "out_of_office": {
+        "enabled": true,
+        "action": "exclude",
+        "description": "Out of office or vacation events"
+      },
+      "working_location": {
+        "enabled": true,
+        "action": "include",
+        "description": "Working location events (office, home, etc.)"
+      }
+    }
+  },
+  "summary_patterns": {
+    "description": "Regex patterns to match event summaries/titles",
+    "exclude": [
+      "^\\[Blocked\\]",
+      "^\\[Hold\\]",
+      "(?i)personal.*time",
+      "(?i)lunch.*break"
+    ],
+    "include": [],
+    "case_sensitive": false
+  },
+  "attendees": {
+    "description": "Filter events based on attendee emails",
+    "exclude_emails": [],
+    "include_emails": [],
+    "exclude_if_organizer": [],
+    "exclude_if_not_organizer": false,
+    "min_attendees": null,
+    "max_attendees": null
+  },
+  "description_patterns": {
+    "description": "Regex patterns to match event descriptions",
+    "exclude": [],
+    "include": [],
+    "case_sensitive": false
+  },
+  "time_filters": {
+    "description": "Filter events based on time criteria",
+    "exclude_before_hour": null,
+    "exclude_after_hour": null,
+    "min_duration_minutes": null,
+    "max_duration_minutes": null,
+    "exclude_weekends": false
+  },
+  "metadata_filters": {
+    "description": "Filter based on event metadata and properties",
+    "exclude_by_color": [],
+    "include_by_color": [],
+    "exclude_recurring": false,
+    "exclude_private": false,
+    "thanos_created_only": false
+  },
+  "location_filters": {
+    "description": "Filter events based on location",
+    "exclude_locations": [],
+    "include_locations": [],
+    "exclude_virtual_only": false,
+    "exclude_in_person_only": false
+  },
+  "advanced": {
+    "apply_filters_to_briefing": true,
+    "apply_filters_to_conflict_detection": false,
+    "apply_filters_to_free_slots": true,
+    "cache_filtered_results": true,
+    "cache_ttl_minutes": 15
+  },
+  "presets": {
+    "work_only": {
+      "description": "Show only work-related events during business hours",
+      "summary_patterns": {
+        "exclude": ["(?i)personal", "(?i)family", "(?i)lunch"]
+      },
+      "time_filters": {
+        "exclude_before_hour": 8,
+        "exclude_after_hour": 18,
+        "exclude_weekends": true
+      }
+    },
+    "focus_sessions": {
+      "description": "Show only focus time and deep work blocks",
+      "summary_patterns": {
+        "include": ["(?i)focus", "(?i)deep work", "(?i)coding time"]
+      },
+      "attendees": {
+        "max_attendees": 1
+      }
+    },
+    "meetings_only": {
+      "description": "Show only meetings with other people",
+      "attendees": {
+        "min_attendees": 2
+      },
+      "event_types": {
+        "event_type_filters": {
+          "focus_time": {"action": "exclude"},
+          "out_of_office": {"action": "exclude"}
+        }
+      }
+    }
+  }
+}
