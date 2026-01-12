@@ -5,7 +5,10 @@
 
 import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
+const execAsync = promisify(exec);
 const CLAUDE_DIR = join(process.env.HOME!, '.claude');
 
 interface SessionStartResult {
@@ -13,6 +16,24 @@ interface SessionStartResult {
   inboxCount: number;
   dueCommitments: string[];
   currentFocus: string;
+  commitmentCheck?: CommitmentCheckResult;
+}
+
+interface CommitmentCheckResult {
+  prompts: Array<{
+    commitment_id: string;
+    commitment_title: string;
+    reason: string;
+    urgency: number;
+    days_overdue?: number;
+    streak_count?: number;
+  }>;
+  total_active: number;
+  overdue_count: number;
+  due_today_count: number;
+  habit_reminder_count: number;
+  in_quiet_hours: boolean;
+  check_timestamp: string;
 }
 
 export default async function sessionStart(): Promise<SessionStartResult> {
@@ -47,8 +68,16 @@ export default async function sessionStart(): Promise<SessionStartResult> {
   }
   const hasInbox = inboxItems.length > 0;
 
-  // 3. Check for due commitments
-  const dueCommitments = extractDueCommitments(commitments);
+  // 3. Check for due commitments using the enhanced commitment system
+  let commitmentCheckResult: CommitmentCheckResult | null = null;
+  let dueCommitments: string[] = [];
+
+  commitmentCheckResult = await checkCommitments();
+
+  // Fallback to old method if new system not available
+  if (!commitmentCheckResult) {
+    dueCommitments = extractDueCommitments(commitments);
+  }
 
   // 4. Generate session brief
   console.log('═══════════════════════════════════════');
@@ -61,7 +90,10 @@ export default async function sessionStart(): Promise<SessionStartResult> {
     console.log('');
   }
 
-  if (dueCommitments.length > 0) {
+  // Display commitment check results (new system or fallback)
+  if (commitmentCheckResult && commitmentCheckResult.prompts.length > 0) {
+    displayCommitmentPrompts(commitmentCheckResult);
+  } else if (dueCommitments.length > 0) {
     console.log('⚠️  DUE SOON:');
     dueCommitments.forEach(c => console.log(`   - ${c}`));
     console.log('');
@@ -82,8 +114,11 @@ export default async function sessionStart(): Promise<SessionStartResult> {
   return {
     hasInbox,
     inboxCount: inboxItems.length,
-    dueCommitments,
+    dueCommitments: commitmentCheckResult
+      ? commitmentCheckResult.prompts.map(p => p.commitment_title)
+      : dueCommitments,
     currentFocus: focusSection,
+    commitmentCheck: commitmentCheckResult || undefined,
   };
 }
 
@@ -142,6 +177,71 @@ function extractSection(content: string, header: string): string {
   const regex = new RegExp(`## ${header}\\n([\\s\\S]*?)(?=\\n##|$)`, 'i');
   const match = content.match(regex);
   return match ? match[1].trim() : '';
+}
+
+/**
+ * Check commitments using the Python commitment_check tool
+ * Returns null if check fails (graceful fallback)
+ */
+async function checkCommitments(): Promise<CommitmentCheckResult | null> {
+  try {
+    // Try multiple potential paths for the Tools directory
+    const toolsPaths = [
+      join(process.env.HOME!, 'Projects/Thanos/Tools'),
+      join(CLAUDE_DIR, '../Tools'),
+      join(process.cwd(), 'Tools'),
+    ];
+
+    let toolsPath = '';
+    for (const path of toolsPaths) {
+      try {
+        await readFile(join(path, 'commitment_check.py'));
+        toolsPath = path;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (!toolsPath) {
+      return null; // commitment_check.py not found
+    }
+
+    const command = `cd "${toolsPath}" && python3 commitment_check.py --json --dry-run`;
+    const { stdout } = await execAsync(command, { timeout: 5000 });
+    const result = JSON.parse(stdout) as CommitmentCheckResult;
+
+    return result;
+  } catch (error) {
+    // Graceful fallback - don't block session start if commitment check fails
+    return null;
+  }
+}
+
+/**
+ * Format and display commitment prompts
+ */
+function displayCommitmentPrompts(result: CommitmentCheckResult): void {
+  const overdue = result.prompts.filter(p => p.reason === 'overdue');
+  const dueToday = result.prompts.filter(p => p.reason === 'due_today');
+
+  if (overdue.length > 0) {
+    console.log('🚨 OVERDUE COMMITMENTS:');
+    overdue.forEach(p => {
+      const days = p.days_overdue || 0;
+      const emoji = days > 7 ? '🚨' : '⚠️';
+      console.log(`   ${emoji} ${p.commitment_title} (${days} day${days > 1 ? 's' : ''})`);
+    });
+    console.log('');
+  }
+
+  if (dueToday.length > 0) {
+    console.log('📅 DUE TODAY:');
+    dueToday.forEach(p => {
+      console.log(`   📅 ${p.commitment_title}`);
+    });
+    console.log('');
+  }
 }
 
 // Run if executed directly

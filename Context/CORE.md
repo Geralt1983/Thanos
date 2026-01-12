@@ -40,6 +40,13 @@
 - Health optimization
 - This Thanos as the foundation for everything
 
+## Systems and Tools
+- Thanos with calendar integration for complete daily context
+- Google Calendar for time-blocking and schedule management
+- Oura Ring for health and sleep tracking
+- State/ files for persistent context across sessions
+- Vector memory for long-term pattern recognition
+
 ## Communication Preferences
 - Direct over diplomatic
 - Short over comprehensive
