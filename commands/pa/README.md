@@ -23,6 +23,9 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 # Process brain dump entries
 /pa:process
 
+# Export data for analysis
+/pa:export
+
 # Weekly review
 /pa:weekly
 ```
@@ -38,6 +41,7 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 | `/pa:tasks` | Task management | `/pa:tasks focus --energy high` |
 | `/pa:brainstorm` | Ideation & planning | `/pa:brainstorm "topic" --mode solve` |
 | `/pa:process` | Brain dump processing | `/pa:process --limit 20 --dry-run` |
+| `/pa:export` | Data export | `/pa:export --format csv --type tasks` |
 | `/pa:weekly` | Weekly review | `/pa:weekly review` |
 | `/pa:epic` | Epic consulting work | `/pa:epic status` |
 
@@ -95,7 +99,8 @@ Configure your task management integration:
 /pa:epic status
 /pa:process --limit 20
 
-# Friday: Weekly reflection
+# Friday: Export data and weekly reflection
+/pa:export --format csv --type all
 /pa:weekly reflect
 ```
 
@@ -116,6 +121,11 @@ Configure your task management integration:
 # Process captured ideas before they pile up
 /pa:process --dry-run  # Preview first
 /pa:process           # Then process for real
+
+# Export data for backup or analysis
+/pa:export --format json --type all           # Full backup
+/pa:export --format csv --type tasks          # Tasks for spreadsheet
+/pa:export --type habits --output ~/Documents # Custom location
 
 # Quick email check
 /pa:email summary --urgent
@@ -138,6 +148,7 @@ Edit the command files to adjust:
 These commands work alongside the SuperClaude framework:
 - Use `/sc:analyze` for code analysis
 - Use `/pa:tasks` for task management
+- Use `/pa:export` for data portability and analysis
 - Combine with `--think` flags for complex planning
 
 ## File Structure
@@ -153,6 +164,7 @@ These commands work alongside the SuperClaude framework:
 │   │   ├── tasks.md           # Task management
 │   │   ├── brainstorm.md      # Ideation
 │   │   ├── process.md         # Brain dump processing
+│   │   ├── export.md          # Data export
 │   │   ├── weekly.md          # Weekly review
 │   │   └── epic.md            # Epic consulting
 │   └── sc/                    # SuperClaude commands
