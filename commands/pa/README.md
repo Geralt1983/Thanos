@@ -11,6 +11,9 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 # Check email with priority triage
 /pa:email summary
 
+# View today's calendar
+/pa:calendar view --today
+
 # View today's schedule
 /pa:schedule view
 
@@ -27,7 +30,8 @@ A suite of personal assistant commands for Claude Code to help manage your day, 
 |---------|---------|-------------|
 | `/pa:daily` | Morning briefing | `/pa:daily --quick` |
 | `/pa:email` | Email management | `/pa:email summary --timeframe 24h` |
-| `/pa:schedule` | Calendar management | `/pa:schedule find --duration 30m` |
+| `/pa:calendar` | Calendar sync & viewing | `/pa:calendar view --today` |
+| `/pa:schedule` | Schedule management | `/pa:schedule find --duration 30m` |
 | `/pa:tasks` | Task management | `/pa:tasks focus --energy high` |
 | `/pa:brainstorm` | Ideation & planning | `/pa:brainstorm "topic" --mode solve` |
 | `/pa:weekly` | Weekly review | `/pa:weekly review` |
@@ -64,6 +68,9 @@ Configure your task management integration:
 # Morning: Start with briefing
 /pa:daily
 
+# View today's calendar
+/pa:calendar view --today
+
 # Throughout day: Task focus
 /pa:tasks focus --duration 30m
 
@@ -90,6 +97,12 @@ Configure your task management integration:
 ```bash
 # Need to schedule a meeting
 /pa:schedule find --duration 1h --attendees "team"
+
+# Sync and check calendar
+/pa:calendar sync --week
+
+# Find available time slots
+/pa:calendar find "meeting slot"
 
 # Brainstorm a problem
 /pa:brainstorm "How to improve orderset adoption" --mode solve
@@ -125,7 +138,8 @@ These commands work alongside the SuperClaude framework:
 │   │   ├── README.md          # This file
 │   │   ├── daily.md           # Morning briefing
 │   │   ├── email.md           # Email management
-│   │   ├── schedule.md        # Calendar management
+│   │   ├── calendar.py        # Calendar sync & viewing
+│   │   ├── schedule.md        # Schedule management
 │   │   ├── tasks.md           # Task management
 │   │   ├── brainstorm.md      # Ideation
 │   │   ├── weekly.md          # Weekly review
