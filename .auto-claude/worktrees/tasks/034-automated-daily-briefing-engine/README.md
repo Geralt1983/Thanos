@@ -191,6 +191,7 @@ Sunday evening briefings include a **Weekly Pattern Review** showing:
 - **[Complete User Guide](docs/briefing_engine_guide.md)** - Comprehensive documentation
 - **[Installation Guide](INSTALLATION.md)** - Quick setup instructions
 - **[Installation Scripts](scripts/README.md)** - Cron vs systemd details
+- **[Example Output](docs/EXAMPLE_OUTPUT.md)** - See what briefings look like
 
 ### Configuration
 - **[Configuration Guide](config/README.md)** - Full config reference
@@ -206,6 +207,9 @@ Sunday evening briefings include a **Weekly Pattern Review** showing:
 - **[Health State Tracker](docs/HEALTH_STATE_TRACKER.md)** - Energy and sleep tracking
 - **[Pattern Analyzer](docs/PATTERN_ANALYZER.md)** - Pattern learning details
 - **[Briefing Command](docs/BRIEFING_COMMAND.md)** - Manual briefing generation
+
+### Developer Resources
+- **[Architecture Guide](docs/briefing_architecture.md)** - System architecture and extension points
 
 ---
 
