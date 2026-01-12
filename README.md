@@ -5,7 +5,8 @@ Thanos is an AI-powered orchestration system that enables seamless integration w
 ## Features
 
 - **Unified Adapter Framework**: Consistent interface for integrating with external services
-- **Direct Adapters**: Native Python adapters for WorkOS, Oura, Neo4j, ChromaDB, and more
+- **Direct Adapters**: Native Python adapters for WorkOS, Oura, Neo4j, ChromaDB, Calendar, and more
+- **Calendar Integration**: Google Calendar sync with unified CalendarAdapter, /calendar slash command, and daily briefing integration
 - **Full MCP SDK Integration**: Connect to any MCP-compatible server for maximum flexibility
 - **Intelligent Orchestration**: Smart routing and execution of commands across adapters
 - **Advanced Features**: Connection pooling, health monitoring, caching, load balancing
@@ -149,8 +150,21 @@ Thanos includes native Python adapters for:
 - **Oura**: Health and fitness data
 - **Neo4j**: Graph database operations
 - **ChromaDB**: Vector database operations
+- **Calendar**: Google Calendar integration with unified CalendarAdapter wrapper for multi-provider support
 
 These adapters work alongside MCP bridges, providing flexibility in integration approach.
+
+### Calendar Integration
+
+The Calendar adapter provides seamless integration with Google Calendar:
+
+- **Unified Interface**: CalendarAdapter wrapper for future multi-provider support
+- **Calendar Sync**: Automatic syncing of calendar events to local State files
+- **/calendar Command**: Slash command for viewing, syncing, and finding calendar events
+- **Daily Briefing Integration**: Auto-sync calendar data with daily briefings
+- **Smart Availability**: Find free time slots and check availability
+
+See [Calendar Integration Guide](docs/guides/calendar-integration.md) for complete setup and usage instructions.
 
 ## Development
 
