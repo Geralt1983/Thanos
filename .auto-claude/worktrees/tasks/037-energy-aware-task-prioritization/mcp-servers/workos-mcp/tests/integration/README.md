@@ -159,13 +159,24 @@ This dataset covers:
 4. **Burnout Prevention** - Low readiness reduces target by 25%
 5. **Energy Matching** - Cognitive load aligned with actual energy state
 
+## Related Test Suites
+
+### Oura Fallback Tests (`oura-fallback.test.ts`) - Subtask 6.3
+Tests graceful degradation when Oura data is unavailable:
+- ✅ Oura API down scenarios
+- ✅ User hasn't worn ring fallback
+- ✅ Complete fallback chain (4 priority levels)
+- ✅ Daily goal adjustment with missing data
+- ✅ Realistic ADHD scenarios (inconsistent ring usage)
+
+See `oura-fallback.README.md` for detailed documentation.
+
 ## Future Enhancements
 
 Tests to add in future subtasks:
 
 - Database integration (requires actual DB setup)
 - MCP handler layer tests (requires handler files in worktree)
-- Oura cache integration tests (subtask 6.3)
 - Feedback loop tests (energy_feedback table)
 - Multi-day pattern detection
 - Time-of-day energy curves
