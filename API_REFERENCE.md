@@ -290,7 +290,7 @@ print(f"Today: {today['calls']} calls, ${today['cost']:.4f} cost")
 summary = client.get_usage_summary(days=30)
 print(f"30-day cost: ${summary['total_cost_usd']:.2f}")
 print(f"Projected monthly: ${summary['projected_monthly_cost']:.2f}")
-print(f"Average per call: ${summary['avg_cost_per_call']:.4f}")
+print(f"Average per day: ${summary['avg_daily_cost']:.4f}")
 ```
 
 ### Complexity Analysis
@@ -752,17 +752,15 @@ Retrieve comprehensive usage statistics and cost analysis for a specified time p
 
 **Returns:**
 - `Dict`: A dictionary containing detailed usage statistics with the following keys:
+  - `period_days` (int): The number of days covered by this summary (same as input parameter)
   - `total_calls` (int): Total number of API calls made
-  - `total_input_tokens` (int): Total input/prompt tokens consumed
-  - `total_output_tokens` (int): Total output/completion tokens generated
-  - `total_tokens` (int): Sum of input and output tokens
+  - `total_tokens` (int): Total tokens consumed (input + output)
   - `total_cost_usd` (float): Total cost in USD
-  - `avg_cost_per_call` (float): Average cost per API call
-  - `avg_tokens_per_call` (float): Average tokens per call
+  - `avg_daily_tokens` (float): Average tokens consumed per day
+  - `avg_daily_cost` (float): Average cost per day
   - `projected_monthly_cost` (float): Estimated monthly cost based on current usage rate
-  - `by_model` (Dict): Breakdown of usage per model
-  - `by_operation` (Dict): Breakdown of usage per operation type
-  - `by_day` (List[Dict]): Daily usage breakdown
+  - `model_breakdown` (Dict): Breakdown of usage per model (keys: model names, values: dicts with 'calls', 'tokens', 'cost')
+  - `provider_breakdown` (Dict): Breakdown of usage per provider (keys: provider names, values: dicts with 'calls', 'tokens', 'cost')
 
 Returns empty dict `{}` if usage tracking is disabled.
 
@@ -778,7 +776,7 @@ print(f"30-Day Usage Summary:")
 print(f"  Total calls: {summary['total_calls']}")
 print(f"  Total cost: ${summary['total_cost_usd']:.2f}")
 print(f"  Projected monthly: ${summary['projected_monthly_cost']:.2f}")
-print(f"  Average per call: ${summary['avg_cost_per_call']:.4f}")
+print(f"  Average per day: ${summary['avg_daily_cost']:.4f}")
 print(f"  Total tokens: {summary['total_tokens']:,}")
 ```
 
@@ -797,7 +795,7 @@ print(f"  Cost: ${weekly['total_cost_usd']:.2f}")
 
 # Show breakdown by model
 print("\nUsage by Model:")
-for model, stats in weekly.get('by_model', {}).items():
+for model, stats in weekly.get('model_breakdown', {}).items():
     print(f"  {model}: {stats['calls']} calls, ${stats['cost']:.4f}")
 ```
 
