@@ -27,6 +27,7 @@ SHORTCUTS:
   thanos tasks                    Review tasks (pa:tasks)
   thanos schedule                 Check schedule (pa:schedule)
   thanos weekly                   Weekly review (pa:weekly)
+  thanos export                   Export data (pa:export)
 
 COMMAND PATTERNS:
   Commands can be called with prefix:name pattern:
@@ -92,6 +93,8 @@ COMMAND_SHORTCUTS = {
     "weekly": "pa:weekly",
     "week": "pa:weekly",
     "review": "pa:weekly",
+    # Data export shortcuts
+    "export": "pa:export",
 }
 
 # ========================================================================
