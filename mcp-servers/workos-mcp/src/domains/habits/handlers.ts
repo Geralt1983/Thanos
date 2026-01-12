@@ -14,6 +14,16 @@ import {
   getCachedHabits,
   isCacheStale,
 } from "../../cache/cache.js";
+import { validateAndSanitize } from "../../shared/validation-schemas.js";
+import {
+  GetHabitsSchema,
+  CreateHabitSchema,
+  CompleteHabitSchema,
+  GetHabitStreaksSchema,
+  HabitCheckinSchema,
+  HabitDashboardSchema,
+  RecalculateStreaksSchema,
+} from "./validation.js";
 
 // =============================================================================
 // HABIT DOMAIN HANDLERS
@@ -65,6 +75,14 @@ export async function handleGetHabits(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetHabitsSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   // Try cache first
   const cacheAvailable = await ensureCache();
   if (cacheAvailable && !isCacheStale()) {
@@ -103,7 +121,15 @@ export async function handleCreateHabit(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { name, description, emoji, frequency = "daily", targetCount = 1, timeOfDay = "anytime", category } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(CreateHabitSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { name, description, emoji, frequency = "daily", targetCount = 1, timeOfDay = "anytime", category } = validation.data as any;
 
   const [newHabit] = await db
     .insert(schema.habits)
@@ -136,7 +162,15 @@ export async function handleCompleteHabit(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { habitId, note } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(CompleteHabitSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { habitId, note } = validation.data as any;
 
   // Get habit first
   const [habit] = await db
@@ -236,7 +270,15 @@ export async function handleGetHabitStreaks(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { habitId, days = 7 } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(GetHabitStreaksSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { habitId, days = 7 } = validation.data as any;
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - days);
 
@@ -274,7 +316,15 @@ export async function handleHabitCheckin(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { timeOfDay = "all", includeCompleted = false } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(HabitCheckinSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { timeOfDay = "all", includeCompleted = false } = validation.data as any;
   const todayStr = getESTDateString();
 
   // Get all active habits
@@ -343,7 +393,15 @@ export async function handleHabitDashboard(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { days = 7, format = "compact" } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(HabitDashboardSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { days = 7, format = "compact" } = validation.data as any;
 
   // Get all active habits
   const habits = await db
@@ -498,6 +556,14 @@ export async function handleRecalculateStreaks(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(RecalculateStreaksSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   // Get all habits
   const habits = await db
     .select()
