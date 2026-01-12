@@ -91,7 +91,7 @@ class SessionHandler(BaseHandler):
             CommandResult with action and success status
         """
         self.session.clear()
-        print(f"{Colors.DIM}Conversation cleared.{Colors.RESET}")
+        print(f"{Colors.GREEN}Conversation cleared.{Colors.RESET}")
         return CommandResult()
 
     def handle_save(self, args: str) -> CommandResult:
@@ -108,7 +108,7 @@ class SessionHandler(BaseHandler):
             CommandResult with action and success status
         """
         filepath = self.session.save()
-        print(f"{Colors.DIM}Session saved: {filepath}{Colors.RESET}")
+        print(f"{Colors.GREEN}Session saved: {filepath}{Colors.RESET}")
         return CommandResult()
 
     def handle_sessions(self, args: str) -> CommandResult:

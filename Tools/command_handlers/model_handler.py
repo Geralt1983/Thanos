@@ -126,8 +126,8 @@ class ModelHandler(BaseHandler):
         if model_name in self._available_models:
             old_model = self.current_model or self._default_model
             self.current_model = model_name
-            print(f"{Colors.CYAN}Model switched:{Colors.RESET} {old_model} → {model_name}")
-            print(f"{Colors.DIM}Using: {self._available_models[model_name]}{Colors.RESET}")
+            print(f"{Colors.GREEN}Model switched:{Colors.RESET} {old_model} → {model_name}")
+            print(f"{Colors.GREEN}Using: {self._available_models[model_name]}{Colors.RESET}")
             return CommandResult()
         else:
             print(f"{Colors.RED}Unknown model: {model_name}{Colors.RESET}")

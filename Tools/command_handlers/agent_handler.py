@@ -111,7 +111,7 @@ class AgentHandler(BaseHandler):
             # Valid agent - switch to it
             self._current_agent = agent_name
             agent = self.orchestrator.agents[agent_name]
-            print(f"{Colors.DIM}Switched to {agent.name} ({agent.role}){Colors.RESET}")
+            print(f"{Colors.GREEN}Switched to {agent.name} ({agent.role}){Colors.RESET}")
             return CommandResult()
         else:
             # Unknown agent
