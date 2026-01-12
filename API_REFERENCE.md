@@ -1179,7 +1179,845 @@ except Exception as e:
 
 ---
 
-*(This section will be expanded in subsequent subtasks to document UsageTracker, ComplexityAnalyzer, ResponseCache, and other components in detail.)*
+### UsageTracker
+
+Comprehensive token and cost tracking system for monitoring API usage across all model providers. The UsageTracker records every API call with detailed metrics including token consumption, costs, latency, and metadata, providing persistent storage and aggregated analytics over time.
+
+#### Class Description
+
+`UsageTracker` is a specialized component for monitoring and accounting of API usage in the LiteLLM package. It automatically tracks every API call made through the LiteLLMClient, recording token usage, costs, performance metrics, and custom metadata. All data is persisted to JSON storage with automatic daily aggregation, making it easy to analyze usage patterns, optimize costs, and generate reports.
+
+**Key Capabilities:**
+- Automatic token counting and cost calculation per model
+- Persistent JSON storage with daily, model, and provider aggregation
+- Historical summaries with configurable time periods
+- Provider detection from model names (Anthropic, OpenAI, Google, etc.)
+- Configurable pricing tables for accurate cost estimation
+- Metadata support for custom tracking dimensions
+- Automatic retention management (keeps last 1000 sessions)
+
+**Storage Architecture:**
+The tracker maintains a JSON file with the following structure:
+- **sessions**: Individual API call records (limited to last 1000)
+- **daily_totals**: Aggregated usage by date (tokens, cost, calls)
+- **model_breakdown**: Usage statistics per model
+- **provider_breakdown**: Usage statistics per provider
+- **last_updated**: Timestamp of last update
+
+**Integration:**
+UsageTracker is automatically initialized by LiteLLMClient when usage tracking is enabled in configuration. It transparently records all API interactions without requiring explicit calls from user code.
+
+#### Constructor
+
+```python
+UsageTracker(storage_path: str, pricing: Dict[str, Dict[str, float]])
+```
+
+Creates a new UsageTracker instance with the specified storage location and pricing configuration.
+
+**Parameters:**
+
+- `storage_path` (str, **required**): Path to the JSON file where usage data will be stored. Can be relative or absolute. The parent directory will be created automatically if it doesn't exist. Example: `"State/usage.json"` or `"/var/app/data/usage.json"`.
+
+- `pricing` (Dict[str, Dict[str, float]], **required**): Pricing table mapping model names to their input/output token costs (per 1000 tokens in USD). Each model entry should have `"input"` and `"output"` keys with float values representing cost per 1000 tokens. Used by `calculate_cost()` to estimate costs.
+
+  **Pricing Format:**
+  ```python
+  {
+      "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+      "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+      "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005},
+      "gpt-4": {"input": 0.03, "output": 0.06},
+      "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002}
+  }
+  ```
+
+**Storage File Initialization:**
+If the storage file doesn't exist, it will be created automatically with an empty structure:
+```json
+{
+  "sessions": [],
+  "daily_totals": {},
+  "model_breakdown": {},
+  "provider_breakdown": {},
+  "last_updated": "2026-01-12T10:30:00.000000"
+}
+```
+
+**Returns:**
+- A configured `UsageTracker` instance ready to record usage
+
+**Example - Basic Initialization:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+# Initialize with default pricing
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+    }
+)
+```
+
+**Example - Custom Storage Location:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+# Use custom storage path
+tracker = UsageTracker(
+    storage_path="/var/app/data/api_usage.json",
+    pricing={
+        "gpt-4": {"input": 0.03, "output": 0.06},
+        "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002}
+    }
+)
+```
+
+**Note:** In typical usage, you don't need to instantiate UsageTracker directly. The LiteLLMClient creates and manages a UsageTracker instance automatically when usage tracking is enabled in configuration.
+
+---
+
+#### Methods
+
+##### `record()`
+
+```python
+record(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+    latency_ms: float,
+    operation: str = "chat",
+    metadata: Optional[Dict] = None
+) -> Dict
+```
+
+Record a single API call's usage with detailed metrics. This method persists the usage data to storage and updates all aggregated statistics (daily totals, model breakdown, provider breakdown).
+
+**Parameters:**
+
+- `model` (str, **required**): The model name used for the API call. Examples: `"claude-opus-4-5-20251101"`, `"claude-sonnet-4-20250514"`, `"gpt-4"`, `"gpt-3.5-turbo"`. The provider is automatically detected from the model name.
+
+- `input_tokens` (int, **required**): Number of tokens in the input/prompt. This includes the user message, system prompt, and conversation history.
+
+- `output_tokens` (int, **required**): Number of tokens in the output/completion/response generated by the model.
+
+- `cost_usd` (float, **required**): The actual cost of the API call in USD. This should be the real cost returned by the API or calculated using the pricing table.
+
+- `latency_ms` (float, **required**): The total latency of the API call in milliseconds, from request to complete response. This measures API performance.
+
+- `operation` (str, optional): A descriptive name for the type of operation. Default is `"chat"`. Use meaningful names like `"code_review"`, `"translation"`, `"summarization"`, `"chat_stream"` to categorize usage. This helps with analytics and cost attribution.
+
+- `metadata` (Optional[Dict], optional): Additional custom metadata to store with this usage record. Can include any fields relevant to your use case, such as `{"user_id": "123", "session_id": "abc", "feature": "autocomplete"}`. Defaults to `None` (empty dict).
+
+**Returns:**
+- `Dict`: The complete usage entry that was recorded, including the generated timestamp and provider. This dict contains all the parameters passed in plus computed fields:
+  - `timestamp` (str): ISO format timestamp when the call was recorded
+  - `model` (str): The model name
+  - `provider` (str): Auto-detected provider (e.g., "anthropic", "openai", "google")
+  - `input_tokens` (int): Input token count
+  - `output_tokens` (int): Output token count
+  - `total_tokens` (int): Sum of input and output tokens
+  - `cost_usd` (float): Cost in USD
+  - `latency_ms` (float): Latency in milliseconds
+  - `operation` (str): Operation name
+  - `metadata` (Dict): Custom metadata
+
+**Side Effects:**
+- Appends the entry to the `sessions` array in storage
+- Updates `daily_totals` for today's date
+- Updates `model_breakdown` for the specific model
+- Updates `provider_breakdown` for the detected provider
+- Updates `last_updated` timestamp
+- If `sessions` exceeds 1000 entries, oldest entries are removed (keeps last 1000)
+- Writes the updated data to the storage file
+
+**Example - Basic Recording:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015}
+    }
+)
+
+# Record an API call
+entry = tracker.record(
+    model="claude-sonnet-4-20250514",
+    input_tokens=150,
+    output_tokens=200,
+    cost_usd=0.0045,
+    latency_ms=1234.5,
+    operation="chat"
+)
+
+print(f"Recorded: {entry['total_tokens']} tokens, ${entry['cost_usd']:.4f}")
+print(f"Provider: {entry['provider']}")
+print(f"Timestamp: {entry['timestamp']}")
+```
+
+**Example - With Custom Metadata:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={"gpt-4": {"input": 0.03, "output": 0.06}}
+)
+
+# Record with detailed metadata for analytics
+entry = tracker.record(
+    model="gpt-4",
+    input_tokens=500,
+    output_tokens=750,
+    cost_usd=0.060,
+    latency_ms=2500.0,
+    operation="code_generation",
+    metadata={
+        "user_id": "dev_456",
+        "session_id": "sess_xyz789",
+        "feature": "autocomplete",
+        "language": "python",
+        "file": "main.py"
+    }
+)
+
+print(f"Recorded code generation call")
+print(f"Metadata: {entry['metadata']}")
+```
+
+**Example - Different Operations:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+    }
+)
+
+# Record different types of operations
+tracker.record(
+    model="claude-3-5-haiku-20241022",
+    input_tokens=50,
+    output_tokens=100,
+    cost_usd=0.0006,
+    latency_ms=450.0,
+    operation="translation"
+)
+
+tracker.record(
+    model="claude-3-5-haiku-20241022",
+    input_tokens=200,
+    output_tokens=150,
+    cost_usd=0.0010,
+    latency_ms=600.0,
+    operation="summarization"
+)
+
+tracker.record(
+    model="claude-3-5-haiku-20241022",
+    input_tokens=100,
+    output_tokens=50,
+    cost_usd=0.0004,
+    latency_ms=400.0,
+    operation="sentiment_analysis"
+)
+```
+
+**Note:** In typical usage with LiteLLMClient, you don't need to call `record()` directly. The client automatically records usage for all API calls when usage tracking is enabled.
+
+---
+
+##### `get_summary()`
+
+```python
+get_summary(days: int = 30) -> Dict
+```
+
+Retrieve comprehensive usage statistics and analytics for a specified time period. This method aggregates data from daily totals and provides breakdowns by model and provider.
+
+**Parameters:**
+
+- `days` (int, optional): Number of days to include in the summary, counting backwards from today. Default is 30 days. Examples: `7` for weekly summary, `1` for today only, `90` for quarterly, `365` for yearly.
+
+**Returns:**
+- `Dict`: A comprehensive dictionary containing usage analytics with the following keys:
+
+  - `period_days` (int): The number of days covered by this summary (same as input parameter)
+
+  - `total_tokens` (int): Total tokens consumed (input + output) during the period
+
+  - `total_cost_usd` (float): Total cost in USD for all API calls during the period
+
+  - `total_calls` (int): Total number of API calls made during the period
+
+  - `avg_daily_tokens` (float): Average tokens consumed per day (total_tokens / days)
+
+  - `avg_daily_cost` (float): Average cost per day in USD (total_cost_usd / days)
+
+  - `projected_monthly_cost` (float): Estimated monthly cost based on current daily average (avg_daily_cost * 30). Useful for budget projections.
+
+  - `model_breakdown` (Dict): Usage statistics per model. Each model key contains:
+    - `tokens` (int): Total tokens for this model
+    - `cost` (float): Total cost for this model
+    - `calls` (int): Number of calls to this model
+
+  - `provider_breakdown` (Dict): Usage statistics per provider. Each provider key contains:
+    - `tokens` (int): Total tokens for this provider
+    - `cost` (float): Total cost for this provider
+    - `calls` (int): Number of calls to this provider
+
+**Example - 30-Day Summary:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015}
+    }
+)
+
+# Get 30-day summary
+summary = tracker.get_summary(days=30)
+
+print(f"30-Day Usage Summary:")
+print(f"  Total calls: {summary['total_calls']}")
+print(f"  Total tokens: {summary['total_tokens']:,}")
+print(f"  Total cost: ${summary['total_cost_usd']:.2f}")
+print(f"  Average per day: ${summary['avg_daily_cost']:.2f}")
+print(f"  Projected monthly: ${summary['projected_monthly_cost']:.2f}")
+```
+
+**Example - Weekly Summary with Breakdown:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "gpt-4": {"input": 0.03, "output": 0.06},
+        "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002}
+    }
+)
+
+# Get last 7 days
+weekly = tracker.get_summary(days=7)
+
+print(f"\n7-Day Summary:")
+print(f"  Total cost: ${weekly['total_cost_usd']:.2f}")
+print(f"  Total calls: {weekly['total_calls']}")
+
+# Model breakdown
+print(f"\nUsage by Model:")
+for model, stats in weekly['model_breakdown'].items():
+    print(f"  {model}:")
+    print(f"    Calls: {stats['calls']}")
+    print(f"    Tokens: {stats['tokens']:,}")
+    print(f"    Cost: ${stats['cost']:.4f}")
+
+# Provider breakdown
+print(f"\nUsage by Provider:")
+for provider, stats in weekly['provider_breakdown'].items():
+    print(f"  {provider}:")
+    print(f"    Calls: {stats['calls']}")
+    print(f"    Cost: ${stats['cost']:.4f}")
+```
+
+**Example - Yearly Analysis:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}
+    }
+)
+
+# Get full year
+yearly = tracker.get_summary(days=365)
+
+print(f"Yearly Analysis:")
+print(f"  Total cost: ${yearly['total_cost_usd']:.2f}")
+print(f"  Average monthly: ${yearly['total_cost_usd'] / 12:.2f}")
+print(f"  Total API calls: {yearly['total_calls']:,}")
+print(f"  Total tokens: {yearly['total_tokens']:,}")
+print(f"  Average tokens per call: {yearly['total_tokens'] / yearly['total_calls']:.0f}")
+```
+
+**Example - Cost Optimization Analysis:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+    }
+)
+
+summary = tracker.get_summary(days=30)
+
+print("Cost Optimization Report:")
+print(f"Current 30-day cost: ${summary['total_cost_usd']:.2f}")
+print(f"Projected monthly: ${summary['projected_monthly_cost']:.2f}")
+
+# Identify most expensive model
+most_expensive_model = max(
+    summary['model_breakdown'].items(),
+    key=lambda x: x[1]['cost']
+)
+print(f"\nMost expensive model: {most_expensive_model[0]}")
+print(f"  Cost: ${most_expensive_model[1]['cost']:.2f}")
+print(f"  Calls: {most_expensive_model[1]['calls']}")
+```
+
+---
+
+##### `get_today()`
+
+```python
+get_today() -> Dict
+```
+
+Get usage statistics for the current day only. This is a convenience method for quick daily monitoring.
+
+**Parameters:**
+- None
+
+**Returns:**
+- `Dict`: A dictionary with today's usage containing:
+  - `tokens` (int): Total tokens used today (input + output)
+  - `cost` (float): Total cost in USD for today
+  - `calls` (int): Number of API calls made today
+
+Returns `{"tokens": 0, "cost": 0.0, "calls": 0}` if no API calls have been made today.
+
+**Example - Check Today's Usage:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015}
+    }
+)
+
+today = tracker.get_today()
+
+print(f"Today's Usage:")
+print(f"  Calls: {today['calls']}")
+print(f"  Tokens: {today['tokens']:,}")
+print(f"  Cost: ${today['cost']:.4f}")
+```
+
+**Example - Daily Budget Monitoring:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "gpt-4": {"input": 0.03, "output": 0.06}
+    }
+)
+
+DAILY_BUDGET = 10.00  # $10 per day limit
+
+today = tracker.get_today()
+
+if today['cost'] > DAILY_BUDGET:
+    print(f"⚠️ ALERT: Daily budget exceeded!")
+    print(f"Budget: ${DAILY_BUDGET:.2f}")
+    print(f"Spent: ${today['cost']:.2f}")
+    print(f"Overage: ${today['cost'] - DAILY_BUDGET:.2f}")
+elif today['cost'] > DAILY_BUDGET * 0.8:
+    print(f"⚠️ Warning: Approaching daily budget (80%)")
+    print(f"Spent: ${today['cost']:.2f} / ${DAILY_BUDGET:.2f}")
+else:
+    remaining = DAILY_BUDGET - today['cost']
+    print(f"✓ Budget OK: ${remaining:.2f} remaining today")
+```
+
+**Example - Real-time Tracking:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+    }
+)
+
+# Make some API calls
+tracker.record("claude-3-5-haiku-20241022", 100, 150, 0.0009, 500.0, "chat")
+tracker.record("claude-3-5-haiku-20241022", 200, 250, 0.0015, 600.0, "chat")
+tracker.record("claude-3-5-haiku-20241022", 150, 100, 0.0007, 450.0, "chat")
+
+# Check accumulated usage
+today = tracker.get_today()
+print(f"Accumulated today:")
+print(f"  {today['calls']} API calls")
+print(f"  {today['tokens']:,} tokens")
+print(f"  ${today['cost']:.4f} cost")
+```
+
+**Example - Compare with Yesterday:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+from datetime import datetime, timedelta
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}
+    }
+)
+
+# Get today's usage
+today = tracker.get_today()
+
+# Get yesterday's usage from summary
+import json
+data = json.loads(open("State/usage.json").read())
+yesterday_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+yesterday = data.get("daily_totals", {}).get(
+    yesterday_date,
+    {"tokens": 0, "cost": 0.0, "calls": 0}
+)
+
+print("Usage Comparison:")
+print(f"Today:     {today['calls']} calls, ${today['cost']:.4f}")
+print(f"Yesterday: {yesterday['calls']} calls, ${yesterday['cost']:.4f}")
+
+change = ((today['cost'] - yesterday['cost']) / yesterday['cost'] * 100) if yesterday['cost'] > 0 else 0
+print(f"Change: {change:+.1f}%")
+```
+
+---
+
+##### `calculate_cost()`
+
+```python
+calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float
+```
+
+Calculate the estimated cost for a given model and token count using the configured pricing table. This method does not record usage; it only computes cost.
+
+**Parameters:**
+
+- `model` (str, **required**): The model name to calculate costs for. The method uses fuzzy matching to find the pricing entry, so partial model names work (e.g., "claude-opus" will match "claude-opus-4-5-20251101").
+
+- `input_tokens` (int, **required**): Number of input/prompt tokens to calculate cost for.
+
+- `output_tokens` (int, **required**): Number of output/completion tokens to calculate cost for.
+
+**Returns:**
+- `float`: The estimated cost in USD. Calculated as: `(input_tokens / 1000) * input_price + (output_tokens / 1000) * output_price`
+
+**Fallback Behavior:**
+If the model is not found in the pricing table, uses default fallback pricing:
+- Input: $0.01 per 1000 tokens
+- Output: $0.03 per 1000 tokens
+
+**Example - Basic Cost Calculation:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+    }
+)
+
+# Calculate cost for different models
+opus_cost = tracker.calculate_cost("claude-opus-4-5-20251101", 1000, 2000)
+sonnet_cost = tracker.calculate_cost("claude-sonnet-4-20250514", 1000, 2000)
+haiku_cost = tracker.calculate_cost("claude-3-5-haiku-20241022", 1000, 2000)
+
+print("Cost comparison for 1000 input + 2000 output tokens:")
+print(f"  Opus:   ${opus_cost:.4f}")
+print(f"  Sonnet: ${sonnet_cost:.4f}")
+print(f"  Haiku:  ${haiku_cost:.4f}")
+```
+
+**Example - Cost Estimation Before API Call:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "gpt-4": {"input": 0.03, "output": 0.06},
+        "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002}
+    }
+)
+
+# Estimate tokens for a prompt (rough estimate)
+prompt = "Explain quantum computing in detail with examples"
+estimated_input_tokens = len(prompt.split()) * 1.3  # Rough approximation
+estimated_output_tokens = 1000  # Expecting detailed response
+
+# Calculate costs for different models
+gpt4_cost = tracker.calculate_cost("gpt-4", estimated_input_tokens, estimated_output_tokens)
+gpt35_cost = tracker.calculate_cost("gpt-3.5-turbo", estimated_input_tokens, estimated_output_tokens)
+
+print("Estimated costs:")
+print(f"  GPT-4: ${gpt4_cost:.4f}")
+print(f"  GPT-3.5-Turbo: ${gpt35_cost:.4f}")
+print(f"  Savings with GPT-3.5: ${gpt4_cost - gpt35_cost:.4f}")
+```
+
+**Example - Batch Operation Cost Estimation:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015}
+    }
+)
+
+# Estimate cost for batch processing
+batch_size = 100
+avg_input_tokens = 200
+avg_output_tokens = 300
+
+cost_per_item = tracker.calculate_cost(
+    "claude-sonnet-4-20250514",
+    avg_input_tokens,
+    avg_output_tokens
+)
+
+total_cost = cost_per_item * batch_size
+
+print(f"Batch Processing Estimate:")
+print(f"  Items: {batch_size}")
+print(f"  Cost per item: ${cost_per_item:.4f}")
+print(f"  Total cost: ${total_cost:.2f}")
+```
+
+**Example - Budget Planning:**
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+    }
+)
+
+monthly_budget = 100.00  # $100 per month
+expected_calls_per_day = 50
+avg_input_tokens = 250
+avg_output_tokens = 500
+
+print("Budget Planning:")
+for model in ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"]:
+    cost_per_call = tracker.calculate_cost(model, avg_input_tokens, avg_output_tokens)
+    daily_cost = cost_per_call * expected_calls_per_day
+    monthly_cost = daily_cost * 30
+
+    print(f"\n{model}:")
+    print(f"  Cost per call: ${cost_per_call:.4f}")
+    print(f"  Daily cost: ${daily_cost:.2f}")
+    print(f"  Monthly cost: ${monthly_cost:.2f}")
+
+    if monthly_cost <= monthly_budget:
+        print(f"  ✓ Within budget (${monthly_budget - monthly_cost:.2f} under)")
+    else:
+        print(f"  ✗ Over budget (${monthly_cost - monthly_budget:.2f} over)")
+```
+
+---
+
+#### Complete Usage Example
+
+Here's a comprehensive example showing UsageTracker initialization, recording usage, and analyzing statistics:
+
+```python
+from Tools.litellm.usage_tracker import UsageTracker
+
+# Initialize tracker with pricing configuration
+tracker = UsageTracker(
+    storage_path="State/usage.json",
+    pricing={
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+    }
+)
+
+# Simulate several API calls
+print("Recording API calls...")
+
+tracker.record(
+    model="claude-3-5-haiku-20241022",
+    input_tokens=50,
+    output_tokens=100,
+    cost_usd=0.0006,
+    latency_ms=450.0,
+    operation="simple_chat",
+    metadata={"user": "alice", "session": "sess_001"}
+)
+
+tracker.record(
+    model="claude-sonnet-4-20250514",
+    input_tokens=250,
+    output_tokens=500,
+    cost_usd=0.0083,
+    latency_ms=1200.0,
+    operation="code_review",
+    metadata={"user": "bob", "session": "sess_002", "language": "python"}
+)
+
+tracker.record(
+    model="claude-opus-4-5-20251101",
+    input_tokens=500,
+    output_tokens=1000,
+    cost_usd=0.0825,
+    latency_ms=2500.0,
+    operation="architecture_design",
+    metadata={"user": "charlie", "session": "sess_003", "project": "microservices"}
+)
+
+# Check today's usage
+today = tracker.get_today()
+print(f"\nToday's Usage:")
+print(f"  Calls: {today['calls']}")
+print(f"  Tokens: {today['tokens']:,}")
+print(f"  Cost: ${today['cost']:.4f}")
+
+# Get 30-day summary
+summary = tracker.get_summary(days=30)
+print(f"\n30-Day Summary:")
+print(f"  Total calls: {summary['total_calls']}")
+print(f"  Total cost: ${summary['total_cost_usd']:.4f}")
+print(f"  Projected monthly: ${summary['projected_monthly_cost']:.2f}")
+
+# Breakdown by model
+print(f"\nUsage by Model:")
+for model, stats in summary['model_breakdown'].items():
+    print(f"  {model}:")
+    print(f"    Calls: {stats['calls']}, Cost: ${stats['cost']:.4f}")
+
+# Breakdown by provider
+print(f"\nUsage by Provider:")
+for provider, stats in summary['provider_breakdown'].items():
+    print(f"  {provider}: {stats['calls']} calls, ${stats['cost']:.4f}")
+
+# Calculate estimated costs
+print(f"\nCost Estimation:")
+for model in ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"]:
+    cost = tracker.calculate_cost(model, 1000, 1000)
+    print(f"  {model}: ${cost:.4f} per 2000 tokens")
+```
+
+---
+
+#### Storage Format Details
+
+The UsageTracker persists data in JSON format with the following structure:
+
+```json
+{
+  "sessions": [
+    {
+      "timestamp": "2026-01-12T10:30:45.123456",
+      "model": "claude-sonnet-4-20250514",
+      "provider": "anthropic",
+      "input_tokens": 250,
+      "output_tokens": 500,
+      "total_tokens": 750,
+      "cost_usd": 0.0083,
+      "latency_ms": 1200.0,
+      "operation": "code_review",
+      "metadata": {"user": "bob", "language": "python"}
+    }
+  ],
+  "daily_totals": {
+    "2026-01-12": {
+      "tokens": 5000,
+      "cost": 0.25,
+      "calls": 15
+    }
+  },
+  "model_breakdown": {
+    "claude-sonnet-4-20250514": {
+      "tokens": 3000,
+      "cost": 0.15,
+      "calls": 10
+    }
+  },
+  "provider_breakdown": {
+    "anthropic": {
+      "tokens": 5000,
+      "cost": 0.25,
+      "calls": 15
+    }
+  },
+  "last_updated": "2026-01-12T10:30:45.123456"
+}
+```
+
+---
+
+#### Integration with LiteLLMClient
+
+In typical usage, UsageTracker is automatically managed by LiteLLMClient:
+
+```python
+from Tools.litellm import get_client
+
+# Get client (automatically initializes UsageTracker)
+client = get_client()
+
+# Make API calls (automatically tracked)
+response = client.chat("Hello, world!")
+
+# Access usage statistics through client
+today = client.get_today_usage()
+summary = client.get_usage_summary(days=30)
+
+print(f"Today: {today['calls']} calls, ${today['cost']:.4f}")
+print(f"30-day: ${summary['total_cost_usd']:.2f}")
+```
+
+The UsageTracker is configured from `config/api.json`:
+
+```json
+{
+  "usage_tracking": {
+    "enabled": true,
+    "storage_path": "State/usage.json"
+  }
+}
+```
+
+---
+
+*(This section will be expanded in subsequent subtasks to document ComplexityAnalyzer, ResponseCache, and other components in detail.)*
 
 ---
 
