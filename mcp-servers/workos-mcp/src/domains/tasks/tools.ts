@@ -105,6 +105,11 @@ export function getTaskTools(): ToolDefinition[] {
             description: "Energy drain type: deep, shallow, admin",
             enum: ["deep", "shallow", "admin"],
           },
+          cognitiveLoad: {
+            type: "string",
+            description: "Cognitive load: low (admin/simple), medium (standard work), high (complex/deep work)",
+            enum: ["low", "medium", "high"],
+          },
         },
         required: ["title"],
       },
@@ -171,7 +176,7 @@ export function getTaskTools(): ToolDefinition[] {
     },
     {
       name: "workos_update_task",
-      description: "Update a task's properties (clientId, title, description, status, valueTier, drainType)",
+      description: "Update a task's properties (clientId, title, description, status, valueTier, drainType, cognitiveLoad)",
       inputSchema: {
         type: "object",
         properties: {
@@ -206,6 +211,11 @@ export function getTaskTools(): ToolDefinition[] {
             description: "New drain type",
             enum: ["deep", "shallow", "admin"],
           },
+          cognitiveLoad: {
+            type: "string",
+            description: "Cognitive load: low (admin/simple), medium (standard work), high (complex/deep work)",
+            enum: ["low", "medium", "high"],
+          },
         },
         required: ["taskId"],
       },
@@ -222,6 +232,39 @@ export function getTaskTools(): ToolDefinition[] {
           },
         },
         required: ["taskId"],
+      },
+    },
+    {
+      name: "workos_get_energy_aware_tasks",
+      description: "Get tasks prioritized by current energy level. Returns tasks ranked by energy-task match, with high-cognitive tasks suggested on high energy days and low-cognitive tasks on low energy days.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          energy_level: {
+            type: "string",
+            description: "Override current energy level (default: auto-detect from Oura/manual logs)",
+            enum: ["low", "medium", "high"],
+          },
+          limit: {
+            type: "number",
+            description: "Max tasks to return (default: unlimited)",
+          },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "workos_adjust_daily_goal",
+      description: "Manually trigger daily goal adjustment based on current energy level. Adjusts target points based on readiness score: <70 reduces by 25%, 70-84 maintains target, 85+ increases by 15%. Returns explanation of adjustment and new target.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          baseTarget: {
+            type: "number",
+            description: "Base daily target points (default: 18)",
+          },
+        },
+        required: [],
       },
     },
   ];

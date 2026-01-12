@@ -7,6 +7,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Brain Dump Processing Command (2026-01-12)
+
+**New intelligent command for processing brain dump entries with AI-powered categorization.**
+
+#### Overview
+Added `pa:process` command to automatically categorize and process brain dump entries, intelligently determining whether to convert them into tasks or archive them. The command uses Claude Haiku for fast, cost-effective categorization and leverages existing `brainDump` table infrastructure.
+
+#### Key Features
+
+**Intelligent Categorization:**
+- AI-powered categorization into four types: thought, task, idea, worry
+- Conservative task creation approach (archives when in doubt)
+- Transparent decision-making with reasoning displayed to user
+- Structured JSON output for reliable parsing
+
+**Command Options:**
+- `--dry-run`: Preview categorization decisions without making changes
+- `--limit N`: Process only N entries at a time (default: 10)
+- Colorful, user-friendly output with progress indicators
+- Comprehensive summary showing tasks created and entries archived
+
+**Database Integration:**
+- Uses existing `brainDump` table fields: `processed`, `category`, `convertedToTaskId`
+- Direct PostgreSQL access via WorkOSAdapter for reliability
+- Automatic task creation with appropriate categories (work/personal)
+- Graceful error handling with rollback on failures
+
+#### Usage Examples
+
+**Preview unprocessed entries:**
+```bash
+/pa:process --dry-run
+```
+
+**Process up to 20 entries:**
+```bash
+/pa:process --limit 20
+```
+
+**Process all unprocessed entries:**
+```bash
+/pa:process
+```
+
+#### Technical Implementation
+
+**Components Added:**
+- `commands/pa/process.py` - Main command implementation with async database operations
+- `commands/pa/process.md` - Comprehensive command documentation
+- `tests/unit/test_pa_process.py` - 23 unit tests for categorization logic
+- `tests/integration/test_pa_process_integration.py` - 20 integration tests for full workflow
+- `docs/brain-dump-workflow.md` - Complete user guide for brain dump workflow
+
+**AI Model:**
+- Uses `claude-3-5-haiku-20241022` for fast classification
+- Temperature 0.3 for consistent results
+- Structured output with JSON schema validation
+- Conservative prompting to prevent task list clutter
+
+**Testing Results:**
+- 43/43 tests passing (23 unit + 20 integration)
+- Manual testing completed with real database
+- Error handling verified
+- Edge cases covered (empty entries, special characters, long content)
+
+#### Documentation Updates
+
+- Updated `commands/pa/README.md` with process command examples and workflows
+- Updated main `README.md` with Personal Assistant Commands section
+- Created `docs/brain-dump-workflow.md` user guide
+- Added command registration in `commands/pa/__init__.py`
+
+#### Integration Points
+
+- **brainDump table**: Uses existing schema fields for processing state
+- **tasks table**: Creates tasks with appropriate category and status
+- **LiteLLM Client**: Leverages existing AI infrastructure
+- **WorkOSAdapter**: Direct PostgreSQL access for reliability
+
+#### Design Decisions
+
+**Conservative Task Creation:**
+- Favors archiving over task creation to prevent clutter
+- Tasks go to backlog, not active status
+- User maintains control over what becomes a task
+
+**Transparent Processing:**
+- Shows each entry being processed in real-time
+- Displays AI reasoning for categorization decisions
+- Builds trust in AI decision-making
+
+**Cost-Effective:**
+- Uses Haiku model for ~10x cost savings vs Sonnet
+- Batch size controls via --limit flag
+- Efficient database queries with processed flag filtering
+
+#### Files Added
+- `commands/pa/process.py` (main implementation)
+- `commands/pa/process.md` (command documentation)
+- `tests/unit/test_pa_process.py` (unit tests)
+- `tests/integration/test_pa_process_integration.py` (integration tests)
+- `docs/brain-dump-workflow.md` (user guide)
+
+#### Files Modified
+- `commands/pa/__init__.py` (command registration)
+- `commands/pa/README.md` (added process command examples)
+- `README.md` (added Personal Assistant Commands section)
+- `CHANGELOG.md` (this entry)
+
+---
+
 ### Changed - Command Router Modularization (2026-01-11)
 
 **Major architectural refactoring of the command routing system for improved maintainability and testability.**

@@ -7,10 +7,11 @@ Quick commands for daily productivity:
 - schedule  : Calendar management
 - tasks     : Task management
 - brainstorm: Idea generation
+- process   : Brain dump processing
 - weekly    : Weekly review
 """
 
-from . import brainstorm, daily, email, schedule, tasks, weekly
+from . import brainstorm, daily, email, process, schedule, tasks, weekly
 
 
-__all__ = ["daily", "email", "schedule", "tasks", "brainstorm", "weekly"]
+__all__ = ["daily", "email", "schedule", "tasks", "brainstorm", "process", "weekly"]

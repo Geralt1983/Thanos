@@ -4,6 +4,8 @@ import { getEnergyTools } from "./tools.js";
 import {
   handleLogEnergy,
   handleGetEnergy,
+  handleOverrideEnergySuggestion,
+  handleProvideEnergyFeedback,
 } from "./handlers.js";
 
 // =============================================================================
@@ -33,6 +35,10 @@ export const handleEnergyTool: ToolRouter = async (
       return handleLogEnergy(args, db);
     case "workos_get_energy":
       return handleGetEnergy(args, db);
+    case "workos_override_energy_suggestion":
+      return handleOverrideEnergySuggestion(args, db);
+    case "workos_provide_energy_feedback":
+      return handleProvideEnergyFeedback(args, db);
     default:
       return errorResponse(`Unknown energy tool: ${name}`);
   }
