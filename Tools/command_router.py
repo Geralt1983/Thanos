@@ -387,7 +387,7 @@ class CommandRouter:
         """Show active commitments from Commitments.md."""
         commitments_file = self.thanos_dir / "State" / "Commitments.md"
         if not commitments_file.exists():
-            print(f"{Colors.DIM}No commitments file found.{Colors.RESET}")
+            print(f"{Colors.RED}No commitments file found.{Colors.RESET}")
             return CommandResult(success=False)
 
         try:

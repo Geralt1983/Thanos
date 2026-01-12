@@ -144,6 +144,7 @@ class TestCommandRouter:
         assert result.success is False
         captured = capsys.readouterr()
         assert "Unknown command" in captured.out
+        assert Colors.RED in captured.out
 
     def test_command_aliases(self, router):
         """Test command aliases route to same handler"""
@@ -171,6 +172,7 @@ class TestAgentCommand:
         assert router.current_agent == "strategy"
         captured = capsys.readouterr()
         assert "Switched to" in captured.out
+        assert Colors.GREEN in captured.out
 
     def test_agent_switch_invalid(self, router, capsys):
         """Test switching to invalid agent"""
@@ -180,6 +182,7 @@ class TestAgentCommand:
         assert router.current_agent == "ops"  # Unchanged
         captured = capsys.readouterr()
         assert "Unknown agent" in captured.out
+        assert Colors.RED in captured.out
 
     def test_agent_no_args(self, router, capsys):
         """Test /agent without arguments shows current and available"""
@@ -264,6 +267,7 @@ class TestCommitmentsCommand:
             assert result.success is False
             captured = capsys.readouterr()
             assert "No commitments file found" in captured.out
+            assert Colors.RED in captured.out
 
     def test_commitments_read_error(self, router, capsys):
         """Test commitments command handles read errors"""
@@ -274,6 +278,7 @@ class TestCommitmentsCommand:
                 assert result.success is False
                 captured = capsys.readouterr()
                 assert "Error reading commitments" in captured.out
+                assert Colors.RED in captured.out
 
     def test_commitments_alias(self, router, capsys):
         """Test /c alias works"""
@@ -330,6 +335,7 @@ class TestClearCommand:
         mock_dependencies["session_manager"].clear.assert_called_once()
         captured = capsys.readouterr()
         assert "Conversation cleared" in captured.out
+        assert Colors.GREEN in captured.out
 
 
 class TestSaveCommand:
@@ -343,6 +349,7 @@ class TestSaveCommand:
         mock_dependencies["session_manager"].save.assert_called_once()
         captured = capsys.readouterr()
         assert "Session saved" in captured.out
+        assert Colors.GREEN in captured.out
 
 
 class TestRunCommand:
@@ -375,6 +382,7 @@ class TestRunCommand:
         assert result.success is False
         captured = capsys.readouterr()
         assert "Error running command" in captured.out
+        assert Colors.RED in captured.out
 
 
 class TestListAgentsCommand:
@@ -487,6 +495,9 @@ class TestColors:
         """Test all color codes are defined"""
         assert hasattr(Colors, "PURPLE")
         assert hasattr(Colors, "CYAN")
+        assert hasattr(Colors, "RED")
+        assert hasattr(Colors, "YELLOW")
+        assert hasattr(Colors, "GREEN")
         assert hasattr(Colors, "DIM")
         assert hasattr(Colors, "RESET")
         assert hasattr(Colors, "BOLD")
@@ -494,6 +505,9 @@ class TestColors:
         # Check they are strings
         assert isinstance(Colors.PURPLE, str)
         assert isinstance(Colors.CYAN, str)
+        assert isinstance(Colors.RED, str)
+        assert isinstance(Colors.YELLOW, str)
+        assert isinstance(Colors.GREEN, str)
         assert isinstance(Colors.DIM, str)
         assert isinstance(Colors.RESET, str)
         assert isinstance(Colors.BOLD, str)
