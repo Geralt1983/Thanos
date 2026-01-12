@@ -151,6 +151,22 @@ export const brainDump = pgTable("brain_dump", {
 ])
 
 // =============================================================================
+// ENERGY FEEDBACK
+// =============================================================================
+export const energyFeedback = pgTable("energy_feedback", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").references(() => tasks.id).notNull(),
+  suggestedEnergyLevel: text("suggested_energy_level").notNull(), // low, medium, high
+  actualEnergyLevel: text("actual_energy_level").notNull(), // low, medium, high
+  userFeedback: text("user_feedback"), // free-form feedback from user
+  completedSuccessfully: boolean("completed_successfully").notNull(), // whether task was completed
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("energy_feedback_task_id_idx").on(table.taskId),
+  index("energy_feedback_created_at_idx").on(table.createdAt),
+])
+
+// =============================================================================
 // TYPE EXPORTS
 // =============================================================================
 export type Client = InferSelectModel<typeof clients>
@@ -161,6 +177,7 @@ export type Habit = InferSelectModel<typeof habits>
 export type HabitCompletion = InferSelectModel<typeof habitCompletions>
 export type EnergyState = InferSelectModel<typeof energyStates>
 export type BrainDumpEntry = InferSelectModel<typeof brainDump>
+export type EnergyFeedback = InferSelectModel<typeof energyFeedback>
 export type TaskStatus = "active" | "queued" | "backlog" | "done"
 export type EnergyLevel = "high" | "medium" | "low"
 export type CognitiveLoad = "low" | "medium" | "high"
@@ -193,6 +210,13 @@ export const habitCompletionsRelations = relations(habitCompletions, ({ one }) =
 export const brainDumpRelations = relations(brainDump, ({ one }) => ({
   convertedTask: one(tasks, {
     fields: [brainDump.convertedToTaskId],
+    references: [tasks.id],
+  }),
+}))
+
+export const energyFeedbackRelations = relations(energyFeedback, ({ one }) => ({
+  task: one(tasks, {
+    fields: [energyFeedback.taskId],
     references: [tasks.id],
   }),
 }))
