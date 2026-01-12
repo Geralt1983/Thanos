@@ -16,6 +16,20 @@ import {
   getLatestCachedDailyGoal,
 } from "../../cache/cache.js";
 import { syncSingleTask, removeCachedTask } from "../../cache/sync.js";
+import { validateAndSanitize } from "../../shared/validation-schemas.js";
+import {
+  GetTodayMetricsSchema,
+  GetTasksSchema,
+  GetClientsSchema,
+  CreateTaskSchema,
+  CompleteTaskSchema,
+  PromoteTaskSchema,
+  GetStreakSchema,
+  GetClientMemorySchema,
+  DailySummarySchema,
+  UpdateTaskSchema,
+  DeleteTaskSchema,
+} from "./validation.js";
 
 // =============================================================================
 // TASK DOMAIN HANDLERS
@@ -66,6 +80,14 @@ export async function handleGetTodayMetrics(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetTodayMetricsSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   const todayStart = getESTTodayStart();
 
   const completedToday = await db
@@ -147,7 +169,15 @@ export async function handleGetTasks(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { status, clientId, limit = 50 } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(GetTasksSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { status, clientId, limit = 50 } = validation.data;
 
   // Try cache first
   const cacheAvailable = await ensureCache();
@@ -234,6 +264,14 @@ export async function handleGetClients(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetClientsSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   // Try cache first
   const cacheAvailable = await ensureCache();
   if (cacheAvailable && !isCacheStale()) {
@@ -282,13 +320,16 @@ export async function handleCreateTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { title, description, clientId, status = "backlog", category = "work", valueTier = "progress", drainType } = args as any;
-
-  if (!title) {
+  // Validate input
+  const validation = validateAndSanitize(CreateTaskSchema, args);
+  if (!validation.success) {
     return {
-      content: [{ type: "text", text: "Error: title is required" }],
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
     };
   }
+
+  const validatedData = validation.data as { title: string; description?: string; clientId?: number; status?: string; category?: string; valueTier?: string; drainType?: string };
+  const { title, description, clientId, status = "backlog", category = "work", valueTier = "progress", drainType } = validatedData;
 
   const existingTasks = await db
     .select({ sortOrder: schema.tasks.sortOrder })
@@ -345,7 +386,15 @@ export async function handleCompleteTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { taskId } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(CompleteTaskSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { taskId } = validation.data;
 
   const [updatedTask] = await db
     .update(schema.tasks)
@@ -396,7 +445,15 @@ export async function handlePromoteTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { taskId } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(PromoteTaskSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const { taskId } = validation.data;
 
   const [updatedTask] = await db
     .update(schema.tasks)
@@ -445,6 +502,14 @@ export async function handleGetStreak(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetStreakSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   const [latestGoal] = await db
     .select()
     .from(schema.dailyGoals)
@@ -473,7 +538,16 @@ export async function handleGetClientMemory(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { clientName } = args as any;
+  // Validate input
+  const validation = validateAndSanitize(GetClientMemorySchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
+  const validatedData = validation.data as { clientName: string };
+  const { clientName } = validatedData;
 
   const [memory] = await db
     .select()
@@ -506,6 +580,14 @@ export async function handleDailySummary(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(DailySummarySchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+    };
+  }
+
   const todayStart = getESTTodayStart();
 
   // Get today's completed tasks
@@ -604,13 +686,15 @@ export async function handleUpdateTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { taskId, clientId, title, description, status, valueTier, drainType } = args as any;
-
-  if (!taskId) {
+  // Validate input
+  const validation = validateAndSanitize(UpdateTaskSchema, args);
+  if (!validation.success) {
     return {
-      content: [{ type: "text", text: "Error: taskId is required" }],
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
     };
   }
+
+  const { taskId, clientId, title, description, status, valueTier, drainType } = validation.data;
 
   const updateData: any = { updatedAt: new Date() };
   if (clientId !== undefined) updateData.clientId = clientId;
@@ -665,13 +749,15 @@ export async function handleDeleteTask(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
-  const { taskId } = args as any;
-
-  if (!taskId) {
+  // Validate input
+  const validation = validateAndSanitize(DeleteTaskSchema, args);
+  if (!validation.success) {
     return {
-      content: [{ type: "text", text: "Error: taskId is required" }],
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
     };
   }
+
+  const { taskId } = validation.data;
 
   const [deletedTask] = await db
     .delete(schema.tasks)
