@@ -46,7 +46,7 @@ export const BrainDumpSchema = z.object({
  */
 export const GetBrainDumpSchema = z.object({
   includeProcessed: z.boolean().optional(),
-  limit: queryLimitSchema,
+  limit: queryLimitSchema.optional(),
 });
 
 /**

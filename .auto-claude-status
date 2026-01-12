@@ -3,13 +3,13 @@
   "spec": "014-mcp-server-lacks-rate-limiting-and-input-bounds-ch",
   "state": "building",
   "subtasks": {
-    "completed": 12,
+    "completed": 14,
     "total": 24,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Add Validation to Habits Domain",
+    "current": "Add Validation to Brain Dump Domain",
     "id": null,
     "total": 2
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 14,
+    "number": 16,
     "started_at": "2026-01-12T00:38:48.656294"
   },
-  "last_update": "2026-01-12T01:28:00.821345"
+  "last_update": "2026-01-12T01:33:36.645214"
 }
