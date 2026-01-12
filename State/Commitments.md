@@ -6,6 +6,7 @@
 - [x] Send weekly status update
 - [ ] Prepare for team standup
 - [ ] Deploy database migration (due: 2026-01-12)
+- [ ] Test command implementation (due: 2026-01-12)
 
 ## Personal
 - [ ] Schedule annual checkup
@@ -17,3 +18,7 @@
 - [ ] Complete Python advanced course
 - [ ] Read "Atomic Habits" chapter 5
 - [x] Watch TypeScript tutorial
+- [ ] ⚡ Master Python programming (due: 2026-01-25)
+
+## Health
+- [x] ⚡ Morning workout [🔄 Daily]
