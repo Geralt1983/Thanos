@@ -2,6 +2,8 @@ import type { Database, ToolHandler, ContentResponse } from "../../shared/types.
 import { successResponse, errorResponse } from "../../shared/types.js";
 import * as schema from "../../schema.js";
 import { eq, and, asc, desc } from "drizzle-orm";
+import { validateAndSanitize } from "../../shared/validation-schemas.js";
+import { GetPersonalTasksSchema } from "./validation.js";
 
 // =============================================================================
 // PERSONAL TASKS DOMAIN HANDLERS
@@ -20,6 +22,15 @@ export async function handleGetPersonalTasks(
   args: Record<string, any>,
   db: Database
 ): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetPersonalTasksSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
   const { status, limit = 20 } = args;
 
   const conditions = [eq(schema.tasks.category, "personal")];
