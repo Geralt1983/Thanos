@@ -143,3 +143,56 @@ def _get_cached_encoder() -> Optional[Any]:
         # If initialization fails (network issues, corrupted cache, etc.),
         # return None to allow fallback to heuristic token estimation
         return None
+
+
+class ContextManager:
+    """
+    Manages conversation context and token counting for Claude API interactions.
+
+    This class provides methods for estimating token counts, trimming conversation
+    history to fit within context windows, and reporting usage statistics.
+
+    Attributes:
+        model (str): The Claude model identifier being used
+        max_tokens (int): Maximum context window size for the model
+        OUTPUT_RESERVE (int): Tokens reserved for model output
+        available_tokens (int): Tokens available for input (max - reserve)
+        encoding (Optional[Any]): Cached tiktoken encoder instance
+
+    Example:
+        cm = ContextManager(model="claude-opus-4-5-20251101")
+        tokens = cm.estimate_tokens("Hello world")
+        trimmed, was_trimmed = cm.trim_history(history, system_prompt, new_message)
+    """
+
+    # Make MODEL_LIMITS accessible at class level for tests
+    MODEL_LIMITS = MODEL_LIMITS
+
+    def __init__(self, model: str = "claude-opus-4-5-20251101"):
+        """
+        Initialize ContextManager for a specific Claude model.
+
+        Args:
+            model (str): Claude model identifier. Defaults to "claude-opus-4-5-20251101".
+                        If model is not in MODEL_LIMITS, uses default limit of 100k tokens.
+
+        The initialization:
+        1. Sets the model name
+        2. Looks up max_tokens from MODEL_LIMITS (or uses default)
+        3. Sets OUTPUT_RESERVE constant
+        4. Calculates available_tokens for input
+        5. Gets the cached tiktoken encoder instance
+        """
+        self.model = model
+
+        # Look up token limit for this model, with fallback to default
+        self.max_tokens = MODEL_LIMITS.get(model, MODEL_LIMITS["default"])
+
+        # Set output reserve constant
+        self.OUTPUT_RESERVE = OUTPUT_RESERVE
+
+        # Calculate available tokens for input (context window - output reserve)
+        self.available_tokens = self.max_tokens - self.OUTPUT_RESERVE
+
+        # Get the cached encoder instance (may be None if tiktoken unavailable)
+        self.encoding = _get_cached_encoder()
