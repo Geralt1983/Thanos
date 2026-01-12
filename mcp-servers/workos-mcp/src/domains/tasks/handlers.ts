@@ -7,7 +7,8 @@ import {
   calculateTotalPoints,
 } from "../../shared/utils.js";
 import * as schema from "../../schema.js";
-import { eq, and, gte, ne, desc, asc } from "drizzle-orm";
+import type { EnergyLevel } from "../../schema.js";
+import { eq, and, gte, ne, desc, asc, or, inArray } from "drizzle-orm";
 import {
   getCachedTasks,
   getCachedTasksByClient,
@@ -16,6 +17,10 @@ import {
   getLatestCachedDailyGoal,
 } from "../../cache/cache.js";
 import { syncSingleTask, removeCachedTask } from "../../cache/sync.js";
+import {
+  getEnergyContext,
+  rankTasksByEnergy,
+} from "../../services/energy-prioritization.js";
 
 // =============================================================================
 // TASK DOMAIN HANDLERS
@@ -699,6 +704,112 @@ export async function handleDeleteTask(
       {
         type: "text",
         text: JSON.stringify({ success: true, deleted: deletedTask }, null, 2),
+      },
+    ],
+  };
+}
+
+/**
+ * Get tasks prioritized by current energy level
+ * Uses energy-aware prioritization algorithm to match tasks to current energy state
+ * Returns tasks ranked by energy score with explanations
+ *
+ * @param args - { energy_level?: string, limit?: number } - Optional energy override and result limit
+ * @param db - Database instance for querying tasks and energy context
+ * @returns Promise resolving to MCP ContentResponse with ranked tasks, energy context, and match explanations
+ */
+export async function handleGetEnergyAwareTasks(
+  args: Record<string, any>,
+  db: Database
+): Promise<ContentResponse> {
+  const { energy_level, limit } = args as {
+    energy_level?: EnergyLevel;
+    limit?: number;
+  };
+
+  // Step 1: Get current energy context (unless overridden)
+  let energyLevel: EnergyLevel;
+  let energyContext;
+
+  if (energy_level) {
+    // User manually overrode energy level
+    energyLevel = energy_level;
+    energyContext = {
+      energyLevel: energy_level,
+      readinessScore: null,
+      sleepScore: null,
+      source: "manual_override",
+      timestamp: new Date(),
+    };
+  } else {
+    // Auto-detect energy from Oura/manual logs
+    energyContext = await getEnergyContext(db);
+    energyLevel = energyContext.energyLevel;
+  }
+
+  // Step 2: Get tasks that are actionable (active, queued, backlog)
+  // Don't include completed tasks
+  const tasksWithClients = await db
+    .select({
+      task: schema.tasks,
+      clientName: schema.clients.name,
+    })
+    .from(schema.tasks)
+    .leftJoin(schema.clients, eq(schema.tasks.clientId, schema.clients.id))
+    .where(
+      or(
+        eq(schema.tasks.status, "active"),
+        eq(schema.tasks.status, "queued"),
+        eq(schema.tasks.status, "backlog")
+      )
+    )
+    .orderBy(asc(schema.tasks.sortOrder), desc(schema.tasks.createdAt));
+
+  // Extract tasks for ranking
+  const tasks = tasksWithClients.map(row => row.task);
+
+  // Step 3: Rank tasks by energy match
+  const rankedTasks = rankTasksByEnergy(tasks, energyLevel, limit);
+
+  // Create a map of task IDs to client names
+  const clientNameMap = new Map(
+    tasksWithClients.map(row => [row.task.id, row.clientName])
+  );
+
+  // Step 4: Format response with energy context and ranked tasks
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            energyContext: {
+              energyLevel: energyContext.energyLevel,
+              readinessScore: energyContext.readinessScore,
+              sleepScore: energyContext.sleepScore,
+              source: energyContext.source,
+              timestamp: energyContext.timestamp,
+            },
+            taskCount: rankedTasks.length,
+            tasks: rankedTasks.map((task) => ({
+              id: task.id,
+              title: task.title,
+              description: task.description,
+              status: task.status,
+              category: task.category,
+              valueTier: task.valueTier,
+              drainType: task.drainType,
+              cognitiveLoad: task.cognitiveLoad,
+              effortEstimate: task.effortEstimate,
+              points: task.pointsFinal ?? task.pointsAiGuess ?? 2,
+              clientName: clientNameMap.get(task.id) || null,
+              energyScore: task.energyScore,
+              matchReason: task.matchReason,
+            })),
+          },
+          null,
+          2
+        ),
       },
     ],
   };
