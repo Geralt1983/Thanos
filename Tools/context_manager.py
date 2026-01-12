@@ -278,3 +278,78 @@ class ContextManager:
             total_tokens += content_tokens + 4
 
         return total_tokens
+
+    def trim_history(
+        self,
+        history: List[Dict[str, str]],
+        system_prompt: str,
+        new_message: str,
+    ) -> Tuple[List[Dict[str, str]], bool]:
+        """
+        Trim conversation history to fit within available token limits.
+
+        Calculates total tokens needed for system_prompt + new_message + history.
+        If the total exceeds available_tokens, removes oldest messages first
+        until the total fits within the limit.
+
+        Args:
+            history (List[Dict[str, str]]): List of conversation messages.
+                                           Each should have "content" key.
+            system_prompt (str): The system prompt to include in token calculation.
+            new_message (str): The new message to include in token calculation.
+
+        Returns:
+            Tuple[List[Dict[str, str]], bool]: A tuple containing:
+                - trimmed_history: The potentially trimmed message list
+                - was_trimmed: True if any messages were removed, False otherwise
+
+        Behavior:
+            - If total tokens fit within available_tokens: returns (history, False)
+            - If trimming needed: removes oldest messages first until it fits
+            - Most recent messages are always preserved when possible
+            - Returns ([], True) if even empty history exceeds limits
+
+        Example:
+            cm = ContextManager()
+            history = [{"role": "user", "content": "Hello"}]
+            trimmed, was_trimmed = cm.trim_history(history, "System", "New message")
+        """
+        # Calculate tokens for system prompt and new message
+        system_tokens = self.estimate_tokens(system_prompt)
+        new_message_tokens = self.estimate_tokens(new_message)
+
+        # Calculate tokens for current history
+        history_tokens = self.estimate_messages_tokens(history)
+
+        # Calculate total tokens needed
+        total_tokens = system_tokens + new_message_tokens + history_tokens
+
+        # If total fits within available tokens, no trimming needed
+        if total_tokens <= self.available_tokens:
+            return (history, False)
+
+        # Trimming is needed - start removing oldest messages
+        trimmed_history = history.copy()
+
+        # Calculate base tokens (system + new message)
+        base_tokens = system_tokens + new_message_tokens
+
+        # If even without history we exceed the limit, return empty history
+        if base_tokens >= self.available_tokens:
+            return ([], True)
+
+        # Remove oldest messages until we fit within available tokens
+        while trimmed_history:
+            # Recalculate history tokens with current trimmed list
+            history_tokens = self.estimate_messages_tokens(trimmed_history)
+            total_tokens = base_tokens + history_tokens
+
+            # If we fit within limits, we're done
+            if total_tokens <= self.available_tokens:
+                break
+
+            # Remove the oldest message (first in list)
+            trimmed_history.pop(0)
+
+        # Return trimmed history and indicate that trimming occurred
+        return (trimmed_history, True)
