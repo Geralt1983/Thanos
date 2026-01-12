@@ -56,3 +56,8 @@ MODEL_LIMITS: Dict[str, int] = {
 # Reserved tokens for model output responses
 # This ensures sufficient space for the model to generate complete responses
 OUTPUT_RESERVE: int = 8_000
+
+# Global encoder cache to avoid expensive re-initialization
+# Initialized to None and lazily loaded via _get_cached_encoder()
+# Thread-safe: tiktoken encoders are stateless and safe for concurrent access
+_CACHED_ENCODER: Optional[Any] = None
