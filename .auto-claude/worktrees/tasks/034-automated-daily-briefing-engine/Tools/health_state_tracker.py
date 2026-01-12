@@ -204,7 +204,7 @@ class HealthStateTracker:
         Returns:
             List of entries sorted by date (most recent first).
         """
-        cutoff_date = self.today - timedelta(days=days)
+        cutoff_date = self.today - timedelta(days=days - 1)
         cutoff_str = cutoff_date.isoformat()
 
         recent = [
