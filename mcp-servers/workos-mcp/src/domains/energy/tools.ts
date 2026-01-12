@@ -36,5 +36,32 @@ export function getEnergyTools(): ToolDefinition[] {
         required: [],
       },
     },
+    {
+      name: "workos_override_energy_suggestion",
+      description: "Manually override auto-detected energy level or task suggestions. Records override reason for learning and algorithm improvement.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          energyLevel: {
+            type: "string",
+            description: "Manual energy level override (high/medium/low)",
+            enum: ["high", "medium", "low"],
+          },
+          reason: {
+            type: "string",
+            description: "Why are you overriding? (e.g. 'Feel more energized than readiness suggests', 'Need to push through despite low energy', 'Readiness doesn't account for coffee/medication')",
+          },
+          taskId: {
+            type: "number",
+            description: "Optional task ID if overriding a specific task suggestion",
+          },
+          adjustDailyGoal: {
+            type: "boolean",
+            description: "Whether to recalculate today's daily goal based on the manual energy level (default: true)",
+          },
+        },
+        required: ["energyLevel", "reason"],
+      },
+    },
   ];
 }
