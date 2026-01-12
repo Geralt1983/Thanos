@@ -28,6 +28,7 @@ export const tasks = pgTable("tasks", {
   effortEstimate: integer("effort_estimate").default(2),
   effortActual: integer("effort_actual"),
   drainType: text("drain_type"),
+  cognitiveLoad: text("cognitive_load"), // low, medium, high - mental complexity required
   sortOrder: integer("sort_order").default(0),
   subtasks: jsonb("subtasks").default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -158,6 +159,7 @@ export type EnergyState = InferSelectModel<typeof energyStates>
 export type BrainDumpEntry = InferSelectModel<typeof brainDump>
 export type TaskStatus = "active" | "queued" | "backlog" | "done"
 export type EnergyLevel = "high" | "medium" | "low"
+export type CognitiveLoad = "low" | "medium" | "high"
 
 // =============================================================================
 // RELATIONS
