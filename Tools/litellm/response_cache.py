@@ -118,6 +118,11 @@ class ResponseCache:
             else:
                 cache_file.unlink()  # Remove expired cache
         except (json.JSONDecodeError, KeyError, ValueError):
+            # Silent failure: Cache corruption should never interrupt service.
+            # Corrupted entries are treated as cache misses - the operation continues
+            # seamlessly by making an API call instead. No logging occurs to avoid
+            # noise since corruption is often transient (partial writes, encoding issues).
+            # See docs/TROUBLESHOOTING.md "Cache Error Handling" for details.
             pass
 
         return None
@@ -143,4 +148,9 @@ class ResponseCache:
                 if cached_time < cutoff:
                     cache_file.unlink()
             except (json.JSONDecodeError, KeyError, ValueError):
+                # Silent automatic cleanup: Corrupted cache files are immediately removed
+                # during cleanup cycles without logging. This self-healing behavior ensures
+                # cache health without manual intervention. Corruption is often caused by
+                # partial writes, encoding issues, or interrupted operations.
+                # See docs/TROUBLESHOOTING.md "Cache Corruption During Cleanup" for details.
                 cache_file.unlink()  # Remove corrupted cache
