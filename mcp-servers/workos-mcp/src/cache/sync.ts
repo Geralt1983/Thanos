@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, desc } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, ne, or } from "drizzle-orm";
 import * as remoteSchema from "../schema.js";
 import * as cacheSchema from "./schema.js";
 import {
@@ -24,6 +24,25 @@ function getRemoteDb() {
 // =============================================================================
 // SYNC UTILITIES
 // =============================================================================
+const TASK_RETENTION_DAYS = 90;
+const TASK_RETENTION_MS = TASK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+function getTaskRecencyCutoff(): Date {
+  return new Date(Date.now() - TASK_RETENTION_MS);
+}
+
+function isRecentWorkTask(task: remoteSchema.Task): boolean {
+  if (task.category !== "work") {
+    return false;
+  }
+  if (task.status !== "done") {
+    return true;
+  }
+  if (!task.completedAt) {
+    return true;
+  }
+  return new Date(task.completedAt).getTime() >= getTaskRecencyCutoff().getTime();
+}
 
 /**
  * Convert Date objects to ISO strings for SQLite storage
@@ -74,9 +93,22 @@ export async function syncTasks(): Promise<number> {
   const remoteDb = getRemoteDb();
   const cacheDb = getCacheDb();
 
-  // Fetch all non-archived tasks from Neon
-  // We exclude very old completed tasks to keep cache size manageable
-  const tasks = await remoteDb.select().from(remoteSchema.tasks);
+  // Fetch recent work tasks from Neon
+  // Keep all in-progress work tasks, plus recently completed work tasks
+  const cutoff = getTaskRecencyCutoff();
+  const tasks = await remoteDb
+    .select()
+    .from(remoteSchema.tasks)
+    .where(
+      and(
+        eq(remoteSchema.tasks.category, "work"),
+        or(
+          ne(remoteSchema.tasks.status, "done"),
+          isNull(remoteSchema.tasks.completedAt),
+          gte(remoteSchema.tasks.completedAt, cutoff),
+        ),
+      ),
+    );
 
   // Clear existing cached tasks
   cacheDb.delete(cacheSchema.cachedTasks).run();
@@ -237,6 +269,13 @@ export async function syncSingleTask(taskId: number): Promise<void> {
 
   if (!task) {
     // Task was deleted, remove from cache
+    cacheDb.delete(cacheSchema.cachedTasks)
+      .where(eq(cacheSchema.cachedTasks.id, taskId))
+      .run();
+    return;
+  }
+
+  if (!isRecentWorkTask(task)) {
     cacheDb.delete(cacheSchema.cachedTasks)
       .where(eq(cacheSchema.cachedTasks.id, taskId))
       .run();

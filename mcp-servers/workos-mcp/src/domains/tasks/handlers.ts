@@ -222,7 +222,7 @@ export async function handleGetTasks(
   }
 
   // Fallback to Neon
-  const conditions = [];
+  const conditions = [eq(schema.tasks.category, "work")];
   if (status) conditions.push(eq(schema.tasks.status, status));
   if (clientId) conditions.push(eq(schema.tasks.clientId, clientId));
 
