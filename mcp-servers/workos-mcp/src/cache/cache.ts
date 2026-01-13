@@ -199,7 +199,12 @@ export function getCachedTasks(status?: string, limit = 50): cacheSchema.CachedT
     return db
       .select()
       .from(cacheSchema.cachedTasks)
-      .where(eq(cacheSchema.cachedTasks.status, status))
+      .where(
+        and(
+          eq(cacheSchema.cachedTasks.category, "work"),
+          eq(cacheSchema.cachedTasks.status, status),
+        ),
+      )
       .orderBy(asc(cacheSchema.cachedTasks.sortOrder), desc(cacheSchema.cachedTasks.createdAt))
       .limit(limit)
       .all();
@@ -208,6 +213,7 @@ export function getCachedTasks(status?: string, limit = 50): cacheSchema.CachedT
   return db
     .select()
     .from(cacheSchema.cachedTasks)
+    .where(eq(cacheSchema.cachedTasks.category, "work"))
     .orderBy(asc(cacheSchema.cachedTasks.sortOrder), desc(cacheSchema.cachedTasks.createdAt))
     .limit(limit)
     .all();
@@ -219,7 +225,10 @@ export function getCachedTasks(status?: string, limit = 50): cacheSchema.CachedT
 export function getCachedTasksByClient(clientId: number, status?: string, limit = 50): cacheSchema.CachedTask[] {
   const db = getCacheDb();
 
-  const conditions = [eq(cacheSchema.cachedTasks.clientId, clientId)];
+  const conditions = [
+    eq(cacheSchema.cachedTasks.category, "work"),
+    eq(cacheSchema.cachedTasks.clientId, clientId),
+  ];
   if (status) {
     conditions.push(eq(cacheSchema.cachedTasks.status, status));
   }
