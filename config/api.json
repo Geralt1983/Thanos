@@ -102,5 +102,26 @@
         "medium": 2.00
       }
     }
+  },
+  "openai_responses": {
+    "enabled": true,
+    "model_prefixes": ["gpt-"],
+    "tiers": {
+      "simple": {
+        "verbosity": "low",
+        "reasoning_effort": "low",
+        "max_output_tokens": 512
+      },
+      "standard": {
+        "verbosity": "medium",
+        "reasoning_effort": "medium",
+        "max_output_tokens": 2048
+      },
+      "complex": {
+        "verbosity": "high",
+        "reasoning_effort": "high",
+        "max_output_tokens": 4096
+      }
+    }
   }
 }
