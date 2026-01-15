@@ -169,6 +169,7 @@ from typing import Optional, Dict, Generator, Any, List
 from .usage_tracker import UsageTracker
 from .complexity_analyzer import ComplexityAnalyzer
 from .response_cache import ResponseCache
+from openai import OpenAI
 
 # LiteLLM import with fallback
 try:
@@ -227,6 +228,7 @@ class LiteLLMClient:
         self._init_cache()
         self._init_complexity_analyzer()
         self._init_fallback_client()
+        self._init_openai_client()
 
         # Configure LiteLLM
         if LITELLM_AVAILABLE:
@@ -256,7 +258,16 @@ class LiteLLMClient:
             },
             "usage_tracking": {"enabled": True, "storage_path": "State/usage.json"},
             "caching": {"enabled": True, "ttl_seconds": 3600, "storage_path": "Memory/cache/"},
-            "defaults": {"max_tokens": 4096, "temperature": 1.0}
+            "defaults": {"max_tokens": 4096, "temperature": 1.0},
+            "openai_responses": {
+                "enabled": False,
+                "model_prefixes": ["gpt-"],
+                "tiers": {
+                    "simple": {"verbosity": "low", "reasoning_effort": "low", "max_output_tokens": 512},
+                    "standard": {"verbosity": "medium", "reasoning_effort": "medium", "max_output_tokens": 2048},
+                    "complex": {"verbosity": "high", "reasoning_effort": "high", "max_output_tokens": 4096}
+                }
+            }
         }
 
     def _setup_api_keys(self):
@@ -318,22 +329,101 @@ class LiteLLMClient:
         else:
             self.fallback_client = None
 
+    def _init_openai_client(self):
+        """Initialize OpenAI client for tiered responses."""
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            self.openai_client = OpenAI(api_key=api_key)
+        else:
+            self.openai_client = None
+
+    def _get_routing_decision(self, prompt: str,
+                              history: Optional[List[Dict]] = None,
+                              model_override: Optional[str] = None) -> Dict[str, Any]:
+        """Return model and tier decision for a prompt."""
+        if model_override:
+            return {
+                "model": model_override,
+                "tier": "override",
+                "complexity": None
+            }
+
+        complexity, tier = self.complexity_analyzer.analyze(prompt, history)
+        rule = self.routing_rules.get(tier, {})
+        selected_model = rule.get(
+            "model",
+            self.config.get("litellm", {}).get("default_model", "claude-opus-4-5-20251101")
+        )
+        return {
+            "model": selected_model,
+            "tier": tier,
+            "complexity": complexity
+        }
+
     def _select_model(self, prompt: str, history: Optional[List[Dict]] = None,
                       model_override: Optional[str] = None) -> str:
         """Select appropriate model based on complexity analysis."""
-        if model_override:
-            return model_override
+        decision = self._get_routing_decision(prompt, history, model_override)
+        return decision["model"]
 
-        complexity, tier = self.complexity_analyzer.analyze(prompt, history)
+    def _openai_responses_config(self) -> Dict[str, Any]:
+        """Return OpenAI responses config section."""
+        return self.config.get("openai_responses", {})
 
-        # Get model from routing rules
-        rule = self.routing_rules.get(tier, {})
-        return rule.get("model", self.config.get("litellm", {}).get("default_model", "claude-opus-4-5-20251101"))
+    def _is_openai_model(self, model: str) -> bool:
+        """Determine if model should use OpenAI responses API."""
+        config = self._openai_responses_config()
+        prefixes = config.get("model_prefixes", ["gpt-"])
+        return any(model.startswith(prefix) for prefix in prefixes)
+
+    def _should_use_openai_responses(self, model: str) -> bool:
+        """Check if OpenAI responses API should be used."""
+        config = self._openai_responses_config()
+        return bool(config.get("enabled", False) and self.openai_client and self._is_openai_model(model))
+
+    def _build_openai_responses_params(self, tier: Optional[str],
+                                       max_tokens: int) -> Dict[str, Any]:
+        """Build tiered responses parameters for OpenAI."""
+        config = self._openai_responses_config()
+        tiers = config.get("tiers", {})
+        tier_settings = tiers.get(tier or "standard", {})
+        max_output_tokens = tier_settings.get("max_output_tokens", max_tokens)
+        reasoning_effort = tier_settings.get("reasoning_effort")
+
+        params = {
+            "verbosity": tier_settings.get("verbosity"),
+            "max_output_tokens": min(max_tokens, max_output_tokens)
+        }
+        if reasoning_effort:
+            params["reasoning"] = {"effort": reasoning_effort}
+        return params
+
+    def _extract_openai_response_text(self, response: Any) -> str:
+        """Extract text output from OpenAI responses API."""
+        if hasattr(response, "output_text") and response.output_text:
+            return response.output_text
+        output_text = []
+        for item in getattr(response, "output", []) or []:
+            if getattr(item, "type", "") == "message":
+                for content in getattr(item, "content", []) or []:
+                    if getattr(content, "type", "") == "output_text":
+                        output_text.append(getattr(content, "text", ""))
+        return "".join(output_text)
+
+    def _extract_openai_usage(self, response: Any) -> Dict[str, int]:
+        """Extract token usage from OpenAI responses API."""
+        usage = getattr(response, "usage", None)
+        return {
+            "input_tokens": getattr(usage, "input_tokens", 0) if usage else 0,
+            "output_tokens": getattr(usage, "output_tokens", 0) if usage else 0,
+            "reasoning_tokens": getattr(usage, "reasoning_tokens", 0) if usage else 0
+        }
 
     def _call_with_fallback(self, model: str, messages: List[Dict],
                             max_tokens: int, temperature: float,
                             system: Optional[str] = None,
-                            stream: bool = False) -> Any:
+                            stream: bool = False,
+                            tier: Optional[str] = None) -> Any:
         """
         Make API call with automatic fallback chain support.
 
@@ -457,7 +547,7 @@ class LiteLLMClient:
         for fallback_model in fallback_chain:
             try:
                 return self._make_call(fallback_model, messages, max_tokens,
-                                       temperature, system, stream)
+                                       temperature, system, stream, tier)
             except Exception as e:
                 last_error = e
                 continue
@@ -467,16 +557,31 @@ class LiteLLMClient:
     def _make_call(self, model: str, messages: List[Dict],
                    max_tokens: int, temperature: float,
                    system: Optional[str] = None,
-                   stream: bool = False) -> Any:
+                   stream: bool = False,
+                   tier: Optional[str] = None) -> Any:
         """Make actual API call via LiteLLM or fallback."""
+        full_messages = []
+        if system:
+            full_messages.append({"role": "system", "content": system})
+        full_messages.extend(messages)
+
+        if self._should_use_openai_responses(model):
+            params = self._build_openai_responses_params(tier, max_tokens)
+            if stream:
+                return self.openai_client.responses.stream(
+                    model=model,
+                    input=full_messages,
+                    temperature=temperature,
+                    **{k: v for k, v in params.items() if v is not None}
+                )
+            return self.openai_client.responses.create(
+                model=model,
+                input=full_messages,
+                temperature=temperature,
+                **{k: v for k, v in params.items() if v is not None}
+            )
 
         if LITELLM_AVAILABLE:
-            # Build messages with system prompt
-            full_messages = []
-            if system:
-                full_messages.append({"role": "system", "content": system})
-            full_messages.extend(messages)
-
             if stream:
                 return completion(
                     model=model,
@@ -539,7 +644,10 @@ class LiteLLMClient:
         temperature = temperature if temperature is not None else defaults.get("temperature", 1.0)
 
         # Select model based on complexity
-        selected_model = self._select_model(prompt, history, model)
+        decision = self._get_routing_decision(prompt, history, model)
+        selected_model = decision["model"]
+        tier = decision["tier"]
+        complexity = decision["complexity"]
 
         # Check cache
         cache_params = {"max_tokens": max_tokens, "temperature": temperature, "system": system_prompt}
@@ -560,13 +668,21 @@ class LiteLLMClient:
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            system=system_prompt
+            system=system_prompt,
+            tier=tier
         )
 
         latency_ms = (time.time() - start_time) * 1000
 
         # Extract response text and usage
-        if LITELLM_AVAILABLE:
+        openai_reasoning_tokens = None
+        if self._should_use_openai_responses(selected_model) and not hasattr(response, "choices"):
+            response_text = self._extract_openai_response_text(response)
+            usage = self._extract_openai_usage(response)
+            input_tokens = usage["input_tokens"]
+            output_tokens = usage["output_tokens"]
+            openai_reasoning_tokens = usage["reasoning_tokens"]
+        elif LITELLM_AVAILABLE:
             response_text = response.choices[0].message.content
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
@@ -585,7 +701,12 @@ class LiteLLMClient:
                 cost_usd=cost,
                 latency_ms=latency_ms,
                 operation=operation,
-                metadata=metadata
+                metadata={
+                    **(metadata or {}),
+                    "openai_reasoning_tokens": openai_reasoning_tokens,
+                    "routing_tier": tier,
+                    "complexity_score": complexity
+                }
             )
 
         # Cache response
@@ -620,7 +741,10 @@ class LiteLLMClient:
         temperature = temperature if temperature is not None else defaults.get("temperature", 1.0)
 
         # Select model
-        selected_model = self._select_model(prompt, history, model)
+        decision = self._get_routing_decision(prompt, history, model)
+        selected_model = decision["model"]
+        tier = decision["tier"]
+        complexity = decision["complexity"]
 
         # Build messages
         messages = list(history) if history else []
@@ -631,14 +755,37 @@ class LiteLLMClient:
         input_tokens = 0
         output_tokens = 0
 
-        if LITELLM_AVAILABLE:
+        openai_reasoning_tokens = None
+        if self._should_use_openai_responses(selected_model):
             response = self._call_with_fallback(
                 model=selected_model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 system=system_prompt,
-                stream=True
+                stream=True,
+                tier=tier
+            )
+            with response as stream:
+                for event in stream:
+                    if getattr(event, "type", "") == "response.output_text.delta":
+                        text = getattr(event, "delta", "")
+                        full_response += text
+                        yield text
+                final_response = stream.get_final_response()
+                usage = self._extract_openai_usage(final_response)
+                input_tokens = usage["input_tokens"]
+                output_tokens = usage["output_tokens"]
+                openai_reasoning_tokens = usage["reasoning_tokens"]
+        elif LITELLM_AVAILABLE:
+            response = self._call_with_fallback(
+                model=selected_model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                stream=True,
+                tier=tier
             )
 
             for chunk in response:
@@ -681,7 +828,12 @@ class LiteLLMClient:
                 cost_usd=cost,
                 latency_ms=latency_ms,
                 operation=operation,
-                metadata=metadata
+                metadata={
+                    **(metadata or {}),
+                    "openai_reasoning_tokens": openai_reasoning_tokens,
+                    "routing_tier": tier,
+                    "complexity_score": complexity
+                }
             )
 
     def get_usage_summary(self, days: int = 30) -> Dict:
@@ -698,8 +850,10 @@ class LiteLLMClient:
 
     def analyze_complexity(self, prompt: str, history: Optional[List[Dict]] = None) -> Dict:
         """Analyze prompt complexity and return routing info."""
-        complexity, tier = self.complexity_analyzer.analyze(prompt, history)
-        selected_model = self._select_model(prompt, history)
+        decision = self._get_routing_decision(prompt, history)
+        complexity = decision["complexity"]
+        tier = decision["tier"]
+        selected_model = decision["model"]
 
         return {
             "complexity_score": complexity,
