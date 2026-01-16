@@ -33,6 +33,11 @@ if str(_THANOS_DIR) not in sys.path:
 
 from Tools.error_logger import log_error
 from Tools.intent_matcher import KeywordMatcher, TrieKeywordMatcher
+from Tools.spinner import command_spinner, chat_spinner, routing_spinner
+from Tools.state_reader import StateReader
+from Tools.state_store import SQLiteStateStore
+from Tools.state_store.summary_builder import SummaryBuilder
+from Tools.router_executor import Router, Executor, get_tool_catalog_text
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -158,6 +163,19 @@ class ThanosOrchestrator:
         self.base_dir = Path(base_dir) if base_dir else Path(__file__).parent.parent
         self.api_client = api_client
         self.matcher_strategy = matcher_strategy
+        
+        # Initialize StateReader
+        self.state_reader = StateReader(self.base_dir / "State")
+        self.state_store = SQLiteStateStore(self.base_dir / "State" / "operator_state.db")
+        self.summary_builder = SummaryBuilder(max_chars=2000)
+        self.router = Router(max_output_tokens=256, prompt_max_chars=4000)
+        self.executor = Executor(
+            state_store=self.state_store,
+            summary_builder=self.summary_builder,
+            state_reader=self.state_reader,
+            max_output_tokens=600,
+            max_prompt_chars=6000,
+        )
 
         # Load components
         self.agents: Dict[str, Agent] = {}
@@ -175,6 +193,11 @@ class ThanosOrchestrator:
         self._calendar_adapter = None
         self._calendar_context_cache: Optional[Dict[str, Any]] = None
         self._calendar_cache_time: Optional[datetime] = None
+
+        # Lazy initialization for WorkOS adapter
+        self._workos_adapter = None
+        self._workos_context_cache: Optional[Dict[str, Any]] = None
+        self._workos_cache_time: Optional[datetime] = None
 
     def _load_agents(self):
         """Load all agent definitions."""
@@ -216,6 +239,121 @@ class ThanosOrchestrator:
                     self.context[file.stem] = file.read_text()
                 except Exception as e:
                     print(f"Warning: Failed to load context {file}: {e}")
+
+    def _collect_state(self) -> Dict[str, Any]:
+        today = {
+            "focus": self.state_reader.get_current_focus(),
+            "energy": self.state_reader.get_energy_state(),
+            "blockers": self.state_reader.get_blockers(),
+            "top3": self.state_reader.get_todays_top3(),
+        }
+        daily_plan = self.state_store.get_state("daily_plan", [])
+        scoreboard = self.state_store.get_state("scoreboard", {"wins": 0, "misses": 0, "streak": 0})
+        reminders = self.state_store.get_state("reminders", [])
+        tool_summaries = self.state_store.get_recent_summaries(limit=5)
+        return {
+            "today": today,
+            "daily_plan": daily_plan,
+            "scoreboard": scoreboard,
+            "reminders": reminders,
+            "tool_summaries": tool_summaries,
+        }
+
+    def _build_state_summary(self) -> str:
+        state = self._collect_state()
+        summary = self.summary_builder.build_state_summary(state)
+        return summary.text
+
+    def _update_plan_and_scoreboard(self, user_message: str) -> None:
+        daily_plan = self.state_store.get_state("daily_plan", [])
+        scoreboard = self.state_store.get_state("scoreboard", {"wins": 0, "misses": 0, "streak": 0})
+        msg = user_message.lower().strip()
+        if msg.startswith("plan ") or "next action" in msg:
+            item = user_message.split(" ", 1)[1] if " " in user_message else user_message
+            daily_plan.append(item.strip())
+            daily_plan = daily_plan[-10:]
+        if "done" in msg or "completed" in msg:
+            scoreboard["wins"] = int(scoreboard.get("wins", 0)) + 1
+            scoreboard["streak"] = int(scoreboard.get("streak", 0)) + 1
+        if "missed" in msg or "did not" in msg:
+            scoreboard["misses"] = int(scoreboard.get("misses", 0)) + 1
+            scoreboard["streak"] = 0
+        self.state_store.set_state("daily_plan", daily_plan)
+        self.state_store.set_state("scoreboard", scoreboard)
+
+    def _record_turn_log(
+        self,
+        model: str,
+        usage_entry: Optional[Dict[str, Any]],
+        latency_ms: float,
+        tool_call_count: int,
+        prompt_bytes: int,
+        response_bytes: int,
+    ) -> None:
+        input_tokens = int(usage_entry.get("input_tokens", 0)) if usage_entry else 0
+        output_tokens = int(usage_entry.get("output_tokens", 0)) if usage_entry else 0
+        cost_usd = float(usage_entry.get("cost_usd", 0.0)) if usage_entry else 0.0
+        state_size = self.state_store.get_state_size()
+        self.state_store.record_turn_log(
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            latency_ms=latency_ms,
+            tool_call_count=tool_call_count,
+            state_size=state_size,
+            prompt_bytes=prompt_bytes,
+            response_bytes=response_bytes,
+        )
+
+    def _get_workos_adapter(self):
+        """Lazy load the WorkOS adapter."""
+        if self._workos_adapter is None:
+            try:
+                from Tools.adapters.workos import WorkOSAdapter
+                self._workos_adapter = WorkOSAdapter()
+            except Exception as e:
+                log_error("thanos_orchestrator", e, "Failed to initialize WorkOS adapter")
+                return None
+        return self._workos_adapter
+
+    async def _fetch_workos_context_async(self, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+        """Fetch WorkOS context asynchronously with caching."""
+        if not force_refresh and self._workos_context_cache is not None:
+            if self._workos_cache_time and (datetime.now() - self._workos_cache_time).seconds < 300:
+                return self._workos_context_cache
+
+        adapter = self._get_workos_adapter()
+        if adapter is None:
+            return None
+
+        try:
+            # Fetch daily summary
+            result = await adapter.call_tool("daily_summary", {})
+            if not result.success:
+                return None
+
+            context = result.data
+            self._workos_context_cache = context
+            self._workos_cache_time = datetime.now()
+            return context
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to fetch WorkOS context")
+            return None
+
+    def _get_workos_context(self, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+        """Synchronous wrapper for fetching WorkOS context."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return self._workos_context_cache
+            else:
+                return asyncio.run(self._fetch_workos_context_async(force_refresh))
+        except RuntimeError:
+            return asyncio.run(self._fetch_workos_context_async(force_refresh))
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to get WorkOS context")
+            return None
 
     def _get_calendar_adapter(self):
         """Lazy load the calendar adapter."""
@@ -527,33 +665,41 @@ class ThanosOrchestrator:
                 'ops': {
                     'high': ['what should i do', 'whats on my plate', 'help me plan', 'overwhelmed',
                              'what did i commit', 'process inbox', 'clear my inbox', 'prioritize',
-                             'show my calendar', 'when am i free', 'schedule this task'],
+                             'show my calendar', 'when am i free', 'schedule this task', 'what should i focus on',
+                             'next action', 'next step'],
                     'medium': ['task', 'tasks', 'todo', 'to-do', 'schedule', 'plan', 'organize',
                                'today', 'tomorrow', 'this week', 'deadline', 'due',
                                'calendar', 'meeting', 'meetings', 'appointment', 'appointments',
-                               'event', 'events', 'free time', 'availability', 'book', 'block time'],
+                               'event', 'events', 'free time', 'availability', 'book', 'block time',
+                               'email', 'inbox'],
                     'low': ['busy', 'work', 'productive', 'efficiency']
                 },
                 'coach': {
-                    'high': ['i keep doing this', 'why cant i', 'im struggling', 'pattern',
-                             'be honest', 'accountability', 'avoiding', 'procrastinating'],
-                    'medium': ['habit', 'stuck', 'motivation', 'discipline', 'consistent',
-                               'excuse', 'failing', 'trying', 'again'],
-                    'low': ['feel', 'feeling', 'hard', 'difficult']
+                    'high': ['i keep doing this', "why can't i", "im struggling", "i'm struggling", "why cant i", 'pattern',
+                             'be honest', 'accountability', 'avoiding', 'procrastinating', "stick to my goals",
+                             'hold me accountable', 'analyze my behavior', 'self-sabotaging', 'pep talk'],
+                    'medium': ['habit', 'habits', 'stuck', 'motivation', 'discipline', 'consistent',
+                               'consistency', 'excuse', 'excuses', 'failing', 'trying', 'again',
+                               'distracted', 'distraction', 'focus', 'analyze'],
+                    'low': ['feel', 'feeling', 'hard', 'difficult', 'trying']
                 },
                 'strategy': {
                     'high': ['quarterly', 'long-term', 'strategy', 'goals', 'where am i headed',
-                             'big picture', 'priorities', 'direction'],
+                             'big picture', 'priorities', 'direction', 'is it worth', 'best approach',
+                             'right track', 'vision', 'mission', 'tradeoff', 'tradeoffs'],
                     'medium': ['should i take this client', 'revenue', 'growth', 'future',
-                               'planning', 'decision', 'tradeoff', 'invest'],
+                               'planning', 'decision', 'invest', 'worth it',
+                               'years', 'year plan'],
                     'low': ['career', 'business', 'opportunity', 'risk']
                 },
                 'health': {
-                    'high': ['im tired', 'should i take my vyvanse', 'i cant focus', 'supplements',
-                             'i crashed', 'energy', 'sleep', 'medication'],
-                    'medium': ['exhausted', 'fatigue', 'focus', 'concentration', 'adhd',
-                               'stimulant', 'caffeine', 'workout', 'exercise'],
-                    'low': ['rest', 'break', 'recovery', 'burnout']
+                    'high': ["im tired", "i'm tired", 'should i take my vyvanse', "i cant focus", "i'm not sleeping well", "i can't focus", 'supplements',
+                             'i crashed', 'energy', 'sleep', 'medication', 'crashed', 'drained', 'focus', 'maintain focus',
+                             'brain fog', 'burnt out', 'burnout', 'meds', 'vyvanse'],
+                    'medium': ['exhausted', 'exhaustion', 'fatigue', 'fatigued', 'concentration', 'adhd',
+                               'stimulant', 'caffeine', 'workout', 'workouts', 'exercise', 'exercising', 'tired',
+                               'concentrate'],
+                    'low': ['rest', 'break', 'recovery']
                 }
             }
 
@@ -579,6 +725,19 @@ class ThanosOrchestrator:
 
         return self._intent_matcher
 
+    def _build_time_context(self) -> str:
+        """Build temporal context string."""
+        now = datetime.now()
+        parts = [f"## Temporal Context\nCurrent time: {now.strftime('%Y-%m-%d %H:%M')}"]
+        
+        # Get elapsed time since last interaction
+        elapsed = self.state_reader.calculate_elapsed_time()
+        readable_elapsed = self.state_reader.format_elapsed_time(elapsed)
+        
+        parts.append(f"Last interaction: {readable_elapsed}")
+        
+        return "\n".join(parts)
+
     def _build_system_prompt(self, agent: Optional[Agent] = None,
                              command: Optional[Command] = None,
                              include_context: bool = True) -> str:
@@ -586,10 +745,16 @@ class ThanosOrchestrator:
         parts = []
 
         # Base identity
-        parts.append("""You are Thanos - Jeremy's personal AI assistant and external prefrontal cortex.
-You manage his entire life: work, family, health, and goals.
-You are proactive, direct, and warm but honest.
-You track patterns and surface them.""")
+        parts.append("""You are The Operator.
+You are stoic and direct.
+You enforce accountability.
+You turn vague goals into next actions.
+You maintain a compact daily plan and a scoreboard.
+""")
+
+        # Add temporal context
+        if include_context:
+            parts.append(self._build_time_context())
 
         # Add core context
         if include_context and "CORE" in self.context:
@@ -620,47 +785,28 @@ You track patterns and surface them.""")
                 # Unexpected errors should be logged
                 log_error("thanos_orchestrator", e, "Unexpected error reading Today.md")
 
-        # Add calendar context (if available)
+        # Add stored summaries
         if include_context:
-            calendar_context = self._get_calendar_context()
-            if calendar_context:
-                parts.append("\n## Calendar Context")
+            workos_summary = self.state_store.get_state("workos_summary")
+            if workos_summary:
+                parts.append("\n## WorkOS Summary")
+                parts.append(workos_summary)
 
-                # Add summary
-                if calendar_context.get("summary"):
-                    parts.append(calendar_context["summary"])
+            calendar_summary = self.state_store.get_state("calendar_summary")
+            if calendar_summary:
+                parts.append("\n## Calendar Summary")
+                parts.append(calendar_summary)
 
-                # Add next event info
-                if calendar_context.get("next_event"):
-                    next_event = calendar_context["next_event"]
-                    event_title = next_event.get("summary", "Untitled Event")
-                    event_start = next_event.get("start", {}).get("dateTime", "")
-                    if event_start:
-                        try:
-                            start_time = datetime.fromisoformat(event_start.replace("Z", "+00:00"))
-                            if start_time.tzinfo is not None:
-                                start_time = start_time.replace(tzinfo=None)
-                            time_str = start_time.strftime("%I:%M %p")
-                            parts.append(f"Next event: {event_title} at {time_str}")
-                        except (ValueError, AttributeError):
-                            parts.append(f"Next event: {event_title}")
+            recent_tool_summaries = self.state_store.get_recent_summaries(limit=3)
+            if recent_tool_summaries:
+                parts.append("\n## Recent Tool Summaries")
+                for entry in recent_tool_summaries:
+                    parts.append(f"{entry.get('tool_name')} id {entry.get('summary_id')} {entry.get('summary_text')}")
 
-                # Add availability note
-                if calendar_context.get("free_until"):
-                    free_until = calendar_context["free_until"]
-                    now = datetime.now()
-                    time_diff = (free_until - now).total_seconds() / 60  # minutes
-                    if time_diff > 0:
-                        if time_diff < 60:
-                            parts.append(f"You have {int(time_diff)} minutes until the next commitment.")
-                        else:
-                            hours = int(time_diff / 60)
-                            parts.append(f"You have {hours} hour{'s' if hours > 1 else ''} until the next commitment.")
-
-                # Note for scheduling
-                parts.append("\nWhen suggesting task timing or scheduling, check for calendar conflicts and prefer free blocks.")
-
-        return "\n\n".join(parts)
+        prompt = "\n\n".join(parts)
+        if len(prompt) > 6000:
+            prompt = prompt[:6000]
+        return prompt
 
     def _ensure_client(self):
         """Ensure API client is initialized."""
@@ -669,69 +815,61 @@ You track patterns and surface them.""")
             self.api_client = api_module.init_client(str(self.base_dir / "config" / "api.json"))
 
     def find_agent(self, message: str) -> Optional[Agent]:
-        """Find the best matching agent for a message using intent detection.
-
-        For comprehensive documentation of the routing algorithm, scoring system,
-        keyword reference, performance optimization, and troubleshooting guides, see:
-        📚 docs/agent-routing.md
-
-        ROUTING ALGORITHM:
-        -----------------
-        Uses a scoring system to find the best match:
-        1. Direct trigger matches (highest priority, weight=10)
-        2. Keyword/phrase matching with tiered scoring:
-           - High priority: weight=5 (e.g., 'overwhelmed', 'should i take my vyvanse')
-           - Medium priority: weight=2 (e.g., 'task', 'exhausted')
-           - Low priority: weight=1 (e.g., 'busy', 'work')
-        3. Question type detection (fallback heuristics)
-        4. Default to Ops for task-related, Strategy for big-picture
-
-        PERFORMANCE OPTIMIZATION:
-        ------------------------
-        This method now uses pre-compiled patterns for O(m) complexity
-        instead of O(n*m) nested loops. The optimization works as follows:
-
-        OLD IMPLEMENTATION (removed):
-        - Nested loops iterating through all 92 keywords
-        - 92+ substring searches per message
-        - O(n*m) complexity: n=92, m=message length
-        - ~120μs average per routing decision
-
-        NEW IMPLEMENTATION:
-        - Single call to pre-compiled matcher.match(message)
-        - Matcher uses optimized pattern matching (regex or Aho-Corasick)
-        - O(m) complexity: single pass through message
-        - ~12μs average per routing decision (10x speedup)
-        - Patterns cached for orchestrator lifetime (lazy initialization)
-
-        CODE REDUCTION:
-        --------------
-        This optimization eliminated 67 lines of duplicate keyword checking code,
-        replacing it with a single matcher.match() call. The keyword definitions
-        are now centralized in _get_intent_matcher() for easier maintenance.
-
-        BACKWARD COMPATIBILITY:
-        ----------------------
-        The optimization preserves 100% backward compatibility:
-        - Same scoring algorithm and weights
-        - Same agent selection logic
-        - Same fallback behavior
-        - Validated with 69 backward compatibility test cases
-
-        Args:
-            message: The user message to analyze
-
-        Returns:
-            The best matching Agent, or Ops as default fallback
         """
-        # OPTIMIZATION: Use pre-compiled matcher for O(m) performance
-        # This replaces the nested loops that were here in the original implementation
+        Find appropriate agent for a message using hybrid routing:
+        1. Fast Keyword Matcher (Zero latency, deterministic)
+        2. Semantic LLM Fallback (Higher accuracy for complex queries)
+        """
         matcher = self._get_intent_matcher()
         agent_scores = matcher.match(message)
 
-        # Find the agent with the highest score
-        # In case of ties, max() returns first occurrence (preserves agent order)
         best_agent = max(agent_scores.items(), key=lambda x: x[1]) if agent_scores else (None, 0)
+
+        # Thresholds
+        HIGH_CONFIDENCE_THRESHOLD = 5
+
+        # 1. Fast Path: High confidence keyword match
+        if best_agent[1] >= HIGH_CONFIDENCE_THRESHOLD:
+            return self.agents.get(best_agent[0])
+
+        # 2. Semantic Fallback: Use LLM routing for ambiguous queries
+        self._ensure_client()
+        if self.api_client and hasattr(self.api_client, 'route'):
+            candidates = ['ops', 'coach', 'strategy', 'health']
+            
+            system_prompt = (
+                "You are the central router for the Thanos Personal Assistant. "
+                "Route the user's query to the most appropriate agent:\n"
+                "- ops: Tactical execution, calendar, todos, inbox, immediate planning.\n"
+                "- coach: Motivation, habits, accountability, behavioral patterns, focus.\n"
+                "- strategy: Long-term vision, business decisions, quarterly goals, trade-offs, big picture.\n"
+                "- health: Energy, sleep, medication, supplements, physiology, burnout, physical state.\n\n"
+                "Return ONLY the agent name (ops, coach, strategy, health)."
+            )
+            
+            try:
+                routed_agent_name = self.api_client.route(
+                    query=message,
+                    candidates=candidates,
+                    classification_prompt=system_prompt
+                )
+                if routed_agent_name and routed_agent_name in self.agents:
+                    return self.agents.get(routed_agent_name)
+            except Exception as e:
+                # Log error but fall back to heuristic
+                print(f"Routing error: {e}")
+
+        # 3. Last Resort: Heuristic Fallback (legacy logic)
+        if best_agent[1] > 0:
+            return self.agents.get(best_agent[0])
+
+        message_lower = message.lower()
+        if any(word in message_lower for word in ['what should', 'help me', 'need to', 'have to']):
+            return self.agents.get('ops')
+        if any(word in message_lower for word in ['should i', 'is it worth', 'best approach']):
+            return self.agents.get('strategy')
+
+        return self.agents.get('ops') # Default fallback
 
         if best_agent[1] > 0:
             # Found a keyword match - return the agent
@@ -791,25 +929,47 @@ You track patterns and surface them.""")
 
         if stream:
             result = ""
-            for chunk in self.api_client.chat_stream(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                operation=f"command:{command_name}"
-            ):
-                print(chunk, end="", flush=True)
-                result += chunk
-            print()
-            return result
+            spinner = command_spinner(command_name)
+            spinner.start()
+            
+            try:
+                first_chunk = True
+                for chunk in self.api_client.chat_stream(
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    operation=f"command:{command_name}"
+                ):
+                    if first_chunk:
+                        spinner.stop()
+                        first_chunk = False
+                        
+                    print(chunk, end="", flush=True)
+                    result += chunk
+                print()
+                return result
+            except Exception:
+                spinner.fail()
+                raise
         else:
-            return self.api_client.chat(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                operation=f"command:{command_name}"
-            )
+            with command_spinner(command_name):
+                return self.api_client.chat(
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    operation=f"command:{command_name}"
+                )
 
     def chat(self, message: str, agent: Optional[str] = None,
-             stream: bool = False) -> str:
-        """Chat with a specific agent or auto-detect."""
+             stream: bool = False, model: Optional[str] = None) -> str:
+        """Chat with a specific agent or auto-detect.
+
+        Args:
+            message: User message to send
+            agent: Optional agent name to use (auto-detects if None)
+            stream: Whether to stream the response
+            model: Optional model name to use (uses default from config if None)
+        """
+        if agent is None and model is None and not stream:
+            return self.route(message, stream=False)
         self._ensure_client()
 
         # Get agent
@@ -819,63 +979,106 @@ You track patterns and surface them.""")
             agent_obj = self.find_agent(message)
 
         system_prompt = self._build_system_prompt(agent=agent_obj)
+        agent_name = agent_obj.name if agent_obj else 'default'
 
-        if stream:
-            result = ""
-            for chunk in self.api_client.chat_stream(
-                prompt=message,
-                system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
-            ):
-                print(chunk, end="", flush=True)
-                result += chunk
-            print()
-            return result
-        else:
-            return self.api_client.chat(
-                prompt=message,
-                system_prompt=system_prompt,
-                operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
-            )
+        try:
+            if stream:
+                result = ""
+                spinner = chat_spinner(agent_name)
+                spinner.start()
+                
+                try:
+                    first_chunk = True
+                    for chunk in self.api_client.chat_stream(
+                        prompt=message,
+                        model=model,
+                        system_prompt=system_prompt,
+                        operation=f"chat:{agent_name}"
+                    ):
+                        if first_chunk:
+                            spinner.stop()
+                            first_chunk = False
+                            
+                        print(chunk, end="", flush=True)
+                        result += chunk
+                    print()
+                    return result
+                except Exception:
+                    spinner.fail()
+                    raise
+            else:
+                with chat_spinner(agent_name):
+                    return self.api_client.chat(
+                        prompt=message,
+                        model=model,
+                        system_prompt=system_prompt,
+                        operation=f"chat:{agent_name}"
+                    )
+        except Exception as e:
+            error_msg = f"API Error: {str(e)}"
+            # Check for common issues
+            if "api key" in str(e).lower():
+                error_msg += "\n\nHint: Check that ANTHROPIC_API_KEY is set in your .env file"
+            elif "rate limit" in str(e).lower():
+                error_msg += "\n\nHint: Rate limit exceeded, try again in a moment"
+            print(f"\n{error_msg}\n")
+            log_error(e, {"operation": "chat", "agent": agent_obj.name if agent_obj else 'default'})
+            return ""
 
-    def route(self, message: str, stream: bool = False) -> str:
-        """Auto-route a message to the appropriate handler using natural language understanding.
+    def route(self, message: str, stream: bool = False, model: Optional[str] = None) -> str:
+        """Route a message through the Operator router and executor."""
+        self._update_plan_and_scoreboard(message)
+        state_summary = self._build_state_summary()
+        tool_catalog = get_tool_catalog_text()
 
-        Routing priority:
-        1. Explicit command pattern (/pa:daily)
-        2. Command shortcut detection (daily, email, tasks)
-        3. Agent trigger matching
-        4. Default to chat with best-fit agent
-        """
-        message_lower = message.lower().strip()
-
-        # 1. Check for explicit command pattern
         cmd_match = re.match(r'^/?(\w+:\w+)\s*(.*)?$', message)
         if cmd_match:
-            return self.run_command(cmd_match.group(1), cmd_match.group(2) or "", stream)
+            action = self.router._parse_action(json.dumps({
+                "respond": "",
+                "tool_calls": [
+                    {
+                        "name": "command.run",
+                        "arguments": {"command": cmd_match.group(1), "args": cmd_match.group(2) or ""}
+                    }
+                ],
+                "escalate": False,
+                "escalate_reason": "",
+                "escalate_task": ""
+            }))
+            exec_result = self.executor.execute(message, action, state_summary, model_override=model)
+            self._record_turn_log(
+                model=exec_result.model,
+                usage_entry=exec_result.usage_entry,
+                latency_ms=exec_result.latency_ms,
+                tool_call_count=exec_result.tool_call_count,
+                prompt_bytes=exec_result.prompt_bytes,
+                response_bytes=exec_result.response_bytes,
+            )
+            return exec_result.text
 
-        # 2. Check for command keywords in natural language
-        command_keywords = {
-            # Daily/Morning routines
-            ("daily", "morning brief", "start my day", "what's today"): "pa:daily",
-            ("email", "emails", "inbox", "messages"): "pa:email",
-            ("schedule", "calendar", "meetings", "appointments"): "pa:schedule",
-            ("tasks", "todo", "to-do", "to do list"): "pa:tasks",
-            ("weekly", "week review", "weekly review", "this week"): "pa:weekly",
-        }
+        router_result = self.router.route(message, state_summary, tool_catalog)
+        self._record_turn_log(
+            model=router_result.model,
+            usage_entry=router_result.usage_entry,
+            latency_ms=router_result.latency_ms,
+            tool_call_count=len(router_result.action.tool_calls),
+            prompt_bytes=router_result.prompt_bytes,
+            response_bytes=router_result.response_bytes,
+        )
 
-        for keywords, cmd in command_keywords.items():
-            if any(kw in message_lower for kw in keywords):
-                # Only trigger if it's a short request (likely a command, not a question about it)
-                if len(message.split()) <= 4:
-                    return self.run_command(cmd, "", stream)
+        if router_result.action.respond and not router_result.action.tool_calls and not router_result.action.escalate:
+            return router_result.action.respond
 
-        # 3. Find best agent based on triggers and context
-        agent = self.find_agent(message)
-
-        # 4. Chat with the detected agent (or default)
-        agent_name = agent.name if agent else None
-        return self.chat(message, agent=agent_name, stream=stream)
+        exec_result = self.executor.execute(message, router_result.action, state_summary, model_override=model)
+        self._record_turn_log(
+            model=exec_result.model,
+            usage_entry=exec_result.usage_entry,
+            latency_ms=exec_result.latency_ms,
+            tool_call_count=exec_result.tool_call_count,
+            prompt_bytes=exec_result.prompt_bytes,
+            response_bytes=exec_result.response_bytes,
+        )
+        return exec_result.text
 
     def list_commands(self) -> List[str]:
         """List all available commands."""
@@ -894,7 +1097,71 @@ You track patterns and surface them.""")
     def get_usage(self, days: int = 30) -> Dict:
         """Get API usage summary."""
         self._ensure_client()
-        return self.api_client.get_usage_summary(days)
+    def refresh_daily_state(self) -> None:
+        """Force refresh of daily state (Calendar, WorkOS) into state_store.
+
+        This ensures that commands like pa:daily have fresh context even if
+        they don't execute tools themselves.
+        """
+        # 1. Refresh WorkOS Summary
+        try:
+            adapter = self._get_workos_adapter()
+            if adapter:
+                # Run async call synchronously
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(adapter.call_tool("daily_summary", {}))
+                    if result.success:
+                        payload = result.data
+                        # Generate summary if needed, for now just store the text representation
+                        # Ideally we use the summary_builder, but a simple dump works for context
+                        summary_text = json.dumps(payload, indent=2)
+                        
+                        # Store in state_store
+                        # We use a fixed key so it's always the latest
+                        self.state_store.set_state("workos_summary", summary_text)
+                        
+                        # Also record as a tool output for history
+                        self.state_store.add_tool_output_with_summary(
+                            "workos.daily_summary", payload, "Refreshed via startup sync", "workos"
+                        )
+                finally:
+                    loop.close()
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to refresh WorkOS state")
+
+        # 2. Refresh Calendar Summary
+        try:
+            adapter = self._get_calendar_adapter()
+            if adapter and adapter.is_authenticated():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # Get today's events
+                    result = loop.run_until_complete(adapter.call_tool("get_today_events", {}))
+                    if result.success:
+                        events = result.data
+                        
+                        # Generate human readable summary using the adapter's tool if available
+                        # or just formatting the events
+                        summary_result = loop.run_until_complete(adapter.call_tool("generate_calendar_summary", {
+                            "date": datetime.now().strftime("%Y-%m-%d")
+                        }))
+                        
+                        summary_text = ""
+                        if summary_result.success and isinstance(summary_result.data, dict):
+                            summary_text = summary_result.data.get("summary", "")
+                        else:
+                            # Fallback to raw events dump if summary gen failed or return type unexpected
+                            summary_text = json.dumps(events, indent=2)
+
+                        self.state_store.set_state("calendar_summary", summary_text)
+                finally:
+                    loop.close()
+        except Exception as e:
+            log_error("thanos_orchestrator", e, "Failed to refresh Calendar state")
+
 
 
 # Singleton instance
