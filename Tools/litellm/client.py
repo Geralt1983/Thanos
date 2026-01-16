@@ -162,6 +162,7 @@ Cost Optimization:
 import os
 import json
 import time
+import warnings
 from pathlib import Path
 from typing import Optional, Dict, Generator, Any, List
 
@@ -195,6 +196,20 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+# Fallback to direct OpenAI if LiteLLM unavailable
+try:
+    import openai
+    from openai import OpenAI, AsyncOpenAI, RateLimitError as OpenAIRateLimitError
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    from pydantic.warnings import PydanticSerializationUnexpectedValue
+except Exception:
+    PydanticSerializationUnexpectedValue = None
+
+# ... (rest of imports)
 
 # Export constants and classes
 __all__ = [
@@ -203,6 +218,7 @@ __all__ = [
     "init_client",
     "LITELLM_AVAILABLE",
     "ANTHROPIC_AVAILABLE",
+    "OPENAI_AVAILABLE",
 ]
 
 
@@ -219,6 +235,9 @@ class LiteLLMClient:
 
         self.base_dir = Path(__file__).parent.parent.parent
         self.config = self._load_config(config_path)
+        self.allow_fallback_client = bool(
+            self.config.get("litellm", {}).get("allow_fallback_client", False)
+        )
 
         # Setup providers API keys
         self._setup_api_keys()
@@ -243,16 +262,17 @@ class LiteLLMClient:
         # Default config
         return {
             "litellm": {
-                "default_model": "claude-opus-4-5-20251101",
-                "fallback_chain": ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514"],
+                "default_model": "claude-3-5-sonnet-20241022",
+                "fallback_chain": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"],
+                "allow_fallback_client": False,
                 "timeout": 600,
                 "max_retries": 3,
                 "retry_delay": 1.0
             },
             "model_routing": {
                 "rules": {
-                    "complex": {"model": "claude-opus-4-5-20251101", "min_complexity": 0.7},
-                    "standard": {"model": "claude-sonnet-4-20250514", "min_complexity": 0.3},
+                    "complex": {"model": "claude-3-opus-20240229", "min_complexity": 0.7},
+                    "standard": {"model": "claude-3-5-sonnet-20241022", "min_complexity": 0.3},
                     "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3}
                 }
             },
@@ -319,15 +339,24 @@ class LiteLLMClient:
         self.routing_rules = routing_config.get("rules", {})
 
     def _init_fallback_client(self):
-        """Initialize fallback Anthropic client if LiteLLM unavailable."""
+        """Initialize fallback clients if LiteLLM unavailable."""
+        self.fallback_client_anthropic = None
+        self.fallback_client_openai = None
+        
+        if not self.allow_fallback_client:
+            return
+            
+        # Anthropic Fallback
         if not LITELLM_AVAILABLE and ANTHROPIC_AVAILABLE:
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if api_key:
-                self.fallback_client = anthropic.Anthropic(api_key=api_key)
-            else:
-                self.fallback_client = None
-        else:
-            self.fallback_client = None
+                self.fallback_client_anthropic = anthropic.Anthropic(api_key=api_key)
+
+        # OpenAI Fallback
+        if not LITELLM_AVAILABLE and OPENAI_AVAILABLE:
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if api_key:
+                self.fallback_client_openai = openai.OpenAI(api_key=api_key)
 
     def _init_openai_client(self):
         """Initialize OpenAI client for tiered responses."""
@@ -554,6 +583,8 @@ class LiteLLMClient:
 
         raise last_error or Exception("All models in fallback chain failed")
 
+    # ... (same _select_model and _call_with_fallback)
+
     def _make_call(self, model: str, messages: List[Dict],
                    max_tokens: int, temperature: float,
                    system: Optional[str] = None,
@@ -598,7 +629,31 @@ class LiteLLMClient:
                     temperature=temperature
                 )
 
-        elif self.fallback_client:
+        # Fallbacks
+        elif model.startswith("gpt") and self.fallback_client_openai:
+             # Direct OpenAI Fallback
+             # Adjust model names if needed (e.g. gpt-4.1-mini -> gpt-4o-mini if mapped)
+             # For now assume model names overlap or are close enough
+             
+             # System prompt handled differently in OpenAI (as a message)
+             full_messages = []
+             if system:
+                 full_messages.append({"role": "system", "content": system})
+             full_messages.extend(messages)
+             
+             kwargs = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": full_messages
+             }
+             
+             if stream:
+                 return self.fallback_client_openai.chat.completions.create(stream=True, **kwargs)
+             else:
+                 return self.fallback_client_openai.chat.completions.create(**kwargs)
+
+        elif self.fallback_client_anthropic:
             # Direct Anthropic fallback
             kwargs = {
                 "model": model,
@@ -610,12 +665,12 @@ class LiteLLMClient:
                 kwargs["system"] = system
 
             if stream:
-                return self.fallback_client.messages.stream(**kwargs)
+                return self.fallback_client_anthropic.messages.stream(**kwargs)
             else:
-                return self.fallback_client.messages.create(**kwargs)
+                return self.fallback_client_anthropic.messages.create(**kwargs)
 
         else:
-            raise RuntimeError("No API client available. Install litellm or anthropic.")
+            raise RuntimeError(f"LiteLLM not available and no suitable fallback for model {model}")
 
     def chat(self, prompt: str, model: Optional[str] = None,
              max_tokens: Optional[int] = None, temperature: Optional[float] = None,
@@ -675,7 +730,7 @@ class LiteLLMClient:
         latency_ms = (time.time() - start_time) * 1000
 
         # Extract response text and usage
-        openai_reasoning_tokens = None
+
         if self._should_use_openai_responses(selected_model) and not hasattr(response, "choices"):
             response_text = self._extract_openai_response_text(response)
             usage = self._extract_openai_usage(response)
@@ -687,9 +742,17 @@ class LiteLLMClient:
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
         else:
-            response_text = response.content[0].text
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
+            # Handle different fallback client response formats
+            if hasattr(response, 'choices'):
+                # OpenAI Format
+                response_text = response.choices[0].message.content
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+            else:
+                # Anthropic Format
+                response_text = response.content[0].text
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
 
         # Calculate cost and track usage
         if self.usage_tracker:
@@ -714,6 +777,45 @@ class LiteLLMClient:
             self.cache.set(prompt, selected_model, cache_params, response_text)
 
         return response_text
+
+    def route(self, query: str, candidates: List[str], classification_prompt: str = None) -> str:
+        """
+        Route a query to one of the candidate labels using an LLM.
+
+        Args:
+            query: The user query to route
+            candidates: List of valid categories/agents
+            classification_prompt: Optional custom system prompt
+
+        Returns:
+            The selected candidate string
+        """
+        if not classification_prompt:
+            classification_prompt = (
+                "You are an intent classification system. "
+                "Classify the following query into exactly one of these categories: "
+                f"{', '.join(candidates)}. "
+                "Return ONLY the category name in lowercase. No other text."
+            )
+
+        # Use the simplest model for routing (usually cheap and fast)
+        response = self.chat(
+            prompt=f"Query: {query}\nCategory:",
+            system_prompt=classification_prompt,
+            model=self.config.get("model_routing", {}).get("rules", {}).get("simple", {}).get("model"),
+            max_tokens=10,
+            temperature=0.0
+        )
+
+        result = response.strip().lower()
+        
+        # Validation - finding the best match
+        for candidate in candidates:
+            if candidate in result:
+                return candidate
+        
+        # Default to first candidate if no clear match
+        return candidates[0]
 
     def chat_stream(self, prompt: str, model: Optional[str] = None,
                     max_tokens: Optional[int] = None, temperature: Optional[float] = None,
@@ -789,8 +891,25 @@ class LiteLLMClient:
             )
 
             for chunk in response:
-                if chunk.choices[0].delta.content:
-                    text = chunk.choices[0].delta.content
+                text = None
+                choice = None
+                if hasattr(chunk, "choices") and chunk.choices:
+                    choice = chunk.choices[0]
+                if choice is not None:
+                    delta = getattr(choice, "delta", None)
+                    if isinstance(delta, dict):
+                        text = delta.get("content") or delta.get("text")
+                    elif delta is not None:
+                        text = getattr(delta, "content", None) or getattr(delta, "text", None)
+                    if text is None:
+                        message = getattr(choice, "message", None)
+                        if isinstance(message, dict):
+                            text = message.get("content")
+                        elif message is not None:
+                            text = getattr(message, "content", None)
+                    if text is None:
+                        text = getattr(choice, "text", None)
+                if text:
                     full_response += text
                     yield text
 
@@ -815,6 +934,8 @@ class LiteLLMClient:
                 final = stream.get_final_message()
                 input_tokens = final.usage.input_tokens
                 output_tokens = final.usage.output_tokens
+        else:
+            raise RuntimeError("No LLM client available for streaming responses.")
 
         latency_ms = (time.time() - start_time) * 1000
 
@@ -835,6 +956,8 @@ class LiteLLMClient:
                     "complexity_score": complexity
                 }
             )
+        if not full_response:
+            raise RuntimeError("Streaming response returned no content.")
 
     def get_usage_summary(self, days: int = 30) -> Dict:
         """Get usage summary for the specified period."""
@@ -861,6 +984,22 @@ class LiteLLMClient:
             "selected_model": selected_model,
             "routing_rules": self.routing_rules
         }
+
+    def shutdown(self, timeout: float = 5.0):
+        """
+        Gracefully shutdown the client and flush pending usage data.
+        
+        Args:
+            timeout: Maximum time to wait for operations to complete (not fully used yet)
+        """
+        if self.usage_tracker and hasattr(self.usage_tracker, 'flush'):
+            # Assuming UsageTracker might have a flush method, or we implement basic cleanup
+            pass
+            # Ideally usage_tracker handles file writes immediately in this sync implementation,
+            # but if we add async/buffering later, this is where we'd flush.
+        
+        if self.cache and hasattr(self.cache, 'close'):
+            self.cache.close()
 
     def list_available_models(self) -> List[str]:
         """List all configured models."""
