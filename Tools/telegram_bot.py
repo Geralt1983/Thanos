@@ -22,6 +22,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from Tools.journal import Journal, EventType, Severity
 
+# Database URL for WorkOS sync
+WORKOS_DATABASE_URL = os.getenv('WORKOS_DATABASE_URL')
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +41,7 @@ class BrainDumpEntry:
     raw_content: str
     content_type: str  # 'text', 'voice', 'photo'
     parsed_category: Optional[str] = None  # 'task', 'thought', 'idea', 'worry', 'commitment'
+    parsed_context: Optional[str] = None  # 'work', 'personal'
     parsed_priority: Optional[str] = None  # 'low', 'medium', 'high', 'critical'
     parsed_entities: Optional[List[str]] = None  # extracted people, projects, etc.
     parsed_action: Optional[str] = None  # extracted action item
@@ -99,6 +103,59 @@ class TelegramBrainDumpBot:
         # Track bot state
         self.is_running = False
         self.application = None
+
+        # WorkOS sync enabled if database URL is configured
+        self.workos_enabled = bool(WORKOS_DATABASE_URL)
+        if self.workos_enabled:
+            logger.info("WorkOS sync enabled")
+
+    async def sync_to_workos(self, entry: 'BrainDumpEntry') -> bool:
+        """
+        Sync a brain dump entry to WorkOS database.
+
+        Args:
+            entry: The BrainDumpEntry to sync.
+
+        Returns:
+            True if sync successful, False otherwise.
+        """
+        if not self.workos_enabled:
+            return False
+
+        try:
+            import asyncpg
+            import ssl
+
+            # Parse database URL and configure SSL for Neon
+            db_url = WORKOS_DATABASE_URL.split('?')[0]  # Remove query params
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            conn = await asyncpg.connect(db_url, ssl=ssl_context)
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO brain_dump (content, category, context, processed, created_at)
+                    VALUES ($1, $2, $3, $4, NOW())
+                    """,
+                    entry.raw_content,
+                    entry.parsed_category,
+                    entry.parsed_context or 'personal',
+                    0  # Not processed
+                )
+                logger.info(f"Synced brain dump to WorkOS: {entry.id} (context: {entry.parsed_context})")
+                return True
+            finally:
+                await conn.close()
+
+        except ImportError:
+            logger.warning("asyncpg not installed - WorkOS sync disabled. Install with: pip install asyncpg")
+            self.workos_enabled = False
+            return False
+        except Exception as e:
+            logger.error(f"WorkOS sync failed: {e}")
+            return False
 
     def _load_entries(self):
         """Load existing brain dump entries from file."""
@@ -191,11 +248,14 @@ Content: "{content}"
 Respond with JSON only:
 {{
     "category": "task|thought|idea|worry|commitment|question",
+    "context": "work|personal",
     "priority": "low|medium|high|critical",
     "entities": ["list", "of", "people", "projects", "mentioned"],
     "action": "extracted action item if any, or null",
     "summary": "one-line summary"
-}}"""
+}}
+
+For "context": Use "personal" for family, health, errands, hobbies, relationships, home tasks. Use "work" for professional tasks, clients, projects, meetings, deadlines."""
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -254,6 +314,21 @@ Respond with JSON only:
         else:
             category = 'thought'
 
+        # Detect work vs personal context
+        personal_keywords = ['family', 'mom', 'dad', 'wife', 'husband', 'kid', 'doctor', 'gym',
+                            'grocery', 'home', 'personal', 'errand', 'birthday', 'vacation',
+                            'hobby', 'friend', 'dinner', 'weekend', 'health', 'appointment']
+        work_keywords = ['client', 'meeting', 'project', 'deadline', 'boss', 'team', 'work',
+                        'report', 'presentation', 'email', 'call with', 'sprint', 'deploy',
+                        'review', 'standup', 'stakeholder', 'deliverable']
+
+        if any(word in content_lower for word in personal_keywords):
+            context = 'personal'
+        elif any(word in content_lower for word in work_keywords):
+            context = 'work'
+        else:
+            context = 'personal'  # Default to personal
+
         # Detect priority
         if any(word in content_lower for word in ['urgent', 'asap', 'critical', 'emergency']):
             priority = 'critical'
@@ -266,6 +341,7 @@ Respond with JSON only:
 
         return {
             'category': category,
+            'context': context,
             'priority': priority,
             'entities': [],
             'action': None,
@@ -303,6 +379,7 @@ Respond with JSON only:
         if parse and content:
             parsed = await self.parse_content(content)
             entry.parsed_category = parsed.get('category')
+            entry.parsed_context = parsed.get('context', 'personal')  # Default to personal
             entry.parsed_priority = parsed.get('priority')
             entry.parsed_entities = parsed.get('entities')
             entry.parsed_action = parsed.get('action')
@@ -314,16 +391,20 @@ Respond with JSON only:
         # Log to journal
         self.journal.log(
             event_type=EventType.BRAIN_DUMP_RECEIVED,
-            message=f"Brain dump captured: {content[:50]}...",
+            title=f"Brain dump captured: {content[:50]}...",
             data={
                 'entry_id': entry.id,
                 'content_type': content_type,
                 'category': entry.parsed_category,
                 'priority': entry.parsed_priority
             },
-            severity=Severity.INFO,
+            severity='info',
             source='telegram_bot'
         )
+
+        # Sync to WorkOS if enabled
+        if self.workos_enabled:
+            await self.sync_to_workos(entry)
 
         logger.info(f"Captured brain dump: {entry.id} ({entry.parsed_category})")
 

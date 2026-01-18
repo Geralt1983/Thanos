@@ -141,6 +141,7 @@ export const brainDump = pgTable("brain_dump", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
   category: text("category"), // thought, task, idea, worry
+  context: text("context").default("personal"), // work, personal
   processed: integer("processed").default(0),
   processedAt: timestamp("processed_at"),
   convertedToTaskId: integer("converted_to_task_id").references(() => tasks.id),
@@ -148,6 +149,7 @@ export const brainDump = pgTable("brain_dump", {
 }, (table) => [
   index("brain_dump_processed_idx").on(table.processed),
   index("brain_dump_created_at_idx").on(table.createdAt),
+  index("brain_dump_context_idx").on(table.context),
 ])
 
 // =============================================================================
