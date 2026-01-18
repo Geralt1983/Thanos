@@ -382,8 +382,9 @@ class TestMemOSRelate:
                     memos = MemOS()
                     result = await memos.relate("node1", "LEADS_TO", "node2")
 
-                    assert result.success is False
-                    assert "Neo4j not available" in result.error
+                    # MemOS now has SQLite fallback for relationships
+                    assert result.success is True
+                    assert any(r.get("source") == "sqlite" for r in result.graph_results)
 
     @pytest.mark.asyncio
     async def test_relate_success(self):
