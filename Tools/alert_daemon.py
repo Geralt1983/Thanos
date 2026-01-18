@@ -20,7 +20,17 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from Tools.journal import Journal, EventType, Severity
-from Tools.alert_checkers import AlertChecker, Alert, WorkOSChecker, OuraChecker, CalendarChecker
+from Tools.alert_checker import (
+    AlertManager,
+    AlertChecker,
+    Alert,
+    AlertPriority,
+    AlertType,
+    CommitmentAlertChecker,
+    TaskAlertChecker,
+    OuraAlertChecker,
+    HabitAlertChecker,
+)
 
 
 # Configure logging
@@ -38,7 +48,7 @@ class DaemonConfig:
     dedup_window: int = 3600  # 1 hour dedup window
     max_alerts_per_run: int = 20  # Prevent alert storms
     state_file: str = "State/daemon_state.json"
-    enabled_checkers: List[str] = field(default_factory=lambda: ['workos', 'oura', 'calendar'])
+    enabled_checkers: List[str] = field(default_factory=lambda: ['commitment', 'task', 'oura', 'habit'])
 
     # Severity thresholds for notifications
     notify_severities: List[str] = field(default_factory=lambda: ['warning', 'alert', 'critical'])
@@ -101,9 +111,10 @@ class AlertDaemon:
     def _init_checkers(self):
         """Initialize enabled alert checkers."""
         checker_map = {
-            'workos': WorkOSChecker,
-            'oura': OuraChecker,
-            'calendar': CalendarChecker
+            'commitment': CommitmentAlertChecker,
+            'task': TaskAlertChecker,
+            'oura': OuraAlertChecker,
+            'habit': HabitAlertChecker,
         }
 
         for checker_name in self.config.enabled_checkers:
@@ -175,12 +186,21 @@ class AlertDaemon:
 
     def _should_notify(self, alert: Alert) -> bool:
         """Determine if alert should trigger notification."""
+        # Map priority to severity for config check
+        priority_to_severity = {
+            AlertPriority.CRITICAL: 'critical',
+            AlertPriority.HIGH: 'alert',
+            AlertPriority.MEDIUM: 'warning',
+            AlertPriority.LOW: 'info',
+        }
+        severity = priority_to_severity.get(alert.priority, 'info')
+
         # Check severity threshold
-        if alert.severity not in self.config.notify_severities:
+        if severity not in self.config.notify_severities:
             return False
 
         # Check quiet hours (only critical alerts during quiet hours)
-        if self._is_quiet_hours() and alert.severity != 'critical':
+        if self._is_quiet_hours() and alert.priority != AlertPriority.CRITICAL:
             return False
 
         return True
@@ -202,55 +222,48 @@ class AlertDaemon:
         for checker in self.checkers:
             try:
                 checker_start = time.time()
-                alerts = await checker.safe_check()
+                alerts = await checker.check()
                 checker_time = time.time() - checker_start
 
-                # Filter duplicates
+                # Filter duplicates using alert id
                 new_alerts = []
                 for alert in alerts:
-                    if not self._is_duplicate(alert):
+                    dedup_key = f"{alert.alert_type.value}:{alert.entity_id or 'global'}"
+                    if dedup_key not in self.state.recent_dedup_keys:
                         new_alerts.append(alert)
-                        self._record_alert(alert)
+                        self.state.recent_dedup_keys[dedup_key] = datetime.now().isoformat()
                     else:
-                        logger.debug(f"Skipping duplicate: {alert.dedup_key}")
+                        logger.debug(f"Skipping duplicate: {dedup_key}")
 
                 all_alerts.extend(new_alerts)
 
                 # Update checker state
-                self.state.checker_states[checker.source] = {
+                self.state.checker_states[checker.checker_name] = {
                     'last_check': datetime.now().isoformat(),
                     'duration_ms': int(checker_time * 1000),
                     'alerts_generated': len(alerts),
                     'alerts_after_dedup': len(new_alerts),
-                    'error': str(checker.last_error) if checker.last_error else None
                 }
 
-                logger.info(f"Checker {checker.source}: {len(new_alerts)} alerts ({checker_time:.2f}s)")
+                logger.info(f"Checker {checker.checker_name}: {len(new_alerts)} alerts ({checker_time:.2f}s)")
 
             except Exception as e:
-                logger.error(f"Checker {checker.source} failed: {e}")
+                logger.error(f"Checker {checker.checker_name} failed: {e}")
 
         # Limit alert storm
         if len(all_alerts) > self.config.max_alerts_per_run:
             logger.warning(f"Alert storm: {len(all_alerts)} alerts, limiting to {self.config.max_alerts_per_run}")
-            # Prioritize by severity
-            severity_order = {'critical': 0, 'alert': 1, 'warning': 2, 'info': 3, 'debug': 4}
-            all_alerts.sort(key=lambda a: severity_order.get(a.severity, 5))
+            # Prioritize by priority (critical first)
+            priority_order = {
+                AlertPriority.CRITICAL: 0,
+                AlertPriority.HIGH: 1,
+                AlertPriority.MEDIUM: 2,
+                AlertPriority.LOW: 3
+            }
+            all_alerts.sort(key=lambda a: priority_order.get(a.priority, 5))
             all_alerts = all_alerts[:self.config.max_alerts_per_run]
 
-        # Log alerts to journal
-        for alert in all_alerts:
-            try:
-                severity = Severity[alert.severity.upper()] if hasattr(Severity, alert.severity.upper()) else Severity.INFO
-                self.journal.log(
-                    event_type=alert.type,
-                    message=alert.title,
-                    data=alert.data,
-                    severity=severity,
-                    source=f"daemon:{alert.data.get('checker', 'unknown')}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to log alert to journal: {e}")
+        # Alerts are already logged by checkers, no need to log again
 
         # Update daemon state
         self.state.last_run = datetime.now().isoformat()
@@ -303,7 +316,7 @@ class AlertDaemon:
         This is a placeholder - integrate with actual notification system.
         """
         # TODO: Integrate with Telegram bot, push notifications, etc.
-        logger.info(f"NOTIFICATION [{alert.severity.upper()}]: {alert.title}")
+        logger.info(f"NOTIFICATION [{alert.priority.value.upper()}]: {alert.title}")
 
     def get_status(self) -> Dict[str, Any]:
         """Get daemon status for monitoring."""
@@ -316,7 +329,7 @@ class AlertDaemon:
             'dedup_cache_size': len(self.state.recent_dedup_keys),
             'is_quiet_hours': self._is_quiet_hours(),
             'checkers': [
-                checker.get_status() for checker in self.checkers
+                {'name': checker.checker_name} for checker in self.checkers
             ]
         }
 
@@ -335,7 +348,7 @@ async def main():
     # Build config
     config = DaemonConfig(
         check_interval=args.interval,
-        enabled_checkers=args.checkers or ['workos', 'oura', 'calendar']
+        enabled_checkers=args.checkers or ['commitment', 'task', 'oura', 'habit']
     )
 
     daemon = AlertDaemon(config)
@@ -349,7 +362,15 @@ async def main():
         alerts = await daemon.run_once()
         print(f"\n=== {len(alerts)} Alert(s) ===")
         for alert in alerts:
-            print(f"[{alert.severity.upper()}] {alert.title}")
+            emoji = {
+                AlertPriority.CRITICAL: '🚨',
+                AlertPriority.HIGH: '⚠️',
+                AlertPriority.MEDIUM: '📢',
+                AlertPriority.LOW: 'ℹ️',
+            }.get(alert.priority, '📝')
+            print(f"{emoji} [{alert.priority.value.upper()}] {alert.title}")
+            print(f"   {alert.message}")
+            print()
     else:
         print(f"Starting alert daemon (interval: {config.check_interval}s)")
         await daemon.run_continuous()

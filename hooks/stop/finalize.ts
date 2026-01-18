@@ -6,6 +6,7 @@
 import { writeFile, appendFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { cleanupAllOrphanedProcesses } from '../../src/utils/session-lifecycle.js';
 
 const CLAUDE_DIR = join(process.env.HOME!, '.claude');
 
@@ -122,6 +123,22 @@ ${data.learnings.map(l => `- ${l}`).join('\n')}
   const summary = generateSummary(data);
   console.log(`\n🎯 SESSION COMPLETE: ${summary}`);
   console.log(`📁 Session saved: ${sessionId}`);
+
+  // 7. Clean up orphaned processes (Task agents, duplicate daemons, etc.)
+  try {
+    const cleanup = await cleanupAllOrphanedProcesses();
+    if (cleanup.killed > 0) {
+      console.log(`🧹 Cleaned up ${cleanup.killed} orphaned process${cleanup.killed > 1 ? 'es' : ''}`);
+    }
+    if (cleanup.staleSessions > 0) {
+      console.log(`🧹 Removed ${cleanup.staleSessions} stale session${cleanup.staleSessions > 1 ? 's' : ''}`);
+    }
+    if (cleanup.errors.length > 0) {
+      console.error(`⚠️  Cleanup errors: ${cleanup.errors.join(', ')}`);
+    }
+  } catch (e) {
+    console.error('Failed to cleanup orphaned processes:', e);
+  }
 
   return { sessionId, summary };
 }

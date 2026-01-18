@@ -53,13 +53,18 @@ class EventType(Enum):
     BALANCE_WARNING = "balance_warning"
     BALANCE_CRITICAL = "balance_critical"
     LARGE_TRANSACTION = "large_transaction"
+    PROJECTION_WARNING = "projection_warning"
     RECURRING_UPCOMING = "recurring_upcoming"
 
     # Brain Dumps
     BRAIN_DUMP_RECEIVED = "brain_dump_received"
     BRAIN_DUMP_PARSED = "brain_dump_parsed"
+    BRAIN_DUMP_THINKING = "brain_dump_thinking"
+    BRAIN_DUMP_VENTING = "brain_dump_venting"
+    BRAIN_DUMP_OBSERVATION = "brain_dump_observation"
     NOTE_CAPTURED = "note_captured"
     IDEA_CAPTURED = "idea_captured"
+    IDEA_PROMOTED = "idea_promoted"
 
     # System
     SYNC_STARTED = "sync_started"
@@ -179,6 +184,7 @@ class Journal:
         event_type: EventType,
         source: str,
         title: str,
+        content: Optional[str] = None,
         data: Optional[Dict] = None,
         severity: str = "info",
         session_id: Optional[str] = None,
@@ -190,7 +196,8 @@ class Journal:
             event_type: Type of event
             source: Source system (workos, oura, monarch, brain_dump, manual, system)
             title: Human-readable summary
-            data: Full event payload
+            content: Human-readable content body (e.g., brain dump text)
+            data: Full event payload (structured metadata)
             severity: debug, info, warning, alert, critical
             session_id: Associated session ID
             agent: Agent that triggered the event
@@ -198,6 +205,11 @@ class Journal:
         Returns:
             Event ID
         """
+        # Merge content into data if provided
+        merged_data = data.copy() if data else {}
+        if content:
+            merged_data['content'] = content
+
         with self._get_connection() as conn:
             cursor = conn.execute('''
                 INSERT INTO journal (event_type, source, severity, title, data, session_id, agent)
@@ -207,7 +219,7 @@ class Journal:
                 source,
                 severity,
                 title,
-                json.dumps(data) if data else None,
+                json.dumps(merged_data) if merged_data else None,
                 session_id,
                 agent
             ))
@@ -287,13 +299,15 @@ class Journal:
     def get_alerts(
         self,
         since: Optional[datetime] = None,
-        unacknowledged_only: bool = True
+        unacknowledged_only: bool = True,
+        limit: int = 50
     ) -> List[JournalEntry]:
         """Get alerts (warning severity and above).
 
         Args:
             since: Alerts after this time
             unacknowledged_only: Only return unacknowledged alerts
+            limit: Maximum number of alerts to return
 
         Returns:
             List of alert entries
@@ -301,7 +315,31 @@ class Journal:
         return self.query(
             severity_min="warning",
             since=since,
-            acknowledged=False if unacknowledged_only else None
+            acknowledged=False if unacknowledged_only else None,
+            limit=limit
+        )
+
+    def get_thinking_entries(
+        self,
+        since: Optional[datetime] = None
+    ) -> List[JournalEntry]:
+        """Get brain dump thinking entries for reflection.
+
+        Args:
+            since: Entries after this time
+
+        Returns:
+            List of thinking-type brain dump entries
+        """
+        thinking_types = [
+            EventType.BRAIN_DUMP_THINKING,
+            EventType.BRAIN_DUMP_VENTING,
+            EventType.BRAIN_DUMP_OBSERVATION
+        ]
+        return self.query(
+            event_types=thinking_types,
+            since=since,
+            limit=100
         )
 
     def get_today(self, source: Optional[str] = None) -> List[JournalEntry]:
@@ -328,15 +366,39 @@ class Journal:
             limit=limit
         )
 
-    def count_unacknowledged_alerts(self) -> int:
-        """Count unacknowledged alerts."""
+    def count_alerts(self, acknowledged: Optional[bool] = None) -> int:
+        """Count alerts by acknowledgement status.
+
+        Args:
+            acknowledged: Filter by acknowledgement status.
+                          None = count all alerts
+                          True = count only acknowledged alerts
+                          False = count only unacknowledged alerts
+
+        Returns:
+            Number of alerts matching the filter
+        """
         with self._get_connection() as conn:
-            row = conn.execute('''
-                SELECT COUNT(*) FROM journal
-                WHERE severity IN ('warning', 'alert', 'critical')
-                AND acknowledged = FALSE
-            ''').fetchone()
+            if acknowledged is None:
+                # Count all alerts
+                row = conn.execute('''
+                    SELECT COUNT(*) FROM journal
+                    WHERE severity IN ('warning', 'alert', 'critical')
+                ''').fetchone()
+            else:
+                row = conn.execute('''
+                    SELECT COUNT(*) FROM journal
+                    WHERE severity IN ('warning', 'alert', 'critical')
+                    AND acknowledged = ?
+                ''', (acknowledged,)).fetchone()
             return row[0]
+
+    def count_unacknowledged_alerts(self) -> int:
+        """Count unacknowledged alerts.
+
+        Deprecated: Use count_alerts(acknowledged=False) instead.
+        """
+        return self.count_alerts(acknowledged=False)
 
     def acknowledge_alert(self, entry_id: int) -> bool:
         """Acknowledge an alert.

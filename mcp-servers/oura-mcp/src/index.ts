@@ -32,6 +32,9 @@ import {
 // Import error response helper
 import { errorResponse } from "./shared/types.js";
 
+// Import database utilities for graceful shutdown
+import { registerShutdownHandlers } from "./cache/db.js";
+
 // =============================================================================
 // SERVER CONFIGURATION
 // =============================================================================
@@ -149,18 +152,8 @@ async function main() {
 // ERROR HANDLING & STARTUP
 // =============================================================================
 
-/**
- * Global error handlers for unhandled errors
- */
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught exception:", error);
-  process.exit(1);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled rejection at:", promise, "reason:", reason);
-  process.exit(1);
-});
+// Register graceful shutdown handlers (closes database on SIGINT/SIGTERM)
+registerShutdownHandlers();
 
 // Start the server
 main().catch((error) => {

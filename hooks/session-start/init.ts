@@ -7,9 +7,32 @@ import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import {
+  cleanupStalePidFiles,
+  findOrphanedProcesses,
+  cleanupOrphanedProcesses,
+} from '../../src/utils/process-manager.js';
+import { trackSessionStart } from '../../src/utils/session-lifecycle.js';
 
 const execAsync = promisify(exec);
 const CLAUDE_DIR = join(process.env.HOME!, '.claude');
+const PROJECT_ROOT = join(process.env.HOME!, 'Projects/Thanos');
+
+/**
+ * Get quick status from unified state store via Python status command
+ */
+async function quickStatus(): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync(
+      `cd "${PROJECT_ROOT}" && python3 -m commands.status --brief`,
+      { timeout: 10000 }
+    );
+    return stdout.trim();
+  } catch (error) {
+    // Graceful fallback - status command may not be available
+    return null;
+  }
+}
 
 interface SessionStartResult {
   hasInbox: boolean;
@@ -38,6 +61,30 @@ interface CommitmentCheckResult {
 
 export default async function sessionStart(): Promise<SessionStartResult> {
   console.log('🚀 Thanos initializing...\n');
+
+  // 0. Startup cleanup - remove stale PIDs and orphaned processes
+  try {
+    const stalePids = cleanupStalePidFiles();
+    if (stalePids > 0) {
+      console.log(`🧹 Cleaned up ${stalePids} stale PID file${stalePids > 1 ? 's' : ''}`);
+    }
+
+    const orphans = findOrphanedProcesses();
+    if (orphans.length > 0) {
+      console.log(`🔍 Found ${orphans.length} orphaned process${orphans.length > 1 ? 'es' : ''}:`);
+      orphans.forEach(o => console.log(`   - PID ${o.pid}: ${o.name}`));
+      const cleanup = cleanupOrphanedProcesses();
+      if (cleanup.killed > 0) {
+        console.log(`🧹 Killed ${cleanup.killed} orphaned process${cleanup.killed > 1 ? 'es' : ''}`);
+      }
+    }
+
+    // Track this session
+    await trackSessionStart();
+  } catch (e) {
+    // Don't fail startup if cleanup fails
+    console.error('⚠️  Startup cleanup error:', e);
+  }
 
   // 1. Load current state
   let currentFocus = '';
@@ -83,6 +130,16 @@ export default async function sessionStart(): Promise<SessionStartResult> {
   console.log('═══════════════════════════════════════');
   console.log('         THANOS SESSION START          ');
   console.log('═══════════════════════════════════════\n');
+
+  // Quick status from unified state store
+  try {
+    const statusOutput = await quickStatus();
+    if (statusOutput) {
+      console.log(statusOutput);
+    }
+  } catch (e) {
+    // Graceful fallback - don't break startup
+  }
 
   if (hasInbox) {
     console.log(`📥 INBOX: ${inboxItems.length} items waiting to process`);
