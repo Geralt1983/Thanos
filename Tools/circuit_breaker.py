@@ -66,6 +66,16 @@ class CircuitMetrics:
     recovery_attempts: int
 
 
+@dataclass
+class CircuitMetadata:
+    """Metadata returned with each circuit breaker call result."""
+    circuit_state: CircuitState
+    is_fallback: bool
+    failure_count: int
+    last_error: Optional[str]
+    cache_age: Optional[float]  # seconds since cache was created, None if not from cache
+
+
 class CircuitBreaker:
     """
     Circuit breaker for resilient API calls.
@@ -126,8 +136,9 @@ class CircuitBreaker:
         self,
         func: Callable[[], T],
         fallback: Optional[Callable[[], T]] = None,
-        timeout: Optional[float] = None
-    ) -> Tuple[T, bool]:
+        timeout: Optional[float] = None,
+        cache_timestamp: Optional[datetime] = None
+    ) -> Tuple[T, CircuitMetadata]:
         """
         Execute function with circuit breaker protection.
 
@@ -135,14 +146,29 @@ class CircuitBreaker:
             func: Async or sync function to execute
             fallback: Fallback function if circuit is open
             timeout: Optional timeout in seconds
+            cache_timestamp: Optional timestamp of when cached data was created
 
         Returns:
-            Tuple of (result, is_fallback)
+            Tuple of (result, CircuitMetadata)
 
         Raises:
             CircuitOpenError: If circuit is open and no fallback provided
         """
         self.total_calls += 1
+
+        def _make_metadata(is_fallback: bool, cache_ts: Optional[datetime] = None) -> CircuitMetadata:
+            cache_age = None
+            if is_fallback and cache_ts:
+                cache_age = (datetime.now() - cache_ts).total_seconds()
+            elif is_fallback and cache_timestamp:
+                cache_age = (datetime.now() - cache_timestamp).total_seconds()
+            return CircuitMetadata(
+                circuit_state=self.state,
+                is_fallback=is_fallback,
+                failure_count=self.failure_count,
+                last_error=str(self.last_error) if self.last_error else None,
+                cache_age=cache_age
+            )
 
         # Check if we should attempt recovery
         if self.state == CircuitState.OPEN:
@@ -155,7 +181,7 @@ class CircuitBreaker:
                 if fallback:
                     self.fallback_calls += 1
                     result = await self._execute(fallback, timeout)
-                    return result, True
+                    return result, _make_metadata(is_fallback=True)
                 raise CircuitOpenError(
                     f"Circuit '{self.name}' is open (last error: {self.last_error})"
                 )
@@ -164,7 +190,7 @@ class CircuitBreaker:
         try:
             result = await self._execute(func, timeout)
             self._on_success()
-            return result, False
+            return result, _make_metadata(is_fallback=False)
 
         except Exception as e:
             self._on_failure(e)
@@ -174,7 +200,7 @@ class CircuitBreaker:
                 self.fallback_calls += 1
                 try:
                     result = await self._execute(fallback, timeout)
-                    return result, True
+                    return result, _make_metadata(is_fallback=True)
                 except Exception as fallback_error:
                     logger.error(f"Fallback also failed: {fallback_error}")
                     raise e
@@ -468,23 +494,27 @@ class ResilientAdapter:
         def get_cached():
             return self.cache.get(cache_key)
 
+        cache_ts = self.cache.get_timestamp(cache_key)
+
         try:
-            result, is_fallback = await self.circuit.call(
+            result, circuit_meta = await self.circuit.call(
                 func=fetch_and_cache,
-                fallback=get_cached
+                fallback=get_cached,
+                cache_timestamp=cache_ts
             )
 
             metadata = {
-                'is_stale': is_fallback,
+                'is_stale': circuit_meta.is_fallback,
                 'as_of': (
-                    self.cache.get_timestamp(cache_key) if is_fallback
+                    cache_ts if circuit_meta.is_fallback
                     else datetime.now()
                 ),
-                'circuit_state': self.circuit.state.value,
-                'source': self.name
+                'circuit_state': circuit_meta.circuit_state.value,
+                'source': self.name,
+                'circuit_metadata': circuit_meta
             }
 
-            if is_fallback and get_journal:
+            if circuit_meta.is_fallback and get_journal:
                 try:
                     journal = get_journal()
                     journal.log(
@@ -554,7 +584,8 @@ def circuit_protected(
     name: str,
     failure_threshold: int = 3,
     recovery_timeout: int = 3600,
-    fallback: Optional[Callable] = None
+    fallback: Optional[Callable] = None,
+    return_metadata: bool = False
 ):
     """
     Decorator to protect a function with circuit breaker.
@@ -563,6 +594,13 @@ def circuit_protected(
         @circuit_protected("monarch", fallback=get_cached_accounts)
         async def fetch_accounts():
             return await api.get_accounts()
+
+        # With metadata:
+        @circuit_protected("monarch", fallback=get_cached_accounts, return_metadata=True)
+        async def fetch_accounts():
+            return await api.get_accounts()
+
+        result, metadata = await fetch_accounts()  # metadata is CircuitMetadata
     """
     def decorator(func: Callable[[], T]) -> Callable[[], T]:
         circuit = get_circuit(
@@ -576,10 +614,12 @@ def circuit_protected(
             async def call_func():
                 return await func(*args, **kwargs)
 
-            result, is_fallback = await circuit.call(
+            result, metadata = await circuit.call(
                 func=call_func,
                 fallback=fallback
             )
+            if return_metadata:
+                return result, metadata
             return result
 
         return wrapper
@@ -616,16 +656,19 @@ if __name__ == "__main__":
         # Test failing calls
         for i in range(5):
             try:
-                result, is_fallback = await circuit.call(
+                result, metadata = await circuit.call(
                     func=flaky_api,
                     fallback=fallback
                 )
-                print(f"Call {i+1}: {result} (fallback={is_fallback})")
+                print(f"Call {i+1}: {result}")
+                print(f"   Metadata: state={metadata.circuit_state.value}, "
+                      f"is_fallback={metadata.is_fallback}, "
+                      f"failures={metadata.failure_count}")
             except Exception as e:
                 print(f"Call {i+1}: Error - {e}")
 
             metrics = circuit.get_metrics()
-            print(f"   State: {metrics.state}, Failures: {metrics.failure_count}")
+            print(f"   Metrics: state={metrics.state}, failures={metrics.failure_count}")
 
         # Wait for recovery
         print("\nWaiting for recovery timeout...")
@@ -635,18 +678,36 @@ if __name__ == "__main__":
         print("\nTesting recovery:")
         for i in range(3):
             try:
-                result, is_fallback = await circuit.call(
+                result, metadata = await circuit.call(
                     func=flaky_api,
                     fallback=fallback
                 )
-                print(f"Call {i+1}: {result} (fallback={is_fallback})")
+                print(f"Call {i+1}: {result}")
+                print(f"   Metadata: state={metadata.circuit_state.value}, "
+                      f"is_fallback={metadata.is_fallback}, "
+                      f"last_error={metadata.last_error}")
             except Exception as e:
                 print(f"Call {i+1}: Error - {e}")
 
             metrics = circuit.get_metrics()
-            print(f"   State: {metrics.state}")
+            print(f"   Metrics: state={metrics.state}")
 
         print("\nFinal metrics:")
         print(asdict(circuit.get_metrics()))
+
+        # Test sync function support
+        print("\n" + "=" * 60)
+        print("Testing sync function support:")
+        circuit.reset()
+        call_count = 0
+
+        def sync_api():
+            nonlocal call_count
+            call_count += 1
+            return f"Sync result {call_count}"
+
+        result, metadata = await circuit.call(func=sync_api)
+        print(f"Sync call result: {result}")
+        print(f"   Metadata: state={metadata.circuit_state.value}, is_fallback={metadata.is_fallback}")
 
     asyncio.run(test_circuit_breaker())

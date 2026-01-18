@@ -14,6 +14,7 @@ import { getRateLimiter } from "./shared/rate-limiter.js";
 import {
   initCache,
   getCacheStats,
+  closeCache,
 } from "./cache/cache.js";
 import { syncAll } from "./cache/sync.js";
 
@@ -169,4 +170,28 @@ async function main() {
   console.error("WorkOS MCP server running on stdio");
 }
 
-main().catch(console.error);
+// =============================================================================
+// GRACEFUL SHUTDOWN HANDLERS
+// =============================================================================
+function shutdown(signal: string) {
+  console.error(`[WorkOS] Received ${signal}, shutting down gracefully...`);
+  closeCache();
+  process.exit(0);
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("uncaughtException", (error) => {
+  console.error("[WorkOS] Uncaught exception:", error);
+  closeCache();
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[WorkOS] Unhandled rejection at:", promise, "reason:", reason);
+});
+
+main().catch((error) => {
+  console.error("[WorkOS] Fatal error:", error);
+  closeCache();
+  process.exit(1);
+});
