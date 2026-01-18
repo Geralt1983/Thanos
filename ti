@@ -1,0 +1,54 @@
+#!/bin/bash
+# ti - Launch Thanos Interactive Mode
+# Finds Python in common Windows locations
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Try common Windows Python locations
+find_python() {
+    # Check if py launcher works (preferred on Windows)
+    if py --version &> /dev/null 2>&1; then
+        echo "py"
+        return 0
+    fi
+    
+    # Check common installation paths (including arm64 variants)
+    for path in \
+        "/c/Users/JeremyKimble/AppData/Local/Programs/Python/Python"*/python.exe \
+        "/c/Users/$USERNAME/AppData/Local/Programs/Python/Python"*/python.exe \
+        "/c/Python3"*/python.exe \
+        "/c/Python"*/python.exe \
+        "/c/Program Files/Python"*/python.exe \
+        "/c/Users/$USERNAME/scoop/apps/python/current/python.exe"
+    do
+        if [[ -x "$path" ]] && "$path" --version &> /dev/null 2>&1; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    # Fallback: try python3/python if they work
+    if python3 --version &> /dev/null 2>&1; then
+        echo "python3"
+        return 0
+    fi
+    if python --version &> /dev/null 2>&1; then
+        echo "python"
+        return 0
+    fi
+    
+    return 1
+}
+
+PYTHON_CMD=$(find_python)
+
+if [[ -z "$PYTHON_CMD" ]]; then
+    echo "Error: Could not find a working Python installation."
+    echo ""
+    echo "Please install Python from https://python.org/downloads"
+    echo "Or install via: winget install Python.Python.3.11"
+    exit 1
+fi
+
+cd "$SCRIPT_DIR"
+exec $PYTHON_CMD thanos.py interactive "$@"

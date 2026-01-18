@@ -1,0 +1,21 @@
+[
+    {
+        "name": "ops",
+        "role": "Operations Manager",
+        "voice": "stoic",
+        "triggers": [
+            "task",
+            "todo"
+        ],
+        "content": "Ops agent content"
+    },
+    {
+        "name": "coach",
+        "role": "Performance Coach",
+        "voice": "encouraging",
+        "triggers": [
+            "motivation"
+        ],
+        "content": "Coach agent content"
+    }
+]

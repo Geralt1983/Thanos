@@ -24,6 +24,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from .base import BaseAdapter, ToolResult
+from . import utils
 
 logger = logging.getLogger(__name__)
 
@@ -31,18 +32,20 @@ logger = logging.getLogger(__name__)
 class GoogleCalendarAdapter(BaseAdapter):
     """
     Direct adapter for Google Calendar API with OAuth 2.0 authentication.
-
+    
     Security Features:
     - OAuth credentials stored in State/calendar_credentials.json with 0600 permissions
     - File is automatically gitignored to prevent accidental commits
     - Supports environment variable fallback for client_id, client_secret, redirect_uri
     - Automatic token refresh with secure re-storage
-
+    
     Environment Variables:
     - GOOGLE_CALENDAR_CLIENT_ID: OAuth 2.0 client ID from Google Cloud Console
     - GOOGLE_CALENDAR_CLIENT_SECRET: OAuth 2.0 client secret
     - GOOGLE_CALENDAR_REDIRECT_URI: OAuth redirect URI (optional, defaults to localhost)
     """
+
+
 
     # OAuth 2.0 scopes for Google Calendar
     SCOPES = [
@@ -406,31 +409,10 @@ class GoogleCalendarAdapter(BaseAdapter):
     def _parse_http_error(self, error: HttpError) -> dict[str, Any]:
         """
         Parse HttpError to extract useful error information.
-
-        Args:
-            error: The HttpError exception
-
-        Returns:
-            Dictionary with status_code, reason, and message
+        
+        Delegates to utils.parse_http_error.
         """
-        status_code = error.resp.status
-        error_content = {}
-
-        try:
-            error_content = json.loads(error.content.decode("utf-8"))
-        except (json.JSONDecodeError, AttributeError):
-            pass
-
-        # Extract error details from the response
-        error_info = error_content.get("error", {})
-        reason = error_info.get("errors", [{}])[0].get("reason", "unknown")
-        message = error_info.get("message", str(error))
-
-        return {
-            "status_code": status_code,
-            "reason": reason,
-            "message": message,
-        }
+        return utils.parse_http_error(error)
 
     def _calculate_backoff(self, base_backoff: float, attempt: int) -> float:
         """
