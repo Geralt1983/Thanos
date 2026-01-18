@@ -54,31 +54,35 @@ This module is automatically initialized by LiteLLMClient and transparently
 tracks all API interactions without requiring explicit calls.
 """
 
-import json
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Optional, Dict
 
+from pathlib import Path
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List
+from ..state_store import SQLiteStateStore
 
 class UsageTracker:
-    """Track token usage and costs across all model providers."""
+    """Track token usage and costs across all model providers using SQLite."""
 
     def __init__(self, storage_path: str, pricing: Dict[str, Dict[str, float]]):
-        self.storage_path = Path(storage_path)
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-        self.pricing = pricing
-        self._ensure_storage_exists()
+        """
+        Initialize tracker.
+        
+        Args:
+            storage_path: Path to the SQLite DB (previously JSON path). 
+                          If a JSON path is passed, we'll strip the extension 
+                          or redirect to operator_state.db in the same dir.
+        """
+        path_obj = Path(storage_path)
+        
+        # Retrofit: If passed a .json file, point to operator_state.db in the same directory
+        # This handles legacy callers without breaking them immediately
+        if path_obj.suffix == '.json':
+            self.db_path = path_obj.parent / "operator_state.db"
+        else:
+            self.db_path = path_obj
 
-    def _ensure_storage_exists(self):
-        """Initialize storage file if it doesn't exist."""
-        if not self.storage_path.exists():
-            self.storage_path.write_text(json.dumps({
-                "sessions": [],
-                "daily_totals": {},
-                "model_breakdown": {},
-                "provider_breakdown": {},
-                "last_updated": datetime.now().isoformat()
-            }, indent=2))
+        self.store = SQLiteStateStore(self.db_path)
+        self.pricing = pricing
 
     def _get_provider(self, model: str) -> str:
         """Determine provider from model name."""
@@ -109,89 +113,127 @@ class UsageTracker:
                cost_usd: float, latency_ms: float, operation: str = "chat",
                metadata: Optional[Dict] = None) -> Dict:
         """Record a single API call's usage."""
-        provider = self._get_provider(model)
+        
+        # Record to SQLite
+        self.store.record_turn_log(
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            latency_ms=latency_ms,
+            # We don't have these metrics easily available in this signature, default to 0
+            tool_call_count=1 if "command" in operation else 0
+        )
 
-        entry = {
+        return {
             "timestamp": datetime.now().isoformat(),
             "model": model,
-            "provider": provider,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
-            "total_tokens": input_tokens + output_tokens,
             "cost_usd": cost_usd,
             "latency_ms": latency_ms,
-            "operation": operation,
-            "metadata": metadata or {}
+            "operation": operation
         }
-
-        # Load, update, save
-        data = json.loads(self.storage_path.read_text())
-        data["sessions"].append(entry)
-
-        # Update daily totals
-        today = datetime.now().strftime("%Y-%m-%d")
-        if today not in data["daily_totals"]:
-            data["daily_totals"][today] = {"tokens": 0, "cost": 0.0, "calls": 0}
-        data["daily_totals"][today]["tokens"] += input_tokens + output_tokens
-        data["daily_totals"][today]["cost"] += cost_usd
-        data["daily_totals"][today]["calls"] += 1
-
-        # Update model breakdown
-        if model not in data.get("model_breakdown", {}):
-            data.setdefault("model_breakdown", {})[model] = {"tokens": 0, "cost": 0.0, "calls": 0}
-        data["model_breakdown"][model]["tokens"] += input_tokens + output_tokens
-        data["model_breakdown"][model]["cost"] += cost_usd
-        data["model_breakdown"][model]["calls"] += 1
-
-        # Update provider breakdown
-        if provider not in data.get("provider_breakdown", {}):
-            data.setdefault("provider_breakdown", {})[provider] = {"tokens": 0, "cost": 0.0, "calls": 0}
-        data["provider_breakdown"][provider]["tokens"] += input_tokens + output_tokens
-        data["provider_breakdown"][provider]["cost"] += cost_usd
-        data["provider_breakdown"][provider]["calls"] += 1
-
-        data["last_updated"] = datetime.now().isoformat()
-
-        # Keep only last 1000 session entries
-        if len(data["sessions"]) > 1000:
-            data["sessions"] = data["sessions"][-1000:]
-
-        self.storage_path.write_text(json.dumps(data, indent=2))
-        return entry
 
     def get_summary(self, days: int = 30) -> Dict:
         """Get usage summary for the specified number of days."""
-        data = json.loads(self.storage_path.read_text())
+        # This is a bit more complex to reconstruct fully from SQLite without writing custom SQL
+        # for aggregations. For now, we'll implement a basic aggregation.
+        
+        import sqlite3
+        
         cutoff = datetime.now() - timedelta(days=days)
-
-        total_tokens = 0
-        total_cost = 0.0
-        total_calls = 0
-
-        for date_str, daily in data.get("daily_totals", {}).items():
-            try:
-                date = datetime.strptime(date_str, "%Y-%m-%d")
-                if date >= cutoff:
-                    total_tokens += daily.get("tokens", 0)
-                    total_cost += daily.get("cost", 0.0)
-                    total_calls += daily.get("calls", 0)
-            except ValueError:
-                continue
-
-        return {
+        cutoff_str = cutoff.isoformat()
+        
+        summary = {
             "period_days": days,
-            "total_tokens": total_tokens,
-            "total_cost_usd": total_cost,
-            "total_calls": total_calls,
-            "avg_daily_tokens": total_tokens / max(days, 1),
-            "avg_daily_cost": total_cost / max(days, 1),
-            "projected_monthly_cost": (total_cost / max(days, 1)) * 30,
-            "model_breakdown": data.get("model_breakdown", {}),
-            "provider_breakdown": data.get("provider_breakdown", {})
+            "total_tokens": 0,
+            "total_cost_usd": 0.0,
+            "total_calls": 0,
+            "model_breakdown": {},
+            "provider_breakdown": {}
         }
+        
+        try:
+            with sqlite3.connect(self.store.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Totals
+                cursor.execute("""
+                    SELECT 
+                        COUNT(*), 
+                        SUM(input_tokens + output_tokens), 
+                        SUM(cost_usd)
+                    FROM turn_logs 
+                    WHERE timestamp >= ?
+                """, (cutoff_str,))
+                
+                row = cursor.fetchone()
+                if row and row[0]:
+                    summary["total_calls"] = row[0]
+                    summary["total_tokens"] = row[1] or 0
+                    summary["total_cost_usd"] = row[2] or 0.0
+                
+                # Model Breakdown
+                cursor.execute("""
+                    SELECT 
+                        model,
+                        COUNT(*),
+                        SUM(input_tokens + output_tokens),
+                        SUM(cost_usd)
+                    FROM turn_logs
+                    WHERE timestamp >= ?
+                    GROUP BY model
+                """, (cutoff_str,))
+                
+                for row in cursor.fetchall():
+                    model = row[0]
+                    provider = self._get_provider(model)
+                    
+                    summary["model_breakdown"][model] = {
+                        "calls": row[1],
+                        "tokens": row[2],
+                        "cost": row[3]
+                    }
+                    
+                    if provider not in summary["provider_breakdown"]:
+                        summary["provider_breakdown"][provider] = {"calls": 0, "tokens": 0, "cost": 0.0}
+                    
+                    summary["provider_breakdown"][provider]["calls"] += row[1]
+                    summary["provider_breakdown"][provider]["tokens"] += row[2]
+                    summary["provider_breakdown"][provider]["cost"] += row[3]
+
+        except sqlite3.Error as e:
+            print(f"Error generating summary: {e}")
+            
+        return summary
 
     def get_today(self) -> Dict:
         """Get today's usage stats."""
-        data = json.loads(self.storage_path.read_text())
-        today = datetime.now().strftime("%Y-%m-%d")
-        return data.get("daily_totals", {}).get(today, {"tokens": 0, "cost": 0.0, "calls": 0})
+        import sqlite3
+        today_start = datetime.now().strftime("%Y-%m-%d")
+        
+        stats = {"tokens": 0, "cost": 0.0, "calls": 0}
+        
+        try:
+            with sqlite3.connect(self.store.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT 
+                        COUNT(*), 
+                        SUM(input_tokens + output_tokens), 
+                        SUM(cost_usd)
+                    FROM turn_logs 
+                    WHERE timestamp >= ?
+                """, (today_start,))
+                
+                row = cursor.fetchone()
+                if row and row[0]:
+                    stats["calls"] = row[0]
+                    stats["tokens"] = row[1] or 0
+                    stats["cost"] = row[2] or 0.0
+        except sqlite3.Error:
+            pass
+            
+        return stats
+

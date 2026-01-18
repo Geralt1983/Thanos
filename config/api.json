@@ -43,7 +43,7 @@
     "enabled": true,
     "agents": {
       "ops": {
-        "model": "gpt-4.1-nano",
+        "model": "claude-3-5-haiku-20241022",
         "fallback": "gpt-4.1-mini",
         "description": "Fast operations, tool calls, scheduling"
       },
@@ -53,7 +53,7 @@
         "description": "Empathetic coaching, accountability"
       },
       "strategy": {
-        "model": "gpt-4o",
+        "model": "claude-3-5-sonnet-20241022",
         "fallback": "claude-3-5-sonnet-20241022",
         "description": "Complex reasoning, big-picture planning"
       },
@@ -68,7 +68,7 @@
   "model_routing": {
     "rules": {
       "complex": {
-        "model": "gpt-4o",
+        "model": "claude-3-5-sonnet-20241022",
         "indicators": [
           "architecture",
           "analysis",
@@ -80,7 +80,7 @@
         "min_complexity": 0.7
       },
       "standard": {
-        "model": "gpt-4.1-mini",
+        "model": "claude-3-5-haiku-20241022",
         "indicators": [
           "task",
           "summary",

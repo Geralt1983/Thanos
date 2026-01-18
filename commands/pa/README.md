@@ -120,9 +120,9 @@ Edit the command files to adjust:
 - Integration points
 - Default behaviors
 
-## Integration with SuperClaude
+## Integration with Thanos
 
-These commands work alongside the SuperClaude framework:
+These commands work alongside the Thanos framework:
 - Use `/sc:analyze` for code analysis
 - Use `/pa:tasks` for task management
 - Combine with `--think` flags for complex planning
@@ -141,7 +141,7 @@ These commands work alongside the SuperClaude framework:
 │   │   ├── process.md         # Brain dump processing
 │   │   ├── weekly.md          # Weekly review
 │   │   └── epic.md            # Epic consulting
-│   └── sc/                    # SuperClaude commands
+│   └── sc/                    # Thanos commands
 └── profile.md                 # User profile & context
 ```
 

@@ -43,6 +43,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 import uuid
+import json
 
 
 # Maximum number of messages to keep in history (sliding window)
@@ -264,6 +265,27 @@ class SessionManager:
 
         # Write to file
         filepath.write_text("".join(lines))
+
+        # Save to JSON
+        json_filepath = filepath.with_suffix(".json")
+        json_data = {
+            "id": self.session.id,
+            "started_at": self.session.started_at.isoformat(),
+            "agent": self.session.agent,
+            "total_input_tokens": self.session.total_input_tokens,
+            "total_output_tokens": self.session.total_output_tokens,
+            "total_cost": self.session.total_cost,
+            "history": [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat(),
+                    "tokens": msg.tokens
+                }
+                for msg in self.session.history
+            ]
+        }
+        json_filepath.write_text(json.dumps(json_data, indent=2))
 
         return filepath
 

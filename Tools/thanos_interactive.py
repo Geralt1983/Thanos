@@ -50,11 +50,13 @@ import json
 from pathlib import Path
 from typing import Optional
 
+import asyncio
 from Tools.command_router import CommandRouter, CommandAction, Colors
 from Tools.context_manager import ContextManager
 from Tools.prompt_formatter import PromptFormatter
 from Tools.session_manager import SessionManager
 from Tools.state_reader import StateReader
+from Tools.memos import get_memos
 
 
 class ThanosInteractive:
@@ -196,6 +198,9 @@ class ThanosInteractive:
                 # Send message to orchestrator
                 current_agent = self.command_router.current_agent
                 model = self.command_router.get_current_model()
+                
+                # Get history for context
+                history = self.session_manager.get_messages_for_api()
 
                 try:
                     # Get response from orchestrator
@@ -203,18 +208,65 @@ class ThanosInteractive:
                         message=user_input,
                         agent=current_agent,
                         model=model,
-                        stream=True
+                        stream=True,
+                        history=history
                     )
 
-                    # Add assistant response to session
-                    # Note: Token counts will need to be tracked from API response
-                    # For now, we'll use placeholder values
-                    if response:
-                        self.session_manager.add_assistant_message(response, tokens=0)
+                    
+                    # Process response structure
+                    content = ""
+                    usage = None
+                    
+                    if isinstance(response, dict):
+                        content = response.get("content", "")
+                        usage = response.get("usage")
+                    else:
+                        content = response
 
-                        # TODO: Update token counts from actual API response
-                        # This requires integration with the orchestrator's usage tracking
-                        # For MVP, stats will be updated when available
+                    # Add assistant response to session
+                    if content:
+                        output_tokens = usage.get("output_tokens", 0) if usage else 0
+                        input_tokens = usage.get("input_tokens", 0) if usage else 0
+                        cost = usage.get("cost_usd", 0.0) if usage else 0.0
+                        
+                        # Update the last user message with actual input tokens
+                        if usage:
+                             # Find the last message (which is the user message we just added)
+                             if self.session_manager.session.history:
+                                 last_msg = self.session_manager.session.history[-1]
+                                 if last_msg.role == "user":
+                                     # Adjust total input tokens (remove old estimate, add new actual)
+                                     self.session_manager.session.total_input_tokens -= last_msg.tokens
+                                     last_msg.tokens = input_tokens
+                                     self.session_manager.session.total_input_tokens += input_tokens
+                                 elif len(self.session_manager.session.history) >= 2:
+                                     # Try second to last (if we have async issues or other messages)
+                                     prev_msg = self.session_manager.session.history[-2]
+                                     if prev_msg.role == "user":
+                                         self.session_manager.session.total_input_tokens -= prev_msg.tokens
+                                         prev_msg.tokens = input_tokens
+                                         self.session_manager.session.total_input_tokens += input_tokens
+
+                        # Add assistant message with output tokens
+                        self.session_manager.add_assistant_message(content, tokens=output_tokens)
+                        
+                        # Update total session cost
+                        if usage:
+                            # If usage dict has cost, use it directly as the increment
+                            self.session_manager.session.total_cost += cost
+                        elif self.orchestrator.api_client.usage_tracker:
+                            # Fallback: estimate cost if usage dict is missing but tracker exists
+                            # Note: This is an estimation fallback
+                            est_cost = self.orchestrator.api_client.usage_tracker.calculate_cost(
+                                model or "default", input_tokens, output_tokens
+                            )
+                            self.session_manager.session.total_cost += est_cost
+
+                        # Update last interaction time after each successful chat
+                        self.state_reader.update_last_interaction(
+                            interaction_type="chat",
+                            agent=current_agent
+                        )
 
                 except Exception as e:
                     print(f"{Colors.DIM}Error: {e}{Colors.RESET}")
@@ -237,6 +289,12 @@ class ThanosInteractive:
         print(f"\n{Colors.CYAN}Welcome to Thanos Interactive Mode{Colors.RESET}")
         print(f"{Colors.DIM}Type /help for commands, /quit to exit{Colors.RESET}\n")
 
+        # Update last interaction time for cross-session awareness
+        self.state_reader.update_last_interaction(
+            interaction_type="session_start",
+            agent=self.command_router.current_agent
+        )
+
         # Show current state context
         ctx = self.state_reader.get_quick_context()
         if ctx.get("focus"):
@@ -248,6 +306,12 @@ class ThanosInteractive:
 
     def _show_goodbye(self) -> None:
         """Display goodbye message when exiting interactive mode."""
+        # Update last interaction time for session end
+        self.state_reader.update_last_interaction(
+            interaction_type="session_end",
+            agent=self.command_router.current_agent
+        )
+
         stats = self.session_manager.get_stats()
 
         print(f"\n{Colors.CYAN}Session Summary:{Colors.RESET}")
@@ -257,13 +321,36 @@ class ThanosInteractive:
         print(f"  Duration: {stats['duration_minutes']} minutes")
 
         # Offer to save session if there were messages
+        # Auto-save session if there were messages
         if stats['message_count'] > 0:
             try:
-                save_input = input(f"\n{Colors.DIM}Save session? (y/N): {Colors.RESET}").strip().lower()
-                if save_input in ['y', 'yes']:
-                    filepath = self.session_manager.save()
-                    print(f"{Colors.DIM}Session saved: {filepath}{Colors.RESET}")
-            except (KeyboardInterrupt, EOFError):
-                pass  # Skip save if user cancels
+                filepath = self.session_manager.save()
+                print(f"\n{Colors.DIM}Session saved: {filepath}{Colors.RESET}")
+                
+                # Auto-ingest into MemOS logic
+                print(f"{Colors.DIM}Indexing memory...{Colors.RESET}", end="", flush=True)
+                asyncio.run(self._ingest_session(filepath))
+                print(f" {Colors.GREEN}Done{Colors.RESET}")
+            except Exception as e:
+                print(f"\n{Colors.RED}Auto-save failed: {e}{Colors.RESET}")
+
+
 
         print(f"\n{Colors.CYAN}Goodbye!{Colors.RESET}\n")
+
+    async def _ingest_session(self, filepath: Path) -> None:
+        """Ingest saved session into MemOS vector store."""
+        memos = get_memos()
+        content = filepath.read_text(encoding='utf-8')
+        
+        # Store as observation/session_log
+        await memos.remember(
+            content=content,
+            memory_type="observation",
+            domain="personal",
+            metadata={
+                "source": "session_import", 
+                "filename": filepath.name,
+                "type": "session_log"
+            }
+        )

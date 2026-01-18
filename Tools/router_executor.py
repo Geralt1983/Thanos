@@ -71,13 +71,16 @@ class Router:
     def route(
         self,
         user_message: str,
-        context: Optional[str] = None
+
+        context: Optional[str] = None,
+        tools: Optional[str] = None
     ) -> RoutingResult:
         """Route a user message to appropriate tool or response.
         
         Args:
             user_message: The user's message to route.
             context: Optional context for routing decisions.
+            tools: Optional tool catalog description.
             
         Returns:
             RoutingResult with tool selection or fallback response.

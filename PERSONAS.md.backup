@@ -1,4 +1,4 @@
-# PERSONAS.md - SuperClaude Persona System Reference
+# PERSONAS.md - Thanos Persona System Reference
 
 Specialized persona system for Claude Code with 11 domain-specific personalities.
 

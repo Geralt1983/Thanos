@@ -1,10 +1,11 @@
-# RULES.md - SuperClaude Framework Actionable Rules
+# RULES.md - Thanos Framework Actionable Rules
 
-Simple actionable rules for Claude Code SuperClaude framework operation.
+Simple actionable rules for Claude Code Thanos framework operation.
 
 ## Core Operational Rules
 
 ### Task Management Rules
+- **ALWAYS run the `/router` workflow at the start of a new task**
 - TodoRead() → TodoWrite(3+ tasks) → Execute → Track progress
 - Use batch tool calls when possible, sequential only when dependencies exist
 - Always validate before execution, verify after completion

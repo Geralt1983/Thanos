@@ -929,6 +929,7 @@ You maintain a compact daily plan and a scoreboard.
 
         if stream:
             result = ""
+            usage = None
             spinner = command_spinner(command_name)
             spinner.start()
             
@@ -943,23 +944,35 @@ You maintain a compact daily plan and a scoreboard.
                         spinner.stop()
                         first_chunk = False
                         
+                        
+                    if isinstance(chunk, dict) and chunk.get("type") == "usage":
+                        usage = chunk.get("usage")
+                        continue
+                        
                     print(chunk, end="", flush=True)
                     result += chunk
                 print()
-                return result
+                return {"content": result, "usage": usage}
             except Exception:
                 spinner.fail()
                 raise
         else:
             with command_spinner(command_name):
-                return self.api_client.chat(
+                # Non-streaming doesn't return usage in the same way yet, or we assume it's tracked internally
+                # For consistency with the plan, we should try to return it if possible, but the plan focused on streaming
+                # Check plan: "Update `chat` method (streaming path)"
+                # But LiteLLMClient.chat (non-stream) returns just string.
+                # However, LiteLLMClient tracks usage internally so we can get it from today's stats if we really wanted
+                # But interactive mode specificially uses streaming.
+                return {"content": self.api_client.chat(
                     prompt=user_prompt,
                     system_prompt=system_prompt,
                     operation=f"command:{command_name}"
-                )
+                ), "usage": None}
 
     def chat(self, message: str, agent: Optional[str] = None,
-             stream: bool = False, model: Optional[str] = None) -> str:
+             stream: bool = False, model: Optional[str] = None,
+             history: Optional[List[Dict]] = None) -> Union[str, Dict]:
         """Chat with a specific agent or auto-detect.
 
         Args:
@@ -967,6 +980,7 @@ You maintain a compact daily plan and a scoreboard.
             agent: Optional agent name to use (auto-detects if None)
             stream: Whether to stream the response
             model: Optional model name to use (uses default from config if None)
+            history: Optional list of previous messages for context
         """
         if agent is None and model is None and not stream:
             return self.route(message, stream=False)
@@ -984,6 +998,7 @@ You maintain a compact daily plan and a scoreboard.
         try:
             if stream:
                 result = ""
+                usage = None
                 spinner = chat_spinner(agent_name)
                 spinner.start()
                 
@@ -993,27 +1008,34 @@ You maintain a compact daily plan and a scoreboard.
                         prompt=message,
                         model=model,
                         system_prompt=system_prompt,
+                        history=history,
                         operation=f"chat:{agent_name}"
                     ):
                         if first_chunk:
                             spinner.stop()
                             first_chunk = False
                             
+                        
+                        if isinstance(chunk, dict) and chunk.get("type") == "usage":
+                            usage = chunk.get("usage")
+                            continue
+
                         print(chunk, end="", flush=True)
                         result += chunk
                     print()
-                    return result
+                    return {"content": result, "usage": usage}
                 except Exception:
                     spinner.fail()
                     raise
             else:
                 with chat_spinner(agent_name):
-                    return self.api_client.chat(
+                    return {"content": self.api_client.chat(
                         prompt=message,
                         model=model,
                         system_prompt=system_prompt,
+                        history=history,
                         operation=f"chat:{agent_name}"
-                    )
+                    ), "usage": None}
         except Exception as e:
             error_msg = f"API Error: {str(e)}"
             # Check for common issues
@@ -1023,9 +1045,9 @@ You maintain a compact daily plan and a scoreboard.
                 error_msg += "\n\nHint: Rate limit exceeded, try again in a moment"
             print(f"\n{error_msg}\n")
             log_error(e, {"operation": "chat", "agent": agent_obj.name if agent_obj else 'default'})
-            return ""
+            return {"content": "", "usage": None}
 
-    def route(self, message: str, stream: bool = False, model: Optional[str] = None) -> str:
+    def route(self, message: str, stream: bool = False, model: Optional[str] = None) -> Union[str, Dict]:
         """Route a message through the Operator router and executor."""
         self._update_plan_and_scoreboard(message)
         state_summary = self._build_state_summary()
@@ -1054,7 +1076,7 @@ You maintain a compact daily plan and a scoreboard.
                 prompt_bytes=exec_result.prompt_bytes,
                 response_bytes=exec_result.response_bytes,
             )
-            return exec_result.text
+            return {"content": exec_result.text, "usage": exec_result.usage_entry}
 
         router_result = self.router.route(message, state_summary, tool_catalog)
         self._record_turn_log(
@@ -1067,7 +1089,7 @@ You maintain a compact daily plan and a scoreboard.
         )
 
         if router_result.action.respond and not router_result.action.tool_calls and not router_result.action.escalate:
-            return router_result.action.respond
+            return {"content": router_result.action.respond, "usage": router_result.usage_entry}
 
         exec_result = self.executor.execute(message, router_result.action, state_summary, model_override=model)
         self._record_turn_log(
@@ -1078,7 +1100,7 @@ You maintain a compact daily plan and a scoreboard.
             prompt_bytes=exec_result.prompt_bytes,
             response_bytes=exec_result.response_bytes,
         )
-        return exec_result.text
+        return {"content": exec_result.text, "usage": exec_result.usage_entry}
 
     def list_commands(self) -> List[str]:
         """List all available commands."""

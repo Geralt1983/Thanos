@@ -366,6 +366,8 @@ class PromptFormatter:
         # Format with appropriate decimal places
         if cost >= 10:
             cost_str = f"${cost:.2f}"
+        elif cost > 0 and cost < 0.01:
+            cost_str = f"${cost:.4f}"
         else:
             cost_str = f"${cost:.2f}"
 
