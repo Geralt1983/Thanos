@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 # Setup path for imports
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -109,7 +113,7 @@ class TelegramBrainDumpBot:
         if self.workos_enabled:
             logger.info("WorkOS sync enabled")
 
-    async def sync_to_workos(self, entry: 'BrainDumpEntry') -> bool:
+    async def sync_to_workos(self, entry: 'BrainDumpEntry') -> Optional[int]:
         """
         Sync a brain dump entry to WorkOS database.
 
@@ -117,10 +121,10 @@ class TelegramBrainDumpBot:
             entry: The BrainDumpEntry to sync.
 
         Returns:
-            True if sync successful, False otherwise.
+            The WorkOS brain dump ID if successful, None otherwise.
         """
         if not self.workos_enabled:
-            return False
+            return None
 
         try:
             import asyncpg
@@ -134,28 +138,85 @@ class TelegramBrainDumpBot:
 
             conn = await asyncpg.connect(db_url, ssl=ssl_context)
             try:
-                await conn.execute(
+                row = await conn.fetchrow(
                     """
                     INSERT INTO brain_dump (content, category, context, processed, created_at)
                     VALUES ($1, $2, $3, $4, NOW())
+                    RETURNING id
                     """,
                     entry.raw_content,
                     entry.parsed_category,
                     entry.parsed_context or 'personal',
                     0  # Not processed
                 )
-                logger.info(f"Synced brain dump to WorkOS: {entry.id} (context: {entry.parsed_context})")
-                return True
+                workos_id = row['id']
+                logger.info(f"Synced brain dump to WorkOS #{workos_id}: {entry.id} (context: {entry.parsed_context})")
+                return workos_id
             finally:
                 await conn.close()
 
         except ImportError:
             logger.warning("asyncpg not installed - WorkOS sync disabled. Install with: pip install asyncpg")
             self.workos_enabled = False
-            return False
+            return None
         except Exception as e:
             logger.error(f"WorkOS sync failed: {e}")
-            return False
+            return None
+
+    async def convert_to_task(self, brain_dump_id: int, entry: 'BrainDumpEntry') -> Optional[int]:
+        """
+        Convert a brain dump to a task in WorkOS.
+
+        Args:
+            brain_dump_id: The WorkOS brain dump ID.
+            entry: The BrainDumpEntry to convert.
+
+        Returns:
+            The task ID if successful, None otherwise.
+        """
+        try:
+            import asyncpg
+            import ssl
+
+            db_url = WORKOS_DATABASE_URL.split('?')[0]
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            conn = await asyncpg.connect(db_url, ssl=ssl_context)
+            try:
+                # Create the task
+                task_title = entry.parsed_action or entry.raw_content[:100]
+                task_row = await conn.fetchrow(
+                    """
+                    INSERT INTO tasks (title, description, status, category, created_at, updated_at)
+                    VALUES ($1, $2, 'backlog', $3, NOW(), NOW())
+                    RETURNING id
+                    """,
+                    task_title,
+                    entry.raw_content,
+                    entry.parsed_context or 'personal'
+                )
+                task_id = task_row['id']
+
+                # Mark brain dump as processed
+                await conn.execute(
+                    """
+                    UPDATE brain_dump
+                    SET processed = 1, processed_at = NOW(), converted_to_task_id = $1
+                    WHERE id = $2
+                    """,
+                    task_id,
+                    brain_dump_id
+                )
+
+                return task_id
+            finally:
+                await conn.close()
+
+        except Exception as e:
+            logger.error(f"Failed to convert to task: {e}")
+            return None
 
     def _load_entries(self):
         """Load existing brain dump entries from file."""
@@ -404,7 +465,13 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
         # Sync to WorkOS if enabled
         if self.workos_enabled:
-            await self.sync_to_workos(entry)
+            workos_id = await self.sync_to_workos(entry)
+
+            # Auto-convert to task ONLY if actionable (task or commitment)
+            if entry.parsed_category in ('task', 'commitment') and workos_id:
+                task_id = await self.convert_to_task(workos_id, entry)
+                if task_id:
+                    logger.info(f"Auto-converted to task #{task_id}")
 
         logger.info(f"Captured brain dump: {entry.id} ({entry.parsed_category})")
 
