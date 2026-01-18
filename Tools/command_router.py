@@ -31,6 +31,9 @@ class Colors:
     DIM = "\033[2m"
     RESET = "\033[0m"
     BOLD = "\033[1m"
+    GREEN = "\033[32m"
+    RED = "\033[31m"
+    YELLOW = "\033[33m"
 
 
 class CommandAction(Enum):
@@ -85,7 +88,7 @@ class CommandRouter:
             "sonnet": "claude-sonnet-4-20250514",
             "haiku": "claude-3-5-haiku-20241022",
         }
-        self._default_model = "opus"
+        self._default_model = None
 
         # MemOS integration (lazy initialization)
         self._memos: Optional[MemOS] = None
@@ -94,6 +97,11 @@ class CommandRouter:
         # Calendar adapter integration (lazy initialization)
         self._calendar_adapter = None
         self._calendar_initialized = False
+
+        # Oura adapter integration (lazy initialization with daily cache)
+        self._oura_adapter = None
+        self._oura_initialized = False
+        self._oura_cache_file = self.thanos_dir / "State" / "OuraCache.json"
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
@@ -174,6 +182,62 @@ class CommandRouter:
 
         return self._calendar_adapter
 
+    def _get_oura_adapter(self):
+        """Get Oura adapter, initializing if needed."""
+        if not self._oura_initialized:
+            try:
+                # Ensure .env is loaded for OURA_PERSONAL_ACCESS_TOKEN
+                try:
+                    from dotenv import load_dotenv
+                    load_dotenv(self.thanos_dir / ".env")
+                except ImportError:
+                    pass
+
+                from Tools.adapters import OuraAdapter
+                self._oura_adapter = OuraAdapter()
+                self._oura_initialized = True
+            except Exception:
+                self._oura_adapter = None
+                self._oura_initialized = True
+
+        return self._oura_adapter
+
+    def _get_oura_cache(self, date_str: str) -> Optional[dict]:
+        """Get cached Oura data for a specific date."""
+        import json
+        if not self._oura_cache_file.exists():
+            return None
+        try:
+            cache = json.loads(self._oura_cache_file.read_text())
+            return cache.get(date_str)
+        except (json.JSONDecodeError, IOError):
+            return None
+
+    def _save_oura_cache(self, date_str: str, data: dict) -> None:
+        """Save Oura data to cache for a specific date."""
+        import json
+        from datetime import datetime
+
+        # Load existing cache or create new
+        cache = {}
+        if self._oura_cache_file.exists():
+            try:
+                cache = json.loads(self._oura_cache_file.read_text())
+            except (json.JSONDecodeError, IOError):
+                cache = {}
+
+        # Add timestamp and save
+        data["_cached_at"] = datetime.now().isoformat()
+        cache[date_str] = data
+
+        # Keep only last 7 days to prevent unbounded growth
+        if len(cache) > 7:
+            sorted_dates = sorted(cache.keys(), reverse=True)[:7]
+            cache = {d: cache[d] for d in sorted_dates}
+
+        self._oura_cache_file.parent.mkdir(parents=True, exist_ok=True)
+        self._oura_cache_file.write_text(json.dumps(cache, indent=2))
+
     def detect_agent(self, message: str, auto_switch: bool = True) -> Optional[str]:
         """
         Detect the appropriate agent for a message based on trigger patterns.
@@ -250,6 +314,10 @@ class CommandRouter:
             "free": (self._cmd_free, "Find free time slots", ["args"]),
             "prompt": (self._cmd_prompt, "Switch prompt display mode", ["mode"]),
             "p": (self._cmd_prompt, "Switch prompt mode (alias)", ["mode"]),
+            "oura": (self._cmd_oura, "Show Oura health data", ["args"]),
+            "health": (self._cmd_oura, "Show health data (alias)", ["args"]),
+            "status": (self._cmd_status, "Show full system status", []),
+            "st": (self._cmd_status, "Show status (alias)", []),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -360,6 +428,18 @@ class CommandRouter:
 """)
         return CommandResult()
 
+    def _cmd_status(self, args: str) -> CommandResult:
+        """Show comprehensive Thanos system status dashboard."""
+        try:
+            from Tools.status_command import ThanosStatus
+            status = ThanosStatus(self.thanos_dir)
+            print(status.get_full_status())
+        except ImportError as e:
+            print(f"{Colors.RED}Status module not available: {e}{Colors.RESET}")
+        except Exception as e:
+            print(f"{Colors.RED}Error loading status: {e}{Colors.RESET}")
+        return CommandResult()
+
     def _cmd_state(self, args: str) -> CommandResult:
         """Show current Thanos state (Today.md context)."""
         ctx = self.state_reader.get_quick_context()
@@ -458,6 +538,8 @@ class CommandRouter:
   /calendar [when] - Show calendar events (today, tomorrow, week, YYYY-MM-DD)
   /schedule <task> - Schedule a task on calendar
   /free [when]   - Find free time slots (today, tomorrow, week)
+  /oura [focus]  - Show Oura health data (readiness, sleep, stress, refresh)
+  /health        - Alias for /oura
   /run <cmd>     - Run a Thanos command (e.g., /run pa:daily)
   /help          - Show this help
   /quit          - Exit interactive mode
@@ -1038,10 +1120,13 @@ class CommandRouter:
             print(f"Available: {', '.join(self._available_models.keys())}")
             return CommandResult(success=False)
 
-    def get_current_model(self) -> str:
+    def get_current_model(self) -> Optional[str]:
         """Get the current model full name for API calls."""
-        model_alias = self.current_model or self._default_model
-        return self._available_models.get(model_alias, self._available_models[self._default_model])
+        if self.current_model:
+            return self._available_models.get(self.current_model)
+        if self._default_model:
+            return self._available_models.get(self._default_model)
+        return None
 
     def _cmd_prompt(self, args: str) -> CommandResult:
         """Switch prompt display mode."""
@@ -1266,3 +1351,198 @@ class CommandRouter:
         except Exception as e:
             print(f"{Colors.DIM}Error finding free slots: {e}{Colors.RESET}")
             return CommandResult(success=False)
+
+    def _cmd_oura(self, args: str) -> CommandResult:
+        """Show Oura health data with smart caching and sync detection."""
+        from datetime import datetime
+
+        oura = self._get_oura_adapter()
+        if not oura:
+            print(f"{Colors.DIM}Oura adapter not available. Set OURA_PERSONAL_ACCESS_TOKEN.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        arg = args.strip().lower() if args else ""
+
+        # Check cache - but validate the actual data date matches today
+        cached = self._get_oura_cache(today)
+        if cached and not arg.startswith("refresh"):
+            # Validate cached data is actually from today
+            data_date = self._get_oura_data_date(cached)
+            if data_date == today:
+                print(f"{Colors.DIM}Using cached data from {cached.get('_cached_at', 'earlier')[:16]}{Colors.RESET}")
+                self._display_oura_data(cached, arg)
+                return CommandResult()
+            else:
+                # Cache is stale (data was from before ring synced)
+                print(f"{Colors.DIM}Cache stale (data from {data_date}), fetching fresh...{Colors.RESET}")
+
+        # Fetch fresh data
+        print(f"{Colors.DIM}Fetching Oura data...{Colors.RESET}")
+        try:
+            result = self._run_async(oura.call_tool("get_today_health", {}))
+
+            if result and result.success:
+                data = result.data
+                data_date = self._get_oura_data_date(data)
+
+                # Check if ring is synced (data date matches today)
+                if data_date != today:
+                    print(f"\n{Colors.YELLOW}⚠️  Ring not synced{Colors.RESET}")
+                    print(f"{Colors.DIM}Latest data is from {data_date}. Sync your Oura ring.{Colors.RESET}")
+                    # Don't cache stale data - show it but don't save
+                    self._display_oura_data(data, arg)
+                    return CommandResult()
+
+                # Data is current - cache it
+                self._save_oura_cache(today, data)
+                print(f"{Colors.DIM}Cached for {today}{Colors.RESET}\n")
+                self._display_oura_data(data, arg)
+                return CommandResult()
+            else:
+                error_msg = result.error if result else "Unknown error"
+                print(f"{Colors.DIM}Failed to fetch Oura data: {error_msg}{Colors.RESET}")
+                return CommandResult(success=False)
+
+        except Exception as e:
+            print(f"{Colors.DIM}Error fetching Oura data: {e}{Colors.RESET}")
+            return CommandResult(success=False)
+
+    def _get_oura_data_date(self, data: dict) -> str:
+        """Extract the actual data date from Oura response."""
+        # Check readiness first (most reliable), then sleep, then activity
+        for key in ["readiness", "sleep", "activity", "stress"]:
+            if data.get(key) and data[key].get("day"):
+                return data[key]["day"]
+        # Fallback to the date field if present
+        return data.get("date", "unknown")
+
+    def _display_oura_data(self, data: dict, focus: str = "") -> None:
+        """Display Oura data in a formatted way."""
+        summary = data.get("summary", {})
+        readiness = data.get("readiness", {})
+        sleep = data.get("sleep", {})
+        stress = data.get("stress", {})
+
+        # Status emoji mapping
+        def status_emoji(score: int) -> str:
+            if score >= 85:
+                return "🟢"
+            elif score >= 70:
+                return "🟡"
+            elif score >= 55:
+                return "🟠"
+            else:
+                return "🔴"
+
+        # Show specific section or overview
+        if focus in ["readiness", "r"]:
+            self._display_readiness(readiness)
+        elif focus in ["sleep", "s"]:
+            self._display_sleep(sleep, data.get("sleep", {}))
+        elif focus in ["stress", "st"]:
+            self._display_stress(stress)
+        else:
+            # Overview
+            print(f"\n{Colors.CYAN}Oura Health - {data.get('date', 'Today')}{Colors.RESET}\n")
+
+            # Readiness
+            r_score = readiness.get("score", 0) if readiness else 0
+            print(f"  {Colors.BOLD}Readiness:{Colors.RESET} {status_emoji(r_score)} {r_score}")
+
+            if readiness and readiness.get("contributors"):
+                contrib = readiness["contributors"]
+                low_items = []
+                if contrib.get("previous_night", 100) < 60:
+                    low_items.append(f"sleep({contrib['previous_night']})")
+                if contrib.get("hrv_balance", 100) < 60:
+                    low_items.append(f"HRV({contrib['hrv_balance']})")
+                if contrib.get("recovery_index", 100) < 60:
+                    low_items.append(f"recovery({contrib['recovery_index']})")
+                if low_items:
+                    print(f"    {Colors.DIM}Low: {', '.join(low_items)}{Colors.RESET}")
+
+            # Sleep
+            s_score = sleep.get("score", 0) if sleep else 0
+            print(f"\n  {Colors.BOLD}Sleep:{Colors.RESET} {status_emoji(s_score)} {s_score}")
+
+            if sleep and sleep.get("contributors"):
+                contrib = sleep["contributors"]
+                if contrib.get("total_sleep", 100) < 60:
+                    print(f"    {Colors.DIM}Total sleep low: {contrib['total_sleep']}{Colors.RESET}")
+                if contrib.get("rem_sleep", 100) < 50:
+                    print(f"    {Colors.DIM}REM low: {contrib['rem_sleep']}{Colors.RESET}")
+
+            # Stress
+            if stress:
+                stress_high = stress.get("stress_high", 0)
+                recovery_high = stress.get("recovery_high", 0)
+                if stress_high > 0 or recovery_high > 0:
+                    stress_min = stress_high // 60
+                    recovery_min = recovery_high // 60
+                    print(f"\n  {Colors.BOLD}Stress:{Colors.RESET} {stress_min}min high | {recovery_min}min recovery")
+
+            # Recommendations
+            recs = summary.get("recommendations", [])
+            if recs:
+                print(f"\n  {Colors.BOLD}Recommendations:{Colors.RESET}")
+                for rec in recs:
+                    print(f"    • {rec}")
+
+            # Overall status
+            overall = summary.get("overall_status", "unknown")
+            print(f"\n  {Colors.BOLD}Overall:{Colors.RESET} {overall.upper()}")
+            print()
+
+    def _display_readiness(self, readiness: dict) -> None:
+        """Display detailed readiness info."""
+        if not readiness:
+            print(f"{Colors.DIM}No readiness data available{Colors.RESET}")
+            return
+
+        print(f"\n{Colors.CYAN}Readiness Details{Colors.RESET}\n")
+        print(f"  Score: {readiness.get('score', 'N/A')}")
+
+        if readiness.get("contributors"):
+            print(f"\n  {Colors.BOLD}Contributors:{Colors.RESET}")
+            contrib = readiness["contributors"]
+            for key, value in sorted(contrib.items()):
+                label = key.replace("_", " ").title()
+                emoji = "🟢" if value >= 70 else "🟡" if value >= 50 else "🔴"
+                print(f"    {emoji} {label}: {value}")
+        print()
+
+    def _display_sleep(self, sleep: dict, detailed: dict = None) -> None:
+        """Display detailed sleep info."""
+        if not sleep:
+            print(f"{Colors.DIM}No sleep data available{Colors.RESET}")
+            return
+
+        print(f"\n{Colors.CYAN}Sleep Details{Colors.RESET}\n")
+        print(f"  Score: {sleep.get('score', 'N/A')}")
+
+        if sleep.get("contributors"):
+            print(f"\n  {Colors.BOLD}Contributors:{Colors.RESET}")
+            contrib = sleep["contributors"]
+            for key, value in sorted(contrib.items()):
+                label = key.replace("_", " ").title()
+                emoji = "🟢" if value >= 70 else "🟡" if value >= 50 else "🔴"
+                print(f"    {emoji} {label}: {value}")
+        print()
+
+    def _display_stress(self, stress: dict) -> None:
+        """Display stress info."""
+        if not stress:
+            print(f"{Colors.DIM}No stress data available{Colors.RESET}")
+            return
+
+        print(f"\n{Colors.CYAN}Stress Details{Colors.RESET}\n")
+        stress_high = stress.get("stress_high", 0)
+        recovery_high = stress.get("recovery_high", 0)
+
+        print(f"  High stress time: {stress_high // 60} minutes")
+        print(f"  Recovery time: {recovery_high // 60} minutes")
+
+        if stress.get("day_summary"):
+            print(f"  Summary: {stress['day_summary']}")
+        print()
