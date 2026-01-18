@@ -1,2 +1,98 @@
 #!/bin/bash
-python3 thanos.py interactive "$@"
+#
+# Thanos Interactive Launcher (ti)
+#
+# Usage:
+#   ti              - Start interactive mode + Telegram bot
+#   ti status       - Check system status
+#   ti bot          - Start only Telegram bot
+#   ti stop         - Stop background services
+#
+# Add to your shell config:
+#   alias ti="~/Projects/Thanos/scripts/ti"
+#
+
+THANOS_DIR="${THANOS_DIR:-$HOME/Projects/Thanos}"
+cd "$THANOS_DIR" || exit 1
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+start_telegram_bot() {
+    if pgrep -f "telegram_bot.py" > /dev/null; then
+        echo -e "${YELLOW}Telegram bot already running${NC}"
+    else
+        echo -e "${CYAN}Starting Telegram bot...${NC}"
+        mkdir -p "$THANOS_DIR/logs"
+        nohup python3 "$THANOS_DIR/Tools/telegram_bot.py" > "$THANOS_DIR/logs/telegram_bot.log" 2>&1 &
+        BOT_PID=$!
+        sleep 1
+        if ps -p $BOT_PID > /dev/null; then
+            echo -e "${GREEN}✓ Telegram bot started (PID: $BOT_PID)${NC}"
+        else
+            echo -e "${RED}✗ Telegram bot failed to start. Check logs/telegram_bot.log${NC}"
+        fi
+    fi
+}
+
+stop_services() {
+    echo -e "${CYAN}Stopping Thanos services...${NC}"
+    pkill -f "telegram_bot.py" 2>/dev/null && echo -e "${GREEN}✓ Telegram bot stopped${NC}"
+}
+
+show_status() {
+    echo -e "${CYAN}=== Thanos System Status ===${NC}"
+    echo
+    if pgrep -f "telegram_bot.py" > /dev/null; then
+        echo -e "Telegram Bot: ${GREEN}Running${NC}"
+    else
+        echo -e "Telegram Bot: ${RED}Stopped${NC}"
+    fi
+    echo
+    python3 -m commands.status --brief 2>/dev/null || python3 -m commands.status
+}
+
+case "${1:-interactive}" in
+    status|s)
+        show_status
+        ;;
+    bot|telegram)
+        start_telegram_bot
+        ;;
+    stop)
+        stop_services
+        ;;
+    morning|brief|daily)
+        start_telegram_bot
+        echo
+        python3 -m commands.status
+        ;;
+    interactive|i|"")
+        start_telegram_bot
+        echo
+        echo -e "${CYAN}=== Quick Status ===${NC}"
+        python3 -m commands.status --brief 2>/dev/null || true
+        echo
+        echo -e "${GREEN}Launching Thanos Interactive...${NC}"
+        python3 "$THANOS_DIR/thanos.py" interactive
+        ;;
+    help|--help|-h)
+        echo "Thanos Interactive Launcher (ti)"
+        echo ""
+        echo "Usage:"
+        echo "  ti              Start interactive mode + Telegram bot"
+        echo "  ti status       Check system status"
+        echo "  ti morning      Morning brief + start services"
+        echo "  ti bot          Start only Telegram bot"
+        echo "  ti stop         Stop background services"
+        echo ""
+        ;;
+    *)
+        # Pass through to thanos.py for natural language
+        python3 "$THANOS_DIR/thanos.py" "$@"
+        ;;
+esac
