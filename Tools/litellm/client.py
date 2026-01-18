@@ -728,7 +728,15 @@ class LiteLLMClient:
 
         # Build messages
         messages = list(history) if history else []
-        messages.append({"role": "user", "content": prompt})
+        
+        # Check if we need to append the prompt
+        # If history was provided, the last message might be the current prompt
+        should_append = True
+        if messages and messages[-1].get("role") == "user" and messages[-1].get("content") == prompt:
+            should_append = False
+            
+        if should_append:
+            messages.append({"role": "user", "content": prompt})
 
         # Make API call with timing
         start_time = time.time()
@@ -745,6 +753,7 @@ class LiteLLMClient:
         latency_ms = (time.time() - start_time) * 1000
 
         # Extract response text and usage
+        openai_reasoning_tokens = None
 
         if self._should_use_openai_responses(selected_model) and not hasattr(response, "choices"):
             response_text = self._extract_openai_response_text(response)
@@ -753,6 +762,7 @@ class LiteLLMClient:
             output_tokens = usage["output_tokens"]
             openai_reasoning_tokens = usage["reasoning_tokens"]
         elif LITELLM_AVAILABLE:
+            openai_reasoning_tokens = getattr(response.usage, "reasoning_tokens", None)
             response_text = response.choices[0].message.content
             input_tokens = response.usage.prompt_tokens
             output_tokens = response.usage.completion_tokens
@@ -852,7 +862,8 @@ class LiteLLMClient:
             agent: Optional agent name for persona-based routing
 
         Yields:
-            Response text chunks as they arrive
+            Response text chunks as they arrive.
+            Finally yields a dict {"type": "usage", "usage": {...}} with stats.
         """
         defaults = self.config.get("defaults", {})
         max_tokens = max_tokens or defaults.get("max_tokens", 4096)
@@ -872,7 +883,14 @@ class LiteLLMClient:
 
         # Build messages
         messages = list(history) if history else []
-        messages.append({"role": "user", "content": prompt})
+        
+        # Check if we need to append the prompt
+        should_append = True
+        if messages and messages[-1].get("role") == "user" and messages[-1].get("content") == prompt:
+            should_append = False
+            
+        if should_append:
+            messages.append({"role": "user", "content": prompt})
 
         start_time = time.time()
         full_response = ""
@@ -1006,6 +1024,18 @@ class LiteLLMClient:
                     "complexity_score": complexity
                 }
             )
+
+        # Yield usage stats at the end
+        yield {
+            "type": "usage",
+            "usage": {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": cost if self.usage_tracker else 0.0,
+                "model": selected_model
+            }
+        }
+
         if not full_response:
             raise RuntimeError("Streaming response returned no content.")
 

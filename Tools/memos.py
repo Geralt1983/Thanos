@@ -17,6 +17,19 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+# Load environment variables BEFORE any initialization
+try:
+    from dotenv import load_dotenv
+    # Load from project root .env file
+    _project_root = Path(__file__).parent.parent
+    _env_file = _project_root / ".env"
+    if _env_file.exists():
+        load_dotenv(_env_file)
+    else:
+        load_dotenv()  # Try default locations
+except ImportError:
+    pass  # dotenv not installed, rely on system env vars
+
 
 # Conditional imports with graceful fallbacks
 try:
@@ -43,6 +56,19 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+# SQLite relationship layer (always available)
+try:
+    from .relationships import (
+        RelationshipStore,
+        RelationType,
+        get_relationship_store,
+    )
+    RELATIONSHIPS_AVAILABLE = True
+except ImportError:
+    RELATIONSHIPS_AVAILABLE = False
+    RelationshipStore = None
+    RelationType = None
 
 
 @dataclass
@@ -120,30 +146,73 @@ class MemOS:
         self._neo4j: Optional[Neo4jAdapter] = None
         self._chroma: Optional[ChromaClient] = None
         self._openai_client = None
+        self._relationships: Optional[RelationshipStore] = None
 
         # Initialize Neo4j if available
+        self._neo4j_error: Optional[str] = None
         if NEO4J_AVAILABLE:
             try:
                 self._neo4j = Neo4jAdapter(
                     uri=neo4j_uri, username=neo4j_username, password=neo4j_password
                 )
             except (ValueError, ImportError) as e:
-                print(f"[MemOS] Neo4j not configured: {e}")
+                self._neo4j_error = str(e)
+                # Silent fail - Neo4j is optional, ChromaDB can work alone
+            except Exception as e:
+                self._neo4j_error = str(e)
+                # Catch DNS/connection errors gracefully
 
         # Initialize ChromaDB if available
         if CHROMA_AVAILABLE:
-            chroma_path = chroma_path or os.path.expanduser("~/.claude/Memory/vectors")
-            Path(chroma_path).mkdir(parents=True, exist_ok=True)
+            try:
+                import chromadb
+                # increased timeout for initial connection test
+                # Try to connect to server first
+                self._chroma = chromadb.HttpClient(host='localhost', port=8000)
+                self._chroma.heartbeat()  # Test connection
+                print("[MemOS] Connected to ChromaDB server at localhost:8000")
+            except Exception:
+                # Fallback to local persistent client
+                print("[MemOS] ChromaDB server not found, falling back to local storage")
+                chroma_path = chroma_path or os.path.expanduser("~/.claude/Memory/vectors")
+                Path(chroma_path).mkdir(parents=True, exist_ok=True)
 
-            self._chroma = ChromaClient(
-                Settings(persist_directory=chroma_path, anonymized_telemetry=False)
-            )
+                self._chroma = ChromaClient(
+                    Settings(persist_directory=chroma_path, anonymized_telemetry=False)
+                )
 
         # Initialize OpenAI for embeddings
         if OPENAI_AVAILABLE:
             api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
             if api_key:
                 self._openai_client = openai.OpenAI(api_key=api_key)
+
+        # Initialize SQLite relationship store (always available, zero overhead)
+        if RELATIONSHIPS_AVAILABLE:
+            try:
+                self._relationships = get_relationship_store()
+            except Exception as e:
+                print(f"[MemOS] Relationship store init error: {e}")
+
+        # Ensure all ChromaDB collections exist
+        if self._chroma:
+            self._ensure_collections()
+
+    def _ensure_collections(self) -> None:
+        """Ensure all required ChromaDB collections exist."""
+        required_collections = [
+            "commitments",
+            "decisions",
+            "patterns",
+            "observations",
+            "conversations",
+            "entities",
+        ]
+        try:
+            for collection_name in required_collections:
+                self._chroma.get_or_create_collection(name=collection_name)
+        except Exception as e:
+            print(f"[MemOS] Warning: Could not create collections: {e}")
 
     @property
     def graph_available(self) -> bool:
@@ -156,12 +225,32 @@ class MemOS:
         return self._chroma is not None
 
     @property
+    def relationships_available(self) -> bool:
+        """Check if relationship store is available."""
+        return self._relationships is not None
+
+    @property
     def status(self) -> dict[str, Any]:
         """Get MemOS status."""
+        neo4j_status = "connected" if self._neo4j else "unavailable"
+        if self._neo4j_error and not self._neo4j:
+            neo4j_status = f"error: {self._neo4j_error[:50]}"
+
+        rel_stats = None
+        if self._relationships:
+            try:
+                rel_stats = self._relationships.get_stats()
+            except Exception:
+                pass
+
         return {
-            "neo4j": "connected" if self._neo4j else "unavailable",
+            "neo4j": neo4j_status,
             "chromadb": "connected" if self._chroma else "unavailable",
             "embeddings": "available" if self._openai_client else "unavailable",
+            "relationships": "connected" if self._relationships else "unavailable",
+            "relationship_stats": rel_stats,
+            "vector_only_mode": self._chroma is not None and self._neo4j is None,
+            "hybrid_mode": self._chroma is not None and self._relationships is not None,
         }
 
     # =========================================================================
@@ -409,34 +498,72 @@ class MemOS:
         self, from_id: str, relationship: str, to_id: str, properties: dict[str, Any] = None
     ) -> MemoryResult:
         """
-        Create a relationship between two memories in the graph.
+        Create a relationship between two memories.
+
+        Uses Neo4j if available, falls back to SQLite relationship store.
 
         Args:
             from_id: Source node ID
-            relationship: Relationship type (LEADS_TO, IMPACTS, etc.)
+            relationship: Relationship type (LEADS_TO, IMPACTS, CAUSED, etc.)
             to_id: Target node ID
             properties: Relationship properties
 
         Returns:
             MemoryResult with relationship confirmation
         """
-        if not self._neo4j:
-            return MemoryResult.fail("Neo4j not available for relationship creation")
+        results = []
 
-        result = await self._neo4j.call_tool(
-            "link_nodes",
-            {
-                "from_id": from_id,
-                "relationship": relationship,
-                "to_id": to_id,
-                "properties": properties or {},
-            },
-        )
+        # Try Neo4j first
+        if self._neo4j:
+            result = await self._neo4j.call_tool(
+                "link_nodes",
+                {
+                    "from_id": from_id,
+                    "relationship": relationship,
+                    "to_id": to_id,
+                    "properties": properties or {},
+                },
+            )
+            if result.success:
+                results.append({"source": "neo4j", "data": result.data})
 
-        if result.success:
-            return MemoryResult.ok(graph_results=[result.data])
-        else:
-            return MemoryResult.fail(result.error)
+        # Also store in SQLite relationship store (hybrid approach)
+        if self._relationships and RELATIONSHIPS_AVAILABLE:
+            try:
+                # Map relationship string to RelationType
+                rel_type_map = {
+                    "LEADS_TO": RelationType.CAUSED,
+                    "CAUSED": RelationType.CAUSED,
+                    "PREVENTED": RelationType.PREVENTED,
+                    "ENABLED": RelationType.ENABLED,
+                    "PRECEDED": RelationType.PRECEDED,
+                    "FOLLOWED": RelationType.FOLLOWED,
+                    "RELATED_TO": RelationType.RELATED_TO,
+                    "IMPACTS": RelationType.IMPACTS,
+                    "SUPPORTS": RelationType.SUPPORTS,
+                    "CONTRADICTS": RelationType.CONTRADICTS,
+                }
+                rel_type = rel_type_map.get(relationship.upper(), RelationType.RELATED_TO)
+
+                rel = self._relationships.link_memories(
+                    source_id=from_id,
+                    target_id=to_id,
+                    rel_type=rel_type,
+                    strength=properties.get("strength", 1.0) if properties else 1.0,
+                    metadata=properties,
+                )
+                results.append({
+                    "source": "sqlite",
+                    "relationship_id": rel.id,
+                    "type": rel.rel_type.value,
+                })
+            except Exception as e:
+                print(f"[MemOS] SQLite relationship error: {e}")
+
+        if not results:
+            return MemoryResult.fail("No relationship storage available")
+
+        return MemoryResult.ok(graph_results=results)
 
     async def reflect(
         self, topic: str, timeframe_days: int = 30, domain: str = None
@@ -534,6 +661,206 @@ class MemOS:
             return MemoryResult.ok(graph_results=[result.data])
         else:
             return MemoryResult.fail(result.error)
+
+    # =========================================================================
+    # Chain Traversal (SQLite Relationship Layer)
+    # =========================================================================
+
+    def what_led_to(
+        self,
+        memory_id: str,
+        max_depth: int = 5,
+        min_strength: float = 0.3,
+    ) -> list[dict[str, Any]]:
+        """
+        Find what led to a specific memory (backward chain traversal).
+
+        Answers "what caused this?" or "what led to this outcome?"
+
+        Args:
+            memory_id: Memory ID to trace back from
+            max_depth: How far back to traverse
+            min_strength: Minimum relationship strength to follow
+
+        Returns:
+            List of causal chain results with paths
+        """
+        if not self._relationships:
+            return []
+
+        try:
+            results = self._relationships.traverse_chain(
+                start_id=memory_id,
+                direction="backward",
+                rel_types=[RelationType.CAUSED, RelationType.ENABLED, RelationType.PRECEDED],
+                max_depth=max_depth,
+                min_strength=min_strength,
+            )
+
+            return [
+                {
+                    "memory_id": r.memory_id,
+                    "depth": r.depth,
+                    "path": r.path,
+                    "relationships": [
+                        {"type": rel.rel_type.value, "strength": rel.strength}
+                        for rel in r.relationships
+                    ],
+                }
+                for r in results
+            ]
+        except Exception as e:
+            print(f"[MemOS] Chain traversal error: {e}")
+            return []
+
+    def what_resulted_from(
+        self,
+        memory_id: str,
+        max_depth: int = 5,
+        min_strength: float = 0.3,
+    ) -> list[dict[str, Any]]:
+        """
+        Find what resulted from a specific memory (forward chain traversal).
+
+        Answers "what did this cause?" or "what were the effects?"
+
+        Args:
+            memory_id: Memory ID to trace forward from
+            max_depth: How far forward to traverse
+            min_strength: Minimum relationship strength to follow
+
+        Returns:
+            List of effect chain results with paths
+        """
+        if not self._relationships:
+            return []
+
+        try:
+            results = self._relationships.traverse_chain(
+                start_id=memory_id,
+                direction="forward",
+                rel_types=[RelationType.CAUSED, RelationType.ENABLED],
+                max_depth=max_depth,
+                min_strength=min_strength,
+            )
+
+            return [
+                {
+                    "memory_id": r.memory_id,
+                    "depth": r.depth,
+                    "path": r.path,
+                    "relationships": [
+                        {"type": rel.rel_type.value, "strength": rel.strength}
+                        for rel in r.relationships
+                    ],
+                }
+                for r in results
+            ]
+        except Exception as e:
+            print(f"[MemOS] Chain traversal error: {e}")
+            return []
+
+    def find_correlations(
+        self,
+        memory_ids: list[str],
+        min_connections: int = 2,
+    ) -> list[dict[str, Any]]:
+        """
+        Find memories that connect multiple input memories.
+
+        Useful for cross-domain correlation discovery.
+        Example: Find what connects "poor sleep" and "missed commitment"
+
+        Args:
+            memory_ids: Memory IDs to find connections between
+            min_connections: Minimum shared connections
+
+        Returns:
+            List of correlation candidates
+        """
+        if not self._relationships:
+            return []
+
+        try:
+            return self._relationships.get_correlation_candidates(
+                memory_ids=memory_ids,
+                min_shared_connections=min_connections,
+            )
+        except Exception as e:
+            print(f"[MemOS] Correlation search error: {e}")
+            return []
+
+    # =========================================================================
+    # Proactive Insight Surfacing
+    # =========================================================================
+
+    def store_insight(
+        self,
+        insight_type: str,
+        content: str,
+        source_memories: list[str],
+        confidence: float = 0.5,
+    ) -> Optional[int]:
+        """
+        Store a discovered insight for later proactive surfacing.
+
+        Args:
+            insight_type: Type (pattern, correlation, warning, opportunity)
+            content: Human-readable insight
+            source_memories: Memory IDs that support this insight
+            confidence: Confidence level (0.0-1.0)
+
+        Returns:
+            Insight ID if stored successfully
+        """
+        if not self._relationships:
+            return None
+
+        try:
+            return self._relationships.store_insight(
+                insight_type=insight_type,
+                content=content,
+                source_memories=source_memories,
+                confidence=confidence,
+            )
+        except Exception as e:
+            print(f"[MemOS] Insight storage error: {e}")
+            return None
+
+    def get_pending_insights(
+        self,
+        min_confidence: float = 0.5,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """
+        Get insights that should be proactively surfaced to the user.
+
+        Args:
+            min_confidence: Minimum confidence threshold
+            limit: Maximum insights to return
+
+        Returns:
+            List of pending insights
+        """
+        if not self._relationships:
+            return []
+
+        try:
+            return self._relationships.get_unsurfaced_insights(
+                min_confidence=min_confidence,
+                limit=limit,
+            )
+        except Exception as e:
+            print(f"[MemOS] Insight retrieval error: {e}")
+            return []
+
+    def mark_insight_shown(self, insight_id: int) -> None:
+        """Mark an insight as having been shown to the user."""
+        if self._relationships:
+            try:
+                self._relationships.mark_insight_surfaced(insight_id)
+            except Exception as e:
+                print(f"[MemOS] Insight update error: {e}")
 
     # =========================================================================
     # Lifecycle

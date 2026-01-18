@@ -82,3 +82,27 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
+
+# Session logs (auto-generated, local only)
+History/Sessions/*.md
+!History/Sessions/CLAUDE.md
+
+# Runtime state & caches
+State/OuraCache.json
+State/backups/
+State/daemon_state.json
+State/*.db
+State/*.bak
+
+# Auto-generated CLAUDE.md context files
+.claude/**/CLAUDE.md
+Tools/**/CLAUDE.md
+tests/**/CLAUDE.md
+
+# Debug/temp scripts
+reproduce_*.py
+tests/debug_*.py
+tests/clean_*.py
+
+# MCP server local data
+mcp-servers/aiswarm/

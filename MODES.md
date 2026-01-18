@@ -1,6 +1,6 @@
-# MODES.md - SuperClaude Operational Modes Reference
+# MODES.md - Thanos Operational Modes Reference
 
-Operational modes reference for Claude Code SuperClaude framework.
+Operational modes reference for Claude Code Thanos framework.
 
 ## Overview
 
@@ -57,7 +57,7 @@ Three primary modes for optimal performance:
 
 # Introspection Mode
 
-Meta-cognitive analysis and SuperClaude framework troubleshooting system.
+Meta-cognitive analysis and Thanos framework troubleshooting system.
 
 ## Purpose
 
@@ -107,7 +107,7 @@ Meta-cognitive analysis mode that enables Claude Code to step outside normal ope
 3. **Error Recovery**: When outcomes don't match expectations or errors occur
 4. **Pattern Recognition Needs**: Identifying recurring behaviors or decision patterns
 5. **Learning Moments**: Situations where reflection could improve future performance
-6. **Framework Discussions**: Meta-conversations about SuperClaude components
+6. **Framework Discussions**: Meta-conversations about Thanos components
 7. **Optimization Opportunities**: Contexts where reasoning analysis could improve efficiency
 
 ## Analysis Markers
@@ -133,7 +133,7 @@ Meta-cognitive analysis mode that enables Claude Code to step outside normal ope
 - **Output**: Pattern documentation, trend analysis, optimization recommendations
 
 ### 🔍 Framework Compliance (Rule Adherence Check)
-- **Purpose**: Validating actions against SuperClaude framework standards
+- **Purpose**: Validating actions against Thanos framework standards
 - **Context**: Rule verification, principle alignment, deviation detection
 - **Output**: Compliance assessment, deviation alerts, corrective guidance
 
@@ -307,4 +307,4 @@ Meta-cognitive analysis mode that enables Claude Code to step outside normal ope
 - **Target**: 30-50% token reduction with quality preservation
 - **Quality**: ≥95% information preservation score
 - **Speed**: <100ms compression decision and application time
-- **Integration**: Seamless SuperClaude framework compliance
+- **Integration**: Seamless Thanos framework compliance

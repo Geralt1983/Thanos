@@ -563,12 +563,12 @@ class StateReader:
         # Check if this is a new day to reset interaction count
         today = now.date().isoformat()
         last_date = None
-        if "last_interaction" in data:
+        if "last_interaction" in data and data["last_interaction"] is not None:
             try:
                 last_ts = data["last_interaction"].get("timestamp")
                 if last_ts:
                     last_date = datetime.fromisoformat(last_ts).date().isoformat()
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, AttributeError):
                 pass
 
         # Initialize or update session data

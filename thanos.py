@@ -257,6 +257,9 @@ def main():
         return
 
     # Initialize orchestrator
+    from Tools.server_manager import ServerManager
+    ServerManager.ensure_chroma_running()
+    
     orchestrator = ThanosOrchestrator(str(THANOS_DIR))
 
     # ====================================================================
