@@ -59,6 +59,14 @@ VISUAL FEEDBACK SYSTEM:
 from pathlib import Path
 import re
 import sys
+import os
+
+# Load environment variables (API keys)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+except ImportError:
+    pass
 
 
 # Ensure Thanos project is in path

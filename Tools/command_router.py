@@ -271,6 +271,15 @@ class CommandRouter:
             handler, _, _ = handler_info
             return handler(args)
         else:
+            # Check if this is a valid command in the orchestrator
+            # This allows running /pa:daily directly as a slash command
+            if hasattr(self.orchestrator, "find_command"):
+                cmd_obj = self.orchestrator.find_command(command)
+                if cmd_obj:
+                    # Found it! Delegate to _cmd_run
+                    full_args = f"{command} {args}".strip()
+                    return self._cmd_run(full_args)
+            
             print(
                 f"{Colors.DIM}Unknown command: /{command}. "
                 f"Type /help for available commands.{Colors.RESET}"

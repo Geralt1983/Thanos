@@ -17,7 +17,7 @@
 - Active clients: Memphis, Raleigh, Orlando, Kentucky
 - Target: $500k+ annually
 - Target hours: 15-20 billable per week
-- Current focus: Memphis (Baptist Rehab/Optimization), Kentucky (ScottCare integration)
+
 
 ## How My Brain Works
 - ADHD - executive function challenges

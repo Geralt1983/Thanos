@@ -170,7 +170,7 @@ from typing import Optional, Dict, Generator, Any, List
 from .usage_tracker import UsageTracker
 from .complexity_analyzer import ComplexityAnalyzer
 from .response_cache import ResponseCache
-from openai import OpenAI
+from .agent_router import AgentRouter
 
 # LiteLLM import with fallback
 try:
@@ -195,6 +195,7 @@ try:
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
+    anthropic = None
 
 # Fallback to direct OpenAI if LiteLLM unavailable
 try:
@@ -203,6 +204,8 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+    OpenAI = None
+    openai = None
 
 try:
     from pydantic.warnings import PydanticSerializationUnexpectedValue
@@ -246,6 +249,7 @@ class LiteLLMClient:
         self._init_usage_tracker()
         self._init_cache()
         self._init_complexity_analyzer()
+        self._init_agent_router()
         self._init_fallback_client()
         self._init_openai_client()
 
@@ -337,6 +341,10 @@ class LiteLLMClient:
         routing_config = self.config.get("model_routing", {})
         self.complexity_analyzer = ComplexityAnalyzer(routing_config)
         self.routing_rules = routing_config.get("rules", {})
+
+    def _init_agent_router(self):
+        """Initialize agent-based router for persona model selection."""
+        self.agent_router = AgentRouter(self.config)
 
     def _init_fallback_client(self):
         """Initialize fallback clients if LiteLLM unavailable."""
@@ -676,7 +684,7 @@ class LiteLLMClient:
              max_tokens: Optional[int] = None, temperature: Optional[float] = None,
              system_prompt: Optional[str] = None, history: Optional[List[Dict]] = None,
              use_cache: bool = True, operation: str = "chat",
-             metadata: Optional[Dict] = None) -> str:
+             metadata: Optional[Dict] = None, agent: Optional[str] = None) -> str:
         """
         Send a chat message and get a response with intelligent model routing.
 
@@ -690,6 +698,8 @@ class LiteLLMClient:
             use_cache: Whether to use response caching
             operation: Operation name for usage tracking
             metadata: Additional metadata for usage tracking
+            agent: Optional agent name for persona-based routing
+                   (ops, coach, strategy, health)
 
         Returns:
             The assistant's response text
@@ -698,7 +708,12 @@ class LiteLLMClient:
         max_tokens = max_tokens or defaults.get("max_tokens", 4096)
         temperature = temperature if temperature is not None else defaults.get("temperature", 1.0)
 
-        # Select model based on complexity
+        # Select model: agent routing > explicit model > complexity routing
+        if agent and not model:
+            agent_model = self.agent_router.get_model(agent)
+            if agent_model:
+                model = agent_model
+        
         decision = self._get_routing_decision(prompt, history, model)
         selected_model = decision["model"]
         tier = decision["tier"]
@@ -821,7 +836,7 @@ class LiteLLMClient:
                     max_tokens: Optional[int] = None, temperature: Optional[float] = None,
                     system_prompt: Optional[str] = None, history: Optional[List[Dict]] = None,
                     operation: str = "chat_stream",
-                    metadata: Optional[Dict] = None) -> Generator[str, None, None]:
+                    metadata: Optional[Dict] = None, agent: Optional[str] = None) -> Generator[str, None, None]:
         """
         Stream a chat response token by token.
 
@@ -834,6 +849,7 @@ class LiteLLMClient:
             history: Previous conversation messages
             operation: Operation name for usage tracking
             metadata: Additional metadata for usage tracking
+            agent: Optional agent name for persona-based routing
 
         Yields:
             Response text chunks as they arrive
@@ -842,6 +858,12 @@ class LiteLLMClient:
         max_tokens = max_tokens or defaults.get("max_tokens", 4096)
         temperature = temperature if temperature is not None else defaults.get("temperature", 1.0)
 
+        # Select model: agent routing > explicit model > complexity routing
+        if agent and not model:
+            agent_model = self.agent_router.get_model(agent)
+            if agent_model:
+                model = agent_model
+        
         # Select model
         decision = self._get_routing_decision(prompt, history, model)
         selected_model = decision["model"]
@@ -918,24 +940,52 @@ class LiteLLMClient:
 
             input_tokens = len(prompt) // 4 + sum(len(m.get("content", "")) // 4 for m in messages[:-1])
 
-        elif self.fallback_client:
-            with self._make_call(
+        elif self.fallback_client_anthropic or self.fallback_client_openai:
+            response = self._make_call(
                 model=selected_model,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 system=system_prompt,
                 stream=True
-            ) as stream:
-                for text in stream.text_stream:
-                    full_response += text
-                    yield text
+            )
+            
+            # Handle Anthropic Stream (Context Manager)
+            # MessageStreamManager needs to be entered to get the stream with text_stream
+            is_anthropic_manager = type(response).__name__ == 'MessageStreamManager'
+            if hasattr(response, "text_stream") or is_anthropic_manager:
+                with response as stream:
+                    for text in stream.text_stream:
+                        full_response += text
+                        yield text
+                    final = stream.get_final_message()
+                    input_tokens = final.usage.input_tokens
+                    output_tokens = final.usage.output_tokens
+            
+            # Handle OpenAI Stream (Iterator)
+            else:
+                 for chunk in response:
+                    text = None
+                    if hasattr(chunk, "choices") and chunk.choices:
+                        delta = chunk.choices[0].delta
+                        text = getattr(delta, "content", "") or ""
+                    
+                    if text:
+                        full_response += text
+                        yield text
+                 
+                 # OpenAI stream usage is often in the last chunk or ignored in simple implementations
+                 # We can estimate or check for usage chunk
+                 output_tokens = len(full_response) // 4
+                 input_tokens = len(prompt) // 4  # Rough estimate since we lost exact count
 
-                final = stream.get_final_message()
-                input_tokens = final.usage.input_tokens
-                output_tokens = final.usage.output_tokens
         else:
-            raise RuntimeError("No LLM client available for streaming responses.")
+            msg = "No LLM client available for streaming responses."
+            if not LITELLM_AVAILABLE:
+                msg += " LiteLLM is missing."
+            if not self.fallback_client_anthropic and not self.fallback_client_openai:
+                msg += " Available fallbacks (Anthropic/OpenAI) could not be initialized (check API keys)."
+            raise RuntimeError(msg)
 
         latency_ms = (time.time() - start_time) * 1000
 

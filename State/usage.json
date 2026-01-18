@@ -71,6 +71,374 @@
       "latency_ms": 0.0,
       "operation": "command:pa:export",
       "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-16T23:38:04.662052",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 636,
+      "total_tokens": 662,
+      "cost_usd": 0.000514,
+      "latency_ms": 4763.756513595581,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-16T23:41:42.811077",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 446,
+      "total_tokens": 472,
+      "cost_usd": 0.000362,
+      "latency_ms": 3601.039409637451,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-16T23:42:06.112653",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 511,
+      "total_tokens": 537,
+      "cost_usd": 0.00041400000000000003,
+      "latency_ms": 3847.579002380371,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-16T23:45:16.750685",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 457,
+      "total_tokens": 483,
+      "cost_usd": 0.00037080000000000007,
+      "latency_ms": 3752.896785736084,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-16T23:45:35.394664",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 640,
+      "total_tokens": 666,
+      "cost_usd": 0.0005172000000000001,
+      "latency_ms": 5155.344486236572,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-16T23:53:26.699005",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 592,
+      "total_tokens": 618,
+      "cost_usd": 0.00047880000000000004,
+      "latency_ms": 7401.3566970825195,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:02:19.779411",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 493,
+      "total_tokens": 519,
+      "cost_usd": 0.0003996,
+      "latency_ms": 3739.565849304199,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:03:52.263788",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 538,
+      "total_tokens": 564,
+      "cost_usd": 0.00043560000000000007,
+      "latency_ms": 4599.027872085571,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:05:19.320136",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 431,
+      "total_tokens": 457,
+      "cost_usd": 0.00035000000000000005,
+      "latency_ms": 2996.8769550323486,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:06:30.278304",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 536,
+      "total_tokens": 562,
+      "cost_usd": 0.0004340000000000001,
+      "latency_ms": 3051.7232418060303,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:07:15.429519",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 282,
+      "total_tokens": 308,
+      "cost_usd": 0.00023079999999999997,
+      "latency_ms": 2337.592124938965,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:07:51.146406",
+      "model": "claude-opus-4-5-20251101",
+      "provider": "anthropic",
+      "input_tokens": 1232,
+      "output_tokens": 54,
+      "total_tokens": 1286,
+      "cost_usd": 0.01394,
+      "latency_ms": 3014.847755432129,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:08:03.349242",
+      "model": "claude-opus-4-5-20251101",
+      "provider": "anthropic",
+      "input_tokens": 1227,
+      "output_tokens": 115,
+      "total_tokens": 1342,
+      "cost_usd": 0.01572,
+      "latency_ms": 5084.426641464233,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:08:45.277233",
+      "model": "claude-opus-4-5-20251101",
+      "provider": "anthropic",
+      "input_tokens": 1232,
+      "output_tokens": 141,
+      "total_tokens": 1373,
+      "cost_usd": 0.01655,
+      "latency_ms": 5247.367382049561,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:09:10.955405",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 373,
+      "total_tokens": 399,
+      "cost_usd": 0.0003036,
+      "latency_ms": 2615.6489849090576,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:09:39.537269",
+      "model": "claude-opus-4-5-20251101",
+      "provider": "anthropic",
+      "input_tokens": 1227,
+      "output_tokens": 120,
+      "total_tokens": 1347,
+      "cost_usd": 0.015870000000000002,
+      "latency_ms": 4764.612197875977,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:09:49.527000",
+      "model": "claude-opus-4-5-20251101",
+      "provider": "anthropic",
+      "input_tokens": 1228,
+      "output_tokens": 88,
+      "total_tokens": 1316,
+      "cost_usd": 0.01492,
+      "latency_ms": 4522.179126739502,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:10:19.662893",
+      "model": "claude-opus-4-5-20251101",
+      "provider": "anthropic",
+      "input_tokens": 1251,
+      "output_tokens": 59,
+      "total_tokens": 1310,
+      "cost_usd": 0.014279999999999998,
+      "latency_ms": 2839.0657901763916,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T00:10:31.218753",
+      "model": "claude-opus-4-5-20251101",
+      "provider": "anthropic",
+      "input_tokens": 1225,
+      "output_tokens": 102,
+      "total_tokens": 1327,
+      "cost_usd": 0.01531,
+      "latency_ms": 4652.872562408447,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T06:48:28.488233",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 5,
+      "output_tokens": 89,
+      "total_tokens": 94,
+      "cost_usd": 7.219999999999999e-05,
+      "latency_ms": 2078.834056854248,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T06:48:59.132493",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 5,
+      "output_tokens": 106,
+      "total_tokens": 111,
+      "cost_usd": 8.58e-05,
+      "latency_ms": 1480.8955192565918,
+      "operation": "chat:Ops",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "override",
+        "complexity_score": null
+      }
+    },
+    {
+      "timestamp": "2026-01-17T07:02:20.253483",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 275,
+      "total_tokens": 301,
+      "cost_usd": 0.00022520000000000003,
+      "latency_ms": 2779.3478965759277,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
+    },
+    {
+      "timestamp": "2026-01-17T07:03:05.565510",
+      "model": "gpt-4.1-nano",
+      "provider": "openai",
+      "input_tokens": 26,
+      "output_tokens": 292,
+      "total_tokens": 318,
+      "cost_usd": 0.00023879999999999998,
+      "latency_ms": 3165.00186920166,
+      "operation": "command:pa:daily",
+      "metadata": {
+        "openai_reasoning_tokens": null,
+        "routing_tier": "simple",
+        "complexity_score": 0.1440125
+      }
     }
   ],
   "daily_totals": {
@@ -78,6 +446,16 @@
       "tokens": 0,
       "cost": 0.0,
       "calls": 6
+    },
+    "2026-01-16": {
+      "tokens": 3438,
+      "cost": 0.0026568000000000004,
+      "calls": 6
+    },
+    "2026-01-17": {
+      "tokens": 12934,
+      "cost": 0.1093656,
+      "calls": 17
     }
   },
   "model_breakdown": {
@@ -85,14 +463,29 @@
       "tokens": 0,
       "cost": 0.0,
       "calls": 6
+    },
+    "gpt-4.1-nano": {
+      "tokens": 7071,
+      "cost": 0.0054323999999999996,
+      "calls": 16
+    },
+    "claude-opus-4-5-20251101": {
+      "tokens": 9301,
+      "cost": 0.10659,
+      "calls": 7
     }
   },
   "provider_breakdown": {
     "anthropic": {
-      "tokens": 0,
-      "cost": 0.0,
-      "calls": 6
+      "tokens": 9301,
+      "cost": 0.10659,
+      "calls": 13
+    },
+    "openai": {
+      "tokens": 7071,
+      "cost": 0.0054323999999999996,
+      "calls": 16
     }
   },
-  "last_updated": "2026-01-12T18:30:35.514253"
+  "last_updated": "2026-01-17T07:03:05.576536"
 }

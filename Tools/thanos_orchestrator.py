@@ -72,7 +72,7 @@ class Agent:
     @classmethod
     def from_markdown(cls, file_path: Path) -> 'Agent':
         """Parse an agent definition from markdown file."""
-        content = file_path.read_text()
+        content = file_path.read_text(encoding='utf-8')
 
         # Extract frontmatter
         frontmatter = {}
@@ -113,7 +113,7 @@ class Command:
     @classmethod
     def from_markdown(cls, file_path: Path) -> 'Command':
         """Parse a command definition from markdown file."""
-        content = file_path.read_text()
+        content = file_path.read_text(encoding='utf-8')
 
         # Extract command name from first heading
         name_match = re.search(r'^#\s+(/\w+:\w+)', content, re.MULTILINE)
@@ -236,7 +236,7 @@ class ThanosOrchestrator:
         if context_dir.exists():
             for file in context_dir.glob("*.md"):
                 try:
-                    self.context[file.stem] = file.read_text()
+                    self.context[file.stem] = file.read_text(encoding='utf-8')
                 except Exception as e:
                     print(f"Warning: Failed to load context {file}: {e}")
 

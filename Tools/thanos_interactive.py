@@ -46,6 +46,7 @@ See Also:
 """
 
 import sys
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -73,17 +74,42 @@ class ThanosInteractive:
         thanos_dir: Path to Thanos project root
     """
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator, startup_command: Optional[str] = None):
         """
         Initialize ThanosInteractive with orchestrator.
 
         Args:
             orchestrator: ThanosOrchestrator instance for agent communication
+            startup_command: Optional command to execute immediately on startup
         """
+        # Ensure stdout handles UTF-8 (crucial for Windows console)
+        if sys.platform == "win32":
+            sys.stdout.reconfigure(encoding='utf-8')
+        
         self.orchestrator = orchestrator
 
         # Determine Thanos directory (parent of Tools)
         self.thanos_dir = Path(__file__).parent.parent
+        
+        # Load default startup command from config if not provided
+        if startup_command is None:
+            # Try to get config from orchestrator, or load from file
+            if hasattr(self.orchestrator, "config"):
+                config = self.orchestrator.config
+            else:
+                config_path = self.thanos_dir / "config" / "api.json"
+                if config_path.exists():
+                    try:
+                        config = json.loads(config_path.read_text(encoding='utf-8'))
+                    except Exception:
+                        config = {}
+                else:
+                    config = {}
+
+            startup_config = config.get("startup", {})
+            startup_command = startup_config.get("default_command")
+            
+        self.startup_command = startup_command
 
         # Initialize components
         self.session_manager = SessionManager(
@@ -122,21 +148,33 @@ class ThanosInteractive:
         self._show_welcome()
 
         # Main interaction loop
+        first_turn = True
+        
         while True:
             try:
-                # Get current session stats for prompt
-                stats = self.session_manager.get_stats()
-
-                # Format prompt with stats (uses mode from command router or config default)
-                prompt_mode = self.command_router.current_prompt_mode
-                prompt = self.prompt_formatter.format(stats, mode=prompt_mode)
-
-                # Get user input
-                user_input = input(prompt).strip()
-
-                # Skip empty input
-                if not user_input:
-                    continue
+                # Handle startup command on first turn
+                if first_turn and self.startup_command:
+                    user_input = self.startup_command
+                    # Print it to simulate user typing
+                    stats = self.session_manager.get_stats()
+                    prompt_mode = self.command_router.current_prompt_mode
+                    prompt = self.prompt_formatter.format(stats, mode=prompt_mode)
+                    print(f"{prompt}{user_input}")
+                    first_turn = False
+                else:
+                    # Get current session stats for prompt
+                    stats = self.session_manager.get_stats()
+    
+                    # Format prompt with stats (uses mode from command router or config default)
+                    prompt_mode = self.command_router.current_prompt_mode
+                    prompt = self.prompt_formatter.format(stats, mode=prompt_mode)
+    
+                    # Get user input
+                    user_input = input(prompt).strip()
+    
+                    # Skip empty input
+                    if not user_input:
+                        continue
 
                 # Handle slash commands
                 if user_input.startswith("/"):

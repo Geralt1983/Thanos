@@ -6,6 +6,8 @@ tiktoken>=0.5.0        # Accurate token counting
 
 # CLI Utilities
 yaspin>=3.0.0          # Animated loading spinners for CLI
+python-dotenv>=1.0.0   # Load environment variables from .env
+litellm>=1.0.0         # Unified LLM client
 
 # MemOS - Hybrid Memory System
 neo4j>=5.0.0           # Neo4j graph database driver (AuraDB)

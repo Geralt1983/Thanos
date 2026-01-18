@@ -32,6 +32,13 @@ except ImportError:
     SQLITE3_AVAILABLE = False
 
 
+try:
+    from Tools.core.calendar_service import CalendarService
+    CALENDAR_SERVICE_AVAILABLE = True
+except ImportError:
+    CALENDAR_SERVICE_AVAILABLE = False
+
+
 class BriefingEngine:
     """
     Core engine for generating personalized daily briefings.
@@ -74,6 +81,16 @@ class BriefingEngine:
         else:
             self.health_tracker = None
 
+        # Initialize CalendarService if available
+        if CALENDAR_SERVICE_AVAILABLE:
+            try:
+                self.calendar_service = CalendarService()
+            except Exception as e:
+                print(f"Warning: Failed to initialize CalendarService: {e}")
+                self.calendar_service = None
+        else:
+            self.calendar_service = None
+
     def gather_context(self) -> Dict[str, Any]:
         """
         Gather all context needed for briefing generation.
@@ -92,14 +109,24 @@ class BriefingEngine:
             - is_weekend: Boolean indicating if today is weekend
             - metadata: Additional context about data sources
         """
+        # Fetch fresh WorkOS data if service is available
+        workos_data = None
+        if self.calendar_service:
+            try:
+                # Force refresh to ensure we get live data
+                workos_data = self.calendar_service.get_workos_context_sync(force_refresh=True)
+            except Exception as e:
+                print(f"Warning: Failed to fetch WorkOS data: {e}")
+
         context = {
             "today_date": self.today.isoformat(),
             "day_of_week": self.today.strftime("%A"),
             "is_weekend": self.today.weekday() >= 5,  # Saturday=5, Sunday=6
             "commitments": self._read_commitments(),
-            "this_week": self._read_this_week(),
+            "this_week": self._read_this_week(workos_data),  # Pass workos data to merge
             "current_focus": self._read_current_focus(),
             "calendar": self._read_calendar(),
+            "workos": workos_data,  # Raw WorkOS data for templates that want to use it directly
             "metadata": {
                 "generated_at": datetime.now().isoformat(),
                 "state_dir": str(self.state_dir),
@@ -185,35 +212,73 @@ class BriefingEngine:
 
         return commitments
 
-    def _read_this_week(self) -> Dict[str, Any]:
+    def _read_this_week(self, workos_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Read and parse ThisWeek.md file.
+        Read and parse ThisWeek.md file, optionally merging with live WorkOS data.
+
+        Args:
+            workos_data: Optional dictionary with live WorkOS data (active_tasks, etc.)
 
         Returns:
             Dictionary with this week's goals and tasks.
         """
         file_path = self.state_dir / "ThisWeek.md"
+        
+        result = {
+            "goals": [],
+            "tasks": [],
+            "notes": ""
+        }
 
-        if not file_path.exists():
+        # Read file content if it exists
+        if file_path.exists():
+            self._mark_file_read("ThisWeek.md")
+            try:
+                content = file_path.read_text(encoding='utf-8')
+                result = self._parse_this_week(content)
+            except Exception as e:
+                print(f"Warning: Error reading ThisWeek.md: {e}")
+        else:
             self._mark_file_missing("ThisWeek.md")
-            return {
-                "goals": [],
-                "tasks": [],
-                "notes": ""
-            }
 
-        self._mark_file_read("ThisWeek.md")
+        # Merge WorkOS data if available
+        if workos_data:
+            # Add active tasks from WorkOS
+            workos_tasks = []
+            
+            # Active tasks
+            for task in workos_data.get("active_tasks", []):
+                workos_tasks.append({
+                    "text": f"{task['title']} ({task.get('client_name', 'No Client')})",
+                    "is_complete": False,
+                    "source": "workos",
+                    "status": "active",
+                    "points": task.get("effort_estimate", 0)
+                })
+                
+            # Queued tasks
+            for task in workos_data.get("queued_tasks", []):
+                workos_tasks.append({
+                    "text": f"{task['title']} ({task.get('client_name', 'No Client')})",
+                    "is_complete": False,
+                    "source": "workos",
+                    "status": "queued",
+                    "points": task.get("effort_estimate", 0)
+                })
 
-        try:
-            content = file_path.read_text(encoding='utf-8')
-            return self._parse_this_week(content)
-        except Exception as e:
-            print(f"Warning: Error reading ThisWeek.md: {e}")
-            return {
-                "goals": [],
-                "tasks": [],
-                "notes": ""
-            }
+            # If we have WorkOS tasks, they take precedence or augment the file tasks
+            # For now, let's append them if they don't look like duplicates
+            existing_texts = {t["text"].lower() for t in result["tasks"]}
+            
+            for task in workos_tasks:
+                # Simple dedup based on text similarity could be added here
+                # For now, just add them
+                result["tasks"].append(task)
+                
+            # Also populate metadata in result for templates to use
+            result["workos_metrics"] = workos_data.get("progress", {})
+
+        return result
 
     def _parse_this_week(self, content: str) -> Dict[str, Any]:
         """
