@@ -139,10 +139,10 @@ class StateStore:
         """Initialize state store.
 
         Args:
-            db_path: Path to SQLite database. Defaults to State/thanos.db
+            db_path: Path to SQLite database. Defaults to State/thanos_unified.db
         """
         if db_path is None:
-            db_path = Path(__file__).parent.parent / "State" / "thanos.db"
+            db_path = Path(__file__).parent.parent / "State" / "thanos_unified.db"
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

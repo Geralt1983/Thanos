@@ -248,9 +248,9 @@ class TestCircuitBreaker(unittest.TestCase):
         async def success_func():
             return "success"
 
-        result, is_fallback = asyncio.run(cb.call(success_func))
+        result, metadata = asyncio.run(cb.call(success_func))
         self.assertEqual(result, "success")
-        self.assertFalse(is_fallback)
+        self.assertFalse(metadata.is_fallback)
         self.assertEqual(cb.success_count, 1)
 
     def test_circuit_breaker_fallback(self):
@@ -266,9 +266,9 @@ class TestCircuitBreaker(unittest.TestCase):
             return "fallback"
 
         # First call should fail and open circuit
-        result, is_fallback = asyncio.run(cb.call(failing_func, fallback=fallback_func))
+        result, metadata = asyncio.run(cb.call(failing_func, fallback=fallback_func))
         self.assertEqual(result, "fallback")
-        self.assertTrue(is_fallback)
+        self.assertTrue(metadata.is_fallback)
         self.assertEqual(cb.state, CircuitState.OPEN)
 
     def test_circuit_protected_decorator(self):
