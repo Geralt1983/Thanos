@@ -310,36 +310,53 @@ class TelegramBrainDumpBot:
             conn = await asyncpg.connect(db_url, ssl=ssl_context)
             try:
                 if status == 'active':
+                    # Get both work and personal active/queued tasks
                     rows = await conn.fetch(
                         """
                         SELECT id, title, status, category, value_tier
                         FROM tasks
-                        WHERE status = 'active'
-                        ORDER BY created_at DESC
-                        LIMIT 10
+                        WHERE status IN ('active', 'queued')
+                        ORDER BY category, status, created_at DESC
+                        LIMIT 15
                         """
                     )
-                    header = "📋 *Active Tasks*"
+                    header = "📋 *Today's Tasks*"
                 else:
                     rows = await conn.fetch(
                         """
                         SELECT id, title, status, category, value_tier
                         FROM tasks
-                        WHERE status IN ('backlog', 'queued')
-                        ORDER BY status, created_at DESC
+                        WHERE status = 'backlog'
+                        ORDER BY category, created_at DESC
                         LIMIT 15
                         """
                     )
-                    header = "📋 *Backlog & Queued Tasks*"
+                    header = "📋 *Backlog*"
 
                 if not rows:
                     return f"{header}\n\nNo tasks found! 🎉"
 
+                # Group by category for cleaner display
+                work_tasks = [r for r in rows if r['category'] == 'work']
+                personal_tasks = [r for r in rows if r['category'] != 'work']
+
                 lines = [header, ""]
-                for row in rows:
-                    emoji = '💼' if row['category'] == 'work' else '🏠'
-                    status_emoji = {'active': '🔥', 'queued': '⏳', 'backlog': '📥'}.get(row['status'], '📝')
-                    lines.append(f"{status_emoji} {emoji} {row['title'][:50]}")
+
+                if work_tasks:
+                    lines.append("💼 *Work*")
+                    for row in work_tasks[:7]:
+                        status_emoji = {'active': '🔥', 'queued': '⏳'}.get(row['status'], '📝')
+                        lines.append(f"  {status_emoji} {row['title'][:45]}")
+                    lines.append("")
+
+                if personal_tasks:
+                    lines.append("🏠 *Personal*")
+                    for row in personal_tasks[:7]:
+                        status_emoji = {'active': '🔥', 'queued': '⏳'}.get(row['status'], '📝')
+                        lines.append(f"  {status_emoji} {row['title'][:45]}")
+
+                if not work_tasks and not personal_tasks:
+                    lines.append("No tasks found! 🎉")
 
                 return "\n".join(lines)
             finally:
