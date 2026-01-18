@@ -26,15 +26,22 @@ import {
 // =============================================================================
 
 /**
+ * Schema for brain dump context (work vs personal)
+ */
+export const brainDumpContextSchema = z.enum(["work", "personal"]).optional();
+
+/**
  * Schema for workos_brain_dump tool
  * Validates quick capture of thoughts, ideas, or worries
  *
  * @property content - Required thought/idea content (1-5000 chars)
  * @property category - Optional category filter (thought, task, idea, worry)
+ * @property context - Optional work/personal context
  */
 export const BrainDumpSchema = z.object({
   content: brainDumpContentSchema,
   category: brainDumpCategorySchema,
+  context: brainDumpContextSchema,
 });
 
 /**
@@ -43,10 +50,14 @@ export const BrainDumpSchema = z.object({
  *
  * @property includeProcessed - Optional flag to include already processed items (boolean)
  * @property limit - Optional result limit (1-100, default 20)
+ * @property context - Optional filter by work/personal context
+ * @property category - Optional filter by category (thought, task, idea, worry)
  */
 export const GetBrainDumpSchema = z.object({
   includeProcessed: z.boolean().optional(),
   limit: queryLimitSchema.optional(),
+  context: brainDumpContextSchema,
+  category: brainDumpCategorySchema,
 });
 
 /**

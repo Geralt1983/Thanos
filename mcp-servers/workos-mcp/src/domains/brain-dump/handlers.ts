@@ -33,13 +33,14 @@ export const handleBrainDump: ToolHandler = async (
     };
   }
 
-  const { content, category } = args;
+  const { content, category, context } = args;
 
   const [entry] = await db
     .insert(schema.brainDump)
     .values({
       content,
       category: category || null,
+      context: context || "personal",
     })
     .returning();
 
@@ -69,9 +70,22 @@ export const handleGetBrainDump: ToolHandler = async (
     };
   }
 
-  const { includeProcessed = false, limit = 20 } = args;
+  const { includeProcessed = false, limit = 20, context, category } = args;
 
-  const conditions = includeProcessed ? [] : [eq(schema.brainDump.processed, 0)];
+  // Build filter conditions
+  const conditions = [];
+
+  if (!includeProcessed) {
+    conditions.push(eq(schema.brainDump.processed, 0));
+  }
+
+  if (context) {
+    conditions.push(eq(schema.brainDump.context, context));
+  }
+
+  if (category) {
+    conditions.push(eq(schema.brainDump.category, category));
+  }
 
   const query = db
     .select()

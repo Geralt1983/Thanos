@@ -1,0 +1,104 @@
+[
+  {
+    "id": "bd_20260118_141659_a8573a",
+    "timestamp": "2026-01-18T14:16:59.006658",
+    "raw_content": "I need to remember to call mom tomorrow",
+    "content_type": "text",
+    "parsed_category": "task",
+    "parsed_context": null,
+    "parsed_priority": "medium",
+    "parsed_entities": [
+      "mom"
+    ],
+    "parsed_action": "call mom",
+    "source": "telegram",
+    "user_id": null,
+    "processed": false,
+    "processing_notes": null
+  },
+  {
+    "id": "bd_20260118_141716_833f75",
+    "timestamp": "2026-01-18T14:17:16.644464",
+    "raw_content": "I need to remember to call mom tomorrow",
+    "content_type": "text",
+    "parsed_category": "task",
+    "parsed_context": null,
+    "parsed_priority": "medium",
+    "parsed_entities": [
+      "mom"
+    ],
+    "parsed_action": "call mom",
+    "source": "telegram",
+    "user_id": null,
+    "processed": false,
+    "processing_notes": null
+  },
+  {
+    "id": "bd_20260118_141734_a41c95",
+    "timestamp": "2026-01-18T14:17:34.773489",
+    "raw_content": "Buy groceries for dinner tonight - personal errand",
+    "content_type": "text",
+    "parsed_category": "task",
+    "parsed_context": null,
+    "parsed_priority": "low",
+    "parsed_entities": [
+      "groceries",
+      "dinner"
+    ],
+    "parsed_action": "Buy groceries for dinner tonight",
+    "source": "telegram",
+    "user_id": null,
+    "processed": false,
+    "processing_notes": null
+  },
+  {
+    "id": "bd_20260118_142314_82e839",
+    "timestamp": "2026-01-18T14:23:14.967541",
+    "raw_content": "Schedule meeting with client about Q2 deliverables",
+    "content_type": "text",
+    "parsed_category": "task",
+    "parsed_context": "work",
+    "parsed_priority": "medium",
+    "parsed_entities": [
+      "client",
+      "Q2 deliverables"
+    ],
+    "parsed_action": "Schedule meeting with client about Q2 deliverables",
+    "source": "telegram",
+    "user_id": null,
+    "processed": false,
+    "processing_notes": null
+  },
+  {
+    "id": "bd_20260118_142323_d2f8b0",
+    "timestamp": "2026-01-18T14:23:23.966167",
+    "raw_content": "Pick up kids from soccer practice at 5pm",
+    "content_type": "text",
+    "parsed_category": "task",
+    "parsed_context": "personal",
+    "parsed_priority": "medium",
+    "parsed_entities": [
+      "kids"
+    ],
+    "parsed_action": "Pick up kids from soccer practice",
+    "source": "telegram",
+    "user_id": null,
+    "processed": false,
+    "processing_notes": null
+  },
+  {
+    "id": "bd_20260118_143603_16a67f",
+    "timestamp": "2026-01-18T14:36:03.473155",
+    "raw_content": "So, uh, I need to move my office desk to the corner.",
+    "content_type": "voice",
+    "parsed_category": "task",
+    "parsed_context": "work",
+    "parsed_priority": "medium",
+    "parsed_entities": [],
+    "parsed_action": "Move office desk to the corner",
+    "source": "telegram",
+    "user_id": "6135558908",
+    "processed": false,
+    "processing_notes": null
+  }
+]
