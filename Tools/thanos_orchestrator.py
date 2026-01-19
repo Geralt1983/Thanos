@@ -972,7 +972,8 @@ You maintain a compact daily plan and a scoreboard.
 
     def chat(self, message: str, agent: Optional[str] = None,
              stream: bool = False, model: Optional[str] = None,
-             history: Optional[List[Dict]] = None) -> Union[str, Dict]:
+             history: Optional[List[Dict]] = None,
+             tools: Optional[List[Dict]] = None) -> Union[str, Dict]:
         """Chat with a specific agent or auto-detect.
 
         Args:
@@ -981,6 +982,7 @@ You maintain a compact daily plan and a scoreboard.
             stream: Whether to stream the response
             model: Optional model name to use (uses default from config if None)
             history: Optional list of previous messages for context
+            tools: Optional list of tool definitions for MCP tool calling
         """
         if agent is None and model is None and not stream:
             return self.route(message, stream=False)
@@ -1009,7 +1011,8 @@ You maintain a compact daily plan and a scoreboard.
                         model=model,
                         system_prompt=system_prompt,
                         history=history,
-                        operation=f"chat:{agent_name}"
+                        operation=f"chat:{agent_name}",
+                        tools=tools
                     ):
                         if first_chunk:
                             spinner.stop()
@@ -1034,7 +1037,8 @@ You maintain a compact daily plan and a scoreboard.
                         model=model,
                         system_prompt=system_prompt,
                         history=history,
-                        operation=f"chat:{agent_name}"
+                        operation=f"chat:{agent_name}",
+                        tools=tools
                     ), "usage": None}
         except Exception as e:
             error_msg = f"API Error: {str(e)}"

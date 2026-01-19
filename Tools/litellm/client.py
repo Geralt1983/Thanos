@@ -165,7 +165,7 @@ import time
 import logging
 import warnings
 from pathlib import Path
-from typing import Optional, Dict, Generator, Any, List
+from typing import Optional, Dict, Generator, Any, List, Union
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -464,7 +464,8 @@ class LiteLLMClient:
                             max_tokens: int, temperature: float,
                             system: Optional[str] = None,
                             stream: bool = False,
-                            tier: Optional[str] = None) -> Any:
+                            tier: Optional[str] = None,
+                            tools: Optional[List[Dict]] = None) -> Any:
         """
         Make API call with automatic fallback chain support.
 
@@ -588,7 +589,7 @@ class LiteLLMClient:
         for fallback_model in fallback_chain:
             try:
                 return self._make_call(fallback_model, messages, max_tokens,
-                                       temperature, system, stream, tier)
+                                       temperature, system, stream, tier, tools)
             except Exception as e:
                 last_error = e
                 logger.warning(
@@ -685,7 +686,8 @@ class LiteLLMClient:
                    max_tokens: int, temperature: float,
                    system: Optional[str] = None,
                    stream: bool = False,
-                   tier: Optional[str] = None) -> Any:
+                   tier: Optional[str] = None,
+                   tools: Optional[List[Dict]] = None) -> Any:
         """Make actual API call via LiteLLM or fallback with retry logic for transient failures."""
         full_messages = []
         if system:
@@ -716,24 +718,29 @@ class LiteLLMClient:
             )
 
         if LITELLM_AVAILABLE:
+            # Build base kwargs
+            litellm_kwargs = {
+                "model": model,
+                "messages": full_messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            # Add tools if provided
+            if tools:
+                litellm_kwargs["tools"] = tools
+
             if stream:
                 return self._call_with_retry(
                     completion,
-                    model=model,
-                    messages=full_messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
                     stream=True,
-                    max_retries=max_retries
+                    max_retries=max_retries,
+                    **litellm_kwargs
                 )
             else:
                 return self._call_with_retry(
                     completion,
-                    model=model,
-                    messages=full_messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    max_retries=max_retries
+                    max_retries=max_retries,
+                    **litellm_kwargs
                 )
 
         # Fallbacks
@@ -754,6 +761,8 @@ class LiteLLMClient:
                 "temperature": temperature,
                 "messages": full_messages
              }
+             if tools:
+                 kwargs["tools"] = tools
 
              if stream:
                  return self._call_with_retry(
@@ -779,6 +788,8 @@ class LiteLLMClient:
             }
             if system:
                 kwargs["system"] = system
+            if tools:
+                kwargs["tools"] = tools
 
             if stream:
                 return self._call_with_retry(
@@ -800,7 +811,8 @@ class LiteLLMClient:
              max_tokens: Optional[int] = None, temperature: Optional[float] = None,
              system_prompt: Optional[str] = None, history: Optional[List[Dict]] = None,
              use_cache: bool = True, operation: str = "chat",
-             metadata: Optional[Dict] = None, agent: Optional[str] = None) -> str:
+             metadata: Optional[Dict] = None, agent: Optional[str] = None,
+             tools: Optional[List[Dict]] = None) -> Union[str, Dict]:
         """
         Send a chat message and get a response with intelligent model routing.
 
@@ -816,9 +828,14 @@ class LiteLLMClient:
             metadata: Additional metadata for usage tracking
             agent: Optional agent name for persona-based routing
                    (ops, coach, strategy, health)
+            tools: Optional list of tool definitions for MCP tool calling.
+                   Each tool should be a dict with 'type', 'function' keys.
+                   Example: [{"type": "function", "function": {"name": "...", "description": "...", "parameters": {...}}}]
 
         Returns:
-            The assistant's response text
+            str: The assistant's response text (when no tool calls)
+            Dict: When tool calls are present, returns:
+                  {"type": "tool_calls", "tool_calls": [...], "content": str|None}
         """
         defaults = self.config.get("defaults", {})
         max_tokens = max_tokens or defaults.get("max_tokens", 4096)
@@ -863,10 +880,17 @@ class LiteLLMClient:
             max_tokens=max_tokens,
             temperature=temperature,
             system=system_prompt,
-            tier=tier
+            tier=tier,
+            tools=tools
         )
 
         latency_ms = (time.time() - start_time) * 1000
+
+        # Check for tool calls in response
+        tool_calls = None
+        if hasattr(response, "choices") and response.choices:
+            message = response.choices[0].message
+            tool_calls = getattr(message, "tool_calls", None)
 
         # Extract response text and usage
         openai_reasoning_tokens = None
@@ -946,9 +970,29 @@ class LiteLLMClient:
                 }
             )
 
-        # Cache response
-        if use_cache and self.cache:
+        # Cache response (only cache if no tool calls - tool calls are dynamic)
+        if use_cache and self.cache and not tool_calls:
             self.cache.set(prompt, selected_model, cache_params, response_text)
+
+        # Return tool calls dict if present, otherwise return text content
+        if tool_calls:
+            # Convert tool_calls to serializable format
+            serialized_tool_calls = []
+            for tc in tool_calls:
+                tc_dict = {
+                    "id": getattr(tc, "id", None),
+                    "type": getattr(tc, "type", "function"),
+                    "function": {
+                        "name": getattr(tc.function, "name", None) if hasattr(tc, "function") else None,
+                        "arguments": getattr(tc.function, "arguments", "{}") if hasattr(tc, "function") else "{}"
+                    }
+                }
+                serialized_tool_calls.append(tc_dict)
+            return {
+                "type": "tool_calls",
+                "tool_calls": serialized_tool_calls,
+                "content": response_text
+            }
 
         return response_text
 
@@ -995,7 +1039,8 @@ class LiteLLMClient:
                     max_tokens: Optional[int] = None, temperature: Optional[float] = None,
                     system_prompt: Optional[str] = None, history: Optional[List[Dict]] = None,
                     operation: str = "chat_stream",
-                    metadata: Optional[Dict] = None, agent: Optional[str] = None) -> Generator[str, None, None]:
+                    metadata: Optional[Dict] = None, agent: Optional[str] = None,
+                    tools: Optional[List[Dict]] = None) -> Generator[Union[str, Dict], None, None]:
         """
         Stream a chat response token by token.
 
@@ -1009,6 +1054,9 @@ class LiteLLMClient:
             operation: Operation name for usage tracking
             metadata: Additional metadata for usage tracking
             agent: Optional agent name for persona-based routing
+            tools: Optional list of tool definitions for MCP tool calling.
+                   Note: Tool calls don't work well with streaming. If tools are provided
+                   and the model returns tool calls, use non-streaming chat() instead.
 
         Yields:
             Response text chunks as they arrive.
@@ -1055,7 +1103,8 @@ class LiteLLMClient:
                 temperature=temperature,
                 system=system_prompt,
                 stream=True,
-                tier=tier
+                tier=tier,
+                tools=tools
             )
             with response as stream:
                 for event in stream:
@@ -1076,7 +1125,8 @@ class LiteLLMClient:
                 temperature=temperature,
                 system=system_prompt,
                 stream=True,
-                tier=tier
+                tier=tier,
+                tools=tools
             )
 
             for chunk in response:
@@ -1114,7 +1164,8 @@ class LiteLLMClient:
                 max_tokens=max_tokens,
                 temperature=temperature,
                 system=system_prompt,
-                stream=True
+                stream=True,
+                tools=tools
             )
             
             # Handle Anthropic Stream (Context Manager)

@@ -207,5 +207,14 @@
   },
   "startup": {
     "default_command": "/pa:daily"
+  },
+  "mcp_servers": {
+    "workos": {
+      "command": "npx",
+      "args": ["tsx", "mcp-servers/workos-mcp/src/index.ts"],
+      "transport": "stdio",
+      "enabled": true,
+      "description": "WorkOS MCP server for task management, habits, energy tracking, and brain dumps"
+    }
   }
 }
