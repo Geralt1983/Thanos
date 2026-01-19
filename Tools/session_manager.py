@@ -49,6 +49,9 @@ import json
 # Maximum number of messages to keep in history (sliding window)
 MAX_HISTORY = 100
 
+# Maximum tokens to include in API context (prevents token growth)
+MAX_CONTEXT_TOKENS = 4000
+
 
 @dataclass
 class Message:
@@ -158,17 +161,71 @@ class SessionManager:
             # If we have an odd number to remove, just remove from the start
             self.session.history = self.session.history[messages_to_remove:]
 
-    def get_messages_for_api(self) -> List[Dict[str, str]]:
+    def _estimate_tokens(self, content: str) -> int:
         """
-        Convert conversation history to API format.
+        Estimate token count for a string using rough approximation.
+
+        Uses ~4 characters per token as a conservative estimate.
+        This avoids importing tiktoken while providing reasonable accuracy.
+
+        Args:
+            content: Text content to estimate tokens for
+
+        Returns:
+            Estimated token count
+        """
+        return len(content) // 4 + 1  # +1 to avoid zero for short strings
+
+    def get_messages_for_api(self, max_tokens: int = MAX_CONTEXT_TOKENS) -> List[Dict[str, str]]:
+        """
+        Convert conversation history to API format with token-based windowing.
+
+        Implements a sliding window that returns only the most recent messages
+        that fit within the token limit. This prevents unbounded token growth
+        in long conversations while maintaining coherence.
+
+        The method:
+        - Always includes at least the last user message
+        - Preserves user/assistant pairs together when possible
+        - Estimates tokens using ~4 chars per token
+
+        Args:
+            max_tokens: Maximum tokens to include (default: MAX_CONTEXT_TOKENS)
 
         Returns:
             List of message dicts with 'role' and 'content' keys
         """
-        return [
-            {"role": msg.role, "content": msg.content}
-            for msg in self.session.history
-        ]
+        if not self.session.history:
+            return []
+
+        # Work backwards from most recent messages
+        messages_to_include = []
+        total_tokens = 0
+
+        # Iterate from most recent to oldest
+        for msg in reversed(self.session.history):
+            msg_tokens = self._estimate_tokens(msg.content)
+
+            # Always include at least the last user message
+            if not messages_to_include and msg.role == "user":
+                messages_to_include.insert(0, {"role": msg.role, "content": msg.content})
+                total_tokens += msg_tokens
+                continue
+
+            # Check if adding this message would exceed limit
+            if total_tokens + msg_tokens > max_tokens:
+                # If we're breaking a pair, try to include the assistant response
+                # to maintain coherence (user question + assistant answer)
+                if messages_to_include and messages_to_include[0]["role"] == "assistant":
+                    # We have an assistant message but no user question - include one more
+                    if msg.role == "user":
+                        messages_to_include.insert(0, {"role": msg.role, "content": msg.content})
+                break
+
+            messages_to_include.insert(0, {"role": msg.role, "content": msg.content})
+            total_tokens += msg_tokens
+
+        return messages_to_include
 
     def is_history_trimmed(self) -> bool:
         """
@@ -222,6 +279,7 @@ class SessionManager:
             "total_cost": self.session.total_cost,
             "current_agent": self.session.agent,
             "duration_minutes": duration_minutes,
+            "error_count": getattr(self.session, 'error_count', 0),
         }
 
     def save(self) -> Path:
