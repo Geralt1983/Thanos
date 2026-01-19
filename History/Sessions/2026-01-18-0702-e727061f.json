@@ -1,0 +1,22 @@
+{
+  "id": "e727061f",
+  "started_at": "2026-01-17T23:24:35.827879",
+  "agent": "ops",
+  "total_input_tokens": 2,
+  "total_output_tokens": 6,
+  "total_cost": 5.200000000000001e-06,
+  "history": [
+    {
+      "role": "user",
+      "content": "oura status",
+      "timestamp": "2026-01-17T23:29:31.809161",
+      "tokens": 2
+    },
+    {
+      "role": "assistant",
+      "content": "Checking Oura status now.",
+      "timestamp": "2026-01-17T23:29:32.670608",
+      "tokens": 6
+    }
+  ]
+}

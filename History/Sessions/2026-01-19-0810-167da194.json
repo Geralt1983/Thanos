@@ -1,0 +1,22 @@
+{
+  "id": "167da194",
+  "started_at": "2026-01-19T08:10:20.715294",
+  "agent": "ops",
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "total_cost": 0.0,
+  "history": [
+    {
+      "role": "user",
+      "content": "oura",
+      "timestamp": "2026-01-19T08:10:26.807472",
+      "tokens": 0
+    },
+    {
+      "role": "assistant",
+      "content": "Your readiness score today is 100, high.",
+      "timestamp": "2026-01-19T08:10:29.671673",
+      "tokens": 0
+    }
+  ]
+}
