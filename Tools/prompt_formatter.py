@@ -232,6 +232,7 @@ class PromptFormatter:
             total_cost = stats.get("total_cost", 0.0)
             duration_minutes = stats.get("duration_minutes", 0)
             message_count = stats.get("message_count", 0)
+            error_count = stats.get("error_count", 0)
         except (AttributeError, TypeError):
             return self.default_prompt
 
@@ -247,31 +248,33 @@ class PromptFormatter:
         if display_mode == "verbose":
             return self._format_verbose(
                 total_input_tokens, total_output_tokens, total_cost,
-                duration_minutes, message_count
+                duration_minutes, message_count, error_count
             )
         elif display_mode == "standard":
             return self._format_standard(
-                total_tokens, total_cost, duration_minutes
+                total_tokens, total_cost, duration_minutes, error_count
             )
         else:  # compact mode (default)
-            return self._format_compact(total_tokens, total_cost)
+            return self._format_compact(total_tokens, total_cost, error_count)
 
-    def _format_compact(self, total_tokens: int, cost: float) -> str:
+    def _format_compact(self, total_tokens: int, cost: float, error_count: int = 0) -> str:
         """
         Format prompt in compact mode: (1.2K | $0.04) Thanos>
 
         Args:
             total_tokens: Combined input and output tokens
             cost: Estimated cost in USD
+            error_count: Number of API errors in session
 
         Returns:
             Compact formatted prompt string
         """
         tokens_display = self._format_token_count(total_tokens)
         cost_display = self._format_cost(cost)
-        return f"({tokens_display} | {cost_display}) Thanos> "
+        error_display = self._format_error_count(error_count)
+        return f"({tokens_display} | {cost_display}{error_display}) Thanos> "
 
-    def _format_standard(self, total_tokens: int, cost: float, duration: int) -> str:
+    def _format_standard(self, total_tokens: int, cost: float, duration: int, error_count: int = 0) -> str:
         """
         Format prompt in standard mode: (45m | 1.2K tokens | $0.04) Thanos>
 
@@ -279,6 +282,7 @@ class PromptFormatter:
             total_tokens: Combined input and output tokens
             cost: Estimated cost in USD
             duration: Session duration in minutes
+            error_count: Number of API errors in session
 
         Returns:
             Standard formatted prompt string
@@ -286,7 +290,8 @@ class PromptFormatter:
         duration_display = self._format_duration(duration)
         tokens_display = self._format_token_count(total_tokens)
         cost_display = self._format_cost(cost)
-        return f"({duration_display} | {tokens_display} tokens | {cost_display}) Thanos> "
+        error_display = self._format_error_count(error_count)
+        return f"({duration_display} | {tokens_display} tokens | {cost_display}{error_display}) Thanos> "
 
     def _format_verbose(
         self,
@@ -294,7 +299,8 @@ class PromptFormatter:
         output_tokens: int,
         cost: float,
         duration: int,
-        message_count: int
+        message_count: int,
+        error_count: int = 0
     ) -> str:
         """
         Format prompt in verbose mode: (45m | 12 msgs | 1.2K in | 3.4K out | $0.04) Thanos>
@@ -305,6 +311,7 @@ class PromptFormatter:
             cost: Estimated cost in USD
             duration: Session duration in minutes
             message_count: Number of messages in session
+            error_count: Number of API errors in session
 
         Returns:
             Verbose formatted prompt string
@@ -313,7 +320,8 @@ class PromptFormatter:
         input_display = self._format_token_count(input_tokens)
         output_display = self._format_token_count(output_tokens)
         cost_display = self._format_cost(cost)
-        return f"({duration_display} | {message_count} msgs | {input_display} in | {output_display} out | {cost_display}) Thanos> "
+        error_display = self._format_error_count(error_count)
+        return f"({duration_display} | {message_count} msgs | {input_display} in | {output_display} out | {cost_display}{error_display}) Thanos> "
 
     def _format_token_count(self, tokens: int) -> str:
         """
@@ -428,3 +436,31 @@ class PromptFormatter:
                 return f"{hours}h"
         else:
             return f"{minutes}m"
+
+    def _format_error_count(self, error_count: int) -> str:
+        """
+        Format error count indicator for display in prompt.
+
+        Only shows if error_count > 0 to avoid cluttering the prompt.
+
+        Args:
+            error_count: Number of API errors in session
+
+        Returns:
+            Formatted error indicator string (e.g., " | 2 errs" in red)
+
+        Examples:
+            >>> formatter = PromptFormatter()
+            >>> formatter._format_error_count(0)
+            ''
+            >>> formatter._format_error_count(2)
+            ' | \\033[31m2 errs\\033[0m'
+        """
+        if error_count <= 0:
+            return ""
+
+        # Format with red color if colors enabled
+        if self.enable_colors:
+            return f" | {Colors.RED}{error_count} err{'s' if error_count > 1 else ''}{Colors.RESET}"
+        else:
+            return f" | {error_count} err{'s' if error_count > 1 else ''}"

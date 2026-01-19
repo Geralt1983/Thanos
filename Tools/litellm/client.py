@@ -162,9 +162,13 @@ Cost Optimization:
 import os
 import json
 import time
+import logging
 import warnings
 from pathlib import Path
 from typing import Optional, Dict, Generator, Any, List
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 # Import support classes from the package
 from .usage_tracker import UsageTracker
@@ -587,54 +591,149 @@ class LiteLLMClient:
                                        temperature, system, stream, tier)
             except Exception as e:
                 last_error = e
+                logger.warning(
+                    f"API call failed for model {fallback_model}: {type(e).__name__}: {e}"
+                )
                 continue
 
+        logger.error(
+            f"All models in fallback chain failed. Last error: {type(last_error).__name__}: {last_error}"
+        )
         raise last_error or Exception("All models in fallback chain failed")
 
-    # ... (same _select_model and _call_with_fallback)
+    def _call_with_retry(self, func, *args, max_retries: int = 3, **kwargs) -> Any:
+        """
+        Execute a function with exponential backoff retry for transient API failures.
+
+        Retries on these HTTP status codes:
+            - 404: Not Found (transient in some API configurations)
+            - 429: Rate Limited (back off and retry)
+            - 500: Internal Server Error
+            - 502: Bad Gateway
+            - 503: Service Unavailable
+            - 504: Gateway Timeout
+
+        Args:
+            func: The function to call
+            *args: Positional arguments for func
+            max_retries: Maximum number of retry attempts (default: 3)
+            **kwargs: Keyword arguments for func
+
+        Returns:
+            The result of func(*args, **kwargs)
+
+        Raises:
+            The last exception if all retries fail or if error is not retryable
+        """
+        retryable_codes = {404, 429, 500, 502, 503, 504}
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_error = e
+
+                # Extract status code from various exception types
+                status_code = None
+
+                # LiteLLM exceptions
+                if hasattr(e, 'status_code'):
+                    status_code = e.status_code
+                # Anthropic APIStatusError
+                elif hasattr(e, 'status'):
+                    status_code = e.status
+                # Some exceptions wrap the status in response
+                elif hasattr(e, 'response') and hasattr(e.response, 'status_code'):
+                    status_code = e.response.status_code
+                # OpenAI exceptions often have status_code attribute
+                elif hasattr(e, 'http_status'):
+                    status_code = e.http_status
+                # Check error message for status codes as fallback
+                elif '404' in str(e) or 'not found' in str(e).lower():
+                    status_code = 404
+                elif '429' in str(e) or 'rate limit' in str(e).lower():
+                    status_code = 429
+                elif '500' in str(e):
+                    status_code = 500
+                elif '502' in str(e):
+                    status_code = 502
+                elif '503' in str(e):
+                    status_code = 503
+                elif '504' in str(e):
+                    status_code = 504
+
+                # Check if error is retryable and we have retries left
+                is_retryable = status_code in retryable_codes if status_code else False
+                is_last_attempt = attempt == max_retries - 1
+
+                if not is_retryable or is_last_attempt:
+                    raise
+
+                # Exponential backoff: 1s, 2s, 4s
+                delay = 2 ** attempt
+                logger.info(
+                    f"Retryable error (status {status_code}), attempt {attempt + 1}/{max_retries}. "
+                    f"Retrying in {delay}s: {type(e).__name__}: {e}"
+                )
+                time.sleep(delay)
+
+        # Should not reach here, but raise last error if we do
+        raise last_error
 
     def _make_call(self, model: str, messages: List[Dict],
                    max_tokens: int, temperature: float,
                    system: Optional[str] = None,
                    stream: bool = False,
                    tier: Optional[str] = None) -> Any:
-        """Make actual API call via LiteLLM or fallback."""
+        """Make actual API call via LiteLLM or fallback with retry logic for transient failures."""
         full_messages = []
         if system:
             full_messages.append({"role": "system", "content": system})
         full_messages.extend(messages)
 
+        # Get max_retries from config (default: 3)
+        max_retries = self.config.get("litellm", {}).get("max_retries", 3)
+
         if self._should_use_openai_responses(model):
             params = self._build_openai_responses_params(tier, max_tokens)
             if stream:
-                return self.openai_client.responses.stream(
+                return self._call_with_retry(
+                    self.openai_client.responses.stream,
                     model=model,
                     input=full_messages,
                     temperature=temperature,
+                    max_retries=max_retries,
                     **{k: v for k, v in params.items() if v is not None}
                 )
-            return self.openai_client.responses.create(
+            return self._call_with_retry(
+                self.openai_client.responses.create,
                 model=model,
                 input=full_messages,
                 temperature=temperature,
+                max_retries=max_retries,
                 **{k: v for k, v in params.items() if v is not None}
             )
 
         if LITELLM_AVAILABLE:
             if stream:
-                return completion(
+                return self._call_with_retry(
+                    completion,
                     model=model,
                     messages=full_messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    stream=True
+                    stream=True,
+                    max_retries=max_retries
                 )
             else:
-                return completion(
+                return self._call_with_retry(
+                    completion,
                     model=model,
                     messages=full_messages,
                     max_tokens=max_tokens,
-                    temperature=temperature
+                    temperature=temperature,
+                    max_retries=max_retries
                 )
 
         # Fallbacks
@@ -642,24 +741,33 @@ class LiteLLMClient:
              # Direct OpenAI Fallback
              # Adjust model names if needed (e.g. gpt-4.1-mini -> gpt-4o-mini if mapped)
              # For now assume model names overlap or are close enough
-             
+
              # System prompt handled differently in OpenAI (as a message)
              full_messages = []
              if system:
                  full_messages.append({"role": "system", "content": system})
              full_messages.extend(messages)
-             
+
              kwargs = {
                 "model": model,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
                 "messages": full_messages
              }
-             
+
              if stream:
-                 return self.fallback_client_openai.chat.completions.create(stream=True, **kwargs)
+                 return self._call_with_retry(
+                     self.fallback_client_openai.chat.completions.create,
+                     stream=True,
+                     max_retries=max_retries,
+                     **kwargs
+                 )
              else:
-                 return self.fallback_client_openai.chat.completions.create(**kwargs)
+                 return self._call_with_retry(
+                     self.fallback_client_openai.chat.completions.create,
+                     max_retries=max_retries,
+                     **kwargs
+                 )
 
         elif self.fallback_client_anthropic:
             # Direct Anthropic fallback
@@ -673,9 +781,17 @@ class LiteLLMClient:
                 kwargs["system"] = system
 
             if stream:
-                return self.fallback_client_anthropic.messages.stream(**kwargs)
+                return self._call_with_retry(
+                    self.fallback_client_anthropic.messages.stream,
+                    max_retries=max_retries,
+                    **kwargs
+                )
             else:
-                return self.fallback_client_anthropic.messages.create(**kwargs)
+                return self._call_with_retry(
+                    self.fallback_client_anthropic.messages.create,
+                    max_retries=max_retries,
+                    **kwargs
+                )
 
         else:
             raise RuntimeError(f"LiteLLM not available and no suitable fallback for model {model}")
@@ -754,6 +870,8 @@ class LiteLLMClient:
 
         # Extract response text and usage
         openai_reasoning_tokens = None
+        api_error = False
+        api_error_message = None
 
         if self._should_use_openai_responses(selected_model) and not hasattr(response, "choices"):
             response_text = self._extract_openai_response_text(response)
@@ -761,23 +879,52 @@ class LiteLLMClient:
             input_tokens = usage["input_tokens"]
             output_tokens = usage["output_tokens"]
             openai_reasoning_tokens = usage["reasoning_tokens"]
+            if input_tokens == 0 and output_tokens == 0:
+                api_error = True
+                api_error_message = "OpenAI responses API returned no usage data"
+                logger.warning(f"API call returned no usage data for model {selected_model}")
         elif LITELLM_AVAILABLE:
-            openai_reasoning_tokens = getattr(response.usage, "reasoning_tokens", None)
-            response_text = response.choices[0].message.content
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
+            usage = getattr(response, "usage", None)
+            if usage is None:
+                api_error = True
+                api_error_message = "LiteLLM response missing usage data"
+                logger.warning(f"API call returned no usage data for model {selected_model}")
+                input_tokens = 0
+                output_tokens = 0
+                response_text = response.choices[0].message.content if hasattr(response, "choices") and response.choices else ""
+            else:
+                openai_reasoning_tokens = getattr(usage, "reasoning_tokens", None)
+                response_text = response.choices[0].message.content
+                input_tokens = usage.prompt_tokens
+                output_tokens = usage.completion_tokens
         else:
             # Handle different fallback client response formats
             if hasattr(response, 'choices'):
                 # OpenAI Format
                 response_text = response.choices[0].message.content
-                input_tokens = response.usage.prompt_tokens
-                output_tokens = response.usage.completion_tokens
+                usage = getattr(response, "usage", None)
+                if usage is None:
+                    api_error = True
+                    api_error_message = "OpenAI response missing usage data"
+                    logger.warning(f"API call returned no usage data for model {selected_model}")
+                    input_tokens = 0
+                    output_tokens = 0
+                else:
+                    input_tokens = usage.prompt_tokens
+                    output_tokens = usage.completion_tokens
             else:
                 # Anthropic Format
                 response_text = response.content[0].text
-                input_tokens = response.usage.input_tokens
-                output_tokens = response.usage.output_tokens
+                usage = getattr(response, "usage", None)
+                if usage is None:
+                    api_error = True
+                    api_error_message = "Anthropic response missing usage data"
+                    logger.warning(f"API call returned no usage data for model {selected_model}")
+                    input_tokens = 0
+                    output_tokens = 0
+                else:
+                    input_tokens = usage.input_tokens
+                    output_tokens = usage.output_tokens
 
         # Calculate cost and track usage
         if self.usage_tracker:
@@ -793,7 +940,9 @@ class LiteLLMClient:
                     **(metadata or {}),
                     "openai_reasoning_tokens": openai_reasoning_tokens,
                     "routing_tier": tier,
-                    "complexity_score": complexity
+                    "complexity_score": complexity,
+                    "api_error": api_error,
+                    "api_error_message": api_error_message
                 }
             )
 

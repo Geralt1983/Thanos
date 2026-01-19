@@ -216,10 +216,21 @@ class ThanosInteractive:
                     # Process response structure
                     content = ""
                     usage = None
-                    
+                    api_error = False
+
                     if isinstance(response, dict):
                         content = response.get("content", "")
                         usage = response.get("usage")
+                        api_error = response.get("api_error", False)
+
+                        # Check for error indicators: api_error flag or empty usage with no content
+                        if api_error or (not usage and not content):
+                            self.session_manager.session.error_count = getattr(
+                                self.session_manager.session, 'error_count', 0
+                            ) + 1
+                            error_msg = response.get("error_message", "Request failed")
+                            print(f"{Colors.DIM}[API Error: {error_msg} - will retry automatically]{Colors.RESET}")
+                            continue
                     else:
                         content = response
 
@@ -269,7 +280,25 @@ class ThanosInteractive:
                         )
 
                 except Exception as e:
-                    print(f"{Colors.DIM}Error: {e}{Colors.RESET}")
+                    # Track error count
+                    self.session_manager.session.error_count = getattr(
+                        self.session_manager.session, 'error_count', 0
+                    ) + 1
+
+                    # Provide informative error messages based on error type
+                    error_msg = str(e)
+                    if "404" in error_msg:
+                        print(f"{Colors.DIM}[API endpoint not found - check model name]{Colors.RESET}")
+                    elif "rate" in error_msg.lower() or "429" in error_msg:
+                        print(f"{Colors.DIM}[Rate limited - waiting...]{Colors.RESET}")
+                    elif "401" in error_msg or "unauthorized" in error_msg.lower():
+                        print(f"{Colors.DIM}[Authentication failed - check API key]{Colors.RESET}")
+                    elif "timeout" in error_msg.lower():
+                        print(f"{Colors.DIM}[Request timed out - will retry]{Colors.RESET}")
+                    elif "connection" in error_msg.lower():
+                        print(f"{Colors.DIM}[Connection error - check network]{Colors.RESET}")
+                    else:
+                        print(f"{Colors.DIM}[Error: {e}]{Colors.RESET}")
                     continue
 
             except (KeyboardInterrupt, EOFError):
