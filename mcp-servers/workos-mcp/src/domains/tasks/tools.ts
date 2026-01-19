@@ -37,7 +37,7 @@ export function getTaskTools(): ToolDefinition[] {
     },
     {
       name: "workos_get_tasks",
-      description: "Get tasks from WorkOS. Filter by status: 'active' (today), 'queued' (up next), 'backlog', or 'done'",
+      description: "Get tasks from WorkOS. Filter by status: 'active' (today), 'queued' (up next), 'backlog', or 'done'. Can filter by clientId (number) or clientName (string like 'Orlando')",
       inputSchema: {
         type: "object",
         properties: {
@@ -48,7 +48,11 @@ export function getTaskTools(): ToolDefinition[] {
           },
           clientId: {
             type: "number",
-            description: "Filter by client ID",
+            description: "Filter by client ID (integer)",
+          },
+          clientName: {
+            type: "string",
+            description: "Filter by client name (case-insensitive, e.g., 'Orlando', 'Raleigh', 'Memphis')",
           },
           limit: {
             type: "number",

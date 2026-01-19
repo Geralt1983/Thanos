@@ -168,8 +168,9 @@ export async function handleGetTodayMetrics(
 /**
  * Get tasks with optional filtering by status and client
  * Uses cache-first pattern for optimal performance, falling back to Neon on cache miss or staleness
+ * Supports both clientId (integer) and clientName (string) for flexible querying
  *
- * @param args - { status?: string, clientId?: number, limit?: number } - Optional filters and result limit (default: 50)
+ * @param args - { status?: string, clientId?: number, clientName?: string, limit?: number } - Optional filters and result limit (default: 50)
  * @param db - Database instance for querying tasks when cache is unavailable
  * @returns Promise resolving to MCP ContentResponse with array of tasks including client names
  */
@@ -186,7 +187,74 @@ export async function handleGetTasks(
     };
   }
 
-  const { status, clientId, limit = 50 } = validation.data;
+  let { status, clientId, limit = 50 } = validation.data;
+  const { clientName } = validation.data as { clientName?: string };
+
+  // If clientName provided but not clientId, lookup the client ID
+  if (clientName && !clientId) {
+    const cacheAvailable = await ensureCache();
+    if (cacheAvailable) {
+      const cachedClients = getCachedClients();
+      const matchedClient = cachedClients.find(
+        c => c.name.toLowerCase() === clientName.toLowerCase()
+      );
+      if (matchedClient) {
+        clientId = matchedClient.id;
+      } else {
+        // No matching client found
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                error: `No client found with name "${clientName}"`,
+                availableClients: cachedClients.map(c => c.name),
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
+    } else {
+      // Fallback to database lookup
+      const [client] = await db
+        .select({ id: schema.clients.id })
+        .from(schema.clients)
+        .where(eq(schema.clients.name, clientName))
+        .limit(1);
+
+      if (client) {
+        clientId = client.id;
+      } else {
+        // Try case-insensitive search
+        const allClients = await db
+          .select({ id: schema.clients.id, name: schema.clients.name })
+          .from(schema.clients)
+          .where(eq(schema.clients.isActive, 1));
+
+        const matchedClient = allClients.find(
+          c => c.name.toLowerCase() === clientName.toLowerCase()
+        );
+
+        if (matchedClient) {
+          clientId = matchedClient.id;
+        } else {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  error: `No client found with name "${clientName}"`,
+                  availableClients: allClients.map(c => c.name),
+                }, null, 2),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+    }
+  }
 
   // Try cache first
   const cacheAvailable = await ensureCache();
