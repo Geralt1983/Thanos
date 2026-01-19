@@ -104,6 +104,7 @@ export async function handleGetTodayMetrics(
     .where(
       and(
         eq(schema.tasks.status, "done"),
+        eq(schema.tasks.category, "work"),
         gte(schema.tasks.completedAt, todayStart)
       )
     );
@@ -452,10 +453,19 @@ export async function handleCreateTask(
   };
 }
 
+// Points mapping by value tier
+const POINTS_BY_TIER: Record<string, number> = {
+  checkbox: 2,
+  progress: 4,
+  deliverable: 6,
+  milestone: 8,
+};
+
 /**
  * Mark a task as complete with timestamp
  * Uses write-through pattern: updates Neon first, then syncs to cache
  * Sets status to "done" and records completedAt timestamp
+ * Auto-calculates pointsFinal from valueTier if not already set
  *
  * @param args - { taskId: number } - ID of the task to complete
  * @param db - Database instance for updating the task
@@ -476,12 +486,35 @@ export async function handleCompleteTask(
 
   const { taskId } = validation.data;
 
+  // First, fetch the task to check if pointsFinal is already set
+  const [existingTask] = await db
+    .select({
+      pointsFinal: schema.tasks.pointsFinal,
+      valueTier: schema.tasks.valueTier,
+    })
+    .from(schema.tasks)
+    .where(eq(schema.tasks.id, taskId))
+    .limit(1);
+
+  if (!existingTask) {
+    return {
+      content: [{ type: "text", text: `Error: Task ${taskId} not found` }],
+      isError: true,
+    };
+  }
+
+  // Calculate pointsFinal if not already set (preserve manual overrides)
+  const pointsFinal = existingTask.pointsFinal ??
+    POINTS_BY_TIER[existingTask.valueTier || 'checkbox'] ??
+    POINTS_BY_TIER.checkbox;
+
   const [updatedTask] = await db
     .update(schema.tasks)
     .set({
       status: "done",
       completedAt: new Date(),
       updatedAt: new Date(),
+      pointsFinal,
     })
     .where(eq(schema.tasks.id, taskId))
     .returning();
@@ -673,13 +706,14 @@ export async function handleDailySummary(
   const todayStart = getESTTodayStart();
   const todayDate = new Date().toISOString().split('T')[0];
 
-  // Get today's completed tasks
+  // Get today's completed tasks (work tasks only)
   const completedToday = await db
     .select()
     .from(schema.tasks)
     .where(
       and(
         eq(schema.tasks.status, "done"),
+        eq(schema.tasks.category, "work"),
         gte(schema.tasks.completedAt, todayStart)
       )
     );
