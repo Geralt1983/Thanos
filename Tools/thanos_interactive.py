@@ -226,20 +226,86 @@ class ThanosInteractive:
             except Exception as e:
                 logger.warning(f"Failed to refresh tools from server '{name}': {e}")
 
+    def _sanitize_schema(self, schema: Any) -> Any:
+        """
+        Sanitize a JSON schema to fix invalid values from MCP servers.
+
+        Some MCP servers (like gsuite) return invalid schemas with False
+        where arrays or objects are expected. This fixes those issues.
+
+        Args:
+            schema: The schema value to sanitize (can be dict, list, or primitive)
+
+        Returns:
+            Sanitized schema value
+        """
+        if schema is False:
+            # False in place of array means empty array
+            return []
+        elif schema is True:
+            # True in place of object means empty object (additionalProperties: true)
+            return {}
+        elif isinstance(schema, dict):
+            sanitized = {}
+            for key, value in schema.items():
+                if key == "required":
+                    # required must be an array of strings
+                    if value is False or value is None:
+                        sanitized[key] = []
+                    elif isinstance(value, list):
+                        sanitized[key] = value
+                    else:
+                        sanitized[key] = []
+                elif key == "properties":
+                    # properties must be an object
+                    if isinstance(value, dict):
+                        sanitized[key] = {
+                            k: self._sanitize_schema(v)
+                            for k, v in value.items()
+                        }
+                    else:
+                        sanitized[key] = {}
+                elif key == "additionalProperties":
+                    # Can be boolean or schema object
+                    if isinstance(value, bool):
+                        sanitized[key] = value
+                    elif isinstance(value, dict):
+                        sanitized[key] = self._sanitize_schema(value)
+                    else:
+                        sanitized[key] = True
+                else:
+                    sanitized[key] = self._sanitize_schema(value)
+            return sanitized
+        elif isinstance(schema, list):
+            return [self._sanitize_schema(item) for item in schema]
+        else:
+            return schema
+
     def _get_tools_for_api(self) -> List[Dict[str, Any]]:
         """
         Get tools in the format expected by LiteLLM/OpenAI API.
 
+        Sanitizes schemas to fix invalid values from some MCP servers.
+
         Returns:
             List of tool definitions with type, function name, description, parameters
         """
-        return [
-            {
-                "type": tool["type"],
-                "function": tool["function"]
+        sanitized_tools = []
+        for tool in self.mcp_tools:
+            function = tool["function"]
+            sanitized_function = {
+                "name": function.get("name", ""),
+                "description": function.get("description", ""),
             }
-            for tool in self.mcp_tools
-        ]
+            # Sanitize parameters schema if present
+            if "parameters" in function:
+                sanitized_function["parameters"] = self._sanitize_schema(function["parameters"])
+
+            sanitized_tools.append({
+                "type": tool["type"],
+                "function": sanitized_function
+            })
+        return sanitized_tools
 
     async def _execute_tool_call(self, tool_call: Dict[str, Any]) -> Dict[str, Any]:
         """

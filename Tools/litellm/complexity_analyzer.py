@@ -98,7 +98,7 @@ class ComplexityAnalyzer:
         # Token count factor (rough estimate: 4 chars per token)
         estimated_tokens = len(prompt) / 4
         if history:
-            estimated_tokens += sum(len(m.get("content", "")) / 4 for m in history)
+            estimated_tokens += sum(len(m.get("content") or "") / 4 for m in history)
 
         token_score = min(estimated_tokens / 2000, 1.0)  # Normalize to 0-1
         scores.append(("token_count", token_score, self.factors.get("token_count_weight", 0.3)))
