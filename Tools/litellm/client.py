@@ -465,7 +465,8 @@ class LiteLLMClient:
                             system: Optional[str] = None,
                             stream: bool = False,
                             tier: Optional[str] = None,
-                            tools: Optional[List[Dict]] = None) -> Any:
+                            tools: Optional[List[Dict]] = None,
+                            tool_choice: Optional[Dict] = None) -> Any:
         """
         Make API call with automatic fallback chain support.
 
@@ -589,7 +590,7 @@ class LiteLLMClient:
         for fallback_model in fallback_chain:
             try:
                 return self._make_call(fallback_model, messages, max_tokens,
-                                       temperature, system, stream, tier, tools)
+                                       temperature, system, stream, tier, tools, tool_choice)
             except Exception as e:
                 last_error = e
                 logger.warning(
@@ -682,17 +683,117 @@ class LiteLLMClient:
         # Should not reach here, but raise last error if we do
         raise last_error
 
+    def _is_anthropic_model(self, model: str) -> bool:
+        """Check if model is an Anthropic Claude model."""
+        anthropic_prefixes = ["claude-", "anthropic/"]
+        return any(model.startswith(prefix) for prefix in anthropic_prefixes)
+
+    def _convert_tools_for_anthropic(self, tools: List[Dict]) -> List[Dict]:
+        """
+        Convert OpenAI-style tools to Anthropic format.
+
+        OpenAI format: {"type": "function", "function": {"name": "x", "description": "y", "parameters": {...}}}
+        Anthropic format: {"name": "x", "description": "y", "input_schema": {...}}
+        """
+        converted = []
+        for tool in tools:
+            if tool.get("type") == "function" and "function" in tool:
+                func = tool["function"]
+                converted.append({
+                    "name": func.get("name", ""),
+                    "description": func.get("description", ""),
+                    "input_schema": func.get("parameters", {"type": "object", "properties": {}})
+                })
+            else:
+                # Already in Anthropic format or unknown format, pass through
+                converted.append(tool)
+        return converted
+
+    def _convert_messages_for_anthropic(self, messages: List[Dict]) -> List[Dict]:
+        """
+        Convert OpenAI-style messages to Anthropic format.
+
+        Handles tool results which use different formats:
+        - OpenAI: {"role": "tool", "tool_call_id": "x", "content": "..."}
+        - Anthropic: {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "x", "content": "..."}]}
+
+        Also handles assistant messages with tool_calls:
+        - OpenAI: {"role": "assistant", "tool_calls": [...]}
+        - Anthropic: {"role": "assistant", "content": [{"type": "tool_use", ...}]}
+        """
+        converted = []
+        tool_results_batch = []
+
+        for msg in messages:
+            role = msg.get("role", "")
+
+            if role == "tool":
+                # Collect tool results to batch them
+                tool_results_batch.append({
+                    "type": "tool_result",
+                    "tool_use_id": msg.get("tool_call_id", ""),
+                    "content": msg.get("content", "")
+                })
+            else:
+                # Flush any pending tool results before adding next message
+                if tool_results_batch:
+                    converted.append({
+                        "role": "user",
+                        "content": tool_results_batch
+                    })
+                    tool_results_batch = []
+
+                if role == "assistant" and msg.get("tool_calls"):
+                    # Convert assistant message with tool calls
+                    content = []
+                    if msg.get("content"):
+                        content.append({"type": "text", "text": msg["content"]})
+                    for tc in msg.get("tool_calls", []):
+                        func = tc.get("function", {})
+                        import json
+                        try:
+                            args = json.loads(func.get("arguments", "{}"))
+                        except:
+                            args = {}
+                        content.append({
+                            "type": "tool_use",
+                            "id": tc.get("id", ""),
+                            "name": func.get("name", ""),
+                            "input": args
+                        })
+                    converted.append({"role": "assistant", "content": content})
+                else:
+                    # Pass through other messages
+                    converted.append(msg)
+
+        # Flush any remaining tool results
+        if tool_results_batch:
+            converted.append({
+                "role": "user",
+                "content": tool_results_batch
+            })
+
+        return converted
+
     def _make_call(self, model: str, messages: List[Dict],
                    max_tokens: int, temperature: float,
                    system: Optional[str] = None,
                    stream: bool = False,
                    tier: Optional[str] = None,
-                   tools: Optional[List[Dict]] = None) -> Any:
+                   tools: Optional[List[Dict]] = None,
+                   tool_choice: Optional[Dict] = None) -> Any:
         """Make actual API call via LiteLLM or fallback with retry logic for transient failures."""
         full_messages = []
         if system:
             full_messages.append({"role": "system", "content": system})
         full_messages.extend(messages)
+
+        # Convert tools and messages for Anthropic models
+        if self._is_anthropic_model(model):
+            if tools:
+                tools = self._convert_tools_for_anthropic(tools)
+            # Convert messages with tool results to Anthropic format
+            full_messages = self._convert_messages_for_anthropic(full_messages)
 
         # Get max_retries from config (default: 3)
         max_retries = self.config.get("litellm", {}).get("max_retries", 3)
@@ -779,17 +880,21 @@ class LiteLLMClient:
                  )
 
         elif self.fallback_client_anthropic:
-            # Direct Anthropic fallback
+            # Direct Anthropic fallback - use converted messages (no system in messages for Anthropic)
+            # Filter out system messages from full_messages (Anthropic uses separate system param)
+            anthropic_messages = [m for m in full_messages if m.get("role") != "system"]
             kwargs = {
                 "model": model,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "messages": messages
+                "messages": anthropic_messages  # Use converted messages
             }
             if system:
                 kwargs["system"] = system
             if tools:
                 kwargs["tools"] = tools
+                # Default to 'any' to encourage tool use when tools are provided
+                kwargs["tool_choice"] = tool_choice or {"type": "auto"}
 
             if stream:
                 return self._call_with_retry(
@@ -812,7 +917,8 @@ class LiteLLMClient:
              system_prompt: Optional[str] = None, history: Optional[List[Dict]] = None,
              use_cache: bool = True, operation: str = "chat",
              metadata: Optional[Dict] = None, agent: Optional[str] = None,
-             tools: Optional[List[Dict]] = None) -> Union[str, Dict]:
+             tools: Optional[List[Dict]] = None,
+             tool_choice: Optional[Dict] = None) -> Union[str, Dict]:
         """
         Send a chat message and get a response with intelligent model routing.
 
@@ -881,7 +987,8 @@ class LiteLLMClient:
             temperature=temperature,
             system=system_prompt,
             tier=tier,
-            tools=tools
+            tools=tools,
+            tool_choice=tool_choice
         )
 
         latency_ms = (time.time() - start_time) * 1000
@@ -889,8 +996,25 @@ class LiteLLMClient:
         # Check for tool calls in response
         tool_calls = None
         if hasattr(response, "choices") and response.choices:
+            # OpenAI format
             message = response.choices[0].message
             tool_calls = getattr(message, "tool_calls", None)
+        elif hasattr(response, "content") and hasattr(response, "stop_reason"):
+            # Anthropic format - check for tool_use blocks in content
+            if response.stop_reason == "tool_use":
+                tool_calls = []
+                for block in response.content:
+                    if getattr(block, "type", None) == "tool_use":
+                        # Convert Anthropic tool_use to OpenAI tool_call format
+                        import json
+                        tool_calls.append(type('ToolCall', (), {
+                            'id': block.id,
+                            'type': 'function',
+                            'function': type('Function', (), {
+                                'name': block.name,
+                                'arguments': json.dumps(block.input)
+                            })()
+                        })())
 
         # Extract response text and usage
         openai_reasoning_tokens = None
@@ -937,8 +1061,11 @@ class LiteLLMClient:
                     input_tokens = usage.prompt_tokens
                     output_tokens = usage.completion_tokens
             else:
-                # Anthropic Format
-                response_text = response.content[0].text
+                # Anthropic Format - extract text from content blocks
+                response_text = ""
+                for block in response.content:
+                    if getattr(block, "type", None) == "text":
+                        response_text += getattr(block, "text", "")
                 usage = getattr(response, "usage", None)
                 if usage is None:
                     api_error = True

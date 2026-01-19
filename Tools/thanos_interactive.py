@@ -451,6 +451,7 @@ class ThanosInteractive:
                 system_prompt=system_prompt,
                 history=messages if iteration > 1 else history,
                 tools=tools,
+                tool_choice={"type": "auto"} if tools else None,  # Enable tool use
                 operation=f"chat:{agent_obj.name if agent_obj else 'default'}"
             )
 
@@ -483,7 +484,10 @@ class ThanosInteractive:
                         loop.close()
 
                 # Add tool results to conversation
+                # Format depends on model - Anthropic uses different structure
+                # LiteLLM should convert, but we support both formats for reliability
                 for result in tool_results:
+                    # OpenAI format (works with gpt-* and should be converted by LiteLLM)
                     messages.append({
                         "role": "tool",
                         "tool_call_id": result["tool_call_id"],
