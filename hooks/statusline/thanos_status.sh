@@ -32,7 +32,15 @@ if [ ! -t 0 ]; then
     INPUT=$(cat)
 fi
 
-# Try Python statusline generator first
+# Try Python statusline generator first (prefer Tools version with better data fetching)
+TOOLS_STATUSLINE="$THANOS_ROOT/Tools/thanos_statusline.py"
+if [ -f "$TOOLS_STATUSLINE" ]; then
+    if python3 "$TOOLS_STATUSLINE" 2>/dev/null; then
+        exit 0
+    fi
+fi
+
+# Fallback to local version
 if [ -f "$SCRIPT_DIR/thanos_statusline.py" ]; then
     if echo "$INPUT" | python3 "$SCRIPT_DIR/thanos_statusline.py" 2>/dev/null; then
         exit 0
