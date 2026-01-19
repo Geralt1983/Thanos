@@ -126,8 +126,8 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "npx @claude-flow/cli@latest hooks statusline 2>/dev/null || node .claude/helpers/statusline.cjs 2>/dev/null || echo \"▊ Claude Flow V3\"",
-    "refreshMs": 5000,
+    "command": "hooks/statusline/thanos_status.sh 2>/dev/null || echo \"Thanos\"",
+    "refreshMs": 10000,
     "enabled": true
   },
   "permissions": {
