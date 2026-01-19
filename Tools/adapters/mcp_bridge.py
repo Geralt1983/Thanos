@@ -21,7 +21,7 @@ from mcp.types import Implementation, InitializeResult
 
 from .base import BaseAdapter, ToolResult
 from .mcp_capabilities import CapabilityManager, create_capability_manager
-from .mcp_config import MCPServerConfig, SSEConfig, StdioConfig
+from .mcp_config import HTTPConfig, MCPServerConfig, SSEConfig, StdioConfig
 from .mcp_observability import MCPLogger, get_metrics
 from .transports import SSETransport, StdioTransport, Transport
 
@@ -597,5 +597,215 @@ async def create_bridges_from_discovery(
             logger.info(f"Created MCP bridge for server: {name}")
         except Exception as e:
             logger.warning(f"Failed to create bridge for server '{name}': {e}")
+
+    return bridges
+
+
+def load_mcp_servers_from_api_json(
+    api_json_path: Optional[str] = None,
+    project_root: Optional[str] = None,
+) -> dict[str, MCPServerConfig]:
+    """
+    Load MCP server configurations from config/api.json.
+
+    Reads the `mcp_servers` section from the Thanos api.json config file
+    and returns validated MCPServerConfig objects.
+
+    Args:
+        api_json_path: Path to api.json file. If None, uses config/api.json
+                      relative to project_root or current working directory.
+        project_root: Project root directory. Used to resolve relative paths
+                     in server configurations (e.g., for cwd).
+
+    Returns:
+        Dictionary mapping server names to MCPServerConfig objects
+
+    Example:
+        >>> configs = load_mcp_servers_from_api_json()
+        >>> for name, config in configs.items():
+        ...     print(f"Server: {name}, Command: {config.transport.command}")
+
+        >>> # With custom path
+        >>> configs = load_mcp_servers_from_api_json("/path/to/api.json")
+    """
+    from pathlib import Path
+
+    # Determine api.json path
+    if api_json_path:
+        config_path = Path(api_json_path)
+    else:
+        # Default: config/api.json relative to project root or cwd
+        root = Path(project_root) if project_root else Path.cwd()
+        config_path = root / "config" / "api.json"
+
+    if not config_path.exists():
+        logger.warning(f"api.json not found at {config_path}")
+        return {}
+
+    # Load JSON
+    try:
+        with open(config_path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        logger.error(f"Failed to load api.json: {e}")
+        return {}
+
+    # Extract mcp_servers section
+    mcp_servers_data = data.get("mcp_servers", {})
+    if not mcp_servers_data:
+        logger.debug("No mcp_servers section found in api.json")
+        return {}
+
+    # Convert to MCPServerConfig objects
+    servers = {}
+    root_path = Path(project_root) if project_root else config_path.parent.parent
+
+    for name, config in mcp_servers_data.items():
+        try:
+            # Determine transport type (default to stdio)
+            transport_type = config.get("transport", "stdio").lower()
+
+            if transport_type == "stdio":
+                # Build stdio transport config
+                transport = StdioConfig(
+                    command=config.get("command", ""),
+                    args=config.get("args", []),
+                    env=config.get("env", {}),
+                    cwd=config.get("cwd") or str(root_path),
+                )
+            elif transport_type in ("sse", "http", "https"):
+                if transport_type == "sse":
+                    transport = SSEConfig(
+                        url=config.get("url", ""),
+                        headers=config.get("headers", {}),
+                        timeout=config.get("timeout", 30),
+                    )
+                else:
+                    transport = HTTPConfig(
+                        type=transport_type,
+                        url=config.get("url", ""),
+                        headers=config.get("headers", {}),
+                        timeout=config.get("timeout", 30),
+                        verify_ssl=config.get("verify_ssl", True),
+                    )
+            else:
+                logger.warning(f"Unknown transport type '{transport_type}' for server '{name}'")
+                continue
+
+            # Create server config
+            server_config = MCPServerConfig(
+                name=name,
+                description=config.get("description"),
+                transport=transport,
+                enabled=config.get("enabled", True),
+                priority=config.get("priority", 0),
+                tags=config.get("tags", []),
+                metadata=config.get("metadata", {}),
+            )
+
+            servers[name] = server_config
+            logger.debug(f"Loaded MCP server config: {name}")
+
+        except Exception as e:
+            logger.warning(f"Failed to parse MCP server config '{name}': {e}")
+            continue
+
+    logger.info(f"Loaded {len(servers)} MCP server configs from api.json")
+    return servers
+
+
+def create_bridges_from_api_json(
+    api_json_path: Optional[str] = None,
+    project_root: Optional[str] = None,
+    enabled_only: bool = True,
+) -> dict[str, MCPBridge]:
+    """
+    Load MCP server configs from api.json and create bridge instances.
+
+    This is a convenience function that combines loading configurations
+    from api.json and creating MCPBridge instances for each server.
+
+    Args:
+        api_json_path: Path to api.json file. If None, uses config/api.json.
+        project_root: Project root directory for resolving relative paths.
+        enabled_only: If True, only create bridges for enabled servers.
+
+    Returns:
+        Dictionary mapping server names to MCPBridge instances
+
+    Example:
+        >>> bridges = create_bridges_from_api_json()
+        >>> workos_bridge = bridges.get("workos")
+        >>> if workos_bridge:
+        ...     tools = await workos_bridge.refresh_tools()
+        ...     result = await workos_bridge.call_tool("workos_get_tasks", {"status": "active"})
+    """
+    # Load server configs from api.json
+    configs = load_mcp_servers_from_api_json(
+        api_json_path=api_json_path,
+        project_root=project_root,
+    )
+
+    # Create bridges for each enabled server
+    bridges = {}
+    for name, config in configs.items():
+        # Skip disabled servers if enabled_only is True
+        if enabled_only and not config.enabled:
+            logger.debug(f"Skipping disabled MCP server: {name}")
+            continue
+
+        try:
+            bridge = MCPBridge(config)
+            bridges[name] = bridge
+            logger.info(f"Created MCP bridge for server: {name}")
+        except Exception as e:
+            logger.warning(f"Failed to create bridge for server '{name}': {e}")
+
+    return bridges
+
+
+async def initialize_all_mcp_bridges(
+    api_json_path: Optional[str] = None,
+    project_root: Optional[str] = None,
+    refresh_tools: bool = True,
+) -> dict[str, MCPBridge]:
+    """
+    Initialize all MCP bridges from api.json with optional tool refresh.
+
+    This function creates bridges from api.json configuration and optionally
+    refreshes the tools list for each bridge to ensure they're ready for use.
+
+    Args:
+        api_json_path: Path to api.json file. If None, uses config/api.json.
+        project_root: Project root directory for resolving relative paths.
+        refresh_tools: If True, fetch tools list from each server after creation.
+
+    Returns:
+        Dictionary mapping server names to initialized MCPBridge instances
+
+    Example:
+        >>> bridges = await initialize_all_mcp_bridges()
+        >>> for name, bridge in bridges.items():
+        ...     print(f"{name}: {len(bridge.list_tools())} tools available")
+
+        >>> # Use a specific bridge
+        >>> workos = bridges.get("workos")
+        >>> result = await workos.call_tool("workos_get_tasks", {"status": "active"})
+    """
+    # Create bridges
+    bridges = create_bridges_from_api_json(
+        api_json_path=api_json_path,
+        project_root=project_root,
+        enabled_only=True,
+    )
+
+    # Optionally refresh tools for each bridge
+    if refresh_tools:
+        for name, bridge in bridges.items():
+            try:
+                await bridge.refresh_tools()
+                logger.info(f"Refreshed tools for MCP bridge: {name}")
+            except Exception as e:
+                logger.warning(f"Failed to refresh tools for bridge '{name}': {e}")
 
     return bridges
