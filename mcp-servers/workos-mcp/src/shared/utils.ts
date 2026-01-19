@@ -79,25 +79,25 @@ export function getExpectedPreviousDate(frequency: string, currentDate: Date): s
 // =============================================================================
 
 /**
- * Points mapping by value tier (must match handlers.ts POINTS_BY_TIER)
+ * Points mapping by value tier (from WorkOS-v3/lib/domain/task-types.ts)
  */
 const POINTS_BY_TIER: Record<string, number> = {
-  checkbox: 2,
-  progress: 4,
-  deliverable: 6,
-  milestone: 8,
+  checkbox: 1,    // Had to happen, low stakes (admin, scheduling, emails)
+  progress: 2,    // Moved something forward (research, drafting, prep)
+  deliverable: 4, // Client sees output (specs, docs, proposals sent)
+  milestone: 7,   // Significant completion (go-live, major deliverable)
 };
 
 /**
  * Calculates the points value for a task using the priority order:
- * pointsFinal > valueTier-based > pointsAiGuess > effortEstimate > default (2)
+ * pointsFinal > valueTier-based > pointsAiGuess > effortEstimate > default (progress=2)
  */
 export function calculatePoints(task: Task): number {
   if (task.pointsFinal != null) return task.pointsFinal;
   if (task.valueTier && POINTS_BY_TIER[task.valueTier] != null) {
     return POINTS_BY_TIER[task.valueTier];
   }
-  return task.pointsAiGuess ?? task.effortEstimate ?? 2;
+  return task.pointsAiGuess ?? task.effortEstimate ?? POINTS_BY_TIER.progress;
 }
 
 /**
