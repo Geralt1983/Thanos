@@ -14,7 +14,11 @@ import { existsSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { Database } from 'bun:sqlite';
 
-const CLAUDE_DIR = join(process.env.HOME!, '.claude');
+// Thanos project directory - use script location to find project root
+const SCRIPT_DIR = new URL('.', import.meta.url).pathname;
+const PROJECT_DIR = join(SCRIPT_DIR, '..');  // Go up from Tools/ to project root
+const THANOS_STATE_DIR = join(PROJECT_DIR, 'State');
+const CLAUDE_DIR = join(process.env.HOME!, '.claude');  // Kept for backward compat
 const OURA_CACHE_DIR = process.env.OURA_CACHE_DIR || join(process.env.HOME!, '.oura-cache');
 const OURA_DB_PATH = join(OURA_CACHE_DIR, 'oura-health.db');
 
@@ -65,11 +69,16 @@ interface BriefData {
 }
 
 async function readStateFile(filename: string): Promise<string> {
-  try {
-    return await readFile(join(CLAUDE_DIR, 'State', filename), 'utf-8');
-  } catch {
-    return '';
+  // Try Thanos project State dir first, fall back to ~/.claude/State for compatibility
+  for (const stateDir of [THANOS_STATE_DIR, join(CLAUDE_DIR, 'State')]) {
+    try {
+      const content = await readFile(join(stateDir, filename), 'utf-8');
+      if (content) return content;
+    } catch {
+      // Try next location
+    }
   }
+  return '';
 }
 
 function extractSection(content: string, header: string): string {
@@ -237,19 +246,40 @@ async function gatherBriefData(): Promise<BriefData> {
   const waitingFor = await readStateFile('WaitingFor.md');
   const thisWeek = await readStateFile('ThisWeek.md');
 
-  // Check inbox
+  // Check inbox (try project Inbox first, then ~/.claude/Inbox)
   let inboxCount = 0;
-  try {
-    const inboxFiles = await readdir(join(CLAUDE_DIR, 'Inbox'));
-    inboxCount = inboxFiles.filter(f => !f.startsWith('.') && f !== 'processed').length;
-  } catch {}
+  for (const baseDir of [PROJECT_DIR, CLAUDE_DIR]) {
+    try {
+      const inboxFiles = await readdir(join(baseDir, 'Inbox'));
+      inboxCount = inboxFiles.filter(f => !f.startsWith('.') && f !== 'processed').length;
+      break;  // Found inbox, stop searching
+    } catch {
+      // Try next location
+    }
+  }
 
-  // Extract data
-  const focusSection = extractSection(currentFocus, 'Right Now');
-  const focus = focusSection.split('\n')[0]?.replace(/^\*\*Primary focus\*\*:\s*/, '') || 'Not set';
+  // Extract data - try multiple possible section names
+  // Focus: try "Right Now", "Focus Areas", "Current Focus", or first line with "focus"
+  let focusSection = extractSection(currentFocus, 'Right Now') ||
+                     extractSection(currentFocus, 'Focus Areas') ||
+                     extractSection(currentFocus, 'Current Focus');
 
-  const top3Section = extractSection(currentFocus, "Today's Top 3");
-  const top3 = extractListItems(top3Section).slice(0, 3);
+  // Parse focus - either first bullet item or first line
+  let focus = 'Not set';
+  if (focusSection) {
+    const focusLines = focusSection.split('\n').filter(l => l.trim());
+    const firstItem = focusLines.find(l => l.match(/^[-*]\s+/));
+    focus = firstItem
+      ? firstItem.replace(/^[-*]\s+/, '').trim()
+      : focusLines[0]?.replace(/^\*\*Primary focus\*\*:\s*/, '').trim() || 'Not set';
+  }
+
+  // Top 3: try "Today's Top 3" or "Priorities" sections
+  const top3Section = extractSection(currentFocus, "Today's Top 3") ||
+                      extractSection(currentFocus, "Priorities") ||
+                      extractSection(currentFocus, "Top Priorities");
+  const top3Lines = top3Section.split('\n').filter(l => l.match(/^[-*]\s+/));
+  const top3 = top3Lines.slice(0, 3).map(l => l.replace(/^[-*]\s+/, '').trim());
 
   // Find due commitments (parse for today/tomorrow or dates within 48h)
   const dueCommitments: string[] = [];
@@ -277,8 +307,20 @@ async function gatherBriefData(): Promise<BriefData> {
   // Extract waiting for items
   const waitingForItems = extractListItems(waitingFor).slice(0, 5);
 
-  // Get week theme
-  const weekTheme = extractSection(thisWeek, 'Theme').split('\n')[0]?.replace(/^\*\*Focus\*\*:\s*/, '') || 'Not set';
+  // Get week theme - try "Theme", "Goals", or first line of "Notes"
+  let weekTheme = 'Not set';
+  const themeSection = extractSection(thisWeek, 'Theme') ||
+                       extractSection(thisWeek, 'Goals') ||
+                       extractSection(thisWeek, 'Notes');
+  if (themeSection) {
+    // Get first non-empty, non-checklist line
+    const firstLine = themeSection.split('\n').find(l =>
+      l.trim() && !l.match(/^\s*[-*]\s*\[/)
+    );
+    if (firstLine) {
+      weekTheme = firstLine.replace(/^\*\*Focus\*\*:\s*/, '').trim();
+    }
+  }
 
   // Fetch calendar events
   const calendar = await fetchCalendarEvents();
@@ -421,7 +463,7 @@ async function main() {
   console.log(brief);
 
   if (shouldSave) {
-    const todayFile = join(CLAUDE_DIR, 'State/Today.md');
+    const todayFile = join(THANOS_STATE_DIR, 'Today.md');
     const today = new Date().toISOString().split('T')[0];
 
     // Generate calendar schedule section
