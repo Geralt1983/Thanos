@@ -46,15 +46,16 @@ async function ensureCache(): Promise<boolean> {
 
       initCache();
       cacheInitialized = true;
-      console.error("[Cache] SQLite cache initialized");
+      // Silent initialization
 
       // Check if cache is empty or stale
       const stats = getCacheStats();
       if (stats.habitCount === 0 || stats.isStale) {
-        console.error("[Cache] Cache empty or stale, syncing from Neon...");
+        // Silent sync
         await syncAll();
       }
     } catch (error) {
+      // Keep error logging
       console.error("[Cache] Failed to initialize cache:", error);
       return false;
     }
@@ -89,12 +90,12 @@ export async function handleGetHabits(
   if (cacheAvailable && !isCacheStale()) {
     try {
       const cachedHabits = getCachedHabits();
-      console.error(`[Cache] Served ${cachedHabits.length} habits from cache`);
+      // Silent cache hit
       return {
         content: [{ type: "text", text: JSON.stringify(cachedHabits, null, 2) }],
       };
-    } catch (cacheError) {
-      console.error("[Cache] Error reading from cache, falling back to Neon:", cacheError);
+    } catch (_cacheError) {
+      // Silent fallback to Neon
     }
   }
 

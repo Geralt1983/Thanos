@@ -51,4 +51,56 @@ if [[ -z "$PYTHON_CMD" ]]; then
 fi
 
 cd "$SCRIPT_DIR"
-exec $PYTHON_CMD thanos.py interactive "$@"
+
+# Use quiet mode wrapper to filter MCP noise while preserving interactivity
+exec $PYTHON_CMD -c "
+import sys
+import os
+import subprocess
+import select
+import re
+
+# Pattern to filter out (comprehensive list)
+NOISE_PATTERNS = [
+    b'No stored Oauth2 credentials',
+    b'INFO:mcp',
+    b'WARNING:mcp',
+    b'Processing request of type',
+    b'tool list change notifications',
+    b'WARNING:root:No stored',
+    b'WARNING:root:',
+    b'ListToolsRequest',
+    b'lowlevel.server',
+    b'.oauth2.',
+]
+
+def is_noise(line):
+    return any(p in line for p in NOISE_PATTERNS)
+
+# Run thanos.py with filtered stderr
+os.chdir('$SCRIPT_DIR')
+proc = subprocess.Popen(
+    [sys.executable, 'thanos.py', 'interactive'] + sys.argv[1:],
+    stdin=sys.stdin,
+    stdout=sys.stdout,
+    stderr=subprocess.PIPE,
+    bufsize=0
+)
+
+# Filter stderr in a separate thread
+import threading
+def filter_stderr():
+    while True:
+        line = proc.stderr.readline()
+        if not line:
+            break
+        if not is_noise(line):
+            sys.stderr.buffer.write(line)
+            sys.stderr.buffer.flush()
+
+t = threading.Thread(target=filter_stderr, daemon=True)
+t.start()
+
+# Wait for process
+sys.exit(proc.wait())
+" "$@"

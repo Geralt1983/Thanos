@@ -30,15 +30,16 @@ async function ensureCache(): Promise<boolean> {
     try {
       initCache();
       cacheInitialized = true;
-      console.error("[Cache] SQLite cache initialized");
+      // Silent initialization
 
       // Check if cache is empty or stale
       const stats = getCacheStats();
       if (stats.taskCount === 0 || stats.isStale) {
-        console.error("[Cache] Cache empty or stale, syncing from Neon...");
+        // Silent sync
         await syncAll();
       }
     } catch (error) {
+      // Keep error logging
       console.error("[Cache] Failed to initialize cache:", error);
       return false;
     }
@@ -109,8 +110,8 @@ async function ensureCache(): Promise<boolean> {
  *                                           Should return the same data structure as cacheReader.
  *                                           Example: async () => db.select().from(schema.clients)
  *
- * @param {string} entityName - Human-readable entity name for logging (e.g., "tasks", "clients", "habits").
- *                               Used in console.error messages to track cache hits/misses.
+ * @param {string} entityName - Human-readable entity name for identification (e.g., "tasks", "clients", "habits").
+ *                               Used for debugging purposes if needed.
  *                               Should be plural lowercase (matches database table conventions).
  *
  * @returns {Promise<CallToolResult>} MCP-formatted response containing the data as JSON text.
@@ -191,11 +192,7 @@ export async function withCacheFirst<T>(
     try {
       const data = cacheReader();
 
-      // Step 4: Log cache hit with count (if array)
-      const count = Array.isArray(data) ? data.length : "N/A";
-      console.error(`[Cache] Served ${count} ${entityName} from cache`);
-
-      // Step 5: Return cached data in MCP format
+      // Step 4: Return cached data in MCP format (silent)
       return {
         content: [
           {
@@ -204,9 +201,8 @@ export async function withCacheFirst<T>(
           },
         ],
       };
-    } catch (cacheError) {
-      // Log cache read error and fall through to Neon fallback
-      console.error("[Cache] Error reading from cache, falling back to Neon:", cacheError);
+    } catch (_cacheError) {
+      // Silent fallback to Neon
     }
   }
 

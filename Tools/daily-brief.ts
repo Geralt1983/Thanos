@@ -12,8 +12,11 @@ import { readFile, writeFile, readdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { spawnSync } from 'child_process';
+import { Database } from 'bun:sqlite';
 
 const CLAUDE_DIR = join(process.env.HOME!, '.claude');
+const OURA_CACHE_DIR = process.env.OURA_CACHE_DIR || join(process.env.HOME!, '.oura-cache');
+const OURA_DB_PATH = join(OURA_CACHE_DIR, 'oura-health.db');
 
 interface CalendarEvent {
   summary: string;
@@ -37,6 +40,17 @@ interface CalendarData {
   error?: string;
 }
 
+interface OuraData {
+  available: boolean;
+  readinessScore: number | null;
+  sleepScore: number | null;
+  hrvBalance: number | null;
+  restingHeartRate: number | null;
+  bodyTemperature: number | null;
+  energyLevel: 'high' | 'medium' | 'low' | null;
+  recommendation: string | null;
+}
+
 interface BriefData {
   date: string;
   focus: string;
@@ -47,6 +61,7 @@ interface BriefData {
   weekTheme: string;
   billableTarget: string;
   calendar: CalendarData;
+  oura: OuraData;
 }
 
 async function readStateFile(filename: string): Promise<string> {
@@ -124,6 +139,94 @@ async function fetchCalendarEvents(): Promise<CalendarData> {
   }
 }
 
+function fetchOuraData(): OuraData {
+  const noData: OuraData = {
+    available: false,
+    readinessScore: null,
+    sleepScore: null,
+    hrvBalance: null,
+    restingHeartRate: null,
+    bodyTemperature: null,
+    energyLevel: null,
+    recommendation: null,
+  };
+
+  if (!existsSync(OURA_DB_PATH)) {
+    return noData;
+  }
+
+  try {
+    const db = new Database(OURA_DB_PATH, { readonly: true });
+    const today = new Date().toISOString().split('T')[0];
+
+    // Fetch readiness data using Bun's SQLite API
+    const readinessStmt = db.query('SELECT data, expires_at FROM readiness_data WHERE day = ?');
+    const readinessRow = readinessStmt.get(today) as { data: string; expires_at: string } | null;
+
+    // Fetch sleep data
+    const sleepStmt = db.query('SELECT data, expires_at FROM sleep_data WHERE day = ?');
+    const sleepRow = sleepStmt.get(today) as { data: string; expires_at: string } | null;
+
+    db.close();
+
+    if (!readinessRow && !sleepRow) {
+      return noData;
+    }
+
+    // Parse readiness
+    let readinessScore: number | null = null;
+    let hrvBalance: number | null = null;
+    let restingHeartRate: number | null = null;
+    let bodyTemperature: number | null = null;
+
+    if (readinessRow) {
+      const readiness = JSON.parse(readinessRow.data);
+      readinessScore = readiness.score ?? null;
+      hrvBalance = readiness.contributors?.hrv_balance ?? null;
+      restingHeartRate = readiness.contributors?.resting_heart_rate ?? null;
+      bodyTemperature = readiness.contributors?.body_temperature ?? null;
+    }
+
+    // Parse sleep
+    let sleepScore: number | null = null;
+    if (sleepRow) {
+      const sleep = JSON.parse(sleepRow.data);
+      sleepScore = sleep.score ?? null;
+    }
+
+    // Determine energy level based on readiness score
+    let energyLevel: 'high' | 'medium' | 'low' | null = null;
+    let recommendation: string | null = null;
+
+    if (readinessScore !== null) {
+      if (readinessScore >= 85) {
+        energyLevel = 'high';
+        recommendation = 'Great day for deep work and complex tasks';
+      } else if (readinessScore >= 70) {
+        energyLevel = 'medium';
+        recommendation = 'Good for standard work; save intensive tasks for later';
+      } else {
+        energyLevel = 'low';
+        recommendation = 'Focus on lighter tasks; consider more breaks';
+      }
+    }
+
+    return {
+      available: true,
+      readinessScore,
+      sleepScore,
+      hrvBalance,
+      restingHeartRate,
+      bodyTemperature,
+      energyLevel,
+      recommendation,
+    };
+  } catch (error) {
+    // Silently fail - Oura data is optional
+    return noData;
+  }
+}
+
 async function gatherBriefData(): Promise<BriefData> {
   const today = new Date().toISOString().split('T')[0];
   const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
@@ -180,6 +283,9 @@ async function gatherBriefData(): Promise<BriefData> {
   // Fetch calendar events
   const calendar = await fetchCalendarEvents();
 
+  // Fetch Oura health data
+  const oura = fetchOuraData();
+
   return {
     date: `${dayName}, ${today}`,
     focus,
@@ -190,6 +296,7 @@ async function gatherBriefData(): Promise<BriefData> {
     weekTheme,
     billableTarget: '15-20 hours',
     calendar,
+    oura,
   };
 }
 
@@ -208,8 +315,22 @@ function generateBrief(data: BriefData): string {
                     DAILY BRIEF
                   ${data.date}
 ═══════════════════════════════════════════════════════════
+`;
 
-📋 FOCUS: ${data.focus}
+  // Add Oura health section if available
+  if (data.oura.available) {
+    const energyEmoji = data.oura.energyLevel === 'high' ? '🟢' : data.oura.energyLevel === 'medium' ? '🟡' : '🔴';
+    brief += `
+💪 HEALTH STATUS:
+   ${energyEmoji} Energy: ${data.oura.energyLevel?.toUpperCase() || 'Unknown'}
+   😴 Sleep: ${data.oura.sleepScore ?? '?'}/100  |  🎯 Readiness: ${data.oura.readinessScore ?? '?'}/100
+   💓 HRV: ${data.oura.hrvBalance ?? '?'}  |  🌡️ Temp: ${data.oura.bodyTemperature ?? '?'}
+   📝 ${data.oura.recommendation || 'No recommendation'}
+
+`;
+  }
+
+  brief += `📋 FOCUS: ${data.focus}
 
 🎯 TODAY'S TOP 3:
 ${data.top3.length > 0 ? data.top3.map((t, i) => `   ${i + 1}. ${t}`).join('\n') : '   Not set - define your priorities!'}
@@ -412,13 +533,25 @@ async function main() {
       }
     }
 
+    // Generate Oura section for saved file
+    let ouraSection = '';
+    if (data.oura.available) {
+      const energyEmoji = data.oura.energyLevel === 'high' ? '🟢' : data.oura.energyLevel === 'medium' ? '🟡' : '🔴';
+      ouraSection = `
+## Health Status (from Oura)
+- ${energyEmoji} **Energy Level:** ${data.oura.energyLevel?.toUpperCase() || 'Unknown'}
+- **Sleep Score:** ${data.oura.sleepScore ?? '?'}/100
+- **Readiness Score:** ${data.oura.readinessScore ?? '?'}/100
+- **HRV Balance:** ${data.oura.hrvBalance ?? '?'}
+- **Recommendation:** ${data.oura.recommendation || 'No recommendation'}
+`;
+    }
+
     const todayContent = `# Today - ${today}
 
 ## Morning Brief
-- Energy: [1-10]
-- Sleep: [hours]
 - Vyvanse: [time taken / not yet]
-
+${ouraSection}
 ## Top 3 Priorities
 ${data.top3.map((t, i) => `${i + 1}. [ ] ${t}`).join('\n')}
 

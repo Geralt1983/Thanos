@@ -60,6 +60,38 @@ from pathlib import Path
 import re
 import sys
 import os
+import logging
+
+# Silence noisy loggers FIRST before any imports that might trigger them
+logging.basicConfig(level=logging.CRITICAL, format="%(message)s")
+
+# Silence root logger and specific noisy loggers
+logging.getLogger().setLevel(logging.CRITICAL)
+for noisy_logger in [
+    "mcp", "mcp.server", "mcp.server.lowlevel", "mcp.server.lowlevel.server",
+    "httpcore", "httpx", "urllib3", "googleapiclient", "oauth2client",
+    "google", "google.auth", "google_auth_oauthlib", "root",
+]:
+    logging.getLogger(noisy_logger).setLevel(logging.CRITICAL)
+
+
+class NoiseFilter(logging.Filter):
+    """Filter out known noisy log messages."""
+
+    NOISE_PATTERNS = [
+        "No stored Oauth2 credentials",
+        "tool list change notifications",
+        "ListToolsRequest",
+        "Processing request of type",
+        ".oauth2.",
+    ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(pattern in msg for pattern in self.NOISE_PATTERNS)
+
+
+logging.getLogger().addFilter(NoiseFilter())
 
 # Load environment variables (API keys)
 try:
@@ -103,6 +135,14 @@ COMMAND_SHORTCUTS = {
     "review": "pa:weekly",
     # Data export shortcuts
     "export": "pa:export",
+}
+
+# Built-in command shortcuts (map to slash commands)
+BUILTIN_SHORTCUTS = {
+    "oura": "/oura",
+    "health": "/oura",
+    "status": "/status",
+    "help": "/help",
 }
 
 # ========================================================================

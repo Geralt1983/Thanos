@@ -92,6 +92,8 @@ class EventType(Enum):
     ALERT_CREATED = "alert_created"
     ALERT_ACKNOWLEDGED = "alert_acknowledged"
     ALERT_RESOLVED = "alert_resolved"
+    ALERT_RAISED = "alert_raised"
+    ALERT_CHECK_COMPLETE = "alert_check_complete"
 
 
 class Severity(Enum):

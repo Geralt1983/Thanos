@@ -84,6 +84,7 @@ from typing import Dict, Optional
 class Colors:
     """ANSI color codes for terminal output."""
     PURPLE = "\033[35m"
+    BRIGHT_MAGENTA = "\033[95m"  # Bright purple for Thanos prompt
     CYAN = "\033[36m"
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
@@ -119,7 +120,7 @@ class PromptFormatter:
         low_cost_threshold: Optional[float] = None,
         medium_cost_threshold: Optional[float] = None,
         enable_colors: Optional[bool] = None,
-        default_prompt: str = "Thanos> "
+        default_prompt: Optional[str] = None
     ):
         """
         Initialize PromptFormatter with configuration.
@@ -132,7 +133,7 @@ class PromptFormatter:
             low_cost_threshold: Dollar amount for green/yellow boundary (overrides config)
             medium_cost_threshold: Dollar amount for yellow/red boundary (overrides config)
             enable_colors: Enable color-coded cost indicators (overrides config)
-            default_prompt: Fallback prompt when stats unavailable (default: "Thanos> ")
+            default_prompt: Fallback prompt when stats unavailable (default: colored "Thanos> ")
         """
         # Load configuration from file
         config = self._load_config(config_path)
@@ -159,7 +160,11 @@ class PromptFormatter:
             else color_config.get("enabled", True)
         )
 
-        self.default_prompt = default_prompt
+        # Default prompt with bright magenta "Thanos>"
+        if default_prompt is not None:
+            self.default_prompt = default_prompt
+        else:
+            self.default_prompt = f"{Colors.BRIGHT_MAGENTA}Thanos>{Colors.RESET} "
 
     def _load_config(self, config_path: Optional[str] = None) -> Dict:
         """
@@ -272,7 +277,8 @@ class PromptFormatter:
         tokens_display = self._format_token_count(total_tokens)
         cost_display = self._format_cost(cost)
         error_display = self._format_error_count(error_count)
-        return f"({tokens_display} | {cost_display}{error_display}) Thanos> "
+        thanos_prompt = f"{Colors.BRIGHT_MAGENTA}Thanos>{Colors.RESET}"
+        return f"({tokens_display} | {cost_display}{error_display}) {thanos_prompt} "
 
     def _format_standard(self, total_tokens: int, cost: float, duration: int, error_count: int = 0) -> str:
         """
@@ -291,7 +297,8 @@ class PromptFormatter:
         tokens_display = self._format_token_count(total_tokens)
         cost_display = self._format_cost(cost)
         error_display = self._format_error_count(error_count)
-        return f"({duration_display} | {tokens_display} tokens | {cost_display}{error_display}) Thanos> "
+        thanos_prompt = f"{Colors.BRIGHT_MAGENTA}Thanos>{Colors.RESET}"
+        return f"({duration_display} | {tokens_display} tokens | {cost_display}{error_display}) {thanos_prompt} "
 
     def _format_verbose(
         self,
@@ -321,7 +328,8 @@ class PromptFormatter:
         output_display = self._format_token_count(output_tokens)
         cost_display = self._format_cost(cost)
         error_display = self._format_error_count(error_count)
-        return f"({duration_display} | {message_count} msgs | {input_display} in | {output_display} out | {cost_display}{error_display}) Thanos> "
+        thanos_prompt = f"{Colors.BRIGHT_MAGENTA}Thanos>{Colors.RESET}"
+        return f"({duration_display} | {message_count} msgs | {input_display} in | {output_display} out | {cost_display}{error_display}) {thanos_prompt} "
 
     def _format_token_count(self, tokens: int) -> str:
         """

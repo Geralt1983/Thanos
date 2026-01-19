@@ -243,8 +243,8 @@ export async function syncAll(): Promise<{
   const syncedAt = new Date();
   setLastSyncTime(syncedAt);
 
-  const duration = Date.now() - startTime;
-  console.error(`[Cache Sync] Completed in ${duration}ms: ${clientCount} clients, ${taskCount} tasks, ${goalCount} goals, ${habitCount} habits`);
+  // Silent sync - duration and counts available in return value if needed
+  const _duration = Date.now() - startTime;
 
   return {
     clients: clientCount,

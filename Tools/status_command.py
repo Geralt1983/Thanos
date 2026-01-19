@@ -15,6 +15,8 @@ from dataclasses import dataclass
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from Tools.output_formatter import format_header as responsive_header, is_mobile, wrap_text, format_list as responsive_list
+
 
 # ANSI color codes
 class Colors:
@@ -57,7 +59,9 @@ class ThanosStatus:
         self.state_dir = self.thanos_dir / "State"
 
     def _format_header(self, text: str, width: int = 50) -> str:
-        """Format a section header."""
+        """Format a section header - responsive for mobile/desktop."""
+        if is_mobile():
+            return f"\n{Colors.BOLD}{Colors.CYAN}{responsive_header(text)}{Colors.RESET}"
         return f"\n{Colors.BOLD}{Colors.CYAN}{'─' * 3} {text} {'─' * (width - len(text) - 5)}{Colors.RESET}"
 
     def _format_status_indicator(self, status: str) -> str:
@@ -461,7 +465,7 @@ class ThanosStatus:
         )
 
     def get_full_status(self) -> str:
-        """Generate complete status display."""
+        """Generate complete status display with responsive layout."""
         sections = [
             self.get_state_summary(),
             self.get_health_summary(),
@@ -475,30 +479,40 @@ class ThanosStatus:
         overall_statuses = [s.status for s in sections]
         if "critical" in overall_statuses:
             overall = "critical"
-            status_text = f"{Colors.RED}⚠ ISSUES DETECTED{Colors.RESET}"
+            status_text = f"{Colors.RED}⚠ ISSUES{Colors.RESET}" if is_mobile() else f"{Colors.RED}⚠ ISSUES DETECTED{Colors.RESET}"
         elif "warning" in overall_statuses:
             overall = "warning"
-            status_text = f"{Colors.YELLOW}⚡ NEEDS ATTENTION{Colors.RESET}"
+            status_text = f"{Colors.YELLOW}⚡ ATTENTION{Colors.RESET}" if is_mobile() else f"{Colors.YELLOW}⚡ NEEDS ATTENTION{Colors.RESET}"
         elif "unknown" in overall_statuses and all(s == "unknown" for s in overall_statuses):
             overall = "unknown"
-            status_text = f"{Colors.DIM}○ INITIALIZING{Colors.RESET}"
+            status_text = f"{Colors.DIM}○ INIT{Colors.RESET}" if is_mobile() else f"{Colors.DIM}○ INITIALIZING{Colors.RESET}"
         else:
             overall = "ok"
-            status_text = f"{Colors.GREEN}✓ ALL SYSTEMS GO{Colors.RESET}"
+            status_text = f"{Colors.GREEN}✓ OK{Colors.RESET}" if is_mobile() else f"{Colors.GREEN}✓ ALL SYSTEMS GO{Colors.RESET}"
 
-        # Build output
+        # Build output - responsive header
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        output = [
-            f"\n{Colors.BOLD}{Colors.PURPLE}╔{'═' * 48}╗{Colors.RESET}",
-            f"{Colors.BOLD}{Colors.PURPLE}║{Colors.RESET}  {Colors.BOLD}THANOS STATUS{Colors.RESET}  {status_text}  {Colors.DIM}{now}{Colors.RESET}",
-            f"{Colors.BOLD}{Colors.PURPLE}╚{'═' * 48}╝{Colors.RESET}",
-        ]
+
+        if is_mobile():
+            # Compact header for mobile
+            output = [
+                f"\n{Colors.BOLD}{Colors.PURPLE}━━━ THANOS ━━━{Colors.RESET}",
+                f"{status_text}  {Colors.DIM}{now}{Colors.RESET}",
+            ]
+        else:
+            output = [
+                f"\n{Colors.BOLD}{Colors.PURPLE}╔{'═' * 48}╗{Colors.RESET}",
+                f"{Colors.BOLD}{Colors.PURPLE}║{Colors.RESET}  {Colors.BOLD}THANOS STATUS{Colors.RESET}  {status_text}  {Colors.DIM}{now}{Colors.RESET}",
+                f"{Colors.BOLD}{Colors.PURPLE}╚{'═' * 48}╝{Colors.RESET}",
+            ]
 
         for section in sections:
             output.append(self._format_header(section.title))
             output.append(section.content)
 
-        output.append(f"\n{Colors.DIM}{'─' * 50}{Colors.RESET}\n")
+        # Responsive footer
+        footer_width = 35 if is_mobile() else 50
+        output.append(f"\n{Colors.DIM}{'─' * footer_width}{Colors.RESET}\n")
 
         return '\n'.join(output)
 

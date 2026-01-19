@@ -180,7 +180,7 @@ export async function handleOverrideEnergySuggestion(
         mappedReadiness: mappedReadiness,
       };
     } catch (error) {
-      console.error("[Override] Failed to adjust daily goal:", error);
+      // Keep error logging for goal adjustment failures - this affects user experience
       responseData.dailyGoalAdjustment = {
         error: "Failed to adjust daily goal",
         details: error instanceof Error ? error.message : String(error),

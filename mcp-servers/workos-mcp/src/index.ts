@@ -35,15 +35,16 @@ async function ensureCache(): Promise<boolean> {
     try {
       initCache();
       cacheInitialized = true;
-      console.error("[Cache] SQLite cache initialized");
+      // Debug: Cache initialized (silent by default)
 
       // Check if cache is empty or stale
       const stats = getCacheStats();
       if (stats.taskCount === 0 || stats.isStale) {
-        console.error("[Cache] Cache empty or stale, syncing from Neon...");
+        // Debug: syncing (silent by default)
         await syncAll();
       }
     } catch (error) {
+      // Keep error logging - this is important
       console.error("[Cache] Failed to initialize cache:", error);
       return false;
     }
@@ -155,26 +156,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // START SERVER
 // =============================================================================
 async function main() {
-  // Initialize cache at startup (non-blocking)
-  ensureCache().then(success => {
-    if (success) {
-      const stats = getCacheStats();
-      console.error(`[Cache] Ready: ${stats.taskCount} tasks, ${stats.clientCount} clients, last sync: ${stats.lastSyncAt || "never"}`);
-    }
+  // Initialize cache at startup (non-blocking, silent)
+  ensureCache().then(_success => {
+    // Silent initialization - only log errors
   }).catch(err => {
     console.error("[Cache] Startup initialization failed:", err);
   });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("WorkOS MCP server running on stdio");
+  // Silent startup - only log when something goes wrong
 }
 
 // =============================================================================
 // GRACEFUL SHUTDOWN HANDLERS
 // =============================================================================
-function shutdown(signal: string) {
-  console.error(`[WorkOS] Received ${signal}, shutting down gracefully...`);
+function shutdown(_signal: string) {
+  // Silent shutdown
   closeCache();
   process.exit(0);
 }

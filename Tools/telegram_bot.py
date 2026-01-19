@@ -120,6 +120,12 @@ class TelegramBrainDumpBot:
             r'\bhow.*doing',
             r'\bmy progress',
         ],
+        'health': [
+            r'\b(health|oura|readiness|sleep score|energy level)',
+            r'\bhow.*(sleep|rested|energy)',
+            r'\bmy (readiness|hrv|heart rate)',
+            r'\bcheck.*oura',
+        ],
     }
 
     def __init__(
@@ -287,8 +293,10 @@ class TelegramBrainDumpBot:
                 return self._get_brain_dumps_response()
             elif command_type == 'status':
                 return await self._get_status_response()
+            elif command_type == 'health':
+                return await self._get_health_response()
             else:
-                return "I didn't understand that command. Try asking about tasks, habits, or status."
+                return "I didn't understand that command. Try asking about tasks, habits, health, or status."
         except Exception as e:
             logger.error(f"Command handling failed: {e}")
             return f"Sorry, I couldn't fetch that information: {e}"
@@ -473,6 +481,88 @@ class TelegramBrainDumpBot:
                 logger.warning(f"Couldn't fetch WorkOS stats: {e}")
 
         return "\n".join(lines)
+
+    async def _get_health_response(self) -> str:
+        """Get health status from Oura Ring cache."""
+        import sqlite3
+
+        oura_cache_dir = os.getenv('OURA_CACHE_DIR', os.path.join(os.path.expanduser('~'), '.oura-cache'))
+        oura_db_path = os.path.join(oura_cache_dir, 'oura-health.db')
+
+        if not os.path.exists(oura_db_path):
+            return "💪 *Health Status*\n\nOura data not available. Make sure oura-mcp has synced."
+
+        try:
+            conn = sqlite3.connect(oura_db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            today = datetime.now().strftime('%Y-%m-%d')
+
+            # Fetch readiness
+            cursor.execute('SELECT data FROM readiness_data WHERE day = ?', (today,))
+            readiness_row = cursor.fetchone()
+
+            # Fetch sleep
+            cursor.execute('SELECT data FROM sleep_data WHERE day = ?', (today,))
+            sleep_row = cursor.fetchone()
+
+            conn.close()
+
+            if not readiness_row and not sleep_row:
+                return "💪 *Health Status*\n\nNo data for today yet. Check back later."
+
+            lines = ["💪 *Health Status*", ""]
+
+            # Parse readiness
+            if readiness_row:
+                import json
+                readiness = json.loads(readiness_row['data'])
+                score = readiness.get('score')
+                contributors = readiness.get('contributors', {})
+
+                # Determine energy level
+                if score is not None:
+                    if score >= 85:
+                        energy = "🟢 HIGH"
+                        rec = "Great day for deep work!"
+                    elif score >= 70:
+                        energy = "🟡 MEDIUM"
+                        rec = "Good for standard tasks"
+                    else:
+                        energy = "🔴 LOW"
+                        rec = "Take it easy, more breaks"
+                    lines.append(f"*Energy:* {energy}")
+                    lines.append(f"*Readiness:* {score}/100")
+
+                    # Add contributors
+                    hrv = contributors.get('hrv_balance')
+                    rhr = contributors.get('resting_heart_rate')
+                    temp = contributors.get('body_temperature')
+
+                    if hrv is not None:
+                        lines.append(f"💓 HRV Balance: {hrv}")
+                    if rhr is not None:
+                        lines.append(f"❤️ RHR Score: {rhr}")
+                    if temp is not None:
+                        lines.append(f"🌡️ Body Temp: {temp}")
+
+                    lines.append("")
+                    lines.append(f"📝 _{rec}_")
+
+            # Parse sleep
+            if sleep_row:
+                import json
+                sleep = json.loads(sleep_row['data'])
+                sleep_score = sleep.get('score')
+                if sleep_score is not None:
+                    lines.insert(3, f"😴 *Sleep:* {sleep_score}/100")
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.error(f"Failed to fetch Oura data: {e}")
+            return f"💪 *Health Status*\n\nError fetching data: {e}"
 
     async def sync_to_workos(self, entry: 'BrainDumpEntry') -> Optional[int]:
         """
@@ -946,6 +1036,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 "I'll capture it, parse it, and add it to your brain dump queue.\n\n"
                 "*Commands:*\n"
                 "/status - Quick status overview\n"
+                "/health - Oura Ring health metrics\n"
                 "/tasks - View active tasks\n"
                 "/habits - View habits\n"
                 "/dumps - View pending brain dumps\n\n"
@@ -1139,12 +1230,19 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             response = self._get_brain_dumps_response()
             await update.message.reply_text(response, parse_mode='Markdown')
 
+        async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            if not is_allowed(update.effective_user.id):
+                return
+            response = await self._get_health_response()
+            await update.message.reply_text(response, parse_mode='Markdown')
+
         # Register handlers
         self.application.add_handler(CommandHandler("start", start_command))
         self.application.add_handler(CommandHandler("status", status_command))
         self.application.add_handler(CommandHandler("tasks", tasks_command))
         self.application.add_handler(CommandHandler("habits", habits_command))
         self.application.add_handler(CommandHandler("dumps", dumps_command))
+        self.application.add_handler(CommandHandler("health", health_command))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         self.application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
