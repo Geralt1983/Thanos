@@ -79,11 +79,25 @@ export function getExpectedPreviousDate(frequency: string, currentDate: Date): s
 // =============================================================================
 
 /**
+ * Points mapping by value tier (must match handlers.ts POINTS_BY_TIER)
+ */
+const POINTS_BY_TIER: Record<string, number> = {
+  checkbox: 2,
+  progress: 4,
+  deliverable: 6,
+  milestone: 8,
+};
+
+/**
  * Calculates the points value for a task using the priority order:
- * pointsFinal > pointsAiGuess > effortEstimate > default (2)
+ * pointsFinal > valueTier-based > pointsAiGuess > effortEstimate > default (2)
  */
 export function calculatePoints(task: Task): number {
-  return task.pointsFinal ?? task.pointsAiGuess ?? task.effortEstimate ?? 2;
+  if (task.pointsFinal != null) return task.pointsFinal;
+  if (task.valueTier && POINTS_BY_TIER[task.valueTier] != null) {
+    return POINTS_BY_TIER[task.valueTier];
+  }
+  return task.pointsAiGuess ?? task.effortEstimate ?? 2;
 }
 
 /**
