@@ -41,11 +41,13 @@ import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import json
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from Tools.output_formatter import format_table, format_header, is_mobile, wrap_text
 
 try:
     from Tools.commitment_tracker import (
@@ -242,39 +244,47 @@ def format_list_view(commitments: List[Commitment], show_details: bool = False) 
 
 def format_table_view(commitments: List[Commitment]) -> str:
     """
-    Format commitments as a table.
+    Format commitments as a table (responsive - cards on mobile).
 
     Args:
         commitments: List of commitments to display
 
     Returns:
-        Formatted table string
+        Formatted table string or card view on mobile
     """
     if not commitments:
         return "No commitments found."
 
-    # Build table header
-    lines = []
-    lines.append("=" * 120)
-    lines.append(f"{'ID':<12} {'Title':<30} {'Type':<8} {'Status':<15} {'Due Date':<25} {'Streak':<15} {'Priority':<10}")
-    lines.append("=" * 120)
+    # Build rows as dicts for format_table
+    headers = ['Title', 'Type', 'Status', 'Due', 'Streak', 'Priority']
+    rows: List[Dict[str, Any]] = []
 
-    # Build table rows
     for commitment in commitments:
-        row_id = commitment.id[:10] + ".." if len(commitment.id) > 12 else commitment.id
-        row_title = (commitment.title[:27] + "...") if len(commitment.title) > 30 else commitment.title
-        row_type = commitment.type
-        row_status = format_status(commitment.status)
-        row_due = format_due_date(commitment)
-        row_streak = format_streak(commitment)
-        row_priority = format_priority(commitment.priority)
+        # Truncate title for desktop, wrap handled by format_table on mobile
+        title = commitment.title
+        if not is_mobile() and len(title) > 30:
+            title = title[:27] + "..."
 
-        lines.append(f"{row_id:<12} {row_title:<30} {row_type:<8} {row_status:<15} {row_due:<25} {row_streak:<15} {row_priority:<10}")
+        rows.append({
+            'Title': title,
+            'Type': commitment.type,
+            'Status': format_status(commitment.status),
+            'Due': format_due_date(commitment),
+            'Streak': format_streak(commitment),
+            'Priority': format_priority(commitment.priority),
+            'notes': None  # Suppress notes in table view
+        })
 
-    lines.append("=" * 120)
-    lines.append(f"Total: {len(commitments)} commitment(s)")
+    # Use responsive formatter
+    output = format_table(headers, rows, title_key='Title')
 
-    return "\n".join(lines)
+    # Add footer
+    if is_mobile():
+        output += f"\n━━━ Total: {len(commitments)} ━━━"
+    else:
+        output += f"\n{'=' * 100}\nTotal: {len(commitments)} commitment(s)"
+
+    return output
 
 
 def format_json_view(commitments: List[Commitment]) -> str:

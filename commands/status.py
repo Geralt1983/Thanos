@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from Tools.state_store import get_db
 from Tools.journal import Journal
 from Tools.alert_checker import AlertManager, run_alert_check, AlertPriority
+from Tools.output_formatter import format_table, format_header, is_mobile, wrap_text, format_list
 
 
 def get_task_summary() -> Dict[str, Any]:
@@ -288,22 +289,28 @@ async def generate_status(
 
 
 def format_status_text(status: Dict[str, Any]) -> str:
-    """Format status as human-readable text."""
+    """Format status as human-readable text with responsive layout."""
     lines = []
     timestamp = datetime.fromisoformat(status['timestamp'])
+    mobile = is_mobile()
 
-    lines.append("╔════════════════════════════════════════╗")
-    lines.append("║         THANOS STATUS REPORT          ║")
-    lines.append(f"║   {timestamp.strftime('%Y-%m-%d %H:%M:%S')}              ║")
-    lines.append("╚════════════════════════════════════════╝")
+    # Header - responsive width
+    if mobile:
+        lines.append("━━━ THANOS STATUS ━━━")
+        lines.append(timestamp.strftime('%Y-%m-%d %H:%M'))
+    else:
+        lines.append("╔════════════════════════════════════════╗")
+        lines.append("║         THANOS STATUS REPORT          ║")
+        lines.append(f"║   {timestamp.strftime('%Y-%m-%d %H:%M:%S')}              ║")
+        lines.append("╚════════════════════════════════════════╝")
     lines.append("")
 
     # Alerts section
     alerts = status.get('alerts', {})
     alert_count = alerts.get('total', 0)
     if alert_count > 0:
-        lines.append("🚨 ALERTS")
-        lines.append("-" * 40)
+        lines.append(format_header("ALERTS"))
+        alert_items = []
         for alert in alerts.get('alerts', [])[:5]:
             emoji = {
                 'critical': '🚨',
@@ -311,7 +318,11 @@ def format_status_text(status: Dict[str, Any]) -> str:
                 'medium': '📢',
                 'low': 'ℹ️',
             }.get(alert.get('priority'), '📝')
-            lines.append(f"  {emoji} {alert.get('title')}")
+            title = alert.get('title', '')
+            if mobile:
+                title = wrap_text(title, 35)
+            alert_items.append(f"{emoji} {title}")
+        lines.append(format_list(alert_items))
         if alert_count > 5:
             lines.append(f"  ... and {alert_count - 5} more")
         lines.append("")
@@ -319,76 +330,96 @@ def format_status_text(status: Dict[str, Any]) -> str:
     # Tasks section
     tasks = status.get('tasks', {})
     if not tasks.get('error'):
-        lines.append("📋 TASKS")
-        lines.append("-" * 40)
-        lines.append(f"  Total active: {tasks.get('total', 0)}")
+        lines.append(format_header("TASKS"))
+        task_info = [f"Total active: {tasks.get('total', 0)}"]
         if tasks.get('overdue', 0) > 0:
-            lines.append(f"  ⚠️  Overdue: {tasks.get('overdue')}")
+            task_info.append(f"⚠️ Overdue: {tasks.get('overdue')}")
         if tasks.get('due_today', 0) > 0:
-            lines.append(f"  📅 Due today: {tasks.get('due_today')}")
+            task_info.append(f"📅 Due today: {tasks.get('due_today')}")
         by_domain = tasks.get('by_domain', {})
         if by_domain:
-            lines.append(f"  Work: {by_domain.get('work', 0)} | Personal: {by_domain.get('personal', 0)}")
+            task_info.append(f"Work: {by_domain.get('work', 0)} | Personal: {by_domain.get('personal', 0)}")
+        lines.append(format_list(task_info))
         lines.append("")
 
     # Commitments section
     commits = status.get('commitments', {})
     if not commits.get('error'):
-        lines.append("🤝 COMMITMENTS")
-        lines.append("-" * 40)
-        lines.append(f"  Total active: {commits.get('total', 0)}")
+        lines.append(format_header("COMMITMENTS"))
+        commit_info = [f"Total active: {commits.get('total', 0)}"]
+        lines.append(format_list(commit_info))
+
         overdue = commits.get('overdue', [])
         if overdue:
             lines.append(f"  🚨 Overdue ({len(overdue)}):")
-            for o in overdue[:3]:
-                lines.append(f"     - {o['title']} ({o['days_overdue']}d)")
+            overdue_items = [f"{o['title']} ({o['days_overdue']}d)" for o in overdue[:3]]
+            for item in overdue_items:
+                if mobile:
+                    lines.append(f"    {wrap_text(item, 30)}")
+                else:
+                    lines.append(f"     - {item}")
+
         due_soon = commits.get('due_soon', [])
         if due_soon:
             lines.append(f"  ⏰ Due soon ({len(due_soon)}):")
             for d in due_soon[:3]:
                 days = d['days_until']
                 when = "today" if days == 0 else f"in {days}d"
-                lines.append(f"     - {d['title']} ({when})")
+                item = f"{d['title']} ({when})"
+                if mobile:
+                    lines.append(f"    {wrap_text(item, 30)}")
+                else:
+                    lines.append(f"     - {item}")
         lines.append("")
 
     # Health section
     health = status.get('health', {})
     if health.get('available'):
-        lines.append("💪 HEALTH (Oura)")
-        lines.append("-" * 40)
+        lines.append(format_header("HEALTH (Oura)"))
+        health_info = []
         if health.get('sleep_score'):
             emoji = '🟢' if health['sleep_score'] >= 70 else '🟡' if health['sleep_score'] >= 50 else '🔴'
-            lines.append(f"  {emoji} Sleep: {health['sleep_score']}")
+            health_info.append(f"{emoji} Sleep: {health['sleep_score']}")
         if health.get('readiness_score'):
             emoji = '🟢' if health['readiness_score'] >= 70 else '🟡' if health['readiness_score'] >= 50 else '🔴'
-            lines.append(f"  {emoji} Readiness: {health['readiness_score']}")
+            health_info.append(f"{emoji} Readiness: {health['readiness_score']}")
         if health.get('activity_score'):
             emoji = '🟢' if health['activity_score'] >= 70 else '🟡' if health['activity_score'] >= 50 else '🔴'
-            lines.append(f"  {emoji} Activity: {health['activity_score']}")
+            health_info.append(f"{emoji} Activity: {health['activity_score']}")
+        lines.append(format_list(health_info))
         lines.append("")
 
     # Brain dumps section
     dumps = status.get('brain_dumps', {})
     if dumps.get('unprocessed', 0) > 0:
-        lines.append("🧠 BRAIN DUMP QUEUE")
-        lines.append("-" * 40)
-        lines.append(f"  Unprocessed: {dumps.get('unprocessed')}")
+        lines.append(format_header("BRAIN DUMP QUEUE"))
+        dump_info = [f"Unprocessed: {dumps.get('unprocessed')}"]
         by_cat = dumps.get('by_category', {})
         if by_cat:
-            cat_str = ", ".join(f"{k}: {v}" for k, v in by_cat.items())
-            lines.append(f"  {cat_str}")
+            if mobile:
+                # Show categories vertically on mobile
+                for k, v in by_cat.items():
+                    dump_info.append(f"{k}: {v}")
+            else:
+                cat_str = ", ".join(f"{k}: {v}" for k, v in by_cat.items())
+                dump_info.append(cat_str)
+        lines.append(format_list(dump_info))
         lines.append("")
 
     # System section
     system = status.get('system', {})
     if system and not system.get('error'):
-        lines.append("⚙️  SYSTEM")
-        lines.append("-" * 40)
+        lines.append(format_header("SYSTEM"))
         db_info = system.get('database', {})
-        lines.append(f"  Schema v{db_info.get('schema_version', '?')}, {db_info.get('tables', 0)} tables")
+        sys_info = [f"Schema v{db_info.get('schema_version', '?')}, {db_info.get('tables', 0)} tables"]
+        lines.append(format_list(sys_info))
         lines.append("")
 
-    lines.append("═" * 40)
+    # Footer
+    if mobile:
+        lines.append("━" * 35)
+    else:
+        lines.append("═" * 40)
 
     return "\n".join(lines)
 

@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from Tools.adapters.oura import OuraAdapter
 from Tools.litellm_client import get_client
+from Tools.output_formatter import format_header, format_list, is_mobile, wrap_text
 
 
 # System prompt for health summary persona (used for optional LLM enhancement)
@@ -216,6 +217,7 @@ def _get_trend_direction(scores: List[int]) -> str:
 def _format_weekly_trends(trends: dict) -> str:
     """
     Format weekly trends data into a readable string.
+    Uses responsive formatting for mobile/desktop.
 
     Args:
         trends: Trend analysis from _analyze_weekly_trends
@@ -223,50 +225,63 @@ def _format_weekly_trends(trends: dict) -> str:
     Returns:
         Formatted string with trend visualizations
     """
-    if "error" in trends:
-        return f"\n## 📊 7-Day Trends\n\n❌ {trends['error']}\n"
+    mobile = is_mobile()
 
-    output = "\n## 📊 7-Day Trends\n\n"
+    if "error" in trends:
+        return f"\n{format_header('7-Day Trends')}\n\n❌ {trends['error']}\n"
+
+    output = "\n" + format_header("7-Day Trends") + "\n\n"
+
+    trend_emoji_map = {
+        "improving": "📈",
+        "declining": "📉",
+        "stable": "➡️",
+        "no_data": "❓"
+    }
 
     # Readiness trends
     readiness = trends.get("readiness", {})
     if readiness.get("average"):
-        trend_emoji = {
-            "improving": "📈",
-            "declining": "📉",
-            "stable": "➡️",
-            "no_data": "❓"
-        }.get(readiness.get("trend", "stable"), "➡️")
+        trend_emoji = trend_emoji_map.get(readiness.get("trend", "stable"), "➡️")
 
-        output += f"**Readiness** {trend_emoji}\n"
-        output += f"- Average: {readiness['average']} ({_get_status_emoji(int(readiness['average']))})\n"
-        output += f"- Range: {readiness['min']} - {readiness['max']}\n"
-        output += f"- Trend: {readiness['trend'].replace('_', ' ').title()}\n\n"
+        if mobile:
+            # Compact format for mobile
+            output += f"{trend_emoji} Readiness: {readiness['average']} avg\n"
+            output += f"  Range: {readiness['min']}-{readiness['max']}\n"
+        else:
+            output += f"**Readiness** {trend_emoji}\n"
+            output += f"- Average: {readiness['average']} ({_get_status_emoji(int(readiness['average']))})\n"
+            output += f"- Range: {readiness['min']} - {readiness['max']}\n"
+            output += f"- Trend: {readiness['trend'].replace('_', ' ').title()}\n\n"
     else:
-        output += "**Readiness**: No data available\n\n"
+        output += "Readiness: No data\n"
 
     # Sleep trends
     sleep = trends.get("sleep", {})
     if sleep.get("average"):
-        trend_emoji = {
-            "improving": "📈",
-            "declining": "📉",
-            "stable": "➡️",
-            "no_data": "❓"
-        }.get(sleep.get("trend", "stable"), "➡️")
+        trend_emoji = trend_emoji_map.get(sleep.get("trend", "stable"), "➡️")
 
-        output += f"**Sleep** {trend_emoji}\n"
-        output += f"- Average: {sleep['average']} ({_get_status_emoji(int(sleep['average']))})\n"
-        output += f"- Range: {sleep['min']} - {sleep['max']}\n"
-        output += f"- Trend: {sleep['trend'].replace('_', ' ').title()}\n\n"
+        if mobile:
+            output += f"\n{trend_emoji} Sleep: {sleep['average']} avg\n"
+            output += f"  Range: {sleep['min']}-{sleep['max']}\n"
+        else:
+            output += f"**Sleep** {trend_emoji}\n"
+            output += f"- Average: {sleep['average']} ({_get_status_emoji(int(sleep['average']))})\n"
+            output += f"- Range: {sleep['min']} - {sleep['max']}\n"
+            output += f"- Trend: {sleep['trend'].replace('_', ' ').title()}\n\n"
     else:
-        output += "**Sleep**: No data available\n\n"
+        output += "\nSleep: No data\n"
 
     # Patterns
     patterns = trends.get("patterns", [])
     if patterns:
-        output += "**Patterns Detected:**\n"
+        if mobile:
+            output += "\nPatterns:\n"
+        else:
+            output += "**Patterns Detected:**\n"
         for pattern in patterns:
+            if mobile:
+                pattern = wrap_text(pattern, 38)
             output += f"- {pattern}\n"
 
     return output
@@ -535,12 +550,13 @@ def _generate_recommendations(data: Dict[str, Any]) -> List[str]:
 def format_health_summary(data: dict) -> str:
     """
     Format health data into a comprehensive, unified dashboard.
+    Uses responsive formatting for mobile/desktop.
 
     Args:
         data: Health data from OuraAdapter
 
     Returns:
-        Formatted markdown string with metrics, insights, and recommendations
+        Formatted string with metrics, insights, and recommendations
     """
     if "error" in data:
         return f"⚠️  {data['error']}\n\nUnable to generate health summary."
@@ -551,10 +567,17 @@ def format_health_summary(data: dict) -> str:
     sleep = data.get("sleep", {})
     stress = data.get("stress", {})
     activity = data.get("activity", {})
+    mobile = is_mobile()
 
     # Build the summary output
     output = []
-    output.append(f"# 💚 Health Dashboard - {date}\n")
+
+    # Title - responsive
+    if mobile:
+        output.append(f"━━━ Health Dashboard ━━━")
+        output.append(f"📅 {date}")
+    else:
+        output.append(f"# 💚 Health Dashboard - {date}\n")
 
     # Overall status
     status = summary.get("overall_status", "unknown").title()
@@ -566,73 +589,77 @@ def format_health_summary(data: dict) -> str:
         "unknown": "⚪"
     }
     status_emoji = status_emoji_map.get(status.lower(), "⚪")
-    output.append(f"## {status_emoji} Overall Status: {status}\n")
+    output.append(f"\n{status_emoji} Overall: {status}\n")
 
     # Key Metrics Section
-    output.append("## 📊 Key Metrics\n")
+    output.append(format_header("Key Metrics"))
 
     # Readiness
     if readiness and "score" in readiness:
         score = readiness["score"]
         emoji = _get_status_emoji(score)
-        output.append(f"### {emoji} Readiness: {score}/100\n")
+        output.append(f"\n{emoji} Readiness: {score}/100")
 
         # Readiness contributors
         contributors = readiness.get("contributors", {})
         if contributors:
-            output.append("**Top Contributors:**")
-            contributor_items = [
+            contrib_items = []
+            contributor_pairs = [
                 ("Sleep Balance", contributors.get("sleep_balance")),
-                ("Previous Day Activity", contributors.get("previous_day_activity")),
-                ("Activity Balance", contributors.get("activity_balance")),
-                ("HRV Balance", contributors.get("hrv_balance")),
-                ("Recovery Index", contributors.get("recovery_index")),
+                ("Activity", contributors.get("activity_balance")),
+                ("HRV", contributors.get("hrv_balance")),
+                ("Recovery", contributors.get("recovery_index")),
             ]
-            for name, value in contributor_items:
+            for name, value in contributor_pairs:
                 if value is not None:
                     contrib_emoji = _get_status_emoji(value)
-                    output.append(f"- {contrib_emoji} {name}: {value}/100")
-            output.append("")
+                    contrib_items.append(f"{contrib_emoji} {name}: {value}")
+            output.append(format_list(contrib_items))
     else:
-        output.append("### ⚪ Readiness: No data available\n")
+        output.append("\n⚪ Readiness: No data")
 
     # Sleep
     if sleep and "score" in sleep:
         score = sleep["score"]
         emoji = _get_status_emoji(score)
         total_sleep = sleep.get("total_sleep_duration", 0)
-        output.append(f"### {emoji} Sleep: {score}/100 ({_format_duration(total_sleep)})\n")
+        output.append(f"\n{emoji} Sleep: {score}/100 ({_format_duration(total_sleep)})")
 
         # Sleep details
-        output.append("**Sleep Breakdown:**")
+        sleep_items = []
         efficiency = sleep.get("efficiency")
         if efficiency:
-            output.append(f"- Efficiency: {efficiency}%")
+            sleep_items.append(f"Efficiency: {efficiency}%")
 
-        # Sleep stages
+        # Sleep stages - compact on mobile
         rem = sleep.get("rem_sleep_duration", 0)
         deep = sleep.get("deep_sleep_duration", 0)
         light = sleep.get("light_sleep_duration", 0)
 
-        if rem > 0:
-            output.append(f"- REM: {_format_duration(rem)}")
-        if deep > 0:
-            output.append(f"- Deep: {_format_duration(deep)}")
-        if light > 0:
-            output.append(f"- Light: {_format_duration(light)}")
-
-        # Latency
-        latency = sleep.get("latency")
-        if latency:
-            output.append(f"- Time to Sleep: {_format_duration(latency)}")
+        if mobile:
+            # Compact stage display for mobile
+            stages = []
+            if rem > 0:
+                stages.append(f"REM {_format_duration(rem)}")
+            if deep > 0:
+                stages.append(f"Deep {_format_duration(deep)}")
+            if stages:
+                sleep_items.append(" | ".join(stages))
+        else:
+            if rem > 0:
+                sleep_items.append(f"REM: {_format_duration(rem)}")
+            if deep > 0:
+                sleep_items.append(f"Deep: {_format_duration(deep)}")
+            if light > 0:
+                sleep_items.append(f"Light: {_format_duration(light)}")
 
         restless = sleep.get("restless_periods")
         if restless:
-            output.append(f"- Restless Periods: {restless}")
+            sleep_items.append(f"Restless: {restless}")
 
-        output.append("")
+        output.append(format_list(sleep_items))
     else:
-        output.append("### ⚪ Sleep: No data available\n")
+        output.append("\n⚪ Sleep: No data")
 
     # Stress
     if stress:
@@ -644,30 +671,31 @@ def format_health_summary(data: dict) -> str:
             "high": "🔴"
         }
         stress_emoji = stress_emoji_map.get(day_summary.lower(), "⚪")
-        output.append(f"### {stress_emoji} Stress: {day_summary.title()}\n")
+        output.append(f"\n{stress_emoji} Stress: {day_summary.title()}")
 
-        # Stress breakdown
+        # Stress breakdown - compact
         recovery_high = stress.get("recovery_high")
         stress_high = stress.get("stress_high")
         if recovery_high and stress_high:
             total_time = recovery_high + stress_high
             recovery_pct = (recovery_high / total_time * 100) if total_time > 0 else 0
             stress_pct = (stress_high / total_time * 100) if total_time > 0 else 0
-            output.append("**Daytime Balance:**")
-            output.append(f"- Recovery Time: {_format_duration(recovery_high)} ({recovery_pct:.0f}%)")
-            output.append(f"- Stress Time: {_format_duration(stress_high)} ({stress_pct:.0f}%)")
-            output.append("")
+            stress_items = [
+                f"Recovery: {_format_duration(recovery_high)} ({recovery_pct:.0f}%)",
+                f"Stress: {_format_duration(stress_high)} ({stress_pct:.0f}%)"
+            ]
+            output.append(format_list(stress_items))
     else:
-        output.append("### ⚪ Stress: No data available\n")
+        output.append("\n⚪ Stress: No data")
 
     # Activity (optional, if available)
     if activity and "score" in activity:
         score = activity["score"]
         emoji = _get_status_emoji(score)
-        output.append(f"### {emoji} Activity: {score}/100\n")
+        output.append(f"\n{emoji} Activity: {score}/100")
 
     # Health Insights Section
-    output.append("## 💡 Health Insights\n")
+    output.append("\n" + format_header("Insights"))
 
     all_insights = []
     all_insights.extend(_analyze_readiness(readiness))
@@ -675,21 +703,37 @@ def format_health_summary(data: dict) -> str:
     all_insights.extend(_analyze_stress(stress))
 
     if all_insights:
-        for insight in all_insights[:8]:  # Limit to top 8 insights to avoid overwhelming
-            output.append(f"- {insight}")
-        output.append("")
+        # Limit insights on mobile
+        max_insights = 5 if mobile else 8
+        insight_items = []
+        for insight in all_insights[:max_insights]:
+            if mobile:
+                insight = wrap_text(insight, 38)
+            insight_items.append(insight)
+        output.append(format_list(insight_items))
     else:
-        output.append("- No significant insights to report\n")
+        output.append("No significant insights")
 
     # Recommendations Section
-    output.append("## 🎯 Recommendations\n")
+    output.append("\n" + format_header("Recommendations"))
 
     recommendations = _generate_recommendations(data)
     if recommendations:
-        for i, rec in enumerate(recommendations[:5], 1):  # Top 5 recommendations
-            output.append(f"{i}. {rec}")
+        max_recs = 3 if mobile else 5
+        rec_items = []
+        for rec in recommendations[:max_recs]:
+            if mobile:
+                rec = wrap_text(rec, 38)
+            rec_items.append(rec)
+        output.append(format_list(rec_items, numbered=True))
     else:
-        output.append("- Continue current health practices\n")
+        output.append("Continue current health practices")
+
+    # Footer
+    if mobile:
+        output.append("\n━" * 20)
+    else:
+        output.append("")
 
     return "\n".join(output)
 
