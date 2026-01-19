@@ -1,0 +1,22 @@
+{
+  "id": "381c818b",
+  "started_at": "2026-01-19T08:40:47.881368",
+  "agent": "ops",
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "total_cost": 0.0,
+  "history": [
+    {
+      "role": "user",
+      "content": "What is my work priority?",
+      "timestamp": "2026-01-19T08:40:51.391035",
+      "tokens": 0
+    },
+    {
+      "role": "assistant",
+      "content": "Let me check your current focus.\n\nProcessing...",
+      "timestamp": "2026-01-19T08:40:52.246040",
+      "tokens": 0
+    }
+  ]
+}

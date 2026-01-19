@@ -1,0 +1,22 @@
+{
+  "id": "ec6b9f7a",
+  "started_at": "2026-01-19T08:41:31.067855",
+  "agent": "ops",
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "total_cost": 0.0,
+  "history": [
+    {
+      "role": "user",
+      "content": "Hello Thanos",
+      "timestamp": "2026-01-19T08:41:34.232072",
+      "tokens": 0
+    },
+    {
+      "role": "assistant",
+      "content": "State your objective.",
+      "timestamp": "2026-01-19T08:41:35.055393",
+      "tokens": 0
+    }
+  ]
+}

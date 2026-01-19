@@ -76,7 +76,7 @@ for noisy_logger in [
 
 
 class NoiseFilter(logging.Filter):
-    """Filter out known noisy log messages."""
+    """Filter out known noisy log messages from MCP servers and OAuth libraries."""
 
     NOISE_PATTERNS = [
         "No stored Oauth2 credentials",
@@ -84,6 +84,10 @@ class NoiseFilter(logging.Filter):
         "ListToolsRequest",
         "Processing request of type",
         ".oauth2.",
+        "mcp-gsuite",
+        "gauth.py",
+        "credentials yet at path",
+        "accounts.json",
     ]
 
     def filter(self, record: logging.LogRecord) -> bool:

@@ -1,0 +1,22 @@
+{
+  "id": "d6e0fd66",
+  "started_at": "2026-01-19T08:42:41.561578",
+  "agent": "ops",
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "total_cost": 0.0,
+  "history": [
+    {
+      "role": "user",
+      "content": "What tasks do I have?",
+      "timestamp": "2026-01-19T08:42:46.533397",
+      "tokens": 0
+    },
+    {
+      "role": "assistant",
+      "content": "Here's your current task breakdown:\n\nActive Tasks (Today's Work):\n1. Memphis Project: Coordinate PEDS Fever Order Set Updates (Shallow effort)\n2. Orlando Project: Create Sherlock Post (Deep effort)\n\nQueued Tasks (Up Next):\n1. Orlando Tasks:\n   - Look for and do Orlando surveys\n   - Initial PCT build for Alabama sites\n\n2. Raleigh Tasks:\n   - INC0215570 Note Template Incident (from Dr. Saik)\n   - Respond to Dr. Mann's email\n   - Compile Harry emails into NotebookLM\n\n3. Kentucky Tasks:\n   - Test Versacare chart review tabs\n   - Build Versacare flow sheets\n\n4. Memphis Tasks:\n   - Confirm MORA Organ Donor OS with Beverly\n   - Research Consult to IP Hospice workflow\n   - MORA OS - identify next 2 OSQs\n\nRecommended next actions:\n1. Complete Sherlock Post for Orlando\n2. Coordinate PEDS Fever Order Set for Memphis\n\nWant me to prioritize or help you plan these out?",
+      "timestamp": "2026-01-19T08:43:00.182497",
+      "tokens": 0
+    }
+  ]
+}

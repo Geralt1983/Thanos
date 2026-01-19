@@ -1,0 +1,22 @@
+{
+  "id": "e62464fe",
+  "started_at": "2026-01-19T08:09:27.182615",
+  "agent": "ops",
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "total_cost": 0.0,
+  "history": [
+    {
+      "role": "user",
+      "content": "how did i sleep",
+      "timestamp": "2026-01-19T08:09:33.101222",
+      "tokens": 0
+    },
+    {
+      "role": "assistant",
+      "content": "Your sleep quality was not explicitly logged today. However, your energy levels are currently high, indicating good rest overall. No recent sleep data suggests any issues today. Focus on your high-energy tasks and maintain this momentum.",
+      "timestamp": "2026-01-19T08:09:52.730855",
+      "tokens": 0
+    }
+  ]
+}

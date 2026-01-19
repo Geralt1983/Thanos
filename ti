@@ -59,8 +59,10 @@ import os
 import subprocess
 import select
 import re
+import io
 
 # Pattern to filter out (comprehensive list)
+# These patterns appear in MCP server output (especially mcp-gsuite OAuth warnings)
 NOISE_PATTERNS = [
     b'No stored Oauth2 credentials',
     b'INFO:mcp',
@@ -72,12 +74,15 @@ NOISE_PATTERNS = [
     b'ListToolsRequest',
     b'lowlevel.server',
     b'.oauth2.',
+    b'mcp-gsuite',
+    b'gauth.py',
+    b'credentials yet at path',
 ]
 
 def is_noise(line):
     return any(p in line for p in NOISE_PATTERNS)
 
-# Run thanos.py with filtered stderr
+# Run thanos.py with filtered stderr (stdout stays direct for interactivity)
 os.chdir('$SCRIPT_DIR')
 proc = subprocess.Popen(
     [sys.executable, 'thanos.py', 'interactive'] + sys.argv[1:],

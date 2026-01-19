@@ -1,0 +1,31 @@
+{
+  "id": "245be148",
+  "started_at": "2026-01-19T12:52:16.770193",
+  "ended_at": "2026-01-19T12:55:18.128322",
+  "agent": "ops",
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "total_cost": 0.0,
+  "error_count": 0,
+  "history": [
+    {
+      "role": "user",
+      "content": "I'm doing the dishes before the wife gets home. After that, priority is to get started on Orlando by setting up a meeting with security and getting on my one o'clock.",
+      "timestamp": "2026-01-19T12:53:05.293886",
+      "tokens": 0
+    }
+  ],
+  "memory_snapshot": {
+    "topics": [],
+    "emotional_markers": {
+      "frustration": 0,
+      "excitement": 0,
+      "urgency": 0
+    },
+    "key_queries": [
+      "I'm doing the dishes before the wife gets home. After that, priority is to get started on Orlando by"
+    ],
+    "blockers_mentioned": false,
+    "task_completions": 0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "dea49135",
+  "started_at": "2026-01-19T08:10:01.719737",
+  "agent": "ops",
+  "total_input_tokens": 0,
+  "total_output_tokens": 0,
+  "total_cost": 0.0,
+  "history": [
+    {
+      "role": "user",
+      "content": "what is my readiness score today",
+      "timestamp": "2026-01-19T08:10:08.311401",
+      "tokens": 0
+    },
+    {
+      "role": "assistant",
+      "content": "Your readiness score today is 100, high.",
+      "timestamp": "2026-01-19T08:10:11.302675",
+      "tokens": 0
+    }
+  ]
+}
