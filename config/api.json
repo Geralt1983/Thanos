@@ -215,6 +215,14 @@
       "transport": "stdio",
       "enabled": true,
       "description": "WorkOS MCP server for task management, habits, energy tracking, and brain dumps"
+    },
+    "gsuite": {
+      "command": "uvx",
+      "args": ["mcp-gsuite"],
+      "transport": "stdio",
+      "enabled": true,
+      "cwd": "/Users/jeremy/.config/mcp-gsuite",
+      "description": "Google Suite MCP server for Calendar, Gmail, and Drive"
     }
   }
 }
