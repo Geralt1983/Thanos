@@ -6,10 +6,20 @@ Fetch today's calendar events for use in daily brief and other tools
 
 import asyncio
 import json
+import logging
 import sys
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+# Suppress OAuth-related warnings and noisy Google logs BEFORE importing
+warnings.filterwarnings('ignore', message='.*oauth.*', category=Warning)
+warnings.filterwarnings('ignore', message='.*Oauth.*', category=Warning)
+logging.getLogger('googleapiclient').setLevel(logging.ERROR)
+logging.getLogger('google').setLevel(logging.ERROR)
+logging.getLogger('oauth2client').setLevel(logging.ERROR)
+logging.getLogger('google_auth_oauthlib').setLevel(logging.ERROR)
 
 # Add Tools directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
