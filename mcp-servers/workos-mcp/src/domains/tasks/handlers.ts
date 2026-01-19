@@ -58,15 +58,16 @@ async function ensureCache(): Promise<boolean> {
 
       initCache();
       cacheInitialized = true;
-      console.error("[Cache] SQLite cache initialized");
+      // Silent initialization
 
       // Check if cache is empty or stale
       const stats = getCacheStats();
       if (stats.taskCount === 0 || stats.isStale) {
-        console.error("[Cache] Cache empty or stale, syncing from Neon...");
+        // Silent sync
         await syncAll();
       }
     } catch (error) {
+      // Keep error logging
       console.error("[Cache] Failed to initialize cache:", error);
       return false;
     }
@@ -207,7 +208,7 @@ export async function handleGetTasks(
         clientName: t.clientId ? clientMap.get(t.clientId) || null : null,
       }));
 
-      console.error(`[Cache] Served ${tasksWithClients.length} tasks from cache`);
+      // Silent cache hit
       return {
         content: [
           {
@@ -216,8 +217,8 @@ export async function handleGetTasks(
           },
         ],
       };
-    } catch (cacheError) {
-      console.error("[Cache] Error reading from cache, falling back to Neon:", cacheError);
+    } catch (_cacheError) {
+      // Silent fallback to Neon
     }
   }
 
@@ -286,7 +287,7 @@ export async function handleGetClients(
   if (cacheAvailable && !isCacheStale()) {
     try {
       const cachedClients = getCachedClients();
-      console.error(`[Cache] Served ${cachedClients.length} clients from cache`);
+      // Silent cache hit
       return {
         content: [
           {
@@ -295,8 +296,8 @@ export async function handleGetClients(
           },
         ],
       };
-    } catch (cacheError) {
-      console.error("[Cache] Error reading from cache, falling back to Neon:", cacheError);
+    } catch (_cacheError) {
+      // Silent fallback to Neon
     }
   }
 
@@ -364,13 +365,12 @@ export async function handleCreateTask(
     })
     .returning();
 
-  // Update cache (write-through)
+  // Update cache (write-through, silent)
   if (cacheInitialized) {
     try {
       await syncSingleTask(newTask.id);
-      console.error(`[Cache] Synced new task ${newTask.id} to cache`);
-    } catch (cacheError) {
-      console.error("[Cache] Failed to sync new task to cache:", cacheError);
+    } catch (_cacheError) {
+      // Silent cache sync failure - primary write succeeded
     }
   }
 
@@ -424,13 +424,12 @@ export async function handleCompleteTask(
     };
   }
 
-  // Update cache (write-through)
+  // Update cache (write-through, silent)
   if (cacheInitialized) {
     try {
       await syncSingleTask(taskId);
-      console.error(`[Cache] Synced completed task ${taskId} to cache`);
-    } catch (cacheError) {
-      console.error("[Cache] Failed to sync completed task to cache:", cacheError);
+    } catch (_cacheError) {
+      // Silent cache sync failure - primary write succeeded
     }
   }
 
@@ -483,13 +482,12 @@ export async function handlePromoteTask(
     };
   }
 
-  // Update cache (write-through)
+  // Update cache (write-through, silent)
   if (cacheInitialized) {
     try {
       await syncSingleTask(taskId);
-      console.error(`[Cache] Synced promoted task ${taskId} to cache`);
-    } catch (cacheError) {
-      console.error("[Cache] Failed to sync promoted task to cache:", cacheError);
+    } catch (_cacheError) {
+      // Silent cache sync failure - primary write succeeded
     }
   }
 
@@ -803,13 +801,12 @@ export async function handleUpdateTask(
     };
   }
 
-  // Update cache (write-through)
+  // Update cache (write-through, silent)
   if (cacheInitialized) {
     try {
       await syncSingleTask(taskId);
-      console.error(`[Cache] Synced updated task ${taskId} to cache`);
-    } catch (cacheError) {
-      console.error("[Cache] Failed to sync updated task to cache:", cacheError);
+    } catch (_cacheError) {
+      // Silent cache sync failure - primary write succeeded
     }
   }
 
@@ -858,13 +855,12 @@ export async function handleDeleteTask(
     };
   }
 
-  // Update cache (write-through - remove deleted task)
+  // Update cache (write-through, silent - remove deleted task)
   if (cacheInitialized) {
     try {
       removeCachedTask(taskId);
-      console.error(`[Cache] Removed deleted task ${taskId} from cache`);
-    } catch (cacheError) {
-      console.error("[Cache] Failed to remove deleted task from cache:", cacheError);
+    } catch (_cacheError) {
+      // Silent cache removal failure - primary delete succeeded
     }
   }
 

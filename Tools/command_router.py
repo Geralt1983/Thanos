@@ -13,6 +13,8 @@ from pathlib import Path
 import re
 from typing import Callable, Optional
 
+from Tools.output_formatter import is_mobile, get_terminal_width
+
 
 # MemOS integration (optional - graceful degradation if unavailable)
 try:
@@ -22,6 +24,21 @@ try:
 except ImportError:
     MEMOS_AVAILABLE = False
     MemOS = None
+
+# Memory commands integration
+try:
+    from commands.memory import (
+        MemoryCommands,
+        MemoryCapture,
+        ContextualMemory,
+        get_memory_commands,
+        get_memory_capture,
+        get_contextual_memory,
+    )
+    MEMORY_COMMANDS_AVAILABLE = True
+except ImportError:
+    MEMORY_COMMANDS_AVAILABLE = False
+    MemoryCommands = None
 
 
 # ANSI color codes (copied from thanos_interactive.py)
@@ -103,6 +120,10 @@ class CommandRouter:
         self._oura_initialized = False
         self._oura_cache_file = self.thanos_dir / "State" / "OuraCache.json"
 
+        # Memory commands integration (lazy initialization)
+        self._memory_commands = None
+        self._memory_commands_initialized = False
+
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
         self._register_commands()
@@ -152,17 +173,22 @@ class CommandRouter:
     def _run_async(self, coro):
         """Run async coroutine from sync context."""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a new loop for nested async
-                import concurrent.futures
+            # Python 3.10+ deprecates get_event_loop() when no loop is running
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop - create and run one
+                return asyncio.run(coro)
 
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, coro)
-                    return future.result(timeout=30)
-            else:
-                return loop.run_until_complete(coro)
-        except Exception:
+            # Loop is running - use thread pool to run in separate loop
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, coro)
+                return future.result(timeout=30)
+        except Exception as e:
+            # Log error but don't crash
+            import logging
+            logging.getLogger(__name__).debug(f"_run_async error: {e}")
             return None
 
     def _get_calendar_adapter(self):
@@ -318,6 +344,8 @@ class CommandRouter:
             "health": (self._cmd_oura, "Show health data (alias)", ["args"]),
             "status": (self._cmd_status, "Show full system status", []),
             "st": (self._cmd_status, "Show status (alias)", []),
+            # Memory commands
+            "mem": (self._cmd_mem, "Memory commands", ["subcommand"]),
         }
 
     def route_command(self, input_str: str) -> CommandResult:
@@ -529,6 +557,7 @@ class CommandRouter:
   /recall <q>    - Search memories (MemOS hybrid) or past sessions
   /remember <c>  - Store a memory in MemOS knowledge graph
   /memory        - Show memory system info (Neo4j, ChromaDB, sessions)
+  /mem <sub>     - Memory commands (search, today, week, struggles, priorities)
   /branch [name] - Create conversation branch from current point
   /branches      - List all branches of this session
   /switch <ref>  - Switch to a different branch (by name or id)
@@ -543,6 +572,13 @@ class CommandRouter:
   /run <cmd>     - Run a Thanos command (e.g., /run pa:daily)
   /help          - Show this help
   /quit          - Exit interactive mode
+
+{Colors.CYAN}Memory Commands:{Colors.RESET}
+  /mem search <q>  - Semantic search across all memories
+  /mem today       - Today's activity summary
+  /mem week        - This week's patterns and highlights
+  /mem struggles   - Recent struggles and blockers
+  /mem priorities  - Current priorities and values
 
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
@@ -1418,7 +1454,7 @@ class CommandRouter:
         return data.get("date", "unknown")
 
     def _display_oura_data(self, data: dict, focus: str = "") -> None:
-        """Display Oura data in a formatted way."""
+        """Display Oura data in a formatted way. Adaptive for mobile/desktop."""
         summary = data.get("summary", {})
         readiness = data.get("readiness", {})
         sleep = data.get("sleep", {})
@@ -1442,57 +1478,115 @@ class CommandRouter:
             self._display_sleep(sleep, data.get("sleep", {}))
         elif focus in ["stress", "st"]:
             self._display_stress(stress)
+        elif is_mobile():
+            # Mobile: Compact single-line format
+            self._display_oura_mobile(data, summary, readiness, sleep, stress, status_emoji)
         else:
-            # Overview
-            print(f"\n{Colors.CYAN}Oura Health - {data.get('date', 'Today')}{Colors.RESET}\n")
+            # Desktop: Detailed format with colors
+            self._display_oura_desktop(data, summary, readiness, sleep, stress, status_emoji)
 
-            # Readiness
-            r_score = readiness.get("score", 0) if readiness else 0
-            print(f"  {Colors.BOLD}Readiness:{Colors.RESET} {status_emoji(r_score)} {r_score}")
+    def _display_oura_mobile(self, data: dict, summary: dict, readiness: dict,
+                             sleep: dict, stress: dict, status_emoji: Callable) -> None:
+        """Compact mobile display for Oura data."""
+        r_score = readiness.get("score", 0) if readiness else 0
+        s_score = sleep.get("score", 0) if sleep else 0
+        overall = summary.get("overall_status", "ok")
 
-            if readiness and readiness.get("contributors"):
-                contrib = readiness["contributors"]
-                low_items = []
-                if contrib.get("previous_night", 100) < 60:
-                    low_items.append(f"sleep({contrib['previous_night']})")
-                if contrib.get("hrv_balance", 100) < 60:
-                    low_items.append(f"HRV({contrib['hrv_balance']})")
-                if contrib.get("recovery_index", 100) < 60:
-                    low_items.append(f"recovery({contrib['recovery_index']})")
-                if low_items:
-                    print(f"    {Colors.DIM}Low: {', '.join(low_items)}{Colors.RESET}")
+        # Single-line status bar
+        print(f"\n{status_emoji(s_score)} {s_score} 😴 | {status_emoji(r_score)} {r_score} 💪 | 📊 {overall}")
 
-            # Sleep
-            s_score = sleep.get("score", 0) if sleep else 0
-            print(f"\n  {Colors.BOLD}Sleep:{Colors.RESET} {status_emoji(s_score)} {s_score}")
+        # Collect low contributors
+        low_items = []
+        if readiness and readiness.get("contributors"):
+            contrib = readiness["contributors"]
+            if contrib.get("previous_night", 100) < 60:
+                low_items.append(f"sleep({contrib['previous_night']})")
+            if contrib.get("hrv_balance", 100) < 60:
+                low_items.append(f"HRV({contrib['hrv_balance']})")
+            if contrib.get("recovery_index", 100) < 60:
+                low_items.append(f"recovery({contrib['recovery_index']})")
 
-            if sleep and sleep.get("contributors"):
-                contrib = sleep["contributors"]
-                if contrib.get("total_sleep", 100) < 60:
-                    print(f"    {Colors.DIM}Total sleep low: {contrib['total_sleep']}{Colors.RESET}")
-                if contrib.get("rem_sleep", 100) < 50:
-                    print(f"    {Colors.DIM}REM low: {contrib['rem_sleep']}{Colors.RESET}")
+        if sleep and sleep.get("contributors"):
+            contrib = sleep["contributors"]
+            if contrib.get("total_sleep", 100) < 60:
+                low_items.append(f"total({contrib['total_sleep']})")
+            if contrib.get("rem_sleep", 100) < 50:
+                low_items.append(f"REM({contrib['rem_sleep']})")
 
-            # Stress
-            if stress:
-                stress_high = stress.get("stress_high", 0)
-                recovery_high = stress.get("recovery_high", 0)
-                if stress_high > 0 or recovery_high > 0:
-                    stress_min = stress_high // 60
-                    recovery_min = recovery_high // 60
-                    print(f"\n  {Colors.BOLD}Stress:{Colors.RESET} {stress_min}min high | {recovery_min}min recovery")
+        if low_items:
+            print(f"Low: {', '.join(low_items)}")
 
-            # Recommendations
-            recs = summary.get("recommendations", [])
-            if recs:
-                print(f"\n  {Colors.BOLD}Recommendations:{Colors.RESET}")
-                for rec in recs:
-                    print(f"    • {rec}")
+        # Stress (if significant)
+        if stress:
+            stress_high = stress.get("stress_high", 0)
+            if stress_high > 300:  # More than 5 min high stress
+                print(f"⚠️ {stress_high // 60}min stress")
 
-            # Overall status
-            overall = summary.get("overall_status", "unknown")
-            print(f"\n  {Colors.BOLD}Overall:{Colors.RESET} {overall.upper()}")
-            print()
+        # First recommendation only
+        recs = summary.get("recommendations", [])
+        if recs:
+            # Truncate to fit mobile width
+            rec = recs[0]
+            width = get_terminal_width() - 4
+            if len(rec) > width:
+                rec = rec[:width - 3] + "..."
+            print(f"💡 {rec}")
+
+        print()
+
+    def _display_oura_desktop(self, data: dict, summary: dict, readiness: dict,
+                              sleep: dict, stress: dict, status_emoji: Callable) -> None:
+        """Detailed desktop display for Oura data."""
+        # Overview
+        print(f"\n{Colors.CYAN}Oura Health - {data.get('date', 'Today')}{Colors.RESET}\n")
+
+        # Readiness
+        r_score = readiness.get("score", 0) if readiness else 0
+        print(f"  {Colors.BOLD}Readiness:{Colors.RESET} {status_emoji(r_score)} {r_score}")
+
+        if readiness and readiness.get("contributors"):
+            contrib = readiness["contributors"]
+            low_items = []
+            if contrib.get("previous_night", 100) < 60:
+                low_items.append(f"sleep({contrib['previous_night']})")
+            if contrib.get("hrv_balance", 100) < 60:
+                low_items.append(f"HRV({contrib['hrv_balance']})")
+            if contrib.get("recovery_index", 100) < 60:
+                low_items.append(f"recovery({contrib['recovery_index']})")
+            if low_items:
+                print(f"    {Colors.DIM}Low: {', '.join(low_items)}{Colors.RESET}")
+
+        # Sleep
+        s_score = sleep.get("score", 0) if sleep else 0
+        print(f"\n  {Colors.BOLD}Sleep:{Colors.RESET} {status_emoji(s_score)} {s_score}")
+
+        if sleep and sleep.get("contributors"):
+            contrib = sleep["contributors"]
+            if contrib.get("total_sleep", 100) < 60:
+                print(f"    {Colors.DIM}Total sleep low: {contrib['total_sleep']}{Colors.RESET}")
+            if contrib.get("rem_sleep", 100) < 50:
+                print(f"    {Colors.DIM}REM low: {contrib['rem_sleep']}{Colors.RESET}")
+
+        # Stress
+        if stress:
+            stress_high = stress.get("stress_high", 0)
+            recovery_high = stress.get("recovery_high", 0)
+            if stress_high > 0 or recovery_high > 0:
+                stress_min = stress_high // 60
+                recovery_min = recovery_high // 60
+                print(f"\n  {Colors.BOLD}Stress:{Colors.RESET} {stress_min}min high | {recovery_min}min recovery")
+
+        # Recommendations
+        recs = summary.get("recommendations", [])
+        if recs:
+            print(f"\n  {Colors.BOLD}Recommendations:{Colors.RESET}")
+            for rec in recs:
+                print(f"    • {rec}")
+
+        # Overall status
+        overall = summary.get("overall_status", "unknown")
+        print(f"\n  {Colors.BOLD}Overall:{Colors.RESET} {overall.upper()}")
+        print()
 
     def _display_readiness(self, readiness: dict) -> None:
         """Display detailed readiness info."""
@@ -1546,3 +1640,277 @@ class CommandRouter:
         if stress.get("day_summary"):
             print(f"  Summary: {stress['day_summary']}")
         print()
+
+    # ========================================================================
+    # Memory Commands
+    # ========================================================================
+
+    def _get_memory_commands(self):
+        """Get memory commands instance, initializing if needed."""
+        if not MEMORY_COMMANDS_AVAILABLE:
+            return None
+
+        if not self._memory_commands_initialized:
+            try:
+                self._memory_commands = get_memory_commands(self.thanos_dir)
+                self._memory_commands_initialized = True
+            except Exception as e:
+                print(f"{Colors.DIM}Memory commands init error: {e}{Colors.RESET}")
+                self._memory_commands = None
+                self._memory_commands_initialized = True
+
+        return self._memory_commands
+
+    def _cmd_mem(self, args: str) -> CommandResult:
+        """
+        Memory commands handler.
+
+        Subcommands:
+        - search <query>  : Semantic search across memories
+        - today           : Today's activity summary
+        - week            : This week's patterns
+        - struggles       : Recent struggles and blockers
+        - priorities      : Current priorities and values
+        """
+        if not args:
+            self._show_mem_help()
+            return CommandResult()
+
+        parts = args.split(maxsplit=1)
+        subcommand = parts[0].lower()
+        subargs = parts[1] if len(parts) > 1 else ""
+
+        mem_cmds = self._get_memory_commands()
+        if not mem_cmds:
+            print(f"{Colors.DIM}Memory commands not available.{Colors.RESET}")
+            return CommandResult(success=False)
+
+        if subcommand == "search":
+            return self._mem_search(mem_cmds, subargs)
+        elif subcommand == "today":
+            return self._mem_today(mem_cmds)
+        elif subcommand == "week":
+            return self._mem_week(mem_cmds)
+        elif subcommand == "struggles":
+            return self._mem_struggles(mem_cmds, subargs)
+        elif subcommand == "priorities":
+            return self._mem_priorities(mem_cmds)
+        else:
+            print(f"{Colors.DIM}Unknown memory subcommand: {subcommand}{Colors.RESET}")
+            self._show_mem_help()
+            return CommandResult(success=False)
+
+    def _show_mem_help(self) -> None:
+        """Show memory commands help."""
+        print(f"""
+{Colors.CYAN}Memory Commands:{Colors.RESET}
+
+  /mem search <query>   Semantic search across all memories
+  /mem today            Today's activity summary (conversations, emotions)
+  /mem week             This week's patterns and highlights
+  /mem struggles [days] Recent struggles and blockers (default: 7 days)
+  /mem priorities       Current priorities, focus, and commitments
+
+{Colors.DIM}Examples:{Colors.RESET}
+  /mem search API rate limiting
+  /mem struggles 14
+  /mem today
+""")
+
+    def _mem_search(self, mem_cmds, query: str) -> CommandResult:
+        """Execute memory search."""
+        if not query:
+            print(f"{Colors.DIM}Usage: /mem search <query>{Colors.RESET}")
+            return CommandResult(success=False)
+
+        print(f"{Colors.DIM}Searching memories for: {query}{Colors.RESET}\n")
+
+        results = mem_cmds.search(query, limit=8)
+
+        if not results:
+            print(f"{Colors.DIM}No matching memories found.{Colors.RESET}")
+            return CommandResult()
+
+        print(f"{Colors.CYAN}Memory Search Results ({len(results)} found):{Colors.RESET}\n")
+
+        for i, r in enumerate(results, 1):
+            # Source indicator
+            source_icon = {
+                "vector": "🔍",
+                "graph": "🔗",
+                "session": "💬"
+            }.get(r.source, "📝")
+
+            relevance_bar = "█" * int(r.relevance * 5) + "░" * (5 - int(r.relevance * 5))
+
+            print(f"  {source_icon} [{r.memory_type}] {relevance_bar}")
+            print(f"     {r.content[:120]}{'...' if len(r.content) > 120 else ''}")
+
+            # Show metadata if available
+            if r.metadata.get("date"):
+                print(f"     {Colors.DIM}Date: {r.metadata['date']}{Colors.RESET}")
+            elif r.metadata.get("session_id"):
+                print(f"     {Colors.DIM}Session: {r.metadata['session_id']}{Colors.RESET}")
+
+            print()
+
+        return CommandResult()
+
+    def _mem_today(self, mem_cmds) -> CommandResult:
+        """Show today's activity summary."""
+        summary = mem_cmds.today()
+
+        print(f"\n{Colors.CYAN}Today's Activity:{Colors.RESET}\n")
+
+        print(f"  Conversations: {summary.conversations}")
+
+        if summary.emotional_markers:
+            print(f"\n  {Colors.BOLD}Emotional Markers:{Colors.RESET}")
+            for emotion, count in summary.emotional_markers.items():
+                if count > 0:
+                    emoji = {"frustration": "😤", "excitement": "🎉", "urgency": "⚡"}.get(emotion, "•")
+                    print(f"    {emoji} {emotion.title()}: {count} occurrences")
+
+        if summary.wins:
+            print(f"\n  {Colors.BOLD}Wins:{Colors.RESET}")
+            for win in summary.wins[:3]:
+                print(f"    ✅ {win}")
+
+        if summary.blockers_mentioned:
+            print(f"\n  {Colors.BOLD}Blockers Mentioned:{Colors.RESET}")
+            for blocker in summary.blockers_mentioned[:3]:
+                print(f"    🚧 {blocker}")
+
+        print()
+        return CommandResult()
+
+    def _mem_week(self, mem_cmds) -> CommandResult:
+        """Show this week's patterns and highlights."""
+        summary = mem_cmds.week()
+
+        print(f"\n{Colors.CYAN}This Week's Summary:{Colors.RESET}\n")
+
+        print(f"  Total Conversations: {summary.conversations}")
+
+        if summary.emotional_markers:
+            print(f"\n  {Colors.BOLD}Emotional Patterns:{Colors.RESET}")
+
+            total = sum(summary.emotional_markers.values())
+            if total > 0:
+                for emotion, count in summary.emotional_markers.items():
+                    if count > 0:
+                        pct = (count / total) * 100
+                        bar = "█" * int(pct / 10) + "░" * (10 - int(pct / 10))
+                        emoji = {"frustration": "😤", "excitement": "🎉", "urgency": "⚡"}.get(emotion, "•")
+                        print(f"    {emoji} {emotion.title():12} {bar} {count}")
+
+        if summary.wins:
+            print(f"\n  {Colors.BOLD}Highlights:{Colors.RESET}")
+            for win in summary.wins[:5]:
+                print(f"    ✅ {win}")
+
+        if summary.blockers_mentioned:
+            print(f"\n  {Colors.BOLD}Recurring Blockers:{Colors.RESET}")
+            for blocker in summary.blockers_mentioned[:5]:
+                print(f"    🚧 {blocker}")
+
+        print()
+        return CommandResult()
+
+    def _mem_struggles(self, mem_cmds, args: str) -> CommandResult:
+        """Show recent struggles and blockers."""
+        days = 7
+        if args:
+            try:
+                days = int(args)
+            except ValueError:
+                print(f"{Colors.DIM}Invalid days value, using default (7){Colors.RESET}")
+
+        struggles = mem_cmds.struggles(days=days)
+
+        print(f"\n{Colors.CYAN}Recent Struggles ({days} days):{Colors.RESET}\n")
+
+        if not struggles:
+            print(f"  {Colors.DIM}No struggles or blockers recorded.{Colors.RESET}")
+            print(f"  {Colors.DIM}(This is either great news or you're not sharing enough!){Colors.RESET}")
+        else:
+            # Group by category
+            by_category = {}
+            for s in struggles:
+                cat = s["category"]
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(s)
+
+            for category, items in by_category.items():
+                emoji = "🚧" if category == "blocker" else "😤"
+                print(f"  {Colors.BOLD}{emoji} {category.title()} ({len(items)}):{Colors.RESET}")
+
+                for item in items[:5]:
+                    print(f"    • [{item['date']}] {item['context'][:80]}...")
+                print()
+
+        print()
+        return CommandResult()
+
+    def _mem_priorities(self, mem_cmds) -> CommandResult:
+        """Show current priorities and values."""
+        priorities = mem_cmds.priorities()
+
+        print(f"\n{Colors.CYAN}Current Priorities:{Colors.RESET}\n")
+
+        if priorities["focus"]:
+            print(f"  {Colors.BOLD}Today's Focus:{Colors.RESET} {priorities['focus']}")
+
+        if priorities["top3"]:
+            print(f"\n  {Colors.BOLD}Top 3 for Today:{Colors.RESET}")
+            for i, item in enumerate(priorities["top3"], 1):
+                print(f"    {i}. {item}")
+
+        if priorities["week_theme"]:
+            print(f"\n  {Colors.BOLD}Week Theme:{Colors.RESET} {priorities['week_theme']}")
+
+        if priorities["commitments"]:
+            print(f"\n  {Colors.BOLD}Active Commitments ({len(priorities['commitments'])}):{Colors.RESET}")
+            for item in priorities["commitments"][:5]:
+                print(f"    • {item}")
+            if len(priorities["commitments"]) > 5:
+                print(f"    {Colors.DIM}... and {len(priorities['commitments']) - 5} more{Colors.RESET}")
+
+        if priorities["values"]:
+            print(f"\n  {Colors.BOLD}Core Values:{Colors.RESET}")
+            for value in priorities["values"][:5]:
+                print(f"    • {value}")
+
+        if not any([priorities["focus"], priorities["top3"], priorities["commitments"]]):
+            print(f"  {Colors.DIM}No priorities set. Update State/Today.md to track priorities.{Colors.RESET}")
+
+        print()
+        return CommandResult()
+
+    def _get_oura_data(self) -> Optional[dict]:
+        """Get Oura health data (used by _detect_and_fetch_oura_context)."""
+        from datetime import datetime
+
+        oura = self._get_oura_adapter()
+        if not oura:
+            return None
+
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # Check cache first
+        cached = self._get_oura_cache(today)
+        if cached:
+            data_date = self._get_oura_data_date(cached)
+            if data_date == today:
+                return cached
+
+        # Fetch fresh
+        try:
+            result = self._run_async(oura.call_tool("get_today_health", {}))
+            if result and result.success:
+                return result.data
+        except Exception:
+            pass
+
+        return None

@@ -52,7 +52,42 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 import asyncio
+
+# Silence noisy loggers early (before any MCP imports)
+logging.basicConfig(level=logging.CRITICAL, format="%(message)s")
+logging.getLogger().setLevel(logging.CRITICAL)
+
+for noisy_logger in [
+    "mcp", "mcp.server", "mcp.server.lowlevel", "mcp.server.lowlevel.server",
+    "httpcore", "httpx", "urllib3", "googleapiclient", "oauth2client",
+    "google", "google.auth", "google_auth_oauthlib", "root",
+]:
+    logging.getLogger(noisy_logger).setLevel(logging.CRITICAL)
+
+
+class NoiseFilter(logging.Filter):
+    """Filter out known noisy log messages."""
+
+    NOISE_PATTERNS = [
+        "No stored Oauth2 credentials",
+        "tool list change notifications",
+        "ListToolsRequest",
+        "Processing request of type",
+        ".oauth2.",
+    ]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(pattern in msg for pattern in self.NOISE_PATTERNS)
+
+
+# Apply noise filter to root logger
+logging.getLogger().addFilter(NoiseFilter())
+
 from Tools.command_router import CommandRouter, CommandAction, Colors
+
+# Add BRIGHT_MAGENTA to Colors for consistent usage
+Colors.BRIGHT_MAGENTA = "\033[95m"
 from Tools.context_manager import ContextManager
 from Tools.prompt_formatter import PromptFormatter
 from Tools.session_manager import SessionManager
@@ -61,6 +96,20 @@ from Tools.memos import get_memos
 
 # MCP Bridge imports for tool execution
 from Tools.adapters.mcp_bridge import MCPBridge
+
+# Memory capture and context injection
+try:
+    from commands.memory import (
+        MemoryCapture,
+        ContextualMemory,
+        get_memory_capture,
+        get_contextual_memory,
+    )
+    MEMORY_CAPTURE_AVAILABLE = True
+except ImportError:
+    MEMORY_CAPTURE_AVAILABLE = False
+    MemoryCapture = None
+    ContextualMemory = None
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +192,11 @@ class ThanosInteractive:
         self.mcp_tools: List[Dict[str, Any]] = []
         self._init_mcp_bridges()
 
+        # Initialize memory capture and context injection
+        self._memory_capture: Optional[MemoryCapture] = None
+        self._contextual_memory: Optional[ContextualMemory] = None
+        self._init_memory_systems()
+
     def _init_mcp_bridges(self) -> None:
         """
         Initialize MCP bridges from config/api.json mcp_servers section.
@@ -200,6 +254,83 @@ class ThanosInteractive:
 
         except Exception as e:
             logger.warning(f"Failed to initialize MCP bridges: {e}")
+
+    def _init_memory_systems(self) -> None:
+        """Initialize memory capture and contextual memory injection."""
+        if not MEMORY_CAPTURE_AVAILABLE:
+            logger.debug("Memory capture not available")
+            return
+
+        try:
+            self._memory_capture = get_memory_capture(self.thanos_dir)
+            self._contextual_memory = get_contextual_memory(self.thanos_dir)
+            logger.info("Memory capture and context injection initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize memory systems: {e}")
+            self._memory_capture = None
+            self._contextual_memory = None
+
+    def _capture_conversation_turn(
+        self,
+        user_message: str,
+        assistant_response: str,
+        tool_calls: List[str] = None
+    ) -> None:
+        """
+        Capture a conversation turn for memory.
+
+        Called after each successful exchange to extract and store:
+        - User intent and emotional markers
+        - Task completions and blockers
+        - Key topics discussed
+
+        Args:
+            user_message: User's input
+            assistant_response: Assistant's response
+            tool_calls: List of tool names that were invoked
+        """
+        if not self._memory_capture:
+            return
+
+        try:
+            self._memory_capture.capture_turn(
+                user_message=user_message,
+                assistant_response=assistant_response,
+                agent=self.command_router.current_agent,
+                tool_calls=tool_calls,
+                session_id=self.session_manager.session.id
+            )
+        except Exception as e:
+            logger.debug(f"Memory capture error (non-fatal): {e}")
+
+    def _get_memory_context(self, user_message: str) -> Optional[str]:
+        """
+        Get contextual memory to inject into the conversation.
+
+        Queries relevant memories based on current message and
+        returns context string to prepend to system prompt.
+
+        Args:
+            user_message: Current user message
+
+        Returns:
+            Context string or None if no relevant context
+        """
+        if not self._contextual_memory:
+            return None
+
+        try:
+            return self._contextual_memory.get_context_injection(
+                user_message=user_message,
+                current_agent=self.command_router.current_agent,
+                session_history=[
+                    {"role": m.role, "content": m.content}
+                    for m in self.session_manager.session.history[-10:]
+                ]
+            )
+        except Exception as e:
+            logger.debug(f"Memory context error (non-fatal): {e}")
+            return None
 
     async def _refresh_mcp_tools(self) -> None:
         """Refresh and cache tools from all MCP bridges."""
@@ -387,6 +518,85 @@ class ThanosInteractive:
             results.append(result)
         return results
 
+    # Health keywords that trigger Oura context injection
+    HEALTH_KEYWORDS = {
+        "sleep", "slept", "sleeping", "tired", "exhausted", "fatigue", "fatigued",
+        "energy", "energized", "energetic", "drained", "rested", "rest",
+        "recovery", "recovered", "recovering", "hrv", "heart rate",
+        "readiness", "ready", "oura", "health", "healthy",
+        "stress", "stressed", "anxious", "anxiety", "calm",
+        "workout", "exercise", "active", "activity",
+        "morning", "woke", "wake", "bedtime", "bed",
+        "how am i", "how do i feel", "how should i",
+    }
+
+    def _detect_and_fetch_oura_context(self, user_input: str) -> Optional[str]:
+        """
+        Detect health-related queries and fetch Oura data for context.
+
+        Args:
+            user_input: The user's message
+
+        Returns:
+            Formatted Oura context string if health-related, None otherwise
+        """
+        input_lower = user_input.lower()
+
+        # Check for health keywords
+        is_health_related = any(kw in input_lower for kw in self.HEALTH_KEYWORDS)
+
+        if not is_health_related:
+            return None
+
+        # Fetch Oura data
+        try:
+            print(f"{Colors.DIM}{Colors.CYAN}[Fetching health context...]{Colors.RESET}")
+            oura_data = self.command_router._get_oura_data()
+
+            if not oura_data:
+                return None
+
+            # Extract key metrics
+            summary = oura_data.get("summary", {})
+            readiness = oura_data.get("readiness", {})
+            sleep = oura_data.get("sleep", {})
+            stress = oura_data.get("stress", {})
+
+            r_score = readiness.get("score", "?") if readiness else "?"
+            s_score = sleep.get("score", "?") if sleep else "?"
+            overall = summary.get("overall_status", "unknown")
+
+            # Build compact context
+            context_parts = [
+                f"[Oura Health Data - {oura_data.get('date', 'Today')}]",
+                f"Readiness: {r_score}, Sleep: {s_score}, Overall: {overall}",
+            ]
+
+            # Add low contributors if any
+            low_items = []
+            if readiness and readiness.get("contributors"):
+                contrib = readiness["contributors"]
+                if contrib.get("previous_night", 100) < 60:
+                    low_items.append(f"sleep({contrib['previous_night']})")
+                if contrib.get("hrv_balance", 100) < 60:
+                    low_items.append(f"HRV({contrib['hrv_balance']})")
+                if contrib.get("recovery_index", 100) < 60:
+                    low_items.append(f"recovery({contrib['recovery_index']})")
+
+            if low_items:
+                context_parts.append(f"Low factors: {', '.join(low_items)}")
+
+            # Add recommendations
+            recs = summary.get("recommendations", [])
+            if recs:
+                context_parts.append(f"Recommendation: {recs[0]}")
+
+            return "\n".join(context_parts)
+
+        except Exception as e:
+            logger.debug(f"Failed to fetch Oura context: {e}")
+            return None
+
     def _run_agentic_loop(
         self,
         message: str,
@@ -460,8 +670,8 @@ class ThanosInteractive:
                 tool_calls = response.get("tool_calls", [])
                 assistant_content = response.get("content", "")
 
-                # Show thinking indicator
-                print(f"{Colors.DIM}[Executing {len(tool_calls)} tool(s)...]{Colors.RESET}")
+                # Show thinking indicator (dim cyan for subtle visibility)
+                print(f"{Colors.DIM}{Colors.CYAN}[Executing {len(tool_calls)} tool(s)...]{Colors.RESET}")
 
                 # Add assistant message with tool calls to conversation
                 assistant_message = {
@@ -508,8 +718,9 @@ class ThanosInteractive:
             else:
                 final_content = response if isinstance(response, str) else ""
 
-            # Print the final response
+            # Print the final response with spacing
             if final_content:
+                print()  # Blank line before response
                 print(final_content)
 
             break
@@ -582,6 +793,20 @@ class ThanosInteractive:
                         break
                     continue
 
+                # Handle bare health commands - route directly to /oura
+                if user_input.lower().strip() in ("oura", "health"):
+                    self.command_router.route_command("/oura")
+                    continue
+
+                # Detect health/Oura-related queries and inject context
+                oura_context = self._detect_and_fetch_oura_context(user_input)
+
+                # Get contextual memory injection (past conversations, related struggles)
+                memory_context = self._get_memory_context(user_input)
+
+                # Visual separator after user input
+                print(f"{Colors.DIM}{'─' * 40}{Colors.RESET}")
+
                 # Check for intelligent agent routing
                 suggested_agent = self.command_router.detect_agent(user_input, auto_switch=False)
                 if suggested_agent and suggested_agent != self.command_router.current_agent:
@@ -603,10 +828,27 @@ class ThanosInteractive:
                     # Determine if we should use MCP tools (non-streaming for tool calls)
                     use_mcp_tools = bool(self.mcp_tools)
 
+                    # Build augmented message with context injections
+                    context_parts = []
+
+                    # Add memory context if available (past conversations, related struggles)
+                    if memory_context:
+                        context_parts.append(memory_context)
+
+                    # Add Oura health context if health-related
+                    if oura_context:
+                        context_parts.append(oura_context)
+
+                    # Combine contexts with user input
+                    if context_parts:
+                        augmented_message = "\n\n".join(context_parts) + f"\n\nUser query: {user_input}"
+                    else:
+                        augmented_message = user_input
+
                     if use_mcp_tools:
                         # Use agentic loop with tools (non-streaming)
                         response = self._run_agentic_loop(
-                            message=user_input,
+                            message=augmented_message,
                             agent=current_agent,
                             model=model,
                             history=history
@@ -614,7 +856,7 @@ class ThanosInteractive:
                     else:
                         # Original streaming path (no tools)
                         response = self.orchestrator.chat(
-                            message=user_input,
+                            message=augmented_message,
                             agent=current_agent,
                             model=model,
                             stream=True,
@@ -687,6 +929,21 @@ class ThanosInteractive:
                             interaction_type="chat",
                             agent=current_agent
                         )
+
+                        # Capture conversation turn for memory
+                        # Extract tool calls from response if available
+                        tool_calls_made = []
+                        if isinstance(response, dict) and response.get("tool_calls"):
+                            tool_calls_made = [tc.get("name", "") for tc in response.get("tool_calls", [])]
+
+                        self._capture_conversation_turn(
+                            user_message=user_input,
+                            assistant_response=content,
+                            tool_calls=tool_calls_made
+                        )
+
+                        # Add blank line after response for visual separation
+                        print()
 
                 except Exception as e:
                     # Track error count

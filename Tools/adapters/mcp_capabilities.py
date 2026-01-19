@@ -276,9 +276,9 @@ class CapabilityManager:
             )
 
     def warn_if_no_tool_list_changed(self) -> None:
-        """Log warning if server doesn't support tool list change notifications."""
+        """Log debug message if server doesn't support tool list change notifications."""
         if self.supports_tools() and not self.supports_tool_list_changed():
-            logger.warning(
+            logger.debug(
                 "Server does not support tool list change notifications. "
                 "Tool list updates will require manual refresh."
             )

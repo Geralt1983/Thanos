@@ -916,6 +916,10 @@ You maintain a compact daily plan and a scoreboard.
         """Execute a command and return the response."""
         self._ensure_client()
 
+        # Special handling for pa:daily - run the script directly for compact output
+        if command_name == "pa:daily":
+            return self._run_daily_brief_direct(args, stream)
+
         command = self.find_command(command_name)
         if not command:
             return f"Command not found: {command_name}"
@@ -969,6 +973,160 @@ You maintain a compact daily plan and a scoreboard.
                     system_prompt=system_prompt,
                     operation=f"command:{command_name}"
                 ), "usage": None}
+
+    def _run_daily_brief_direct(self, args: str = "", stream: bool = False) -> Dict:
+        """Run daily-brief.ts directly for compact output."""
+        import subprocess
+        from pathlib import Path
+
+        script_path = Path(self.base_dir) / "Tools" / "daily-brief.ts"
+
+        if not script_path.exists():
+            return {"content": "daily-brief.ts not found", "usage": None}
+
+        try:
+            cmd = ["bun", str(script_path)]
+            if "--save" in args or "-s" in args:
+                cmd.append("--save")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=self.base_dir
+            )
+
+            output = result.stdout
+
+            # Inject fresh Oura health data from MCP
+            oura_section = self._get_oura_health_section()
+            if oura_section:
+                # Insert after the date header line
+                lines = output.split('\n')
+                insert_idx = 4  # After the header box
+                for i, line in enumerate(lines):
+                    if line.startswith('═══') and i > 2:
+                        insert_idx = i + 1
+                        break
+                lines.insert(insert_idx, oura_section)
+                output = '\n'.join(lines)
+
+            if result.stderr and "error" in result.stderr.lower():
+                output += f"\n[Warning: {result.stderr.strip()}]"
+
+            if stream:
+                print(output)
+                return {"content": output, "usage": None}
+            else:
+                return {"content": output, "usage": None}
+
+        except subprocess.TimeoutExpired:
+            return {"content": "Daily brief timed out", "usage": None}
+        except FileNotFoundError:
+            # Bun not installed, fall back to LLM
+            return self._run_command_via_llm("pa:daily", args, stream)
+        except Exception as e:
+            return {"content": f"Error running daily brief: {e}", "usage": None}
+
+    def _get_oura_health_section(self) -> str:
+        """Fetch Oura health data from cache for daily brief."""
+        import json
+        from datetime import datetime, timedelta
+
+        try:
+            # Check cache file first (same as command_router)
+            cache_file = self.base_dir / "State" / "OuraCache.json"
+            today = datetime.now().strftime("%Y-%m-%d")
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+            data = None
+            data_date = None
+            if cache_file.exists():
+                try:
+                    cache = json.loads(cache_file.read_text())
+                    # Try today first, then yesterday as fallback
+                    data = cache.get(today)
+                    data_date = today
+                    if not data:
+                        data = cache.get(yesterday)
+                        data_date = yesterday
+                except (json.JSONDecodeError, IOError):
+                    pass
+
+            if not data:
+                return ""
+
+            # Extract metrics
+            summary = data.get("summary", {})
+            readiness = data.get("readiness", {})
+            sleep = data.get("sleep", {})
+
+            r_score = readiness.get("score", "?") if readiness else "?"
+            s_score = sleep.get("score", "?") if sleep else "?"
+            overall = summary.get("overall_status", "unknown")
+
+            # Determine energy emoji
+            if isinstance(r_score, int):
+                if r_score >= 85:
+                    energy_emoji, energy = "🟢", "HIGH"
+                elif r_score >= 70:
+                    energy_emoji, energy = "🟡", "MEDIUM"
+                else:
+                    energy_emoji, energy = "🔴", "LOW"
+            else:
+                energy_emoji, energy = "⚪", "UNKNOWN"
+
+            # Get recommendation
+            recs = summary.get("recommendations", [])
+            rec = recs[0] if recs else "Check /oura for health data"
+
+            # Add date note if using yesterday's data
+            date_note = "" if data_date == today else f" (from {data_date})"
+
+            section = f"""
+💪 HEALTH STATUS{date_note}:
+   {energy_emoji} Energy: {energy}
+   😴 Sleep: {s_score}/100  |  🎯 Readiness: {r_score}/100
+   📝 {rec}
+"""
+            return section
+
+        except Exception:
+            # Silently fail - Oura is optional
+            return ""
+
+    def _run_command_via_llm(self, command_name: str, args: str = "", stream: bool = False) -> Dict:
+        """Fallback: run command via LLM."""
+        command = self.find_command(command_name)
+        if not command:
+            return {"content": f"Command not found: {command_name}", "usage": None}
+
+        system_prompt = self._build_system_prompt(command=command)
+        user_prompt = f"Execute the {command.name} command."
+        if args:
+            user_prompt += f"\nArguments: {args}"
+        user_prompt += "\n\nFollow the workflow exactly and provide the output in the specified format."
+
+        if stream:
+            result = ""
+            for chunk in self.api_client.chat_stream(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                operation=f"command:{command_name}"
+            ):
+                if isinstance(chunk, dict) and chunk.get("type") == "usage":
+                    continue
+                print(chunk, end="", flush=True)
+                result += chunk
+            print()
+            return {"content": result, "usage": None}
+        else:
+            return {"content": self.api_client.chat(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                operation=f"command:{command_name}"
+            ), "usage": None}
 
     def chat(self, message: str, agent: Optional[str] = None,
              stream: bool = False, model: Optional[str] = None,

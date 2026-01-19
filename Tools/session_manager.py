@@ -324,15 +324,17 @@ class SessionManager:
         # Write to file
         filepath.write_text("".join(lines))
 
-        # Save to JSON
+        # Save to JSON with enhanced metadata for memory integration
         json_filepath = filepath.with_suffix(".json")
         json_data = {
             "id": self.session.id,
             "started_at": self.session.started_at.isoformat(),
+            "ended_at": datetime.now().isoformat(),
             "agent": self.session.agent,
             "total_input_tokens": self.session.total_input_tokens,
             "total_output_tokens": self.session.total_output_tokens,
             "total_cost": self.session.total_cost,
+            "error_count": getattr(self.session, 'error_count', 0),
             "history": [
                 {
                     "role": msg.role,
@@ -341,11 +343,75 @@ class SessionManager:
                     "tokens": msg.tokens
                 }
                 for msg in self.session.history
-            ]
+            ],
+            # Memory snapshot for contextual recall
+            "memory_snapshot": self._build_memory_snapshot()
         }
         json_filepath.write_text(json.dumps(json_data, indent=2))
 
         return filepath
+
+    def _build_memory_snapshot(self) -> Dict:
+        """
+        Build memory snapshot for session persistence.
+
+        Extracts key topics, emotional markers, and conversation summary
+        for use in contextual memory retrieval.
+
+        Returns:
+            Dict with memory metadata
+        """
+        snapshot = {
+            "topics": [],
+            "emotional_markers": {
+                "frustration": 0,
+                "excitement": 0,
+                "urgency": 0
+            },
+            "key_queries": [],
+            "blockers_mentioned": False,
+            "task_completions": 0
+        }
+
+        # Emotional marker patterns
+        frustration_markers = ["frustrated", "annoying", "stuck", "can't", "broken", "failing"]
+        excitement_markers = ["excited", "amazing", "awesome", "great", "love", "perfect", "finally"]
+        urgency_markers = ["urgent", "asap", "deadline", "due today", "must", "critical"]
+        blocker_markers = ["blocked", "waiting on", "can't proceed", "need help", "stuck on"]
+        completion_markers = ["done", "completed", "finished", "solved", "fixed", "worked"]
+
+        for msg in self.session.history:
+            content_lower = msg.content.lower()
+
+            # Count emotional markers
+            if any(m in content_lower for m in frustration_markers):
+                snapshot["emotional_markers"]["frustration"] += 1
+            if any(m in content_lower for m in excitement_markers):
+                snapshot["emotional_markers"]["excitement"] += 1
+            if any(m in content_lower for m in urgency_markers):
+                snapshot["emotional_markers"]["urgency"] += 1
+
+            # Track blockers
+            if any(m in content_lower for m in blocker_markers):
+                snapshot["blockers_mentioned"] = True
+
+            # Count task completions (from assistant responses)
+            if msg.role == "assistant" and any(m in content_lower for m in completion_markers):
+                snapshot["task_completions"] += 1
+
+            # Extract key user queries (first 100 chars)
+            if msg.role == "user" and len(msg.content) > 20:
+                query_preview = msg.content[:100]
+                if query_preview not in snapshot["key_queries"]:
+                    snapshot["key_queries"].append(query_preview)
+                    if len(snapshot["key_queries"]) >= 5:
+                        # Limit to 5 key queries
+                        pass
+
+        # Keep only top 5 queries
+        snapshot["key_queries"] = snapshot["key_queries"][:5]
+
+        return snapshot
 
     def list_sessions(self, limit: int = 10) -> List[Dict]:
         """

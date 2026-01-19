@@ -1,985 +1,915 @@
-# Thanos Architecture Documentation
+# Thanos Personal Productivity System - Architecture
 
-## Table of Contents
+## System Overview
 
-- [Overview](#overview)
-- [System Architecture](#system-architecture)
-- [Core Layers](#core-layers)
-- [MCP Integration](#mcp-integration)
-- [Component Details](#component-details)
-- [Data Flow](#data-flow)
-- [Integration Points](#integration-points)
-- [Scalability & Performance](#scalability--performance)
-- [Security](#security)
-- [Future Architecture](#future-architecture)
-
-## Overview
-
-Thanos is built on a **modular, layered architecture** that enables flexible integration with external services through two primary approaches:
-
-1. **Direct Adapters**: Native Python implementations for tight integration
-2. **MCP Bridges**: Protocol-based integration via Model Context Protocol
-
-This hybrid approach provides the best of both worlds: native performance where needed and ecosystem flexibility through MCP.
-
-## System Architecture
-
-### High-Level Architecture Diagram
+Thanos is a personal productivity system built on **four architectural pillars** that work together to create a trusted, resilient system for capturing thoughts, managing tasks, and maintaining clarity.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        User / Client Layer                           │
-│  - CLI Interface                                                     │
-│  - API Endpoints                                                     │
-│  - Configuration Files                                               │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Orchestration Layer                              │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │              Thanos Orchestrator                              │  │
-│  │  - Command Parsing                                            │  │
-│  │  - Execution Planning                                         │  │
-│  │  - Result Aggregation                                         │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │              Command Router                                   │  │
-│  │  - Tool Selection                                             │  │
-│  │  - Parameter Validation                                       │  │
-│  │  - Response Formatting                                        │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Adapter Layer                                   │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                   Adapter Manager                             │  │
-│  │  - Adapter Registration & Discovery                           │  │
-│  │  - Unified Tool Interface                                     │  │
-│  │  - Routing (Direct vs MCP)                                    │  │
-│  │  - Lifecycle Management                                       │  │
-│  │  - Health Checking                                            │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                      │
-│  ┌────────────────────────┐        ┌──────────────────────────┐   │
-│  │   Direct Adapters      │        │     MCP Bridges          │   │
-│  │                        │        │                          │   │
-│  │  ┌──────────────────┐ │        │  ┌────────────────────┐ │   │
-│  │  │ WorkOS Adapter   │ │        │  │ WorkOS MCP Bridge  │ │   │
-│  │  │ - Native Python  │ │        │  │ - Via Protocol     │ │   │
-│  │  └──────────────────┘ │        │  └────────────────────┘ │   │
-│  │                        │        │                          │   │
-│  │  ┌──────────────────┐ │        │  ┌────────────────────┐ │   │
-│  │  │ Oura Adapter     │ │        │  │ Context7 Bridge    │ │   │
-│  │  │ - Native Python  │ │        │  │ - Remote SSE       │ │   │
-│  │  └──────────────────┘ │        │  └────────────────────┘ │   │
-│  │                        │        │                          │   │
-│  │  ┌──────────────────┐ │        │  │ Sequential Bridge  │ │   │
-│  │  │ Neo4j Adapter    │ │        │  │ - Local stdio      │ │   │
-│  │  │ - Graph DB       │ │        │  └────────────────────┘ │   │
-│  │  └──────────────────┘ │        │                          │   │
-│  │                        │        │  ┌────────────────────┐ │   │
-│  │  ┌──────────────────┐ │        │  │ Filesystem Bridge  │ │   │
-│  │  │ ChromaDB Adapter │ │        │  │ - Local stdio      │ │   │
-│  │  │ - Vector DB      │ │        │  └────────────────────┘ │   │
-│  │  └──────────────────┘ │        │                          │   │
-│  │                        │        │  ┌────────────────────┐ │   │
-│  └────────────────────────┘        │  │ Custom Bridges     │ │   │
-│       BaseAdapter                  │  │ - User-defined     │ │   │
-│       Interface                    │  └────────────────────┘ │   │
-│                                    └──────────────────────────┘   │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      MCP Bridge Layer                                │
-│  (Only for MCP Bridges)                                             │
-│                                                                      │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐  │
-│  │   Discovery      │  │  Configuration   │  │  Capabilities   │  │
-│  │  - Global        │  │  - Validation    │  │  - Negotiation  │  │
-│  │  - Project       │  │  - Env vars      │  │  - Feature det. │  │
-│  │  - Filtering     │  │  - Merging       │  │  - Versioning   │  │
-│  └──────────────────┘  └──────────────────┘  └─────────────────┘  │
-│                                                                      │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐  │
-│  │   Transport      │  │   Connection     │  │   Health        │  │
-│  │  - stdio         │  │   Pooling        │  │   Monitoring    │  │
-│  │  - SSE           │  │  - Lifecycle     │  │  - Metrics      │  │
-│  │  - HTTP (ready)  │  │  - Reuse         │  │  - Status       │  │
-│  └──────────────────┘  └──────────────────┘  └─────────────────┘  │
-│                                                                      │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐  │
-│  │   Caching        │  │   Load           │  │   Error         │  │
-│  │  - TTL           │  │   Balancing      │  │   Handling      │  │
-│  │  - LRU/LFU       │  │  - Strategies    │  │  - Retry        │  │
-│  │  - Disk/Memory   │  │  - Failover      │  │  - Circuit      │  │
-│  └──────────────────┘  └──────────────────┘  └─────────────────┘  │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │              MCPBridge Core                                   │  │
-│  │  - Session Management                                         │  │
-│  │  - Protocol Lifecycle                                         │  │
-│  │  - Tool Caching                                               │  │
-│  │  - BaseAdapter Implementation                                 │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                  MCP Protocol (JSON-RPC 2.0)                         │
-│  - initialize                                                        │
-│  - tools/list                                                        │
-│  - tools/call                                                        │
-│  - completion                                                        │
-│  - resources/* (future)                                             │
-│  - prompts/* (future)                                               │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      External Services                               │
-│                                                                      │
-│  ┌────────────────────────┐        ┌──────────────────────────┐    │
-│  │   Direct Services      │        │     MCP Servers          │    │
-│  │                        │        │                          │    │
-│  │  - WorkOS API          │        │  - WorkOS MCP Server     │    │
-│  │  - Oura API            │        │  - Context7 (Remote)     │    │
-│  │  - Neo4j Database      │        │  - Sequential Thinking   │    │
-│  │  - ChromaDB            │        │  - Filesystem Server     │    │
-│  └────────────────────────┘        │  - Playwright Server     │    │
-│                                    │  - Fetch Server          │    │
-│                                    │  - Custom Servers        │    │
-│                                    └──────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────┘
+                           +---------------------------+
+                           |      User Interfaces      |
+                           |  CLI | Telegram | Voice   |
+                           +-------------+-------------+
+                                         |
+         +-------------------------------+--------------------------------+
+         |                               |                                |
+         v                               v                                v
++------------------+          +-------------------+           +-------------------+
+|     CAPTURE      |          |      CLARITY      |           |    RESILIENCE     |
+|                  |          |                   |           |                   |
+| Brain Dump       |          | Alert Checker     |           | Circuit Breaker   |
+| - Classifier     |          | - Commitments     |           | - State Tracking  |
+| - Router         |          | - Tasks           |           | - Auto-Fallback   |
+|                  |          | - Health (Oura)   |           | - File Cache      |
+| (9 Types)        |          | - Habits          |           |                   |
++--------+---------+          +---------+---------+           +----------+--------+
+         |                              |                                |
+         +------------------------------+--------------------------------+
+                                        |
+                                        v
+                           +---------------------------+
+                           |         TRUST             |
+                           |                           |
+                           |  Unified State Store      |
+                           |  (SQLite - 8 Tables)      |
+                           |                           |
+                           |  Event Journal            |
+                           |  (47 Event Types)         |
+                           +---------------------------+
+                                        |
+                                        v
+                           +---------------------------+
+                           |    External Services      |
+                           | Oura | WorkOS | Calendar  |
+                           +---------------------------+
 ```
 
-## Core Layers
+## The Four Pillars
 
-### 1. User / Client Layer
+### 1. TRUST - Single Source of Truth
 
-**Responsibility**: User interaction and configuration
+The foundation of Thanos is a **unified SQLite state store** that consolidates all data into a single, reliable database. This eliminates the complexity of managing multiple data sources and provides consistent, trustworthy data.
 
-**Components**:
-- CLI interface for command-line interactions
-- API endpoints for programmatic access
-- Configuration files (`.mcp.json`, `~/.claude.json`, `.env`)
+**Core Components:**
+- `Tools/unified_state.py` - StateStore class (8 core tables)
+- `Tools/journal.py` - Event Journal (47 event types, 5 severity levels)
 
-**Key Files**:
-- Configuration files in project root
-- Environment variables
+**Design Principles:**
+- Single database file for all state
+- WAL mode for concurrent access
+- Foreign key enforcement
+- Automatic timestamps on all mutations
 
-### 2. Orchestration Layer
+### 2. CAPTURE - Intelligent Input Processing
 
-**Responsibility**: High-level command orchestration and execution
+The brain dump system provides **zero-friction capture** of any thought, with AI-powered classification that distinguishes thinking from actionable items. This prevents task pollution while ensuring nothing important is lost.
 
-**Components**:
+**Core Components:**
+- `Tools/brain_dump/classifier.py` - AI-powered classification (9 types)
+- `Tools/brain_dump/router.py` - Intelligent routing to destinations
 
-#### Thanos Orchestrator (`Tools/thanos_orchestrator.py`)
-- Parses user commands
-- Plans execution strategy
-- Coordinates multi-step operations
-- Aggregates results
+**Design Principles:**
+- Default to NOT creating tasks
+- All input archived regardless of classification
+- Empathetic acknowledgments for venting/thinking
+- Clear routing rules per classification
 
-#### Command Router (`Tools/command_router.py`)
-- Routes commands to appropriate adapters
-- Validates parameters
-- Formats responses
-- Handles errors
+### 3. CLARITY - Proactive Alerting
 
-**Integration Points**:
-- Initializes AdapterManager on startup
-- Calls adapter methods for tool execution
-- Manages adapter lifecycle
+The alert system provides **proactive visibility** into commitments, tasks, health metrics, and habits. It surfaces what needs attention before it becomes urgent.
 
-### 3. Adapter Layer
+**Core Components:**
+- `Tools/alert_checker.py` - AlertManager with 4 specialized checkers
+- Integration with Journal for alert logging
 
-**Responsibility**: Unified interface to all external services
+**Design Principles:**
+- Priority-based sorting (critical first)
+- Acknowledgment tracking
+- Domain-specific thresholds (health, commitments, habits)
+- Non-blocking async checks
 
-**Core Component**: AdapterManager (`Tools/adapters/__init__.py`)
+### 4. RESILIENCE - Graceful Degradation
 
-**Features**:
-- **Unified Interface**: Single API for all adapters (direct + MCP)
-- **Discovery**: Automatic MCP server discovery from config files
-- **Registration**: Both manual and automatic adapter registration
-- **Routing**: Transparent routing to direct adapters or MCP bridges
-- **Lifecycle**: Health checking, initialization, shutdown
-- **Statistics**: Usage tracking and performance monitoring
+The circuit breaker pattern provides **resilience for fragile APIs** (like unofficial Oura/Monarch integrations). When external services fail, the system automatically falls back to cached data.
 
-**Key Methods**:
+**Core Components:**
+- `Tools/circuit_breaker.py` - CircuitBreaker, FileCache, ResilientAdapter
+
+**Design Principles:**
+- Three states: CLOSED (normal), OPEN (failing), HALF_OPEN (testing)
+- Automatic recovery attempts after timeout
+- File-based cache with TTL
+- Transparent fallback (caller gets metadata about staleness)
+
+---
+
+## Database Schema
+
+### StateStore Tables (8 Tables)
+
+```
++-------------------+     +--------------------+     +-------------------+
+|      tasks        |     |  calendar_events   |     |   commitments     |
++-------------------+     +--------------------+     +-------------------+
+| id (PK)           |     | id (PK)            |     | id (PK)           |
+| title             |     | title              |     | title             |
+| description       |     | start_time         |     | description       |
+| status            |     | end_time           |     | stakeholder       |
+| priority          |     | location           |     | deadline          |
+| due_date          |     | source             |     | status            |
+| source            |     | source_id          |     | priority          |
+| source_id         |     | created_at         |     | created_at        |
+| created_at        |     | metadata (JSON)    |     | completed_at      |
+| updated_at        |     +--------------------+     | metadata (JSON)   |
+| completed_at      |                               +-------------------+
+| metadata (JSON)   |
++-------------------+
+
++-------------------+     +--------------------+     +-------------------+
+|   focus_areas     |     |  health_metrics    |     |     finances      |
++-------------------+     +--------------------+     +-------------------+
+| id (PK)           |     | id (PK, AUTO)      |     | id (PK, AUTO)     |
+| title             |     | date               |     | date              |
+| description       |     | metric_type        |     | account_id        |
+| is_active         |     | value              |     | account_name      |
+| started_at        |     | source             |     | balance           |
+| ended_at          |     | recorded_at        |     | available         |
+| metadata (JSON)   |     | metadata (JSON)    |     | source            |
++-------------------+     | UNIQUE(date,type,  |     | recorded_at       |
+                          |        source)     |     | metadata (JSON)   |
+                          +--------------------+     +-------------------+
+
++------------------------+     +-------------------+
+| finance_transactions   |     |  schema_version   |
++------------------------+     +-------------------+
+| id (PK)                |     | version (PK)      |
+| date                   |     | applied_at        |
+| amount                 |     +-------------------+
+| merchant               |
+| category               |
+| account_id             |
+| is_recurring           |
+| source                 |
+| metadata (JSON)        |
++------------------------+
+```
+
+### Indexes (Performance Optimization)
+
+```sql
+-- Tasks
+idx_tasks_status      ON tasks(status)
+idx_tasks_due_date    ON tasks(due_date)
+idx_tasks_source      ON tasks(source)
+
+-- Calendar
+idx_calendar_start    ON calendar_events(start_time)
+
+-- Commitments
+idx_commitments_deadline ON commitments(deadline)
+idx_commitments_status   ON commitments(status)
+
+-- Health
+idx_health_date       ON health_metrics(date)
+idx_health_type       ON health_metrics(metric_type)
+
+-- Finances
+idx_finances_date     ON finances(date)
+idx_transactions_date ON finance_transactions(date)
+```
+
+### Journal Table
+
+```
++-------------------------+
+|        journal          |
++-------------------------+
+| id (PK, AUTO)           |
+| timestamp               |
+| event_type              |
+| source                  |
+| severity                |
+| title                   |
+| data (JSON)             |
+| session_id              |
+| agent                   |
+| acknowledged            |
+| acknowledged_at         |
++-------------------------+
+
+Indexes:
+- idx_journal_timestamp
+- idx_journal_event_type
+- idx_journal_severity
+- idx_journal_source
+- idx_journal_acknowledged
+```
+
+---
+
+## Event Types (47 Types)
+
+### Task Events (5)
+| Event | Description |
+|-------|-------------|
+| `task_created` | New task added to system |
+| `task_updated` | Task modified |
+| `task_completed` | Task marked complete |
+| `task_cancelled` | Task cancelled |
+| `task_overdue` | Task past due date |
+
+### Calendar Events (4)
+| Event | Description |
+|-------|-------------|
+| `event_created` | Calendar event added |
+| `event_upcoming` | Event starting soon |
+| `event_started` | Event has begun |
+| `event_missed` | Event passed without attendance |
+
+### Health Events (3)
+| Event | Description |
+|-------|-------------|
+| `health_metric_logged` | Health data recorded |
+| `health_alert` | Health threshold exceeded |
+| `health_summary` | Daily health summary |
+
+### Finance Events (6)
+| Event | Description |
+|-------|-------------|
+| `balance_logged` | Account balance recorded |
+| `balance_warning` | Balance below threshold |
+| `balance_critical` | Balance critically low |
+| `large_transaction` | Unusually large transaction |
+| `projection_warning` | Projected shortfall |
+| `recurring_upcoming` | Recurring charge approaching |
+
+### Brain Dump Events (8)
+| Event | Description |
+|-------|-------------|
+| `brain_dump_received` | Raw input received |
+| `brain_dump_parsed` | Classification complete |
+| `brain_dump_thinking` | Classified as thinking |
+| `brain_dump_venting` | Classified as venting |
+| `brain_dump_observation` | Classified as observation |
+| `note_captured` | Note saved |
+| `idea_captured` | Idea recorded |
+| `idea_promoted` | Idea promoted to task |
+
+### System Events (9)
+| Event | Description |
+|-------|-------------|
+| `sync_started` | Data sync initiated |
+| `sync_completed` | Sync successful |
+| `sync_failed` | Sync failed |
+| `circuit_opened` | Circuit breaker tripped |
+| `circuit_closed` | Circuit recovered |
+| `circuit_half_open` | Testing recovery |
+| `daemon_started` | Background service started |
+| `daemon_stopped` | Background service stopped |
+| `error_occurred` | System error |
+
+### Commitment Events (4)
+| Event | Description |
+|-------|-------------|
+| `commitment_created` | Promise recorded |
+| `commitment_completed` | Commitment fulfilled |
+| `commitment_due_soon` | Deadline approaching |
+| `commitment_overdue` | Deadline passed |
+
+### Session Events (3)
+| Event | Description |
+|-------|-------------|
+| `session_started` | User session began |
+| `session_ended` | Session concluded |
+| `command_executed` | Command processed |
+
+### Alert Events (5)
+| Event | Description |
+|-------|-------------|
+| `alert_created` | Alert generated |
+| `alert_acknowledged` | User acknowledged |
+| `alert_resolved` | Alert cleared |
+| `alert_raised` | Alert surfaced |
+| `alert_check_complete` | Check cycle done |
+
+### Severity Levels (5)
 ```python
-class AdapterManager:
-    async def list_tools() -> List[Dict]
-    async def call_tool(name: str, args: Dict) -> ToolResult
-    async def register_adapter(name: str, adapter: BaseAdapter)
-    async def register_mcp_server(config: MCPServerConfig)
-    async def discover_and_register_mcp_servers(...)
-    async def health_check_all() -> Dict
+DEBUG    = "debug"     # Diagnostic info
+INFO     = "info"      # Normal operations
+WARNING  = "warning"   # Attention needed
+ALERT    = "alert"     # Action required
+CRITICAL = "critical"  # Immediate action
 ```
 
-**Adapter Types**:
+---
 
-#### Direct Adapters
-Native Python implementations extending `BaseAdapter`:
-- **WorkOS Adapter**: Task management
-- **Oura Adapter**: Health data
-- **Neo4j Adapter**: Graph database
-- **ChromaDB Adapter**: Vector database
+## Brain Dump Classification System
 
-**Advantages**:
-- Native Python performance
-- Direct API integration
-- Tighter error handling
-- Simpler debugging
-
-#### MCP Bridges
-Protocol-based implementations extending `BaseAdapter`:
-- **WorkOS MCP Bridge**: Via WorkOS MCP server
-- **Context7 Bridge**: Documentation search (remote)
-- **Sequential Thinking Bridge**: Advanced reasoning
-- **Filesystem Bridge**: File operations
-- **Playwright Bridge**: Browser automation
-- **Fetch Bridge**: Web scraping
-- **Custom Bridges**: User-defined servers
-
-**Advantages**:
-- Ecosystem access
-- Language-agnostic
-- Standardized protocol
-- Community servers
-
-### 4. MCP Bridge Layer
-
-**Responsibility**: MCP protocol implementation and advanced features
-
-**Only active for MCP bridges** - Direct adapters bypass this layer.
-
-#### Core Components:
-
-**MCPBridge** (`Tools/adapters/mcp_bridge.py`)
-- Implements `BaseAdapter` interface
-- Manages MCP protocol lifecycle
-- Handles sessions and cleanup
-- Caches tool listings
-- Provides health checks
-
-**Server Discovery** (`Tools/adapters/mcp_discovery.py`)
-- Discovers servers from `~/.claude.json`
-- Discovers project-specific `.mcp.json`
-- Walks directory tree for configs
-- Merges configurations with precedence
-- Filters by enabled status and tags
-
-**Configuration** (`Tools/adapters/mcp_config.py`)
-- Pydantic-based validation
-- Environment variable interpolation
-- Support for stdio, SSE, HTTP transports
-- Per-server settings (timeouts, retries, etc.)
-
-**Capabilities** (`Tools/adapters/mcp_capabilities.py`)
-- Client capability declaration
-- Server capability parsing
-- Feature detection and matching
-- Graceful degradation
-
-**Transport Layer** (`Tools/adapters/transports/`)
-- **Base Transport**: Abstract interface
-- **StdioTransport**: Local subprocess via stdin/stdout
-- **SSETransport**: Remote servers via server-sent events
-- **HTTPTransport**: (Ready for implementation)
-
-#### Advanced Features:
-
-**Connection Pooling** (`Tools/adapters/mcp_pool.py`)
-- Min/max connection limits
-- Connection lifecycle tracking
-- Automatic reconnection
-- Background health checks
-- Graceful shutdown
-
-**Health Monitoring** (`Tools/adapters/mcp_health.py`)
-- Periodic health checks
-- Performance metrics (latency, success rate)
-- Health status tracking (HEALTHY/DEGRADED/UNHEALTHY)
-- Automatic status updates
-- Multi-server registry
-
-**Result Caching** (`Tools/adapters/mcp_cache.py`)
-- TTL-based expiration
-- Multiple strategies (LRU, LFU, MANUAL)
-- Memory and disk backends
-- Cache statistics
-- Per-tool cache keys
-
-**Load Balancing** (`Tools/adapters/mcp_loadbalancer.py`)
-- Multiple strategies (round-robin, least-connections, health-aware)
-- Automatic failover
-- Connection tracking
-- Health-aware routing
-- Multi-server registry
-
-**Error Handling** (`Tools/adapters/mcp_errors.py`, `mcp_retry.py`)
-- Custom exception hierarchy (11 types)
-- Exponential backoff with jitter
-- Circuit breaker pattern
-- Detailed error logging
-- Fallback strategies
-
-**Validation** (`Tools/adapters/mcp_validation.py`)
-- JSON Schema validation
-- Argument validation
-- Response validation
-- Strict and lenient modes
-- Type coercion
-
-### 5. Protocol Layer
-
-**MCP Protocol** (JSON-RPC 2.0 over stdio/SSE/HTTP)
-
-**Messages**:
-- `initialize`: Handshake with capability negotiation
-- `tools/list`: Retrieve available tools
-- `tools/call`: Execute a tool with arguments
-- `completion`: Graceful shutdown
-
-**Future Messages** (MCP spec extensions):
-- `resources/*`: Access to contextual resources
-- `prompts/*`: Prompt templates
-- `sampling/*`: LLM sampling requests
-
-### 6. External Services Layer
-
-**Direct Services**: Native APIs accessed directly
-- WorkOS REST API
-- Oura REST API
-- Neo4j database protocol
-- ChromaDB API
-
-**MCP Servers**: Protocol-compliant servers
-- WorkOS MCP Server (Node.js, local stdio)
-- Context7 (Remote HTTPS/SSE)
-- @modelcontextprotocol/* (NPM packages, local stdio)
-- Custom servers (Any language, any transport)
-
-## MCP Integration
-
-### Integration Architecture
-
-MCP integration follows a **bridge pattern** where:
-
-1. **MCPBridge** implements the same `BaseAdapter` interface as direct adapters
-2. **AdapterManager** treats both types identically
-3. **Orchestrator** remains unaware of adapter implementation details
-
-This enables:
-- Transparent routing
-- Zero orchestrator changes
-- Backward compatibility
-- Easy migration
-
-### Integration Flow
+### Classification Types (9)
 
 ```
-User Command
-    │
-    ▼
-Orchestrator
-    │
-    ▼
-Command Router
-    │
-    ▼
-Adapter Manager ──┬──> Direct Adapter ──> External API
-                  │
-                  └──> MCP Bridge ──> Transport ──> MCP Server ──> Service
++------------------+     +------------------+     +------------------+
+|    REFLECTIVE    |     |     CAPTURE      |     |    ACTIONABLE    |
+|  (Journal Only)  |     |  (State Store)   |     |  (Tasks/Commits) |
++------------------+     +------------------+     +------------------+
+| thinking         |     | note             |     | personal_task    |
+| venting          |     | idea             |     | work_task        |
+| observation      |     |                  |     | commitment       |
++------------------+     +------------------+     +------------------+
+                               |
+                               v
+                         +----------+
+                         |  mixed   |
+                         | (multi)  |
+                         +----------+
 ```
 
-### Configuration Discovery
+### Classification Rules
+
+**1. THINKING** (Default)
+- Internal reflection, musing, pondering
+- Phrases: "I've been thinking about...", "I wonder if...", "Maybe I need to..."
+- Action: Journal only, empathetic acknowledgment
+
+**2. VENTING**
+- Emotional release, frustration, stress
+- Indicators: Exclamation points, emotional language, complaints
+- Action: Journal only, validating acknowledgment
+
+**3. OBSERVATION**
+- Noting something without action needed
+- Phrases: "I noticed that...", "It seems like..."
+- Action: Journal only
+
+**4. NOTE**
+- Information to remember, not act on
+- Phrases: "Remember that...", facts, references
+- Action: Store in state, log to journal
+
+**5. PERSONAL_TASK**
+- Clear, specific personal action
+- Requirements: Specific verb + clear object + feasibility
+- Examples: "Call dentist", "Buy groceries", "Pay electric bill"
+- Action: Create task (personal domain), log to journal
+
+**6. WORK_TASK**
+- Clear, specific work action
+- Indicators: Client/project mentions, code/PR references
+- Examples: "Review the PR", "Send report to client"
+- Action: Create task (work domain), sync to WorkOS, log to journal
+
+**7. IDEA**
+- Creative thought worth capturing
+- Phrases: "What if we built...", "A cool feature would be..."
+- Action: Store idea, log to journal
+
+**8. COMMITMENT**
+- Promise made to someone
+- Requirements: Another person + promise
+- Phrases: "I told X I would...", "I promised to..."
+- Action: Create commitment with stakeholder, log to journal
+
+**9. MIXED**
+- Contains multiple distinct items
+- Action: Process each segment independently, merge results
+
+### Classifier Response Format
+
+```json
+{
+  "classification": "work_task",
+  "confidence": 0.95,
+  "reasoning": "Clear action (review PR) + specific target (auth changes)",
+  "acknowledgment": "Work task created.",
+  "task": {
+    "title": "Review Sarah's auth PR",
+    "description": "Review Sarah's PR for the auth changes",
+    "context": "work",
+    "priority": "medium",
+    "estimated_effort": "medium"
+  }
+}
+```
+
+### Routing Flow
 
 ```
-Adapter Manager
-    │
-    ▼
-MCPServerDiscovery
-    │
-    ├──> Load ~/.claude.json (global)
-    │
-    ├──> Walk directory tree for .mcp.json (project-specific)
-    │
-    ├──> Merge configurations (project > global)
-    │
-    ├──> Filter by enabled status and tags
-    │
-    └──> Return list of MCPServerConfig
-         │
-         ▼
-    Create MCPBridge instances
-         │
-         ▼
-    Register with AdapterManager
+Raw Input
+    |
+    v
++-------------------+
+| BrainDumpClassifier |
+| (Claude API)       |
++-------------------+
+    |
+    v
+ClassifiedBrainDump
+    |
+    v
++-------------------+
+| BrainDumpRouter    |
++-------------------+
+    |
+    +---> Archive (always)
+    |
+    +---> Classification Check
+          |
+          +---> thinking/venting/observation --> Journal only
+          |
+          +---> note --> State Store + Journal
+          |
+          +---> idea --> State Store + Journal
+          |
+          +---> personal_task --> Task (personal) + Journal
+          |
+          +---> work_task --> Task (work) + WorkOS + Journal
+          |
+          +---> commitment --> Commitment + Journal
+          |
+          +---> mixed --> Route each segment recursively
 ```
 
-### Session Lifecycle
+---
+
+## Circuit Breaker Pattern
+
+### State Diagram
 
 ```
-1. Discovery Phase
-   - Scan config files
-   - Parse and validate configurations
-   - Create MCPServerConfig objects
-
-2. Registration Phase
-   - Create MCPBridge instances (lazy)
-   - Register with AdapterManager
-   - Store in adapter registry
-
-3. Initialization Phase (Lazy)
-   - First tool call triggers initialization
-   - Create transport (stdio/SSE)
-   - Send initialize request
-   - Negotiate capabilities
-   - Cache tool list
-
-4. Operation Phase
-   - List tools (from cache or fresh)
-   - Call tools (via protocol)
-   - Handle errors (retry, circuit breaker)
-   - Cache results (if enabled)
-   - Monitor health (if enabled)
-
-5. Shutdown Phase
-   - Send completion request
-   - Close transport
-   - Cleanup resources
-   - Close connection pool (if used)
-   - Stop health monitor (if running)
+                     failure_threshold
+                        reached
+    +--------+       +----------+       +--------+
+    | CLOSED | ----> |   OPEN   | ----> | HALF_  |
+    | (Normal)|      | (Failing)|       | OPEN   |
+    +--------+       +----------+       +--------+
+        ^                |                  |
+        |                | recovery_        |
+        |                | timeout          |
+        +----------------+                  |
+              success in                    |
+              half_open                     |
+                                           |
+        +----------------------------------+
+                    failure in
+                    half_open
 ```
 
-## Component Details
-
-### BaseAdapter Interface
-
-All adapters (direct and MCP) implement this interface:
+### Configuration Options
 
 ```python
-class BaseAdapter(ABC):
-    @abstractmethod
-    async def list_tools(self) -> List[Dict]:
-        """List available tools"""
-
-    @abstractmethod
-    async def call_tool(self, name: str, arguments: Dict) -> ToolResult:
-        """Execute a tool with arguments"""
-
-    @abstractmethod
-    async def health_check(self) -> bool:
-        """Check adapter health"""
-
-    @abstractmethod
-    async def close(self):
-        """Cleanup and shutdown"""
+CircuitBreaker(
+    name="oura",                    # Identifier for logging
+    failure_threshold=3,           # Failures before opening
+    recovery_timeout=3600,         # Seconds before testing recovery
+    half_open_max_calls=1,         # Successes needed to close
+    success_threshold=2,           # Consecutive successes to reset
+    log_events=True                # Log state changes to journal
+)
 ```
 
-This unified interface enables:
-- Transparent routing in AdapterManager
-- Consistent error handling
-- Uniform health checking
-- Common lifecycle management
-
-### Tool Result Format
-
-Both adapter types return the same `ToolResult`:
+### Metadata Returned
 
 ```python
 @dataclass
-class ToolResult:
-    success: bool
-    result: Optional[Any]
-    error: Optional[str]
-    metadata: Optional[Dict]
+class CircuitMetadata:
+    circuit_state: CircuitState    # CLOSED, OPEN, or HALF_OPEN
+    is_fallback: bool              # True if using cached data
+    failure_count: int             # Current failure count
+    last_error: Optional[str]      # Most recent error
+    cache_age: Optional[float]     # Seconds since cache created
 ```
 
-### Configuration Schema
-
-MCP servers are configured via JSON:
-
-```json
-{
-  "mcpServers": {
-    "server-name": {
-      "command": "npx",
-      "args": ["-y", "package-name"],
-      "env": {
-        "VAR": "value",
-        "SECRET": "${ENV_VAR}"
-      },
-      "transport": "stdio",
-      "enabled": true,
-      "tags": ["tag1", "tag2"],
-      "settings": {
-        "timeout": 30000,
-        "retries": 3
-      }
-    }
-  }
-}
-```
-
-## Data Flow
-
-### Tool Call Flow (MCP Bridge)
-
-```
-1. User → Orchestrator
-   Command: "Get task list"
-
-2. Orchestrator → Command Router
-   Parse and extract intent
-
-3. Command Router → Adapter Manager
-   call_tool("task_list", {})
-
-4. Adapter Manager
-   - Lookup tool in registry
-   - Find MCPBridge for "task_list"
-   - Route to bridge
-
-5. MCPBridge
-   - Check if initialized (if not, initialize)
-   - Check cache (if enabled)
-   - Check circuit breaker status
-
-6. MCPBridge → Transport
-   Send JSON-RPC request:
-   {
-     "jsonrpc": "2.0",
-     "method": "tools/call",
-     "params": {
-       "name": "task_list",
-       "arguments": {}
-     }
-   }
-
-7. Transport → MCP Server
-   - Stdio: Write to process stdin
-   - SSE: POST to HTTPS endpoint
-
-8. MCP Server
-   - Process request
-   - Execute tool logic
-   - Return result
-
-9. MCP Server → Transport
-   JSON-RPC response:
-   {
-     "jsonrpc": "2.0",
-     "result": {
-       "content": [...]
-     }
-   }
-
-10. Transport → MCPBridge
-    Parse response
-
-11. MCPBridge
-    - Cache result (if enabled)
-    - Record metrics (if monitoring enabled)
-    - Convert to ToolResult
-
-12. MCPBridge → Adapter Manager
-    Return ToolResult
-
-13. Adapter Manager → Command Router
-    Forward result
-
-14. Command Router → Orchestrator
-    Format response
-
-15. Orchestrator → User
-    Present result
-```
-
-### Error Flow
-
-```
-Error in MCP Server
-    │
-    ▼
-Transport detects error
-    │
-    ▼
-MCPBridge catches exception
-    │
-    ▼
-Retry Logic (if transient error)
-    │
-    ├──> Success → Return result
-    │
-    └──> Failure → Circuit Breaker
-         │
-         ├──> Open Circuit → Return error immediately
-         │
-         └──> Closed Circuit → Try alternative server (load balancer)
-              │
-              ├──> Success → Return result
-              │
-              └──> All failed → Return ToolResult with error
-                   │
-                   ▼
-              Adapter Manager
-                   │
-                   ▼
-              Command Router (format error)
-                   │
-                   ▼
-              Orchestrator (handle error)
-                   │
-                   ▼
-              User (error message)
-```
-
-## Integration Points
-
-### 1. Orchestrator Integration
-
-**Current State**: Orchestrator is MCP-ready but not yet enabled
-
-**Integration Points**:
-```python
-# Tools/thanos_orchestrator.py
-
-class ThanosOrchestrator:
-    def __init__(self, enable_mcp: bool = False):
-        self.adapter_manager = get_default_manager(enable_mcp=enable_mcp)
-
-    async def initialize(self):
-        if self.enable_mcp:
-            await self.adapter_manager.discover_and_register_mcp_servers()
-```
-
-**Future Work** (Subtask 6.5):
-- Enable MCP by default (or via config)
-- Auto-discover on startup
-- Graceful shutdown of MCP connections
-- Error handling integration
-
-### 2. Command Router Integration
-
-**Current State**: Routes transparently to any adapter
-
-**Integration Points**:
-```python
-# Tools/command_router.py
-
-class CommandRouter:
-    async def route_command(self, command: str, args: Dict):
-        # Works identically for direct adapters and MCP bridges
-        tools = await self.adapter_manager.list_tools()
-        tool = self.select_tool(tools, command)
-        result = await self.adapter_manager.call_tool(tool['name'], args)
-        return self.format_response(result)
-```
-
-**No changes needed** - already works with both adapter types.
-
-### 3. Configuration Integration
-
-**Configuration Sources** (in precedence order):
-1. Project-specific `.mcp.json` (highest precedence)
-2. Parent directory `.mcp.json` (walks up tree)
-3. Global `~/.claude.json`
-4. Environment variables (for credentials)
-
-**Merging Strategy**:
-- Project configs override global configs
-- Same server name → project config wins
-- Different server names → both included
-- Disabled servers → excluded from final list
-
-### 4. Logging Integration
-
-**Current State**: Uses Python logging module
-
-**Integration Points**:
-```python
-import logging
-
-logger = logging.getLogger(__name__)
-
-# In MCPBridge
-logger.debug(f"Sending MCP request: {request}")
-logger.info(f"Tool '{tool_name}' executed successfully")
-logger.warning(f"Retry attempt {attempt}/{max_attempts}")
-logger.error(f"Tool execution failed: {error}")
-```
-
-**Future Work** (Subtask 6.1):
-- Structured logging with context
-- Log sanitization for sensitive data
-- Configurable log levels per component
-- Log aggregation for production
-
-### 5. Metrics Integration
-
-**Current State**: Basic metrics in health monitoring
-
-**Future Work** (Subtask 6.2):
-- Prometheus/StatsD export
-- Grafana dashboards
-- Real-time monitoring
-- Alerting on failures
-
-## Scalability & Performance
-
-### Horizontal Scaling
-
-**Load Balancing** enables scaling across multiple server instances:
+### ResilientAdapter Pattern
 
 ```python
-# Create multiple instances of same server
-bridges = [
-    await create_mcp_bridge(config1),
-    await create_mcp_bridge(config2),
-    await create_mcp_bridge(config3)
-]
+class OuraAdapter(ResilientAdapter):
+    def __init__(self):
+        super().__init__(
+            name="oura",
+            cache_dir=Path("State/cache/oura"),
+            failure_threshold=3,
+            recovery_timeout=3600,
+            cache_ttl=86400  # 24 hours
+        )
 
-# Load balance across instances
-lb = LoadBalancer("server-name", bridges, LoadBalancingStrategy.HEALTH_AWARE)
-
-# Automatic distribution
-result = await lb.execute_tool("tool_name", args)
+    async def get_sleep_data(self, date: str):
+        return await self.fetch_with_fallback(
+            cache_key=f"sleep_{date}",
+            fetch_func=lambda: self._api_call(f"/sleep/{date}"),
+            cache_ttl=3600
+        )
 ```
 
-**Strategies**:
-- **Round-robin**: Distribute evenly
-- **Least-connections**: Use least busy server
-- **Health-aware**: Prioritize healthy servers
+---
 
-### Vertical Scaling
+## Alert System
 
-**Connection Pooling** enables efficient resource usage:
+### Alert Types (17)
+
+#### Commitment Alerts
+| Type | Priority | Trigger |
+|------|----------|---------|
+| `COMMITMENT_OVERDUE` | HIGH/CRITICAL | Past deadline |
+| `COMMITMENT_DUE_SOON` | MEDIUM | Within 48 hours |
+
+#### Task Alerts
+| Type | Priority | Trigger |
+|------|----------|---------|
+| `TASK_OVERDUE` | MEDIUM/HIGH | Past due date |
+| `TASK_DUE_TODAY` | MEDIUM | Due today |
+| `TASK_BLOCKED` | MEDIUM | Blocked status |
+
+#### Health Alerts (Oura)
+| Type | Priority | Threshold |
+|------|----------|-----------|
+| `HEALTH_LOW_SLEEP` | MEDIUM | Score < 70 |
+| `HEALTH_LOW_READINESS` | MEDIUM | Score < 65 |
+| `HEALTH_HIGH_STRESS` | HIGH | Score > 80 |
+| `HEALTH_LOW_HRV` | HIGH | HRV < 30ms |
+
+#### Habit Alerts
+| Type | Priority | Trigger |
+|------|----------|---------|
+| `HABIT_STREAK_AT_RISK` | MEDIUM/HIGH | Not done today, streak >= 3 |
+| `HABIT_MISSED` | LOW | Missed 2+ days |
+
+#### Focus Alerts
+| Type | Priority | Trigger |
+|------|----------|---------|
+| `FOCUS_STALLED` | MEDIUM | No progress on active focus |
+| `FOCUS_NO_PROGRESS` | LOW | Focus area dormant |
+
+#### System Alerts
+| Type | Priority | Trigger |
+|------|----------|---------|
+| `SYSTEM_SYNC_FAILED` | WARNING | Sync error |
+| `SYSTEM_ERROR` | HIGH | System failure |
+
+### Alert Priority Levels
 
 ```python
-# Single bridge with connection pool
-bridge = await create_mcp_bridge(config)
-pool = MCPConnectionPool(bridge, PoolConfig(
-    min_connections=2,
-    max_connections=20
-))
-
-# Reuse connections
-async with pool.acquire() as conn:
-    result = await conn.call_tool("tool", args)
+class AlertPriority(Enum):
+    LOW = "low"         # Informational
+    MEDIUM = "medium"   # Attention needed
+    HIGH = "high"       # Action required soon
+    CRITICAL = "critical"  # Immediate action
 ```
 
-**Benefits**:
-- Reduce initialization overhead
-- Reuse existing sessions
-- Background health checks
-- Automatic reconnection
+### AlertManager Architecture
 
-### Caching Strategy
+```
+AlertManager
+    |
+    +---> CommitmentAlertChecker
+    |         |
+    |         +---> state.get_active_commitments()
+    |         +---> Check deadlines
+    |
+    +---> TaskAlertChecker
+    |         |
+    |         +---> state.execute_sql(tasks query)
+    |         +---> Check due dates
+    |
+    +---> OuraAlertChecker
+    |         |
+    |         +---> state.get_health_metrics()
+    |         +---> Compare against thresholds
+    |
+    +---> HabitAlertChecker
+              |
+              +---> Query habits + completions
+              +---> Check streaks
+```
 
-**Result Caching** reduces load on MCP servers:
+---
+
+## API Examples
+
+### StateStore Usage
 
 ```python
-cache = create_cache(CacheConfig(
-    backend="MEMORY",
-    invalidation_strategy=InvalidationStrategy.LRU,
-    default_ttl=300,
-    max_size=1000
-))
+from Tools.unified_state import get_state_store
 
-# Cache tool results
-result = await cache.cache_tool_call(bridge, "tool", args, ttl=600)
+store = get_state_store()
+
+# Task operations
+task_id = store.add_task(
+    title="Review Q4 financials",
+    priority="p1",
+    due_date=date.today() + timedelta(days=7)
+)
+
+tasks = store.get_tasks_due_today()
+overdue = store.get_overdue_tasks()
+store.complete_task(task_id)
+
+# Commitment operations
+commit_id = store.add_commitment(
+    title="Deliver project proposal",
+    stakeholder="Mike",
+    deadline=date(2026, 1, 25)
+)
+
+commitments = store.get_commitments_due_soon(days=7)
+store.complete_commitment(commit_id)
+
+# Health metrics
+store.log_health_metric(
+    metric_type="sleep_score",
+    value=78,
+    source="oura"
+)
+
+health = store.get_today_health()
+# Returns: {"sleep_score": 78, "readiness": 82, ...}
+
+# Export
+snapshot = store.export_snapshot()
+store.save_daily_snapshot()
 ```
 
-**Strategies**:
-- **TTL**: Time-based expiration
-- **LRU**: Least recently used eviction
-- **LFU**: Least frequently used eviction
-- **MANUAL**: Explicit invalidation
+### Journal Usage
 
-### Performance Characteristics
+```python
+from Tools.journal import get_journal, EventType
 
-| Component | Overhead | Mitigation |
-|-----------|----------|------------|
-| MCP Protocol | ~10ms | Acceptable for most use cases |
-| Subprocess | ~5-10ms | Use connection pooling |
-| Initialization | ~200ms | Lazy initialization, pooling |
-| Cache lookup | <1ms | In-memory cache |
-| Health check | <5ms | Background checks |
+journal = get_journal()
 
-**Optimization Tips**:
-1. Enable connection pooling for long-running operations
-2. Use caching for frequently accessed data
-3. Use health-aware load balancing
-4. Tune TTL based on data freshness needs
-5. Monitor metrics to identify bottlenecks
+# Log events
+journal.log(
+    event_type=EventType.TASK_COMPLETED,
+    source="workos",
+    title="Completed: Review Q4 financials",
+    data={"task_id": "abc123", "duration_hours": 2.5}
+)
 
-## Security
+# Query events
+events = journal.get_today()
+alerts = journal.get_alerts(unacknowledged_only=True)
+stats = journal.get_stats(since=datetime.now() - timedelta(hours=24))
 
-### Configuration Security
-
-**Sensitive Data Protection**:
-- Store credentials in environment variables
-- Use `.env` files (never commit to git)
-- Reference via `${VAR}` syntax in configs
-- Validate all configurations
-
-**Example**:
-```json
-{
-  "mcpServers": {
-    "secure-server": {
-      "command": "node",
-      "args": ["server.js"],
-      "env": {
-        "API_KEY": "${SECURE_API_KEY}",
-        "DATABASE_URL": "${DATABASE_URL}"
-      }
-    }
-  }
-}
+# Acknowledge alerts
+journal.acknowledge_alert(entry_id=42)
+count = journal.acknowledge_all_alerts()
 ```
 
-### Transport Security
+### Brain Dump Usage
 
-**Stdio Transport**:
-- Local subprocess communication only
-- No network exposure
-- Process isolation
+```python
+from Tools.brain_dump.classifier import classify_brain_dump_sync
+from Tools.brain_dump.router import route_brain_dump
 
-**SSE Transport**:
-- HTTPS for encryption
-- Bearer token authentication
-- Header-based credentials
+# Classify
+result = classify_brain_dump_sync(
+    "I told Sarah I'd review her PR by Friday",
+    source="telegram"
+)
 
-**Future HTTP Transport**:
-- HTTPS only
-- OAuth2/JWT support
-- Certificate validation
+print(result.classification)  # "commitment"
+print(result.commitment)      # {"to_whom": "Sarah", "deadline": "Friday"}
 
-### Input Validation
+# Route (with dependencies)
+from Tools.unified_state import get_state_store
+from Tools.journal import get_journal
 
-**Tool Arguments**:
-- JSON Schema validation
-- Type checking
-- Range validation
-- Required field checking
+routing_result = await route_brain_dump(
+    dump=result,
+    state=get_state_store(),
+    journal=get_journal()
+)
 
-**Configuration**:
-- Pydantic validation
-- Type safety
-- Default values
-- Constraint enforcement
+print(routing_result.commitment_created)  # UUID
+print(routing_result.summary())           # "commitment created, logged to journal"
+```
 
-### Access Control
+### Circuit Breaker Usage
 
-**MCP Server Access Control**:
-- Servers define allowed directories (filesystem server)
-- API keys for authentication (Context7, custom servers)
-- Read-only by default (filesystem server requires ALLOW_WRITE)
+```python
+from Tools.circuit_breaker import CircuitBreaker, ResilientAdapter
 
-**Thanos Access Control**:
-- Per-server enabled/disabled flag
-- Tag-based filtering
-- Environment-specific configs (dev vs prod)
+# Direct usage
+circuit = CircuitBreaker(name="external_api", failure_threshold=3)
 
-### Audit Logging
+result, metadata = await circuit.call(
+    func=fetch_from_api,
+    fallback=get_cached_data
+)
 
-**Current**:
-- All tool calls logged
-- Error context captured
-- Performance metrics recorded
+if metadata.is_fallback:
+    print(f"Using cached data from {metadata.cache_age}s ago")
 
-**Future** (Subtask 6.1):
-- Structured audit logs
-- User attribution
-- Request/response logging
-- Compliance reporting
+# Decorator usage
+@circuit_protected("monarch", fallback=get_cached_accounts)
+async def fetch_accounts():
+    return await api.get_accounts()
 
-## Future Architecture
+# ResilientAdapter pattern
+adapter = ResilientAdapter(name="oura", cache_ttl=86400)
+data, meta = await adapter.fetch_with_fallback(
+    cache_key="sleep_2026-01-18",
+    fetch_func=fetch_sleep_data
+)
+```
 
-### Planned Enhancements (Phase 6)
+### Alert Checker Usage
 
-#### 6.1: Comprehensive Logging
-- Structured logging with JSON output
-- Log levels per component
-- Sensitive data sanitization
-- Centralized log aggregation
+```python
+from Tools.alert_checker import AlertManager, run_alert_check
 
-#### 6.2: Metrics & Observability
-- Prometheus metrics export
-- StatsD integration
-- Grafana dashboards
-- Real-time alerting
+# Full check
+alerts = await run_alert_check()
+for alert in alerts:
+    print(f"{alert.priority.value}: {alert.title}")
 
-#### 6.3: Deployment Configuration
-- Docker support
-- Kubernetes manifests
-- Helm charts
-- CI/CD pipelines
+# Custom manager
+manager = AlertManager()
+alerts = await manager.check_all()
+active = manager.get_active_alerts(limit=10)
+manager.acknowledge_alert("alert_id_123")
+```
 
-#### 6.4: Performance Optimization
-- Profile and optimize hot paths
-- Memory usage optimization
-- Subprocess spawning optimization
-- Benchmark suite
+---
 
-#### 6.5: Full Orchestrator Integration
-- MCP enabled by default
-- Graceful shutdown
-- Error handling integration
-- Backward compatibility testing
+## Data Flow Diagrams
 
-### Future MCP Features
+### Brain Dump Flow
 
-**Resources** (MCP Spec):
-- Access to contextual resources
-- File contents, API responses, etc.
-- URI-based resource access
+```
+User Input (Telegram/CLI/Voice)
+         |
+         v
++-------------------+
+| Brain Dump Entry  |
+| (raw text)        |
++-------------------+
+         |
+         v
++-------------------+
+| BrainDumpClassifier|
+| (Claude API)      |
++-------------------+
+         |
+    Classification
+         |
+    +----+----+----+----+----+----+----+
+    |    |    |    |    |    |    |    |
+    v    v    v    v    v    v    v    v
+  think vent obs note idea p_task w_task commit
+    |    |    |    |    |    |    |    |
+    +----+----+    +----+    +----+----+
+         |              |         |
+         v              v         v
+    +--------+    +--------+  +--------+
+    | Journal|    | State  |  | WorkOS |
+    | (log)  |    | (store)|  | (sync) |
+    +--------+    +--------+  +--------+
+         |              |         |
+         +------+-------+---------+
+                |
+                v
+        +---------------+
+        | RoutingResult |
+        | (summary)     |
+        +---------------+
+```
 
-**Prompts** (MCP Spec):
-- Reusable prompt templates
-- Dynamic prompt generation
-- Prompt parameter injection
+### Alert Check Flow
 
-**Sampling** (MCP Spec):
-- LLM sampling requests from servers
-- Server-initiated reasoning
-- Agentic workflows
+```
+Scheduled Trigger / Manual
+         |
+         v
++-------------------+
+|   AlertManager    |
++-------------------+
+         |
+    +----+----+----+----+
+    |    |    |    |    |
+    v    v    v    v    v
++------+ +------+ +------+ +------+
+|Commit| |Task  | |Oura  | |Habit |
+|Check | |Check | |Check | |Check |
++------+ +------+ +------+ +------+
+    |        |        |        |
+    +--------+--------+--------+
+             |
+             v
+    +-------------------+
+    | Aggregate Alerts  |
+    | Sort by Priority  |
+    +-------------------+
+             |
+             v
+    +-------------------+
+    |   Journal Log     |
+    | (alert_raised)    |
+    +-------------------+
+             |
+             v
+    +-------------------+
+    |  Return Alerts    |
+    +-------------------+
+```
 
-### Extensibility
+### Circuit Breaker Flow
 
-**Adding New Direct Adapters**:
-1. Extend `BaseAdapter`
-2. Implement required methods
-3. Register with `AdapterManager`
+```
+API Call Request
+         |
+         v
++-------------------+
+|  CircuitBreaker   |
++-------------------+
+         |
+    Check State
+         |
+    +----+----+
+    |         |
+    v         v
+ CLOSED     OPEN
+    |         |
+    v         |
+  Try API     |
+    |         |
++---+---+     |
+|       |     |
+v       v     v
+Success Fail  Check Recovery Timeout
+  |       |         |
+  v       v         v
+Reset   Count   +---+---+
+Failures Fail   |       |
+  |       |    No      Yes
+  |       |     |       |
+  |       v     v       v
+  |   Threshold? Return HALF_OPEN
+  |       |     Cached    |
+  |       v       |       v
+  |   Open       |    Test API
+  |   Circuit    |       |
+  |       |      |   +---+---+
+  |       v      |   |       |
+  |   Use Fallback   v       v
+  |       |      Success   Fail
+  +-------+        |         |
+          |        v         v
+          |     CLOSED    OPEN
+          |        |         |
+          +--------+---------+
+                   |
+                   v
+            Return Result
+            + Metadata
+```
 
-**Adding New MCP Bridges**:
-1. Create server configuration
-2. Add to `.mcp.json` or `~/.claude.json`
-3. Auto-discovered on next startup
+---
 
-**Custom Advanced Features**:
-- Custom cache backends
-- Custom load balancing strategies
-- Custom health check logic
-- Custom retry policies
+## File Structure
 
-## Conclusion
+```
+Thanos/
++-- Tools/
+|   +-- unified_state.py      # StateStore (Trust pillar)
+|   +-- journal.py            # Event Journal (Trust pillar)
+|   +-- circuit_breaker.py    # Resilience pillar
+|   +-- alert_checker.py      # Clarity pillar
+|   +-- brain_dump/
+|   |   +-- classifier.py     # AI classification (Capture pillar)
+|   |   +-- router.py         # Routing logic (Capture pillar)
+|   +-- adapters/
+|       +-- base.py           # BaseAdapter interface
+|       +-- oura.py           # Health data adapter
+|       +-- workos.py         # Task management adapter
+|       +-- ...               # Other adapters
+|
++-- State/
+|   +-- thanos_unified.db     # Main SQLite database
+|   +-- thanos.db             # Journal database
+|   +-- cache/                # Circuit breaker cache
+|       +-- oura/
+|       +-- monarch/
+|
++-- docs/
+    +-- ARCHITECTURE.md       # This document
+    +-- architecture.md       # MCP-focused architecture
+```
 
-The Thanos architecture provides:
+---
 
-- ✅ **Unified Interface**: Single API for all integrations
-- ✅ **Flexibility**: Support for both direct and protocol-based adapters
-- ✅ **Scalability**: Connection pooling, load balancing, caching
-- ✅ **Reliability**: Error handling, retry logic, circuit breakers
-- ✅ **Observability**: Health monitoring, metrics, logging
-- ✅ **Security**: Input validation, access control, credential management
-- ✅ **Extensibility**: Easy to add new adapters and servers
-- ✅ **Performance**: Optimized for production workloads
+## Summary
 
-This positions Thanos as a robust, production-ready orchestration platform capable of integrating with any external service through native adapters or the growing MCP ecosystem.
+Thanos achieves reliable personal productivity through four integrated pillars:
+
+| Pillar | Component | Purpose |
+|--------|-----------|---------|
+| **Trust** | StateStore + Journal | Single source of truth, full audit trail |
+| **Capture** | Brain Dump Classifier + Router | Zero-friction input, intelligent routing |
+| **Clarity** | Alert Checker | Proactive visibility into what matters |
+| **Resilience** | Circuit Breaker + Cache | Graceful degradation when APIs fail |
+
+Each pillar reinforces the others:
+- **Trust** provides the data foundation for all other pillars
+- **Capture** feeds data into the trust layer with proper classification
+- **Clarity** queries the trust layer to surface important information
+- **Resilience** protects the trust layer from external failures
+
+This architecture enables a productivity system that is both powerful and forgiving - capturing everything, surfacing what matters, and continuing to work even when external services don't.
