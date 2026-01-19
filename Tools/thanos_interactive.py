@@ -176,11 +176,13 @@ class ThanosInteractive:
                 try:
                     # Build MCPServerConfig from json config
                     # StdioConfig has type="stdio" which discriminates the transport
+                    # Use cwd from config if specified, otherwise project root
+                    cwd = server_config.get("cwd") or str(self.thanos_dir)
                     transport_config = StdioConfig(
                         command=server_config["command"],
                         args=server_config.get("args", []),
                         env=server_config.get("env") or {},
-                        cwd=str(self.thanos_dir)  # Run from project root
+                        cwd=cwd
                     )
                     mcp_config = MCPServerConfig(
                         name=name,

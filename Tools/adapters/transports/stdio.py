@@ -88,6 +88,7 @@ class StdioTransport(Transport):
             command=self.config.command,
             args=self.config.args,
             env=env,
+            cwd=self.config.cwd,
         )
 
         logger.debug(
