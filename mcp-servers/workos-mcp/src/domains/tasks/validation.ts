@@ -24,6 +24,7 @@ import {
   taskCategorySchema,
   valueTierSchema,
   drainTypeSchema,
+  cognitiveLoadSchema,
 } from "../../shared/validation-schemas.js";
 
 // =============================================================================
@@ -36,11 +37,13 @@ import {
  *
  * @property status - Optional task status filter (active, queued, backlog, done)
  * @property clientId - Optional client ID filter (positive integer)
+ * @property clientName - Optional client name filter (case-insensitive lookup)
  * @property limit - Optional result limit (1-100, default handled by handler)
  */
 export const GetTasksSchema = z.object({
   status: taskStatusSchema.optional(),
   clientId: clientIdSchema.optional(),
+  clientName: clientNameSchema.optional(),
   limit: queryLimitSchema.optional(),
 });
 
@@ -91,6 +94,7 @@ export const UpdateTaskSchema = z.object({
   status: taskStatusSchema.optional(),
   valueTier: valueTierSchema.optional(),
   drainType: drainTypeSchema.optional(),
+  cognitiveLoad: cognitiveLoadSchema.optional(),
 });
 
 /**

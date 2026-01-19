@@ -374,6 +374,15 @@ export const drainTypeSchema = z.enum(["deep", "shallow", "admin"], {
 });
 
 /**
+ * Task cognitive load enum validation
+ */
+export const cognitiveLoadSchema = z.enum(["low", "medium", "high"], {
+  errorMap: () => ({
+    message: "cognitiveLoad must be one of: low, medium, high",
+  }),
+});
+
+/**
  * Habit frequency enum validation
  */
 export const habitFrequencySchema = z.enum(["daily", "weekdays", "weekly"], {
