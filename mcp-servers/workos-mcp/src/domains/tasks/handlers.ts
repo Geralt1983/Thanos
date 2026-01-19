@@ -453,12 +453,12 @@ export async function handleCreateTask(
   };
 }
 
-// Points mapping by value tier
+// Points mapping by value tier (from WorkOS-v3/lib/domain/task-types.ts)
 const POINTS_BY_TIER: Record<string, number> = {
-  checkbox: 2,
-  progress: 4,
-  deliverable: 6,
-  milestone: 8,
+  checkbox: 1,    // Had to happen, low stakes (admin, scheduling, emails)
+  progress: 2,    // Moved something forward (research, drafting, prep)
+  deliverable: 4, // Client sees output (specs, docs, proposals sent)
+  milestone: 7,   // Significant completion (go-live, major deliverable)
 };
 
 /**

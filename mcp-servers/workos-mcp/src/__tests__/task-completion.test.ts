@@ -19,10 +19,10 @@ import { describe, it, expect, beforeEach, vi, type MockedFunction } from "vites
 // =============================================================================
 
 const POINTS_BY_TIER: Record<string, number> = {
-  checkbox: 2,
-  progress: 4,
-  deliverable: 6,
-  milestone: 8,
+  checkbox: 1,
+  progress: 2,
+  deliverable: 4,
+  milestone: 7,
 };
 
 // =============================================================================
@@ -52,20 +52,20 @@ interface MockClient {
 
 describe("Task Completion: pointsFinal Calculation", () => {
   describe("POINTS_BY_TIER mapping", () => {
-    it("should map checkbox tier to 2 points", () => {
-      expect(POINTS_BY_TIER.checkbox).toBe(2);
+    it("should map checkbox tier to 1 point", () => {
+      expect(POINTS_BY_TIER.checkbox).toBe(1);
     });
 
-    it("should map progress tier to 4 points", () => {
-      expect(POINTS_BY_TIER.progress).toBe(4);
+    it("should map progress tier to 2 points", () => {
+      expect(POINTS_BY_TIER.progress).toBe(2);
     });
 
-    it("should map deliverable tier to 6 points", () => {
-      expect(POINTS_BY_TIER.deliverable).toBe(6);
+    it("should map deliverable tier to 4 points", () => {
+      expect(POINTS_BY_TIER.deliverable).toBe(4);
     });
 
-    it("should map milestone tier to 8 points", () => {
-      expect(POINTS_BY_TIER.milestone).toBe(8);
+    it("should map milestone tier to 7 points", () => {
+      expect(POINTS_BY_TIER.milestone).toBe(7);
     });
   });
 
@@ -101,7 +101,7 @@ describe("Task Completion: pointsFinal Calculation", () => {
         task.valueTier
       );
 
-      expect(calculatedPoints).toBe(6); // deliverable = 6 points
+      expect(calculatedPoints).toBe(4); // deliverable = 4 points
     });
 
     it("should preserve existing pointsFinal when already set (manual override)", () => {
@@ -141,10 +141,10 @@ describe("Task Completion: pointsFinal Calculation", () => {
         task.valueTier
       );
 
-      expect(calculatedPoints).toBe(2); // Default to checkbox
+      expect(calculatedPoints).toBe(1); // Default to checkbox
     });
 
-    it("should default to checkbox (2 points) when valueTier is unknown", () => {
+    it("should default to checkbox (1 point) when valueTier is unknown", () => {
       const task: MockTask = {
         id: 4,
         title: "Task with unknown tier",
@@ -161,15 +161,15 @@ describe("Task Completion: pointsFinal Calculation", () => {
         task.valueTier
       );
 
-      expect(calculatedPoints).toBe(2); // Fall back to checkbox default
+      expect(calculatedPoints).toBe(1); // Fall back to checkbox default
     });
 
     it("should calculate correct points for all tier types", () => {
       const testCases: Array<{ valueTier: string; expectedPoints: number }> = [
-        { valueTier: "checkbox", expectedPoints: 2 },
-        { valueTier: "progress", expectedPoints: 4 },
-        { valueTier: "deliverable", expectedPoints: 6 },
-        { valueTier: "milestone", expectedPoints: 8 },
+        { valueTier: "checkbox", expectedPoints: 1 },
+        { valueTier: "progress", expectedPoints: 2 },
+        { valueTier: "deliverable", expectedPoints: 4 },
+        { valueTier: "milestone", expectedPoints: 7 },
       ];
 
       testCases.forEach(({ valueTier, expectedPoints }) => {
@@ -514,7 +514,7 @@ describe("Task Completion: Integration Tests", () => {
     // The calculateTotalPoints function defaults to 2 when pointsFinal is null
     // This is incorrect - it should be 6 (deliverable tier)
     const totalWithBug = calculateTotalPoints([completedTaskWithBug]);
-    expect(totalWithBug).toBe(2); // Incorrect! Should be 6
+    expect(totalWithBug).toBe(2); // Incorrect! Should be 4
 
     // After the fix, pointsFinal should be set on completion
     const completedTaskAfterFix: MockTask = {
@@ -523,7 +523,7 @@ describe("Task Completion: Integration Tests", () => {
     };
 
     const totalAfterFix = calculateTotalPoints([completedTaskAfterFix]);
-    expect(totalAfterFix).toBe(6); // Correct!
+    expect(totalAfterFix).toBe(4); // Correct!
   });
 
   it("should track both points and clients correctly in real-world scenario", () => {
