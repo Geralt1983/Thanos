@@ -23,6 +23,7 @@ import {
   HabitCheckinSchema,
   HabitDashboardSchema,
   RecalculateStreaksSchema,
+  DeleteHabitSchema,
 } from "./validation.js";
 
 // =============================================================================
@@ -678,6 +679,78 @@ export async function handleRecalculateStreaks(
         success: true,
         recalculated: results.length,
         results,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Permanently delete a habit and all its completion history
+ * Use for cleanup of test or duplicate habits
+ * This action is irreversible - completions will be deleted via cascade or explicit deletion
+ *
+ * @param args - { habitId: number } - ID of habit to delete
+ * @param db - Database instance for deletion
+ * @returns Promise resolving to MCP ContentResponse with deletion confirmation including habit name and completion count deleted
+ */
+export async function handleDeleteHabit(
+  args: Record<string, any>,
+  db: Database
+): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(DeleteHabitSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
+  const { habitId } = validation.data as any;
+
+  // Get habit first to confirm it exists
+  const [habit] = await db
+    .select()
+    .from(schema.habits)
+    .where(eq(schema.habits.id, habitId));
+
+  if (!habit) {
+    return {
+      content: [{ type: "text", text: `Error: Habit ${habitId} not found` }],
+      isError: true,
+    };
+  }
+
+  // Count completions before deletion
+  const completions = await db
+    .select()
+    .from(schema.habitCompletions)
+    .where(eq(schema.habitCompletions.habitId, habitId));
+
+  const completionCount = completions.length;
+
+  // Delete completions first (if no cascade)
+  await db
+    .delete(schema.habitCompletions)
+    .where(eq(schema.habitCompletions.habitId, habitId));
+
+  // Delete the habit
+  await db
+    .delete(schema.habits)
+    .where(eq(schema.habits.id, habitId));
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        success: true,
+        deleted: {
+          habitId,
+          name: habit.name,
+          emoji: habit.emoji,
+          completionsDeleted: completionCount,
+        },
+        message: `Habit "${habit.name}" and ${completionCount} completion(s) permanently deleted.`,
       }, null, 2),
     }],
   };

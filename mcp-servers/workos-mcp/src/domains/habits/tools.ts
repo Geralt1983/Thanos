@@ -105,5 +105,16 @@ export function getHabitTools(): ToolDefinition[] {
         required: [],
       },
     },
+    {
+      name: "workos_delete_habit",
+      description: "Permanently delete a habit and all its completion history. Use for cleanup of test or duplicate habits.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          habitId: { type: "number", description: "Habit ID to delete (required)" },
+        },
+        required: ["habitId"],
+      },
+    },
   ];
 }

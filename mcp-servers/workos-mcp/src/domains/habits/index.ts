@@ -9,6 +9,7 @@ import {
   handleHabitCheckin,
   handleHabitDashboard,
   handleRecalculateStreaks,
+  handleDeleteHabit,
 } from "./handlers.js";
 
 // =============================================================================
@@ -48,6 +49,8 @@ export const handleHabitTool: ToolRouter = async (
       return handleHabitDashboard(args, db);
     case "workos_recalculate_streaks":
       return handleRecalculateStreaks(args, db);
+    case "workos_delete_habit":
+      return handleDeleteHabit(args, db);
     default:
       return errorResponse(`Unknown habit tool: ${name}`);
   }

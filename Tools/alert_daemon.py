@@ -311,12 +311,57 @@ class AlertDaemon:
 
     async def _send_notification(self, alert: Alert):
         """
-        Send notification for alert.
-
-        This is a placeholder - integrate with actual notification system.
+        Send notification for alert via Telegram.
         """
-        # TODO: Integrate with Telegram bot, push notifications, etc.
-        logger.info(f"NOTIFICATION [{alert.priority.value.upper()}]: {alert.title}")
+        import os
+
+        token = os.getenv('TELEGRAM_BOT_TOKEN')
+        chat_id = os.getenv('TELEGRAM_ALLOWED_USERS', '').split(',')[0].strip()
+
+        if not token or not chat_id:
+            logger.warning("Telegram not configured - skipping notification")
+            logger.info(f"NOTIFICATION [{alert.priority.value.upper()}]: {alert.title}")
+            return
+
+        # Build message with emoji based on priority
+        emoji = {
+            AlertPriority.CRITICAL: '🚨',
+            AlertPriority.HIGH: '⚠️',
+            AlertPriority.MEDIUM: '📢',
+            AlertPriority.LOW: 'ℹ️',
+        }.get(alert.priority, '📝')
+
+        message = (
+            f"{emoji} *{alert.priority.value.upper()}*\n\n"
+            f"*{alert.title}*\n\n"
+            f"{alert.message}"
+        )
+
+        try:
+            import httpx
+
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url,
+                    json={
+                        "chat_id": chat_id,
+                        "text": message,
+                        "parse_mode": "Markdown"
+                    },
+                    timeout=10.0
+                )
+
+            if response.status_code == 200:
+                logger.info(f"Telegram notification sent: {alert.title}")
+            else:
+                logger.error(f"Telegram API error: {response.status_code}")
+
+        except ImportError:
+            logger.error("httpx not installed for Telegram notifications")
+        except Exception as e:
+            logger.error(f"Failed to send Telegram notification: {e}")
 
     def get_status(self) -> Dict[str, Any]:
         """Get daemon status for monitoring."""
