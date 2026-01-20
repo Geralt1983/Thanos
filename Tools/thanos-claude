@@ -44,5 +44,10 @@ bun "$THANOS_ROOT/Tools/daily-brief.ts" 2>/dev/null || echo "[Morning brief unav
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Launch Claude Code
-exec claude "$@"
+# Launch Claude Code with bypass permissions and run pa:daily
+# If user provides args, use those instead of pa:daily
+if [ $# -eq 0 ]; then
+    exec claude --dangerously-skip-permissions "/pa:daily"
+else
+    exec claude --dangerously-skip-permissions "$@"
+fi
