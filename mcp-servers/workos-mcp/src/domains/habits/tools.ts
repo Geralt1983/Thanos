@@ -7,13 +7,13 @@ import type { ToolDefinition } from "../../shared/types.js";
 /**
  * Habit tool definitions will be added in subtask-3.2
  * This file contains MCP tool definitions for the 7 habit-related tools:
- * - workos_get_habits
- * - workos_create_habit
- * - workos_complete_habit
- * - workos_get_habit_streaks
- * - workos_habit_checkin
- * - workos_habit_dashboard
- * - workos_recalculate_streaks
+ * - life_get_habits
+ * - life_create_habit
+ * - life_complete_habit
+ * - life_get_habit_streaks
+ * - life_habit_checkin
+ * - life_habit_dashboard
+ * - life_recalculate_streaks
  */
 
 /**
@@ -23,7 +23,7 @@ import type { ToolDefinition } from "../../shared/types.js";
 export function getHabitTools(): ToolDefinition[] {
   return [
     {
-      name: "workos_get_habits",
+      name: "life_get_habits",
       description: "Get all active habits with their current streaks",
       inputSchema: {
         type: "object",
@@ -32,7 +32,7 @@ export function getHabitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_create_habit",
+      name: "life_create_habit",
       description: "Create a new habit to track",
       inputSchema: {
         type: "object",
@@ -49,7 +49,7 @@ export function getHabitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_complete_habit",
+      name: "life_complete_habit",
       description: "Mark a habit as completed for today",
       inputSchema: {
         type: "object",
@@ -61,7 +61,7 @@ export function getHabitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_get_habit_streaks",
+      name: "life_get_habit_streaks",
       description: "Get habit completion history and streak info",
       inputSchema: {
         type: "object",
@@ -73,7 +73,7 @@ export function getHabitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_habit_checkin",
+      name: "life_habit_checkin",
       description: "Get habits due for check-in based on time of day",
       inputSchema: {
         type: "object",
@@ -85,7 +85,7 @@ export function getHabitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_habit_dashboard",
+      name: "life_habit_dashboard",
       description: "Get ASCII dashboard showing habit completion grid for the week",
       inputSchema: {
         type: "object",
@@ -97,7 +97,7 @@ export function getHabitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_recalculate_streaks",
+      name: "life_recalculate_streaks",
       description: "Recalculate all habit streaks from completion history. Use to fix broken streak data.",
       inputSchema: {
         type: "object",
@@ -106,7 +106,7 @@ export function getHabitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_delete_habit",
+      name: "life_delete_habit",
       description: "Permanently delete a habit and all its completion history. Use for cleanup of test or duplicate habits.",
       inputSchema: {
         type: "object",
