@@ -1,0 +1,48 @@
+#!/bin/bash
+# Thanos Claude Wrapper - Full startup sequence then launch Claude
+
+THANOS_ROOT="${THANOS_ROOT:-$HOME/Projects/Thanos}"
+
+HOUR=$(date +%H)
+TIME_DISPLAY=$(date "+%I:%M %p")
+
+if [ "$HOUR" -ge 5 ] && [ "$HOUR" -lt 12 ]; then
+    TIME_MSG="The day begins..."
+elif [ "$HOUR" -ge 12 ] && [ "$HOUR" -lt 17 ]; then
+    TIME_MSG="Midday execution..."
+elif [ "$HOUR" -ge 17 ] && [ "$HOUR" -lt 21 ]; then
+    TIME_MSG="The day draws to close..."
+else
+    TIME_MSG="The universe rests. Should you?"
+fi
+
+# Display banner
+cat << 'EOF'
+
+    ████████╗██╗  ██╗ █████╗ ███╗   ██╗ ██████╗ ███████╗
+    ╚══██╔══╝██║  ██║██╔══██╗████╗  ██║██╔═══██╗██╔════╝
+       ██║   ███████║███████║██╔██╗ ██║██║   ██║███████╗
+       ██║   ██╔══██║██╔══██║██║╚██╗██║██║   ██║╚════██║
+       ██║   ██║  ██║██║  ██║██║ ╚████║╚██████╔╝███████║
+       ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝
+                    THE EXECUTOR AWAKENS
+EOF
+
+echo ""
+echo "### DESTINY // $TIME_DISPLAY"
+echo "$TIME_MSG"
+echo ""
+
+# Reset time tracker for new session
+python3 "$THANOS_ROOT/Tools/time_tracker.py" --reset 2>/dev/null | jq -r '"Session initialized: " + .session_started' 2>/dev/null || true
+
+echo ""
+
+# Run morning brief
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+bun "$THANOS_ROOT/Tools/daily-brief.ts" 2>/dev/null || echo "[Morning brief unavailable]"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Launch Claude Code
+exec claude "$@"
