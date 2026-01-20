@@ -137,6 +137,16 @@ export const HabitDashboardSchema = z.object({
  */
 export const RecalculateStreaksSchema = z.object({});
 
+/**
+ * Schema for workos_delete_habit tool
+ * Validates habit deletion request
+ *
+ * @property habitId - Required habit ID to delete (positive integer)
+ */
+export const DeleteHabitSchema = z.object({
+  habitId: habitIdSchema,
+});
+
 // =============================================================================
 // SCHEMA EXPORT MAP
 // =============================================================================
@@ -157,4 +167,5 @@ export const HABIT_SCHEMAS = {
   workos_habit_checkin: HabitCheckinSchema,
   workos_habit_dashboard: HabitDashboardSchema,
   workos_recalculate_streaks: RecalculateStreaksSchema,
+  workos_delete_habit: DeleteHabitSchema,
 } as const;
