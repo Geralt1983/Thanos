@@ -11,7 +11,7 @@ import type { ToolDefinition } from "../../shared/types.js";
 export function getPersonalTasksTools(): ToolDefinition[] {
   return [
     {
-      name: "workos_get_personal_tasks",
+      name: "life_get_personal_tasks",
       description: "Get personal (non-work) tasks",
       inputSchema: {
         type: "object",

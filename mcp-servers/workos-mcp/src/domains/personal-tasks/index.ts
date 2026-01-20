@@ -26,7 +26,7 @@ export const handlePersonalTasksTool: ToolRouter = async (
   db: Database
 ): Promise<ContentResponse> => {
   switch (name) {
-    case "workos_get_personal_tasks":
+    case "life_get_personal_tasks":
       return handleGetPersonalTasks(args, db);
     default:
       return errorResponse(`Unknown personal tasks tool: ${name}`);

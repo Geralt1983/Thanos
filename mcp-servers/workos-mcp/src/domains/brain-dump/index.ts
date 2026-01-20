@@ -30,11 +30,11 @@ export const handleBrainDumpTool: ToolRouter = async (
   db: Database
 ): Promise<ContentResponse> => {
   switch (name) {
-    case "workos_brain_dump":
+    case "life_brain_dump":
       return handleBrainDump(args, db);
-    case "workos_get_brain_dump":
+    case "life_get_brain_dump":
       return handleGetBrainDump(args, db);
-    case "workos_process_brain_dump":
+    case "life_process_brain_dump":
       return handleProcessBrainDump(args, db);
     default:
       return errorResponse(`Unknown brain dump tool: ${name}`);

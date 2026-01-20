@@ -31,13 +31,13 @@ export const handleEnergyTool: ToolRouter = async (
   db: Database
 ): Promise<ContentResponse> => {
   switch (name) {
-    case "workos_log_energy":
+    case "life_log_energy":
       return handleLogEnergy(args, db);
-    case "workos_get_energy":
+    case "life_get_energy":
       return handleGetEnergy(args, db);
-    case "workos_override_energy_suggestion":
+    case "life_override_energy_suggestion":
       return handleOverrideEnergySuggestion(args, db);
-    case "workos_provide_energy_feedback":
+    case "life_provide_energy_feedback":
       return handleProvideEnergyFeedback(args, db);
     default:
       return errorResponse(`Unknown energy tool: ${name}`);

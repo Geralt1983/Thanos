@@ -12,7 +12,7 @@ import type { ToolDefinition } from "../../shared/types.js";
 export function getBrainDumpTools(): ToolDefinition[] {
   return [
     {
-      name: "workos_brain_dump",
+      name: "life_brain_dump",
       description: "Quick capture a thought, idea, or worry. Low friction - just dump it.",
       inputSchema: {
         type: "object",
@@ -24,7 +24,7 @@ export function getBrainDumpTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_get_brain_dump",
+      name: "life_get_brain_dump",
       description: "Get unprocessed brain dump entries",
       inputSchema: {
         type: "object",
@@ -36,7 +36,7 @@ export function getBrainDumpTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_process_brain_dump",
+      name: "life_process_brain_dump",
       description: "Mark a brain dump entry as processed, optionally converting to a task",
       inputSchema: {
         type: "object",

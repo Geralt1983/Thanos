@@ -35,21 +35,21 @@ export const handleHabitTool: ToolRouter = async (
   db: Database
 ): Promise<ContentResponse> => {
   switch (name) {
-    case "workos_get_habits":
+    case "life_get_habits":
       return handleGetHabits(args, db);
-    case "workos_create_habit":
+    case "life_create_habit":
       return handleCreateHabit(args, db);
-    case "workos_complete_habit":
+    case "life_complete_habit":
       return handleCompleteHabit(args, db);
-    case "workos_get_habit_streaks":
+    case "life_get_habit_streaks":
       return handleGetHabitStreaks(args, db);
-    case "workos_habit_checkin":
+    case "life_habit_checkin":
       return handleHabitCheckin(args, db);
-    case "workos_habit_dashboard":
+    case "life_habit_dashboard":
       return handleHabitDashboard(args, db);
-    case "workos_recalculate_streaks":
+    case "life_recalculate_streaks":
       return handleRecalculateStreaks(args, db);
-    case "workos_delete_habit":
+    case "life_delete_habit":
       return handleDeleteHabit(args, db);
     default:
       return errorResponse(`Unknown habit tool: ${name}`);

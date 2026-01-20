@@ -11,7 +11,7 @@ import type { ToolDefinition } from "../../shared/types.js";
 export function getEnergyTools(): ToolDefinition[] {
   return [
     {
-      name: "workos_log_energy",
+      name: "life_log_energy",
       description: "Log current energy state (high/medium/low). Can include Oura data.",
       inputSchema: {
         type: "object",
@@ -26,7 +26,7 @@ export function getEnergyTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_get_energy",
+      name: "life_get_energy",
       description: "Get current/recent energy states",
       inputSchema: {
         type: "object",
@@ -37,7 +37,7 @@ export function getEnergyTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_override_energy_suggestion",
+      name: "life_override_energy_suggestion",
       description: "Manually override auto-detected energy level or task suggestions. Records override reason for learning and algorithm improvement.",
       inputSchema: {
         type: "object",
@@ -64,7 +64,7 @@ export function getEnergyTools(): ToolDefinition[] {
       },
     },
     {
-      name: "workos_provide_energy_feedback",
+      name: "life_provide_energy_feedback",
       description: "Record feedback on whether an energy-based task suggestion was helpful. Data is used to refine the energy-task matching algorithm over time.",
       inputSchema: {
         type: "object",
