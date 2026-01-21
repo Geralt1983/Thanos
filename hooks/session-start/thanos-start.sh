@@ -21,14 +21,19 @@ else
     TIME_MSG="The universe rests. Should you?"
 fi
 
-# Reset time tracker (may already be done by wrapper, but safe to call again)
-RESET_OUTPUT=$(python3 "$THANOS_ROOT/Tools/time_tracker.py" --reset 2>/dev/null || echo '{"status": "unavailable"}')
+# Get session context (reset already done by wrapper to avoid race condition)
+CONTEXT_OUTPUT=$(python3 "$THANOS_ROOT/Tools/time_tracker.py" --context 2>/dev/null || echo '{"status": "unavailable"}')
 
 # Output context for Claude (goes to system-reminder)
 cat << EOF
 ### DESTINY // $TIME_DISPLAY
 $TIME_MSG
 
-$RESET_OUTPUT
-startup hook success: Success
+$CONTEXT_OUTPUT
 EOF
+
+# Run daily brief for meaningful context (suppress errors)
+bun "$THANOS_ROOT/Tools/daily-brief.ts" 2>/dev/null || true
+
+# Set visual state to CHAOS (morning disorder, unsorted tasks)
+python3 "$THANOS_ROOT/Tools/wallpaper_manager.py" --auto 2>/dev/null || true
