@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""
+Thanos Tmux CLI Wrapper.
+
+User-friendly interface for tmux session management integrated with Thanos.
+
+Usage:
+    thanos-tmux                    # Auto-attach to main session
+    thanos-tmux main              # Attach to main session
+    thanos-tmux dev               # Attach to dev session
+    thanos-tmux monitor           # Attach to monitor session
+    thanos-tmux list              # List all sessions
+    thanos-tmux status            # Show tmux status
+    thanos-tmux kill <session>    # Kill a session
+    thanos-tmux cleanup           # Cleanup orphaned state
+
+Examples:
+    thanos-tmux                   # Start/attach to main session
+    thanos-tmux dev               # Switch to dev session
+    thanos-tmux kill thanos-dev   # Kill dev session
+"""
+
+import sys
+import argparse
+from pathlib import Path
+
+# Add Tools directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from Access.tmux_manager import TmuxManager
+
+
+def print_banner(text: str) -> None:
+    """Print Thanos-themed banner."""
+    print()
+    print("=" * 60)
+    print(f"  {text}")
+    print("=" * 60)
+    print()
+
+
+def cmd_list(manager: TmuxManager) -> int:
+    """List all active sessions."""
+    sessions = manager.list_sessions()
+
+    if not sessions:
+        print("No active tmux sessions.")
+        return 0
+
+    print_banner("ACTIVE SESSIONS")
+    for session in sessions:
+        info = manager.get_session_info(session)
+        if info:
+            status = "✓" if info.is_attached else " "
+            windows = f"{info.window_count} window(s)"
+            print(f"  [{status}] {session:20s} {windows}")
+
+            if info.last_attached:
+                print(f"      Last attached: {info.last_attached}")
+        else:
+            print(f"  [ ] {session}")
+
+    print()
+    return 0
+
+
+def cmd_status(manager: TmuxManager) -> int:
+    """Show tmux status."""
+    status = manager.get_status()
+
+    print_banner("TMUX STATUS")
+
+    # Availability
+    tmux_status = "✓ Available" if status["tmux_available"] else "✗ Not available"
+    print(f"Tmux: {tmux_status}")
+    print()
+
+    # Sessions
+    print(f"Active sessions: {status['session_count']}")
+    for session in status["active_sessions"]:
+        print(f"  - {session}")
+    print()
+
+    # Tracked state
+    print(f"Tracked in state: {len(status['tracked_sessions'])}")
+    for session in status["tracked_sessions"]:
+        print(f"  - {session}")
+    print()
+
+    # Valid sessions
+    print("Valid session names:")
+    for session in status["valid_sessions"]:
+        exists = "✓" if session in status["active_sessions"] else " "
+        print(f"  [{exists}] {session}")
+    print()
+
+    print(f"State file: {status['state_file']}")
+    print()
+
+    return 0
+
+
+def cmd_attach(manager: TmuxManager, session_name: str) -> int:
+    """Attach to or create a session."""
+    # Map short names to full session names
+    session_map = {
+        "main": "thanos-main",
+        "dev": "thanos-dev",
+        "monitor": "thanos-monitor"
+    }
+
+    full_name = session_map.get(session_name, session_name)
+
+    if full_name not in manager.VALID_SESSIONS:
+        print(f"Warning: '{full_name}' is not a standard Thanos session name")
+        print(f"Valid names: {', '.join(manager.VALID_SESSIONS)}")
+        print()
+
+    # Get starting directory (Thanos root)
+    thanos_root = Path(__file__).parent.parent
+
+    print_banner(f"DESTINY // {full_name.upper()}")
+    print(f"The work begins. Entering session: {full_name}")
+    print()
+
+    success = manager.attach_or_create(full_name, start_directory=thanos_root)
+    return 0 if success else 1
+
+
+def cmd_kill(manager: TmuxManager, session_name: str) -> int:
+    """Kill a session."""
+    if not manager.session_exists(session_name):
+        print(f"Session '{session_name}' does not exist")
+        return 1
+
+    print(f"Killing session: {session_name}")
+    success = manager.kill_session(session_name)
+
+    if success:
+        print("The Snap is complete. Session terminated.")
+        return 0
+    else:
+        print("Failed to kill session")
+        return 1
+
+
+def cmd_cleanup(manager: TmuxManager) -> int:
+    """Cleanup orphaned session state."""
+    print("Cleaning up orphaned session state...")
+    cleaned = manager.cleanup_orphaned_state()
+
+    if cleaned > 0:
+        print(f"Removed {cleaned} orphaned session state(s)")
+    else:
+        print("No orphaned states found. Perfect balance.")
+
+    return 0
+
+
+def main():
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser(
+        description="Thanos Tmux Session Manager",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  thanos-tmux              # Auto-attach to main session
+  thanos-tmux dev          # Attach to dev session
+  thanos-tmux list         # List all sessions
+  thanos-tmux status       # Show status
+  thanos-tmux kill dev     # Kill dev session
+        """
+    )
+
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="main",
+        help="Command or session name (main|dev|monitor|list|status|kill|cleanup)"
+    )
+
+    parser.add_argument(
+        "session",
+        nargs="?",
+        help="Session name (for kill command)"
+    )
+
+    args = parser.parse_args()
+
+    # Initialize manager
+    manager = TmuxManager()
+
+    # Check if tmux is available
+    if not manager.tmux_available and args.command not in ["status", "cleanup"]:
+        print("Error: tmux is not installed or not in PATH")
+        print()
+        print("Install tmux:")
+        print("  macOS:  brew install tmux")
+        print("  Ubuntu: sudo apt install tmux")
+        print("  Arch:   sudo pacman -S tmux")
+        print()
+        return 1
+
+    # Route commands
+    if args.command in ["list", "ls"]:
+        return cmd_list(manager)
+
+    elif args.command == "status":
+        return cmd_status(manager)
+
+    elif args.command == "kill":
+        if not args.session:
+            print("Error: kill command requires a session name")
+            print("Usage: thanos-tmux kill <session>")
+            return 1
+        return cmd_kill(manager, args.session)
+
+    elif args.command == "cleanup":
+        return cmd_cleanup(manager)
+
+    elif args.command in ["main", "dev", "monitor"] or args.command.startswith("thanos-"):
+        return cmd_attach(manager, args.command)
+
+    else:
+        # Assume it's a session name
+        return cmd_attach(manager, args.command)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

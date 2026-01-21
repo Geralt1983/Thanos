@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""
+Thanos VPN CLI - Tailscale management interface.
+
+Provides user-friendly commands for Tailscale VPN management:
+- Connection status and diagnostics
+- Device listing
+- Quick connect/disconnect
+- Access URL generation
+- Integration with thanos-web
+
+Usage:
+    thanos-vpn status          # Show connection status
+    thanos-vpn connect         # Connect to Tailscale
+    thanos-vpn disconnect      # Disconnect from Tailscale
+    thanos-vpn devices         # List all devices
+    thanos-vpn url             # Get web access URL
+    thanos-vpn ssh             # Get SSH command
+    thanos-vpn health          # Health check
+"""
+
+import sys
+import argparse
+from pathlib import Path
+
+# Add Access directory to path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from tailscale_manager import TailscaleManager
+
+
+def cmd_status(manager: TailscaleManager, args):
+    """Show Tailscale connection status."""
+    status = manager.get_status()
+
+    print("Tailscale VPN Status")
+    print("=" * 60)
+    print(f"Connected: {'✓ Yes' if status.connected else '✗ No'}")
+    print(f"Backend State: {status.backend_state}")
+
+    if status.self_device:
+        print(f"\nDevice Information:")
+        print(f"  Hostname: {status.self_device.hostname}")
+        print(f"  Tailscale IP: {status.self_device.tailscale_ip}")
+        print(f"  OS: {status.self_device.os}")
+        print(f"  Online: {'✓' if status.self_device.online else '✗'}")
+
+        if status.self_device.tags:
+            print(f"  Tags: {', '.join(status.self_device.tags)}")
+
+        if status.self_device.key_expiry:
+            print(f"  Key Expiry: {status.self_device.key_expiry}")
+
+    print(f"\nNetwork:")
+    print(f"  MagicDNS: {'✓ Enabled' if status.magic_dns else '✗ Disabled'}")
+    print(f"  Peer Count: {status.peer_count}")
+
+    if status.exit_node:
+        print(f"  Exit Node: {status.exit_node}")
+
+    if status.health_issues:
+        print(f"\nHealth Issues:")
+        for issue in status.health_issues:
+            print(f"  ⚠ {issue}")
+
+    if status.connected:
+        print(f"\nAccess Information:")
+        conn_info = manager.get_connection_info()
+        if conn_info['web_url']:
+            print(f"  Web: {conn_info['web_url']}")
+        if conn_info['ssh_command']:
+            print(f"  SSH: {conn_info['ssh_command']}")
+
+    print()
+
+
+def cmd_connect(manager: TailscaleManager, args):
+    """Connect to Tailscale VPN."""
+    if manager.is_connected():
+        print("Already connected to Tailscale")
+        return 0
+
+    print("Connecting to Tailscale...")
+
+    accept_routes = args.accept_routes if hasattr(args, 'accept_routes') else False
+    accept_dns = args.accept_dns if hasattr(args, 'accept_dns') else True
+
+    if manager.up(accept_routes=accept_routes, accept_dns=accept_dns):
+        print("✓ Connected successfully")
+
+        # Show connection info
+        status = manager.get_status()
+        if status.self_device:
+            print(f"\nTailscale IP: {status.self_device.tailscale_ip}")
+
+        conn_info = manager.get_connection_info()
+        if conn_info['web_url']:
+            print(f"Web Access: {conn_info['web_url']}")
+
+        return 0
+    else:
+        print("✗ Failed to connect")
+        return 1
+
+
+def cmd_disconnect(manager: TailscaleManager, args):
+    """Disconnect from Tailscale VPN."""
+    if not manager.is_connected():
+        print("Already disconnected")
+        return 0
+
+    print("Disconnecting from Tailscale...")
+
+    if manager.down():
+        print("✓ Disconnected successfully")
+        return 0
+    else:
+        print("✗ Failed to disconnect")
+        return 1
+
+
+def cmd_devices(manager: TailscaleManager, args):
+    """List all devices in Tailscale network."""
+    devices = manager.list_devices()
+
+    if not devices:
+        print("No devices found")
+        return 0
+
+    print("Tailscale Network Devices")
+    print("=" * 60)
+
+    for device in devices:
+        status_icon = "✓" if device.online else "✗"
+        print(f"\n{status_icon} {device.hostname}")
+        print(f"  IP: {device.tailscale_ip}")
+
+        if device.os:
+            print(f"  OS: {device.os}")
+
+        if device.tags:
+            print(f"  Tags: {', '.join(device.tags)}")
+
+        if device.last_seen:
+            print(f"  Last Seen: {device.last_seen}")
+
+    print()
+
+
+def cmd_url(manager: TailscaleManager, args):
+    """Get web access URL."""
+    if not manager.is_connected():
+        print("Not connected to Tailscale")
+        return 1
+
+    port = args.port if hasattr(args, 'port') else 443
+    use_magic_dns = not (hasattr(args, 'no_magic_dns') and args.no_magic_dns)
+
+    url = manager.get_web_access_url(port=port, use_magicDNS=use_magic_dns)
+
+    if url:
+        print(f"Web Access URL: {url}")
+
+        if args.open if hasattr(args, 'open') else False:
+            import webbrowser
+            print("Opening in browser...")
+            webbrowser.open(url)
+
+        return 0
+    else:
+        print("Could not generate URL")
+        return 1
+
+
+def cmd_ssh(manager: TailscaleManager, args):
+    """Get SSH command."""
+    if not manager.is_connected():
+        print("Not connected to Tailscale")
+        return 1
+
+    user = args.user if hasattr(args, 'user') else "jeremy"
+    ssh_cmd = manager.get_ssh_command(user=user)
+
+    if ssh_cmd:
+        print(f"SSH Command: {ssh_cmd}")
+
+        if args.copy if hasattr(args, 'copy') else False:
+            try:
+                import pyperclip
+                pyperclip.copy(ssh_cmd)
+                print("✓ Copied to clipboard")
+            except ImportError:
+                print("(Install pyperclip to enable clipboard copy)")
+
+        return 0
+    else:
+        print("Could not generate SSH command")
+        return 1
+
+
+def cmd_health(manager: TailscaleManager, args):
+    """Perform health check."""
+    health = manager.health_check()
+
+    print("Tailscale Health Check")
+    print("=" * 60)
+
+    status_icon = "✓" if health['connected'] else "✗"
+    print(f"{status_icon} Installed: {health['installed']}")
+    print(f"{status_icon} Connected: {health['connected']}")
+    print(f"Backend State: {health['backend_state']}")
+
+    if health['tailscale_ip']:
+        print(f"Tailscale IP: {health['tailscale_ip']}")
+
+    if health['hostname']:
+        print(f"Hostname: {health['hostname']}")
+
+    print(f"MagicDNS: {'✓ Enabled' if health['magic_dns'] else '✗ Disabled'}")
+    print(f"Peer Count: {health['peer_count']}")
+
+    if health['issues']:
+        print(f"\nIssues Found:")
+        for issue in health['issues']:
+            print(f"  ⚠ {issue}")
+        return 1
+    else:
+        print(f"\n✓ No issues found")
+        return 0
+
+
+def cmd_info(manager: TailscaleManager, args):
+    """Show comprehensive connection information."""
+    conn_info = manager.get_connection_info()
+
+    print("Tailscale Connection Information")
+    print("=" * 60)
+
+    for key, value in conn_info.items():
+        if value is not None:
+            key_display = key.replace('_', ' ').title()
+            print(f"{key_display}: {value}")
+
+    print()
+
+
+def main():
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser(
+        description="Thanos VPN - Tailscale management CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  thanos-vpn status              # Show connection status
+  thanos-vpn connect             # Connect to Tailscale
+  thanos-vpn disconnect          # Disconnect
+  thanos-vpn devices             # List devices
+  thanos-vpn url --open          # Get URL and open in browser
+  thanos-vpn ssh --user jeremy   # Get SSH command
+  thanos-vpn health              # Health check
+        """
+    )
+
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+
+    # Status command
+    status_parser = subparsers.add_parser('status', help='Show connection status')
+
+    # Connect command
+    connect_parser = subparsers.add_parser('connect', help='Connect to Tailscale')
+    connect_parser.add_argument('--accept-routes', action='store_true',
+                              help='Accept subnet routes from peers')
+    connect_parser.add_argument('--no-accept-dns', dest='accept_dns', action='store_false',
+                              help='Do not accept DNS configuration')
+
+    # Disconnect command
+    disconnect_parser = subparsers.add_parser('disconnect', help='Disconnect from Tailscale')
+
+    # Devices command
+    devices_parser = subparsers.add_parser('devices', help='List network devices')
+
+    # URL command
+    url_parser = subparsers.add_parser('url', help='Get web access URL')
+    url_parser.add_argument('--port', type=int, default=443,
+                          help='Port number (default: 443)')
+    url_parser.add_argument('--no-magic-dns', action='store_true',
+                          help='Use IP instead of MagicDNS hostname')
+    url_parser.add_argument('--open', action='store_true',
+                          help='Open URL in browser')
+
+    # SSH command
+    ssh_parser = subparsers.add_parser('ssh', help='Get SSH command')
+    ssh_parser.add_argument('--user', default='jeremy',
+                          help='SSH username (default: jeremy)')
+    ssh_parser.add_argument('--copy', action='store_true',
+                          help='Copy command to clipboard')
+
+    # Health command
+    health_parser = subparsers.add_parser('health', help='Run health check')
+
+    # Info command
+    info_parser = subparsers.add_parser('info', help='Show connection information')
+
+    args = parser.parse_args()
+
+    # Show help if no command
+    if not args.command:
+        parser.print_help()
+        return 0
+
+    # Initialize manager
+    try:
+        manager = TailscaleManager()
+    except Exception as e:
+        print(f"Error initializing Tailscale manager: {e}", file=sys.stderr)
+        return 1
+
+    # Check if Tailscale is installed
+    if not manager.is_installed():
+        print("Tailscale is not installed", file=sys.stderr)
+        print("\nInstall with: ./Access/install_tailscale.sh")
+        return 1
+
+    # Execute command
+    command_map = {
+        'status': cmd_status,
+        'connect': cmd_connect,
+        'disconnect': cmd_disconnect,
+        'devices': cmd_devices,
+        'url': cmd_url,
+        'ssh': cmd_ssh,
+        'health': cmd_health,
+        'info': cmd_info,
+    }
+
+    cmd_func = command_map.get(args.command)
+    if cmd_func:
+        try:
+            return cmd_func(manager, args)
+        except KeyboardInterrupt:
+            print("\n\nInterrupted")
+            return 130
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+    else:
+        print(f"Unknown command: {args.command}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

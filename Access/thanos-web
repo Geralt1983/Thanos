@@ -1,0 +1,448 @@
+#!/usr/bin/env python3
+"""
+Thanos Web Terminal CLI
+
+Command-line interface for managing ttyd web terminal daemon.
+
+Usage:
+    thanos-web start [--session SESSION]  - Start web terminal daemon
+    thanos-web stop                       - Stop daemon
+    thanos-web restart [--session SESSION] - Restart daemon
+    thanos-web status                     - Show daemon status
+    thanos-web url                        - Show access URL
+    thanos-web credentials                - Show/generate credentials
+    thanos-web logs [--tail N]            - Show daemon logs
+    thanos-web health                     - Run health check
+    thanos-web config                     - Show configuration
+
+Examples:
+    thanos-web start                      # Start with default session
+    thanos-web start --session thanos-dev # Start with specific session
+    thanos-web url                        # Get access URL and credentials
+    thanos-web logs --tail 50             # Show last 50 log lines
+"""
+
+import sys
+import argparse
+from pathlib import Path
+from datetime import datetime
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from Access.ttyd_manager import TtydManager
+from Access.tailscale_manager import TailscaleManager
+
+
+class Colors:
+    """ANSI color codes."""
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[1;33m'
+    BLUE = '\033[0;34m'
+    BOLD = '\033[1m'
+    NC = '\033[0m'  # No Color
+
+
+def print_header(text: str):
+    """Print formatted header."""
+    print(f"\n{Colors.BLUE}{'=' * 60}{Colors.NC}")
+    print(f"{Colors.BOLD}{text}{Colors.NC}")
+    print(f"{Colors.BLUE}{'=' * 60}{Colors.NC}\n")
+
+
+def print_success(text: str):
+    """Print success message."""
+    print(f"{Colors.GREEN}✓{Colors.NC} {text}")
+
+
+def print_error(text: str):
+    """Print error message."""
+    print(f"{Colors.RED}✗{Colors.NC} {text}", file=sys.stderr)
+
+
+def print_warning(text: str):
+    """Print warning message."""
+    print(f"{Colors.YELLOW}⚠{Colors.NC} {text}")
+
+
+def print_info(text: str):
+    """Print info message."""
+    print(f"{Colors.BLUE}ℹ{Colors.NC} {text}")
+
+
+def cmd_start(args, manager: TtydManager):
+    """Start ttyd daemon."""
+    print_header("Starting Ttyd Web Terminal")
+
+    if manager.start(session_name=args.session):
+        print_success("Ttyd daemon started successfully")
+
+        status = manager.get_status()
+        print()
+        print(f"PID: {status.pid}")
+        print(f"Port: {status.port}")
+        print(f"Session: {args.session or manager.DEFAULT_SESSION}")
+        print()
+        print_info(f"Access URL: {status.access_url}")
+
+        # Show credentials
+        creds = manager.get_credentials()
+        if creds:
+            username, password = creds
+            print()
+            print(f"Username: {Colors.BOLD}{username}{Colors.NC}")
+            print(f"Password: {Colors.BOLD}{password}{Colors.NC}")
+
+        print()
+        print_warning("Browser will warn about self-signed certificate (safe to proceed)")
+
+        return 0
+    else:
+        print_error("Failed to start ttyd daemon")
+        return 1
+
+
+def cmd_stop(args, manager: TtydManager):
+    """Stop ttyd daemon."""
+    print_header("Stopping Ttyd Web Terminal")
+
+    if manager.stop():
+        print_success("Ttyd daemon stopped successfully")
+        return 0
+    else:
+        print_error("Failed to stop ttyd daemon")
+        return 1
+
+
+def cmd_restart(args, manager: TtydManager):
+    """Restart ttyd daemon."""
+    print_header("Restarting Ttyd Web Terminal")
+
+    if manager.restart(session_name=args.session):
+        print_success("Ttyd daemon restarted successfully")
+
+        status = manager.get_status()
+        print()
+        print_info(f"Access URL: {status.access_url}")
+        return 0
+    else:
+        print_error("Failed to restart ttyd daemon")
+        return 1
+
+
+def cmd_status(args, manager: TtydManager):
+    """Show daemon status."""
+    print_header("Ttyd Daemon Status")
+
+    status = manager.get_status()
+
+    if status.running:
+        print_success("Daemon is running")
+        print()
+        print(f"PID: {status.pid}")
+        print(f"Port: {status.port}")
+
+        if status.uptime_seconds:
+            hours, remainder = divmod(int(status.uptime_seconds), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            print(f"Uptime: {hours}h {minutes}m {seconds}s")
+
+        print(f"Active Clients: {status.client_count}")
+        print(f"SSL Enabled: {Colors.GREEN if status.ssl_enabled else Colors.RED}{'Yes' if status.ssl_enabled else 'No'}{Colors.NC}")
+        print(f"Auth Enabled: {Colors.GREEN if status.auth_enabled else Colors.RED}{'Yes' if status.auth_enabled else 'No'}{Colors.NC}")
+
+        if status.started_at:
+            print(f"Started: {status.started_at}")
+
+        if status.access_url:
+            print()
+            print_info(f"Access URL: {status.access_url}")
+
+    else:
+        print_warning("Daemon is not running")
+        print()
+        print("Start with: thanos-web start")
+
+    return 0
+
+
+def cmd_url(args, manager: TtydManager):
+    """Show access URL and credentials."""
+    print_header("Web Terminal Access")
+
+    status = manager.get_status()
+
+    if not status.running:
+        print_warning("Daemon is not running")
+        print()
+        print("Start with: thanos-web start")
+        return 1
+
+    # Check Tailscale integration
+    tailscale = TailscaleManager()
+    tailscale_url = None
+    if tailscale.is_connected():
+        tailscale_url = tailscale.get_web_access_url(port=status.port)
+
+    # Access URLs
+    print(f"{Colors.BOLD}Access URLs:{Colors.NC}")
+    print(f"  Local: {status.access_url}")
+
+    if tailscale_url:
+        print(f"  Tailscale (Remote): {tailscale_url}")
+        print()
+        print_success("Tailscale VPN enabled - accessible from any authorized device")
+    else:
+        print()
+        print_info("Tailscale not connected - local access only")
+        print_info("Enable remote access: thanos-vpn connect")
+
+    print()
+
+    # Credentials
+    creds = manager.get_credentials()
+    if creds:
+        username, password = creds
+        print(f"{Colors.BOLD}Credentials:{Colors.NC}")
+        print(f"  Username: {username}")
+        print(f"  Password: {password}")
+        print()
+
+    # Security info
+    print(f"{Colors.BOLD}Security:{Colors.NC}")
+    print(f"  SSL/TLS: {Colors.GREEN if status.ssl_enabled else Colors.RED}{'Enabled' if status.ssl_enabled else 'Disabled'}{Colors.NC}")
+    print(f"  Authentication: {Colors.GREEN if status.auth_enabled else Colors.RED}{'Required' if status.auth_enabled else 'None'}{Colors.NC}")
+    if tailscale.is_connected():
+        print(f"  VPN Encryption: {Colors.GREEN}Enabled (WireGuard){Colors.NC}")
+    print()
+
+    print_warning("Browser will warn about self-signed certificate (safe to proceed)")
+
+    return 0
+
+
+def cmd_credentials(args, manager: TtydManager):
+    """Show or generate credentials."""
+    print_header("Authentication Credentials")
+
+    creds = manager.get_credentials()
+
+    if creds:
+        username, password = creds
+        print_success("Credentials exist")
+        print()
+        print(f"Username: {Colors.BOLD}{username}{Colors.NC}")
+        print(f"Password: {Colors.BOLD}{password}{Colors.NC}")
+        print()
+
+        if args.regenerate:
+            print_warning("Regenerating credentials...")
+            username, password = manager.generate_credentials()
+            print()
+            print_success("New credentials generated")
+            print()
+            print(f"Username: {Colors.BOLD}{username}{Colors.NC}")
+            print(f"Password: {Colors.BOLD}{password}{Colors.NC}")
+            print()
+            print_info("Restart daemon for changes to take effect")
+
+    else:
+        print_warning("No credentials found, generating...")
+        username, password = manager.generate_credentials()
+        print()
+        print_success("Credentials generated")
+        print()
+        print(f"Username: {Colors.BOLD}{username}{Colors.NC}")
+        print(f"Password: {Colors.BOLD}{password}{Colors.NC}")
+
+    return 0
+
+
+def cmd_logs(args, manager: TtydManager):
+    """Show daemon logs."""
+    print_header("Ttyd Daemon Logs")
+
+    log_file = manager.LOG_FILE
+
+    if not log_file.exists():
+        print_warning("No log file found")
+        return 0
+
+    try:
+        with open(log_file, 'r') as f:
+            lines = f.readlines()
+
+        if args.tail > 0:
+            lines = lines[-args.tail:]
+
+        for line in lines:
+            print(line.rstrip())
+
+        print()
+        print_info(f"Log file: {log_file}")
+
+        return 0
+
+    except Exception as e:
+        print_error(f"Failed to read logs: {e}")
+        return 1
+
+
+def cmd_health(args, manager: TtydManager):
+    """Run health check."""
+    print_header("Health Check")
+
+    if not manager.get_status().running:
+        print_error("Daemon is not running")
+        return 1
+
+    if manager.health_check():
+        print_success("Daemon is healthy")
+        print()
+
+        status = manager.get_status()
+        print(f"PID: {status.pid}")
+        print(f"Port: {status.port}")
+        print(f"Active Clients: {status.client_count}")
+
+        if args.auto_restart and not manager.health_check():
+            print()
+            print_warning("Daemon unhealthy, attempting auto-restart...")
+            if manager.auto_restart_if_unhealthy():
+                print_success("Auto-restart successful")
+                return 0
+            else:
+                print_error("Auto-restart failed")
+                return 1
+
+        return 0
+    else:
+        print_error("Daemon is unhealthy")
+        return 1
+
+
+def cmd_config(args, manager: TtydManager):
+    """Show configuration."""
+    print_header("Ttyd Configuration")
+
+    config = manager.config
+
+    print(f"Port: {config.port}")
+    print(f"Interface: {config.interface}")
+    print(f"Max Clients: {config.max_clients}")
+    print(f"Writable: {config.writable}")
+    print(f"Check Origin: {config.check_origin}")
+    print(f"Reconnect Timeout: {config.reconnect_timeout}s")
+    print(f"Client Timeout: {config.client_timeout}s" if config.client_timeout > 0 else "Client Timeout: None")
+    print(f"Terminal Type: {config.terminal_type}")
+    print()
+
+    # Paths
+    print(f"{Colors.BOLD}Paths:{Colors.NC}")
+    print(f"  Config: {manager.config_file}")
+    print(f"  SSL Cert: {manager.SSL_CERT}")
+    print(f"  SSL Key: {manager.SSL_KEY}")
+    print(f"  Credentials: {manager.CREDS_FILE}")
+    print(f"  Log File: {manager.LOG_FILE}")
+    print(f"  PID File: {manager.PID_FILE}")
+    print()
+
+    # File existence
+    print(f"{Colors.BOLD}Files:{Colors.NC}")
+    print(f"  SSL Cert: {Colors.GREEN if manager.SSL_CERT.exists() else Colors.RED}{'Exists' if manager.SSL_CERT.exists() else 'Missing'}{Colors.NC}")
+    print(f"  SSL Key: {Colors.GREEN if manager.SSL_KEY.exists() else Colors.RED}{'Exists' if manager.SSL_KEY.exists() else 'Missing'}{Colors.NC}")
+    print(f"  Credentials: {Colors.GREEN if manager.CREDS_FILE.exists() else Colors.RED}{'Exists' if manager.CREDS_FILE.exists() else 'Missing'}{Colors.NC}")
+
+    return 0
+
+
+def main():
+    """Main CLI entry point."""
+    parser = argparse.ArgumentParser(
+        description="Thanos Web Terminal CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
+
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
+
+    # Start command
+    start_parser = subparsers.add_parser('start', help='Start web terminal daemon')
+    start_parser.add_argument('--session', default=None, help='Tmux session name')
+
+    # Stop command
+    subparsers.add_parser('stop', help='Stop daemon')
+
+    # Restart command
+    restart_parser = subparsers.add_parser('restart', help='Restart daemon')
+    restart_parser.add_argument('--session', default=None, help='Tmux session name')
+
+    # Status command
+    subparsers.add_parser('status', help='Show daemon status')
+
+    # URL command
+    subparsers.add_parser('url', help='Show access URL and credentials')
+
+    # Credentials command
+    creds_parser = subparsers.add_parser('credentials', help='Show/generate credentials')
+    creds_parser.add_argument('--regenerate', action='store_true', help='Regenerate credentials')
+
+    # Logs command
+    logs_parser = subparsers.add_parser('logs', help='Show daemon logs')
+    logs_parser.add_argument('--tail', type=int, default=50, help='Number of lines to show')
+
+    # Health command
+    health_parser = subparsers.add_parser('health', help='Run health check')
+    health_parser.add_argument('--auto-restart', action='store_true', help='Auto-restart if unhealthy')
+
+    # Config command
+    subparsers.add_parser('config', help='Show configuration')
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return 1
+
+    # Initialize manager
+    try:
+        manager = TtydManager()
+    except Exception as e:
+        print_error(f"Failed to initialize manager: {e}")
+        return 1
+
+    # Dispatch commands
+    commands = {
+        'start': cmd_start,
+        'stop': cmd_stop,
+        'restart': cmd_restart,
+        'status': cmd_status,
+        'url': cmd_url,
+        'credentials': cmd_credentials,
+        'logs': cmd_logs,
+        'health': cmd_health,
+        'config': cmd_config,
+    }
+
+    cmd_func = commands.get(args.command)
+    if cmd_func:
+        try:
+            return cmd_func(args, manager)
+        except KeyboardInterrupt:
+            print()
+            print_warning("Interrupted by user")
+            return 130
+        except Exception as e:
+            print_error(f"Command failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return 1
+    else:
+        print_error(f"Unknown command: {args.command}")
+        parser.print_help()
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

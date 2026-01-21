@@ -1,0 +1,86 @@
+{
+  "acls": [
+    {
+      "action": "accept",
+      "comment": "Allow owner full access to Thanos services",
+      "src": ["group:owner"],
+      "dst": [
+        "tag:thanos:7681",
+        "tag:thanos:22",
+        "tag:thanos:443"
+      ]
+    },
+    {
+      "action": "accept",
+      "comment": "Allow family members web-only access",
+      "src": ["group:family"],
+      "dst": ["tag:thanos:443"]
+    }
+  ],
+  "tagOwners": {
+    "tag:thanos": ["your-email@example.com"]
+  },
+  "hosts": {
+    "thanos-primary": "100.64.1.10",
+    "thanos-mobile": "100.64.1.20",
+    "thanos-tablet": "100.64.1.30"
+  },
+  "ssh": [
+    {
+      "action": "accept",
+      "comment": "Owner can SSH to Thanos devices",
+      "src": ["group:owner"],
+      "dst": ["tag:thanos"],
+      "users": ["jeremy", "autogroup:nonroot"]
+    },
+    {
+      "action": "check",
+      "comment": "Family needs approval for SSH",
+      "src": ["group:family"],
+      "dst": ["tag:thanos"],
+      "users": ["jeremy"]
+    }
+  ],
+  "groups": {
+    "group:owner": ["your-email@example.com"],
+    "group:family": [],
+    "group:emergency": []
+  },
+  "autoApprovers": {
+    "routes": {
+      "100.64.0.0/10": ["group:owner"]
+    }
+  },
+  "postures": {
+    "devicePosture:screenlock": {
+      "description": "Device must have screen lock enabled",
+      "matches": ["screenLock == true"]
+    }
+  },
+  "tests": [
+    {
+      "comment": "Owner can access ttyd web terminal",
+      "src": "group:owner",
+      "dst": "tag:thanos:7681",
+      "accept": true
+    },
+    {
+      "comment": "Owner can SSH to Thanos",
+      "src": "group:owner",
+      "dst": "tag:thanos:22",
+      "accept": true
+    },
+    {
+      "comment": "Family can access web interface",
+      "src": "group:family",
+      "dst": "tag:thanos:443",
+      "accept": true
+    },
+    {
+      "comment": "Family cannot access ttyd directly",
+      "src": "group:family",
+      "dst": "tag:thanos:7681",
+      "accept": false
+    }
+  ]
+}
