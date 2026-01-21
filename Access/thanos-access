@@ -1,0 +1,509 @@
+#!/usr/bin/env python3
+"""
+Thanos Unified Access - Main Entry Point
+
+Context-aware access routing with smart component selection,
+graceful fallback, and comprehensive health checking.
+
+Usage:
+    thanos-access                    # Auto-detect and recommend
+    thanos-access status             # Show full status
+    thanos-access mobile             # Mobile-optimized access
+    thanos-access web                # Web browser access
+    thanos-access ssh                # SSH access info
+    thanos-access local              # Local terminal access
+    thanos-access emergency          # Minimal dependencies
+    thanos-access health             # Health check all components
+    thanos-access urls               # List all access URLs
+"""
+
+import sys
+import os
+import argparse
+from pathlib import Path
+
+# Add project root to path
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from Access.access_coordinator import (
+    AccessCoordinator,
+    AccessContext,
+    AccessMethod
+)
+
+
+# Terminal colors
+class Colors:
+    """ANSI color codes."""
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+
+
+def print_header(text: str):
+    """Print colored header."""
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'=' * 70}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{text.center(70)}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'=' * 70}{Colors.RESET}\n")
+
+
+def print_status(label: str, value: str, good: bool = True):
+    """Print status line with color."""
+    color = Colors.GREEN if good else Colors.RED
+    symbol = "✓" if good else "✗"
+    print(f"  {color}{symbol}{Colors.RESET} {Colors.BOLD}{label}:{Colors.RESET} {value}")
+
+
+def print_info(label: str, value: str):
+    """Print info line."""
+    print(f"  {Colors.BLUE}•{Colors.RESET} {Colors.BOLD}{label}:{Colors.RESET} {value}")
+
+
+def print_warning(message: str):
+    """Print warning message."""
+    print(f"{Colors.YELLOW}⚠{Colors.RESET}  {message}")
+
+
+def print_error(message: str):
+    """Print error message."""
+    print(f"{Colors.RED}✗{Colors.RESET}  {message}")
+
+
+def print_success(message: str):
+    """Print success message."""
+    print(f"{Colors.GREEN}✓{Colors.RESET}  {message}")
+
+
+def cmd_status(coordinator: AccessCoordinator):
+    """Show comprehensive status."""
+    print_header("THANOS ACCESS STATUS")
+
+    # Context
+    context_info = coordinator.get_context_info()
+    print(f"{Colors.BOLD}Current Context:{Colors.RESET}")
+    print_info("Type", context_info['context'])
+    print_info("In tmux", str(context_info['in_tmux']))
+    print_info("In SSH", str(context_info['in_ssh']))
+    print_info("Terminal", context_info['terminal'])
+    print_info("Hostname", context_info['hostname'])
+    print()
+
+    # Component health
+    status = coordinator.get_full_status()
+    print(f"{Colors.BOLD}Component Health:{Colors.RESET}")
+
+    for name, health in status["components"].items():
+        print(f"\n  {Colors.BOLD}{name.upper()}:{Colors.RESET}")
+        print_status("Available", str(health['available']), health['available'])
+        print_status("Running", str(health['running']), health['running'])
+        print_status("Healthy", str(health['healthy']), health['healthy'])
+
+        if health["issues"]:
+            print(f"    {Colors.YELLOW}Issues:{Colors.RESET}")
+            for issue in health["issues"]:
+                print(f"      - {issue}")
+
+    print()
+
+    # Overall health
+    if status["healthy"]:
+        print_success("All components healthy")
+    else:
+        print_warning("Some components need attention")
+
+    print()
+
+
+def cmd_auto(coordinator: AccessCoordinator):
+    """Auto-detect and recommend best access method."""
+    print_header("RECOMMENDED ACCESS")
+
+    recommendations = coordinator.recommend_access_method()
+
+    if not recommendations:
+        print_error("No access methods available!")
+        print()
+        print("Please install required components:")
+        print("  - tmux: brew install tmux")
+        print("  - ttyd: Run Access/install_ttyd.sh")
+        print("  - Tailscale: Run Access/install_tailscale.sh")
+        return 1
+
+    # Show top recommendation
+    top = recommendations[0]
+    print(f"{Colors.BOLD}Best Option:{Colors.RESET} {Colors.GREEN}{top.method.value}{Colors.RESET}")
+    print(f"{Colors.BOLD}Reason:{Colors.RESET} {top.reason}")
+    print()
+
+    if top.url:
+        print(f"{Colors.BOLD}Access URL:{Colors.RESET}")
+        print(f"  {Colors.CYAN}{top.url}{Colors.RESET}")
+        print()
+
+        # Try to generate QR code
+        qr = coordinator.generate_qr_code(top.url)
+        if qr:
+            print(f"{Colors.BOLD}QR Code:{Colors.RESET}")
+            print(qr)
+
+    if top.command:
+        print(f"{Colors.BOLD}Command:{Colors.RESET}")
+        print(f"  {Colors.CYAN}{top.command}{Colors.RESET}")
+        print()
+
+    if top.requires_setup:
+        print_warning("Setup required:")
+        for step in top.requires_setup:
+            print(f"  - {step}")
+        print()
+
+    # Show alternatives
+    if len(recommendations) > 1:
+        print(f"{Colors.BOLD}Alternatives:{Colors.RESET}")
+        for i, rec in enumerate(recommendations[1:], 2):
+            print(f"  {i}. {rec.method.value}")
+            if rec.url:
+                print(f"     URL: {rec.url}")
+            if rec.command:
+                print(f"     Command: {rec.command}")
+        print()
+
+    return 0
+
+
+def cmd_mobile(coordinator: AccessCoordinator):
+    """Mobile-optimized access."""
+    print_header("MOBILE ACCESS")
+
+    # Prefer Tailscale web access for mobile
+    if coordinator.tailscale.is_connected() and coordinator.ttyd.get_status().running:
+        url = coordinator.tailscale.get_web_access_url(port=7681)
+        if url:
+            print_success("Secure web access via Tailscale VPN")
+            print()
+            print(f"{Colors.BOLD}URL:{Colors.RESET}")
+            print(f"  {Colors.CYAN}{url}{Colors.RESET}")
+            print()
+
+            # Generate QR code
+            qr = coordinator.generate_qr_code(url)
+            if qr:
+                print(f"{Colors.BOLD}Scan with your phone:{Colors.RESET}")
+                print(qr)
+            else:
+                print_info("Tip", "Install qrencode for QR codes: brew install qrencode")
+
+            print()
+            return 0
+
+    # Fallback to local web
+    if coordinator.ttyd.get_status().running:
+        url = coordinator.ttyd.get_access_url()
+        if url:
+            print_warning("Using local web access (requires same network)")
+            print()
+            print(f"{Colors.BOLD}URL:{Colors.RESET}")
+            print(f"  {Colors.CYAN}{url}{Colors.RESET}")
+            print()
+
+            # Get credentials
+            creds = coordinator.ttyd.get_credentials()
+            if creds:
+                username, password = creds
+                print(f"{Colors.BOLD}Credentials:{Colors.RESET}")
+                print(f"  Username: {username}")
+                print(f"  Password: {password}")
+                print()
+
+            return 0
+
+    # Not available
+    print_error("Web access not available")
+    print()
+    print("Setup steps:")
+    print("  1. Start ttyd: thanos-web start")
+    print("  2. (Optional) Connect Tailscale: thanos-vpn up")
+    print()
+    return 1
+
+
+def cmd_web(coordinator: AccessCoordinator):
+    """Web browser access."""
+    print_header("WEB ACCESS")
+
+    urls = coordinator.get_access_urls()
+
+    # Tailscale web (preferred for remote)
+    if urls["tailscale_web"]:
+        print(f"{Colors.BOLD}Tailscale VPN (Recommended):{Colors.RESET}")
+        print(f"  {Colors.CYAN}{urls['tailscale_web']}{Colors.RESET}")
+        print()
+
+    # Local web
+    if urls["local_web"]:
+        print(f"{Colors.BOLD}Local Network:{Colors.RESET}")
+        print(f"  {Colors.CYAN}{urls['local_web']}{Colors.RESET}")
+        print()
+
+        # Show credentials
+        creds = coordinator.ttyd.get_credentials()
+        if creds:
+            username, password = creds
+            print(f"{Colors.BOLD}Credentials:{Colors.RESET}")
+            print(f"  Username: {username}")
+            print(f"  Password: {password}")
+            print()
+
+    if not urls["tailscale_web"] and not urls["local_web"]:
+        print_error("No web access available")
+        print()
+        print("Start web terminal: thanos-web start")
+        print()
+        return 1
+
+    return 0
+
+
+def cmd_ssh(coordinator: AccessCoordinator):
+    """SSH access information."""
+    print_header("SSH ACCESS")
+
+    urls = coordinator.get_access_urls()
+
+    if urls["tailscale_ssh"]:
+        print(f"{Colors.BOLD}Tailscale VPN:{Colors.RESET}")
+        print(f"  {Colors.CYAN}{urls['tailscale_ssh']}{Colors.RESET}")
+        print()
+        print_info("Tip", "This works from anywhere on your Tailscale network")
+        print()
+        return 0
+
+    # Check if Tailscale is available but not connected
+    if coordinator.tailscale.is_installed():
+        print_warning("Tailscale installed but not connected")
+        print()
+        print("Connect Tailscale: thanos-vpn up")
+        print()
+        return 1
+
+    print_error("SSH via Tailscale not available")
+    print()
+    print("Install Tailscale: Access/install_tailscale.sh")
+    print()
+    return 1
+
+
+def cmd_local(coordinator: AccessCoordinator):
+    """Local terminal access."""
+    print_header("LOCAL TERMINAL ACCESS")
+
+    if not coordinator.tmux.tmux_available:
+        print_error("tmux not installed")
+        print()
+        print("Install: brew install tmux")
+        print()
+        return 1
+
+    # Check for existing session
+    sessions = coordinator.tmux.list_sessions()
+
+    if "thanos-main" in sessions:
+        print_success("Thanos session is running")
+        print()
+        print(f"{Colors.BOLD}Attach with:{Colors.RESET}")
+        print(f"  {Colors.CYAN}tmux attach -t thanos-main{Colors.RESET}")
+        print()
+        print("Or use: thanos-tmux")
+        print()
+    else:
+        print_warning("No thanos-main session found")
+        print()
+        print(f"{Colors.BOLD}Create and attach:{Colors.RESET}")
+        print(f"  {Colors.CYAN}thanos-tmux{Colors.RESET}")
+        print()
+
+    # Show other sessions
+    if len(sessions) > 1:
+        other = [s for s in sessions if s != "thanos-main"]
+        if other:
+            print(f"{Colors.BOLD}Other sessions:{Colors.RESET}")
+            for s in other:
+                print(f"  - {s}")
+            print()
+
+    return 0
+
+
+def cmd_emergency(coordinator: AccessCoordinator):
+    """Emergency access with minimal dependencies."""
+    print_header("EMERGENCY ACCESS")
+
+    print("Minimal dependency access methods:")
+    print()
+
+    # SSH (no special deps needed)
+    context_info = coordinator.get_context_info()
+    print(f"{Colors.BOLD}1. Direct SSH:{Colors.RESET}")
+    print(f"   ssh {context_info['user']}@{context_info['hostname']}")
+    print()
+
+    # Tmux if available
+    if coordinator.tmux.tmux_available:
+        print(f"{Colors.BOLD}2. Local tmux:{Colors.RESET}")
+        print(f"   tmux attach -t thanos-main")
+        print()
+
+    # Manual ttyd if installed
+    if coordinator.ttyd.ttyd_available:
+        print(f"{Colors.BOLD}3. Manual ttyd:{Colors.RESET}")
+        print(f"   ttyd tmux attach -t thanos-main")
+        print(f"   Then visit: http://localhost:7681")
+        print()
+
+    print(f"{Colors.BOLD}Recovery commands:{Colors.RESET}")
+    print("  - Kill all access daemons: pkill ttyd")
+    print("  - Check processes: ps aux | grep ttyd")
+    print("  - View logs: tail -f logs/ttyd.log")
+    print()
+
+    return 0
+
+
+def cmd_health(coordinator: AccessCoordinator):
+    """Comprehensive health check."""
+    print_header("HEALTH CHECK")
+
+    status = coordinator.get_full_status()
+    all_good = True
+
+    for name, health in status["components"].items():
+        print(f"{Colors.BOLD}{name.upper()}:{Colors.RESET}")
+
+        if health["available"]:
+            print_success("Installed")
+        else:
+            print_error("Not installed")
+            all_good = False
+
+        if health["running"]:
+            print_success("Running")
+        else:
+            if health["available"]:
+                print_warning("Not running")
+
+        if health["healthy"]:
+            print_success("Healthy")
+        else:
+            if health["running"]:
+                print_error("Unhealthy")
+                all_good = False
+
+        if health["issues"]:
+            for issue in health["issues"]:
+                print_error(issue)
+
+        print()
+
+    if all_good:
+        print_success("All systems operational")
+        return 0
+    else:
+        print_warning("Some components need attention")
+        return 1
+
+
+def cmd_urls(coordinator: AccessCoordinator):
+    """List all access URLs."""
+    print_header("ACCESS URLS")
+
+    urls = coordinator.get_access_urls()
+    found_any = False
+
+    for url_type, url in urls.items():
+        if url:
+            found_any = True
+            print(f"{Colors.BOLD}{url_type.replace('_', ' ').title()}:{Colors.RESET}")
+            print(f"  {Colors.CYAN}{url}{Colors.RESET}")
+            print()
+
+    if not found_any:
+        print_warning("No access URLs available")
+        print()
+        print("Start services:")
+        print("  - Web terminal: thanos-web start")
+        print("  - VPN: thanos-vpn up")
+        print()
+
+    return 0
+
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="Thanos Unified Access - Context-aware access routing",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  thanos-access              # Auto-detect and recommend
+  thanos-access status       # Show full status
+  thanos-access mobile       # Mobile-optimized (QR code)
+  thanos-access web          # Web browser access
+  thanos-access ssh          # SSH access info
+  thanos-access local        # Local terminal
+        """
+    )
+
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="auto",
+        choices=[
+            "auto", "status", "mobile", "web", "ssh",
+            "local", "emergency", "health", "urls"
+        ],
+        help="Command to execute (default: auto)"
+    )
+
+    args = parser.parse_args()
+
+    # Initialize coordinator
+    try:
+        coordinator = AccessCoordinator()
+    except Exception as e:
+        print_error(f"Failed to initialize coordinator: {e}")
+        return 1
+
+    # Route to command
+    commands = {
+        "auto": cmd_auto,
+        "status": cmd_status,
+        "mobile": cmd_mobile,
+        "web": cmd_web,
+        "ssh": cmd_ssh,
+        "local": cmd_local,
+        "emergency": cmd_emergency,
+        "health": cmd_health,
+        "urls": cmd_urls
+    }
+
+    try:
+        return commands[args.command](coordinator) or 0
+    except KeyboardInterrupt:
+        print()
+        print_warning("Interrupted")
+        return 130
+    except Exception as e:
+        print_error(f"Command failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

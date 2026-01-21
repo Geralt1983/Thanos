@@ -1,0 +1,99 @@
+{
+  "test_date": "2026-01-20T21:32:13.768913",
+  "platform": "macOS",
+  "tests": {
+    "TmuxManager - Initialization": {
+      "status": "PASS",
+      "result": true
+    },
+    "TmuxManager - List sessions": {
+      "status": "PASS",
+      "result": true
+    },
+    "TmuxManager - Check session exists": {
+      "status": "PASS",
+      "result": true
+    },
+    "TmuxManager - Get status": {
+      "status": "PASS",
+      "result": true
+    },
+    "TmuxManager - Session info for nonexistent": {
+      "status": "PASS",
+      "result": true
+    },
+    "TtydManager - Initialization": {
+      "status": "PASS",
+      "result": true
+    },
+    "TtydManager - Get status": {
+      "status": "PASS",
+      "result": true
+    },
+    "TtydManager - Health check": {
+      "status": "PASS",
+      "result": true
+    },
+    "TtydManager - Get credentials": {
+      "status": "PASS",
+      "result": true
+    },
+    "TtydManager - Has SSL cert": {
+      "status": "FAIL",
+      "error": "'TtydManager' object has no attribute 'has_ssl_cert'"
+    },
+    "TailscaleManager - Get status": {
+      "status": "PASS",
+      "result": true
+    },
+    "TailscaleManager - Health check": {
+      "status": "PASS",
+      "result": true
+    },
+    "TailscaleManager - List devices": {
+      "status": "PASS",
+      "result": true
+    },
+    "TailscaleManager - Get access URLs": {
+      "status": "FAIL",
+      "error": "'TailscaleManager' object has no attribute 'get_access_urls'"
+    },
+    "AccessCoordinator - Get full status": {
+      "status": "PASS",
+      "result": true
+    },
+    "AccessCoordinator - Get component health": {
+      "status": "PASS",
+      "result": true
+    },
+    "AccessCoordinator - Recommend access method": {
+      "status": "PASS",
+      "result": true
+    },
+    "AccessCoordinator - Get access URLs": {
+      "status": "PASS",
+      "result": true
+    },
+    "AccessCoordinator - Get context info": {
+      "status": "PASS",
+      "result": false
+    },
+    "Integration - Coordinator uses TmuxManager": {
+      "status": "PASS",
+      "result": true
+    },
+    "Integration - Coordinator uses TtydManager": {
+      "status": "PASS",
+      "result": true
+    },
+    "Integration - Coordinator uses TailscaleManager": {
+      "status": "PASS",
+      "result": true
+    }
+  },
+  "summary": {
+    "passed": 20,
+    "failed": 2,
+    "skipped": 0
+  }
+}
