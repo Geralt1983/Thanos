@@ -8,6 +8,13 @@
             "command": "python3 ${THANOS_ROOT:-$HOME/Projects/Thanos}/Tools/time_tracker.py --context",
             "timeout": 2000,
             "continueOnError": true
+          },
+          {
+            "type": "command",
+            "command": "python3 ${THANOS_ROOT:-$HOME/Projects/Thanos}/hooks/user-prompt-submit/memory_checkpoint.py",
+            "timeout": 3000,
+            "continueOnError": true,
+            "passStdin": true
           }
         ]
       }

@@ -6,11 +6,13 @@ Monitors check various aspects of the system and generate alerts:
 - TaskMonitor: Deadlines, overdue tasks, commitments
 - PatternMonitor: Procrastination patterns, energy trends
 - AccessMonitor: tmux, ttyd, Tailscale remote access health
+- CheckpointMonitor: Session checkpoints, orphan recovery
 """
 
 from .health import HealthMonitor
 from .tasks import TaskMonitor
 from .patterns import PatternMonitor
 from .access import AccessMonitor
+from .checkpoint import CheckpointMonitor
 
-__all__ = ['HealthMonitor', 'TaskMonitor', 'PatternMonitor', 'AccessMonitor']
+__all__ = ['HealthMonitor', 'TaskMonitor', 'PatternMonitor', 'AccessMonitor', 'CheckpointMonitor']
