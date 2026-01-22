@@ -57,6 +57,13 @@
             "command": "${THANOS_ROOT:-$HOME/Projects/Thanos}/hooks/session-end/summary.sh",
             "timeout": 5000,
             "continueOnError": true
+          },
+          {
+            "type": "command",
+            "command": "python3 ${THANOS_ROOT:-$HOME/Projects/Thanos}/hooks/session-end/memory_capture.py",
+            "timeout": 10000,
+            "continueOnError": true,
+            "passStdin": true
           }
         ]
       }
