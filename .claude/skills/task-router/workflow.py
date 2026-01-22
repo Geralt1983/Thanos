@@ -1,0 +1,492 @@
+#!/usr/bin/env python3
+"""
+TaskRouter Skill - Workflow Implementation
+
+Handles task operations with energy-aware gating and priority tracking.
+"""
+
+import os
+import sys
+import re
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+
+# Add project root to path
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# MCP client for tool calls (will be imported when MCP integration is ready)
+# For now, we'll structure the code to call MCP tools via the standard interface
+
+
+class TaskIntent:
+    """Parsed task intent."""
+
+    def __init__(
+        self,
+        action: str,
+        title: Optional[str] = None,
+        task_id: Optional[int] = None,
+        client_name: Optional[str] = None,
+        value_tier: Optional[str] = None,
+        cognitive_load: Optional[str] = None,
+        drain_type: Optional[str] = None,
+        description: Optional[str] = None,
+        status: Optional[str] = None,
+    ):
+        self.action = action  # create|complete|promote|update|delete|query
+        self.title = title
+        self.task_id = task_id
+        self.client_name = client_name
+        self.value_tier = value_tier or "checkbox"
+        self.cognitive_load = cognitive_load or "medium"
+        self.drain_type = drain_type or "shallow"
+        self.description = description
+        self.status = status or "active"
+
+
+def parse_intent(user_message: str) -> TaskIntent:
+    """
+    Parse user message to determine task intent and extract parameters.
+
+    Args:
+        user_message: Raw user input
+
+    Returns:
+        TaskIntent object with parsed parameters
+    """
+    lower_msg = user_message.lower()
+
+    # Determine action
+    action = "query"  # default
+
+    if any(word in lower_msg for word in ["add", "create", "make", "new"]):
+        action = "create"
+    elif any(word in lower_msg for word in ["complete", "finish", "done", "mark as complete"]):
+        action = "complete"
+    elif any(word in lower_msg for word in ["promote", "elevate", "activate"]):
+        action = "promote"
+    elif any(word in lower_msg for word in ["update", "modify", "change", "edit"]):
+        action = "update"
+    elif any(word in lower_msg for word in ["delete", "remove"]):
+        action = "delete"
+    elif any(word in lower_msg for word in ["show", "list", "get", "view", "what"]):
+        action = "query"
+
+    # Extract title (for create action)
+    title = None
+    if action == "create":
+        # Try to extract task title
+        # Pattern: "add a task to X" or "create task: X"
+        patterns = [
+            r"task\s+to\s+(.+?)(?:\s*$|\.)",
+            r"task:\s+(.+?)(?:\s*$|\.)",
+            r"(?:add|create)\s+(?:a\s+)?(.+?)\s+task",
+            r"(?:add|create)\s+task\s+(.+)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, lower_msg)
+            if match:
+                title = match.group(1).strip()
+                break
+
+        # Fallback: use message after "task"
+        if not title:
+            task_idx = lower_msg.find("task")
+            if task_idx != -1:
+                title = user_message[task_idx + 4 :].strip()
+
+    # Detect complexity from keywords
+    cognitive_load = "medium"
+    high_complexity_keywords = [
+        "design",
+        "architect",
+        "refactor",
+        "implement",
+        "build",
+        "create",
+        "develop",
+        "research",
+        "analyze",
+        "plan",
+    ]
+
+    low_complexity_keywords = [
+        "review",
+        "check",
+        "read",
+        "respond",
+        "reply",
+        "schedule",
+        "organize",
+    ]
+
+    if any(keyword in lower_msg for keyword in high_complexity_keywords):
+        cognitive_load = "high"
+    elif any(keyword in lower_msg for keyword in low_complexity_keywords):
+        cognitive_load = "low"
+
+    # Detect value tier
+    value_tier = "checkbox"
+    if any(word in lower_msg for word in ["milestone", "major", "critical"]):
+        value_tier = "milestone"
+    elif any(word in lower_msg for word in ["deliverable", "ship", "launch"]):
+        value_tier = "deliverable"
+    elif any(word in lower_msg for word in ["progress", "ongoing"]):
+        value_tier = "progress"
+
+    return TaskIntent(
+        action=action,
+        title=title,
+        cognitive_load=cognitive_load,
+        value_tier=value_tier,
+    )
+
+
+def get_energy_level() -> tuple[int, str]:
+    """
+    Get current energy level from Oura or WorkOS.
+
+    Returns:
+        tuple: (readiness_score, energy_level)
+               energy_level: 'low'|'medium'|'high'
+    """
+    # This would call MCP tools in production
+    # For now, return placeholder
+    # TODO: Implement MCP client integration
+
+    # Pseudo-code:
+    # try:
+    #     oura_data = mcp_client.call('oura__get_daily_readiness', {
+    #         'startDate': today,
+    #         'endDate': today
+    #     })
+    #     score = oura_data[0]['score']
+    # except:
+    #     energy_data = mcp_client.call('workos_get_energy', {'limit': 1})
+    #     score = map_energy_to_score(energy_data[0]['level'])
+
+    # Placeholder
+    score = 75  # Assume medium energy
+    energy = map_readiness_to_energy(score)
+
+    return (score, energy)
+
+
+def map_readiness_to_energy(score: int) -> str:
+    """Map readiness score to energy level."""
+    if score >= 85:
+        return "high"
+    elif score >= 70:
+        return "medium"
+    else:
+        return "low"
+
+
+def should_gate_task(intent: TaskIntent, energy_level: str) -> bool:
+    """
+    Determine if task should be gated based on energy and complexity.
+
+    Args:
+        intent: Parsed task intent
+        energy_level: Current energy level
+
+    Returns:
+        bool: True if task should be gated
+    """
+    if intent.action != "create":
+        return False  # Only gate creation
+
+    if energy_level == "low" and intent.cognitive_load == "high":
+        return True
+
+    return False
+
+
+def get_suggested_alternatives(energy_level: str) -> List[str]:
+    """
+    Get suggested low-complexity alternatives for current energy level.
+
+    Args:
+        energy_level: Current energy level
+
+    Returns:
+        List of suggested task types
+    """
+    if energy_level == "low":
+        return [
+            "Review completed tasks",
+            "Brain dump loose thoughts",
+            "Check off a simple checkbox task",
+            "Respond to low-priority emails",
+            "Organize files or notes",
+        ]
+    elif energy_level == "medium":
+        return [
+            "Make progress on ongoing tasks",
+            "Plan next steps for projects",
+            "Review and update documentation",
+            "Coordinate with team members",
+        ]
+    else:
+        return []
+
+
+def detect_priority_shift(user_message: str) -> bool:
+    """
+    Detect if message indicates a priority shift.
+
+    Args:
+        user_message: Raw user input
+
+    Returns:
+        bool: True if priority shift detected
+    """
+    indicators = [
+        r"top priority",
+        r"highest priority",
+        r"more important than",
+        r"focus on.*instead",
+        r"switch to",
+        r"most urgent",
+        r"critical.*this week",
+    ]
+
+    lower_msg = user_message.lower()
+
+    for pattern in indicators:
+        if re.search(pattern, lower_msg):
+            return True
+
+    return False
+
+
+def extract_new_priorities(user_message: str) -> List[str]:
+    """
+    Extract new priorities from user message.
+
+    Args:
+        user_message: Raw user input
+
+    Returns:
+        List of priority items
+    """
+    # Simple extraction - in production, use more sophisticated NLP
+    priorities = []
+
+    # Look for explicit priority statements
+    patterns = [
+        r"priority(?:\s+\d+)?[:\s]+(.+?)(?:\.|$)",
+        r"focus on\s+(.+?)(?:\.|$)",
+        r"top priority:\s+(.+?)(?:\.|$)",
+    ]
+
+    for pattern in patterns:
+        matches = re.findall(pattern, user_message, re.IGNORECASE)
+        priorities.extend([m.strip() for m in matches])
+
+    return priorities[:3]  # Top 3
+
+
+def update_current_focus(new_priorities: List[str]) -> None:
+    """
+    Update State/CurrentFocus.md with new priorities.
+
+    Args:
+        new_priorities: List of priority items
+    """
+    focus_file = PROJECT_ROOT / "State" / "CurrentFocus.md"
+
+    if not focus_file.exists():
+        return
+
+    content = focus_file.read_text()
+
+    # Find priorities section
+    priorities_section_match = re.search(
+        r"(## Priorities\n)(.*?)(?=\n##|\Z)", content, re.DOTALL
+    )
+
+    if priorities_section_match:
+        # Build new priorities list
+        new_section = "## Priorities\n"
+        for i, priority in enumerate(new_priorities, 1):
+            new_section += f"- {priority}\n"
+
+        # Replace section
+        updated_content = (
+            content[: priorities_section_match.start()]
+            + new_section
+            + content[priorities_section_match.end() :]
+        )
+
+        focus_file.write_text(updated_content)
+
+
+def format_thanos_response(
+    intent: TaskIntent, result: Dict[str, Any], energy_score: int = 0
+) -> str:
+    """
+    Format response in Thanos voice.
+
+    Args:
+        intent: Task intent
+        result: Execution result
+        energy_score: Readiness score (optional)
+
+    Returns:
+        Formatted response string
+    """
+    action = intent.action
+
+    if action == "create":
+        if result.get("gated"):
+            alternatives = "\n".join(f"  - {alt}" for alt in result["alternatives"])
+            return f"""### DESTINY // LOW POWER STATE
+
+Readiness: {energy_score}. The stones require charging.
+
+This task demands high cognitive load. Your current state suggests:
+{alternatives}
+
+The universe demands patience. Proceed anyway?"""
+
+        points = _estimate_points(intent.value_tier)
+        return f"""The task has been added to your sacrifices.
+{intent.title}
++{points} toward the balance."""
+
+    elif action == "complete":
+        points = result.get("points", 0)
+        progress = result.get("progress", "")
+        target = result.get("target", "")
+
+        return f"""A small price to pay for salvation.
+{intent.title} has been snapped from existence.
++{points} toward the balance.
+{progress}/{target} complete."""
+
+    elif action == "promote":
+        return f"""{intent.title} elevated to active status.
+The work does not wait."""
+
+    elif action == "query":
+        tasks = result.get("tasks", [])
+        if not tasks:
+            return "The list is empty. A moment of balance."
+
+        task_list = "\n".join(
+            f"  [{task.get('valueTier', '')[0].upper()}] {task.get('title', '')}"
+            for task in tasks
+        )
+
+        return f"""Your current sacrifices:
+{task_list}
+
+Dread it. Run from it. The work arrives all the same."""
+
+    else:
+        return "Task operation acknowledged."
+
+
+def _estimate_points(value_tier: str) -> int:
+    """Estimate points for value tier."""
+    point_map = {"checkbox": 1, "progress": 2, "deliverable": 4, "milestone": 7}
+    return point_map.get(value_tier, 1)
+
+
+def execute_task_operation(
+    user_input: str, mcp_client=None
+) -> Dict[str, Any]:
+    """
+    Main workflow execution.
+
+    Args:
+        user_input: Raw user input
+        mcp_client: MCP client instance (optional, for testing)
+
+    Returns:
+        {
+            'success': bool,
+            'action': str,
+            'response': str,
+            'priority_shift': bool,
+            'updated_focus': list
+        }
+    """
+    # 1. Parse intent
+    intent = parse_intent(user_input)
+
+    # 2. Get energy level
+    energy_score, energy_level = get_energy_level()
+
+    # 3. Check if should gate
+    if should_gate_task(intent, energy_level):
+        alternatives = get_suggested_alternatives(energy_level)
+
+        result = {
+            "gated": True,
+            "alternatives": alternatives,
+        }
+
+        response = format_thanos_response(intent, result, energy_score)
+
+        return {
+            "success": False,
+            "action": intent.action,
+            "response": response,
+            "priority_shift": False,
+            "updated_focus": [],
+        }
+
+    # 4. Execute via MCP (placeholder for now)
+    # In production, this would call the appropriate MCP tool:
+    # if intent.action == 'create':
+    #     mcp_client.call('workos_create_task', {...})
+    # elif intent.action == 'complete':
+    #     mcp_client.call('workos_complete_task', {...})
+    # etc.
+
+    execution_result = {"success": True, "points": 2, "progress": 15, "target": 18}
+
+    # 5. Check for priority shift
+    priority_shift = detect_priority_shift(user_input)
+    updated_focus = []
+
+    if priority_shift:
+        new_priorities = extract_new_priorities(user_input)
+        if new_priorities:
+            update_current_focus(new_priorities)
+            updated_focus = new_priorities
+
+    # 6. Format response
+    response = format_thanos_response(intent, execution_result, energy_score)
+
+    return {
+        "success": True,
+        "action": intent.action,
+        "response": response,
+        "priority_shift": priority_shift,
+        "updated_focus": updated_focus,
+    }
+
+
+def main():
+    """CLI entry point for testing."""
+    if len(sys.argv) < 2:
+        print("Usage: python3 workflow.py \"user message\"", file=sys.stderr)
+        sys.exit(1)
+
+    message = " ".join(sys.argv[1:])
+    result = execute_task_operation(message)
+
+    print(result["response"])
+
+    if result["priority_shift"]:
+        print(f"\nPriority shift detected: {result['updated_focus']}")
+
+
+if __name__ == "__main__":
+    main()

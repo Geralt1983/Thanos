@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
-import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { Database } from "bun:sqlite";
+import { drizzle, BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
+import { eq, and, ne, asc, desc } from "drizzle-orm";
 import * as cacheSchema from "./schema.js";
 import * as path from "path";
 import * as fs from "fs";
@@ -14,105 +14,122 @@ const CACHE_DB_PATH = path.join(CACHE_DIR, "cache.db");
 const STALENESS_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 
 // =============================================================================
-// CACHE MANAGER
+// CACHE MANAGER (Bun Native SQLite)
 // =============================================================================
-let cacheDb: BetterSQLite3Database<typeof cacheSchema> | null = null;
-let sqliteDb: Database.Database | null = null;
+let cacheDb: BunSQLiteDatabase<typeof cacheSchema> | null = null;
+let sqliteDb: Database | null = null;
 
 /**
- * Initialize the SQLite cache database
+ * Initialize the SQLite cache database using Bun's native Database
  * Creates the cache directory and database file if they don't exist
  */
-export function initCache(): BetterSQLite3Database<typeof cacheSchema> {
+export function initCache(): BunSQLiteDatabase<typeof cacheSchema> {
   if (cacheDb) return cacheDb;
 
-  // Ensure cache directory exists
-  if (!fs.existsSync(CACHE_DIR)) {
-    fs.mkdirSync(CACHE_DIR, { recursive: true });
+  try {
+    // Ensure cache directory exists
+    if (!fs.existsSync(CACHE_DIR)) {
+      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
+
+    // Create SQLite database using Bun's native API
+    sqliteDb = new Database(CACHE_DB_PATH);
+
+    // Enable WAL mode for better concurrent access
+    sqliteDb.run("PRAGMA journal_mode = WAL");
+
+    // Create all tables if they don't exist
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS cached_clients (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'client',
+        color TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      )
+    `);
+
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS cached_tasks (
+        id INTEGER PRIMARY KEY,
+        client_id INTEGER,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'backlog',
+        category TEXT NOT NULL DEFAULT 'work',
+        value_tier TEXT DEFAULT 'progress',
+        effort_estimate INTEGER DEFAULT 2,
+        effort_actual INTEGER,
+        drain_type TEXT,
+        sort_order INTEGER DEFAULT 0,
+        subtasks TEXT DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT,
+        backlog_entered_at TEXT,
+        points_ai_guess INTEGER,
+        points_final INTEGER,
+        points_adjusted_at TEXT
+      )
+    `);
+
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS cached_daily_goals (
+        id INTEGER PRIMARY KEY,
+        date TEXT NOT NULL UNIQUE,
+        target_points INTEGER DEFAULT 18,
+        earned_points INTEGER DEFAULT 0,
+        task_count INTEGER DEFAULT 0,
+        current_streak INTEGER DEFAULT 0,
+        longest_streak INTEGER DEFAULT 0,
+        last_goal_hit_date TEXT,
+        daily_debt INTEGER DEFAULT 0,
+        weekly_debt INTEGER DEFAULT 0,
+        pressure_level INTEGER DEFAULT 0,
+        updated_at TEXT
+      )
+    `);
+
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS cached_habits (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        emoji TEXT,
+        frequency TEXT NOT NULL DEFAULT 'daily',
+        target_count INTEGER DEFAULT 1,
+        current_streak INTEGER DEFAULT 0,
+        longest_streak INTEGER DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS cache_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    // Create indexes
+    sqliteDb.run("CREATE INDEX IF NOT EXISTS idx_cached_tasks_status ON cached_tasks(status)");
+    sqliteDb.run("CREATE INDEX IF NOT EXISTS idx_cached_tasks_client_id ON cached_tasks(client_id)");
+    sqliteDb.run("CREATE INDEX IF NOT EXISTS idx_cached_tasks_completed_at ON cached_tasks(completed_at)");
+
+    // Create Drizzle ORM instance with Bun SQLite
+    cacheDb = drizzle(sqliteDb, { schema: cacheSchema });
+
+    console.error("[Cache] ✓ Cache initialized successfully (Bun SQLite)");
+    return cacheDb;
+  } catch (error) {
+    console.error("[Cache] Failed to initialize cache:", error);
+    throw error;
   }
-
-  // Create SQLite database
-  sqliteDb = new Database(CACHE_DB_PATH);
-
-  // Enable WAL mode for better concurrent access
-  sqliteDb.pragma("journal_mode = WAL");
-
-  // Create tables if they don't exist
-  sqliteDb.exec(`
-    CREATE TABLE IF NOT EXISTS cached_clients (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'client',
-      color TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS cached_tasks (
-      id INTEGER PRIMARY KEY,
-      client_id INTEGER,
-      title TEXT NOT NULL,
-      description TEXT,
-      status TEXT NOT NULL DEFAULT 'backlog',
-      category TEXT NOT NULL DEFAULT 'work',
-      value_tier TEXT DEFAULT 'progress',
-      effort_estimate INTEGER DEFAULT 2,
-      effort_actual INTEGER,
-      drain_type TEXT,
-      sort_order INTEGER DEFAULT 0,
-      subtasks TEXT DEFAULT '[]',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      completed_at TEXT,
-      backlog_entered_at TEXT,
-      points_ai_guess INTEGER,
-      points_final INTEGER,
-      points_adjusted_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS cached_daily_goals (
-      id INTEGER PRIMARY KEY,
-      date TEXT NOT NULL UNIQUE,
-      target_points INTEGER DEFAULT 18,
-      earned_points INTEGER DEFAULT 0,
-      task_count INTEGER DEFAULT 0,
-      current_streak INTEGER DEFAULT 0,
-      longest_streak INTEGER DEFAULT 0,
-      last_goal_hit_date TEXT,
-      daily_debt INTEGER DEFAULT 0,
-      weekly_debt INTEGER DEFAULT 0,
-      pressure_level INTEGER DEFAULT 0,
-      updated_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS cached_habits (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      emoji TEXT,
-      frequency TEXT NOT NULL DEFAULT 'daily',
-      target_count INTEGER DEFAULT 1,
-      current_streak INTEGER DEFAULT 0,
-      longest_streak INTEGER DEFAULT 0,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS cache_meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_cached_tasks_status ON cached_tasks(status);
-    CREATE INDEX IF NOT EXISTS idx_cached_tasks_client_id ON cached_tasks(client_id);
-    CREATE INDEX IF NOT EXISTS idx_cached_tasks_completed_at ON cached_tasks(completed_at);
-  `);
-
-  cacheDb = drizzle(sqliteDb, { schema: cacheSchema });
-  return cacheDb;
 }
 
 /**
@@ -129,7 +146,7 @@ export function closeCache(): void {
 /**
  * Get the cache database instance
  */
-export function getCacheDb(): BetterSQLite3Database<typeof cacheSchema> {
+export function getCacheDb(): BunSQLiteDatabase<typeof cacheSchema> {
   if (!cacheDb) {
     return initCache();
   }
@@ -196,6 +213,7 @@ export function getCachedTasks(status?: string, limit = 50): cacheSchema.CachedT
   const db = getCacheDb();
 
   if (status) {
+    // Explicit status filter - return exactly what's requested
     return db
       .select()
       .from(cacheSchema.cachedTasks)
@@ -210,10 +228,16 @@ export function getCachedTasks(status?: string, limit = 50): cacheSchema.CachedT
       .all();
   }
 
+  // No status filter - exclude completed tasks by default
   return db
     .select()
     .from(cacheSchema.cachedTasks)
-    .where(eq(cacheSchema.cachedTasks.category, "work"))
+    .where(
+      and(
+        eq(cacheSchema.cachedTasks.category, "work"),
+        ne(cacheSchema.cachedTasks.status, "done"),
+      ),
+    )
     .orderBy(asc(cacheSchema.cachedTasks.sortOrder), desc(cacheSchema.cachedTasks.createdAt))
     .limit(limit)
     .all();
@@ -230,7 +254,11 @@ export function getCachedTasksByClient(clientId: number, status?: string, limit 
     eq(cacheSchema.cachedTasks.clientId, clientId),
   ];
   if (status) {
+    // Explicit status filter - return exactly what's requested
     conditions.push(eq(cacheSchema.cachedTasks.status, status));
+  } else {
+    // No status filter - exclude completed tasks by default
+    conditions.push(ne(cacheSchema.cachedTasks.status, "done"));
   }
 
   return db

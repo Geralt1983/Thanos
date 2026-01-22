@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""
+Thanos CLI - Main command-line interface for Thanos Operating System
+
+Provides unified access to all Thanos subsystems:
+- Access layer (tmux, web, vpn)
+- Task management
+- Habit tracking
+- Energy monitoring
+- System status
+
+Usage:
+    thanos <command> [args]
+
+Commands:
+    access [subcommand]  - Unified access layer
+    remote [method]      - Quick remote access setup
+    status [--full]      - System status
+    tasks                - Task management
+    habits               - Habit tracking
+    energy               - Energy monitoring
+    help                 - Show this help
+"""
+
+import sys
+import os
+import subprocess
+from pathlib import Path
+import argparse
+
+# Project root
+PROJECT_ROOT = Path(__file__).parent.parent
+ACCESS_DIR = PROJECT_ROOT / "Access"
+
+# Colors
+class Colors:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    CYAN = "\033[36m"
+
+
+def run_command(cmd: list, check: bool = True) -> subprocess.CompletedProcess:
+    """Run command and return result."""
+    try:
+        result = subprocess.run(
+            cmd,
+            check=check,
+            capture_output=False,
+            text=True
+        )
+        return result
+    except subprocess.CalledProcessError as e:
+        print(f"{Colors.RED}✗ Command failed: {' '.join(cmd)}{Colors.RESET}")
+        return e
+
+
+def cmd_access(args: list):
+    """Handle access subcommands."""
+    thanos_access = ACCESS_DIR / "thanos-access"
+
+    if not thanos_access.exists():
+        print(f"{Colors.RED}✗ thanos-access not found{Colors.RESET}")
+        return 1
+
+    # If no subcommand, run auto-detect
+    if not args:
+        args = ["auto"]
+
+    cmd = [str(thanos_access)] + args
+    result = run_command(cmd, check=False)
+    return result.returncode if result else 1
+
+
+def cmd_remote(args: list):
+    """Quick remote access setup."""
+    if not args:
+        # Default to mobile
+        args = ["mobile"]
+
+    method = args[0]
+    workflows_dir = ACCESS_DIR / "workflows"
+
+    workflow_map = {
+        "mobile": workflows_dir / "mobile-access.sh",
+        "web": workflows_dir / "web-access.sh",
+        "ssh": workflows_dir / "ssh-access.sh",
+        "local": workflows_dir / "local-access.sh",
+        "emergency": workflows_dir / "emergency-access.sh"
+    }
+
+    workflow = workflow_map.get(method)
+
+    if not workflow or not workflow.exists():
+        print(f"{Colors.RED}✗ Unknown remote method: {method}{Colors.RESET}")
+        print(f"\n{Colors.BOLD}Available methods:{Colors.RESET}")
+        for m in workflow_map.keys():
+            print(f"  - {m}")
+        return 1
+
+    result = run_command([str(workflow)], check=False)
+    return result.returncode if result else 1
+
+
+def cmd_status(args: list):
+    """Show system status."""
+    full = "--full" in args or "-f" in args
+
+    if full:
+        # Run thanos-access status for full access layer status
+        thanos_access = ACCESS_DIR / "thanos-access"
+        if thanos_access.exists():
+            result = run_command([str(thanos_access), "status"], check=False)
+            return result.returncode if result else 1
+    else:
+        # Quick status
+        print(f"{Colors.BOLD}{Colors.CYAN}THANOS QUICK STATUS{Colors.RESET}\n")
+
+        # Check key components
+        components = {
+            "tmux": "tmux",
+            "ttyd": "ttyd",
+            "tailscale": "tailscale"
+        }
+
+        for name, cmd in components.items():
+            if subprocess.run(
+                ["which", cmd],
+                capture_output=True,
+                check=False
+            ).returncode == 0:
+                print(f"{Colors.GREEN}✓{Colors.RESET} {name} installed")
+            else:
+                print(f"{Colors.RED}✗{Colors.RESET} {name} not found")
+
+        print(f"\n{Colors.BOLD}For detailed status:{Colors.RESET} thanos status --full")
+        print(f"{Colors.BOLD}For access info:{Colors.RESET} thanos access")
+
+    return 0
+
+
+def cmd_tasks(args: list):
+    """Task management (placeholder)."""
+    print(f"{Colors.YELLOW}Task management integration coming soon{Colors.RESET}")
+    print("For now, use the WorkOS MCP tools directly")
+    return 0
+
+
+def cmd_habits(args: list):
+    """Habit tracking (placeholder)."""
+    print(f"{Colors.YELLOW}Habit tracking integration coming soon{Colors.RESET}")
+    print("For now, use the WorkOS MCP tools directly")
+    return 0
+
+
+def cmd_energy(args: list):
+    """Energy monitoring (placeholder)."""
+    print(f"{Colors.YELLOW}Energy monitoring integration coming soon{Colors.RESET}")
+    print("For now, use the Oura MCP tools directly")
+    return 0
+
+
+def cmd_help(args: list = None):
+    """Show help."""
+    print(f"""
+{Colors.BOLD}{Colors.CYAN}THANOS CLI{Colors.RESET}
+
+{Colors.BOLD}Usage:{Colors.RESET}
+    thanos <command> [args]
+
+{Colors.BOLD}Commands:{Colors.RESET}
+
+    {Colors.GREEN}access{Colors.RESET} [subcommand]
+        Unified access layer control
+        Subcommands: auto, status, mobile, web, ssh, local, emergency, health, urls
+        Examples:
+            thanos access              # Auto-detect and recommend
+            thanos access mobile       # Mobile-optimized (QR code)
+            thanos access status       # Full access status
+
+    {Colors.GREEN}remote{Colors.RESET} [method]
+        Quick remote access setup
+        Methods: mobile, web, ssh, local, emergency
+        Examples:
+            thanos remote              # Default: mobile
+            thanos remote web          # Browser access
+            thanos remote ssh          # SSH info
+
+    {Colors.GREEN}status{Colors.RESET} [--full]
+        Show system status
+        Options:
+            --full, -f                 # Full detailed status
+
+    {Colors.GREEN}tasks{Colors.RESET}
+        Task management (coming soon)
+
+    {Colors.GREEN}habits{Colors.RESET}
+        Habit tracking (coming soon)
+
+    {Colors.GREEN}energy{Colors.RESET}
+        Energy monitoring (coming soon)
+
+    {Colors.GREEN}help{Colors.RESET}
+        Show this help message
+
+{Colors.BOLD}Examples:{Colors.RESET}
+
+    # Quick access from phone
+    thanos remote mobile
+
+    # Check if everything is running
+    thanos status --full
+
+    # Get web access URL
+    thanos access web
+
+    # Emergency recovery
+    thanos remote emergency
+
+{Colors.BOLD}Component Scripts:{Colors.RESET}
+
+    Access/thanos-access       # Main access coordinator
+    Access/thanos-tmux         # Tmux session manager
+    Access/thanos-web          # Web terminal (ttyd)
+    Access/thanos-vpn          # Tailscale VPN
+
+{Colors.BOLD}More Info:{Colors.RESET}
+
+    Documentation: docs/
+    Architecture: Access/ARCHITECTURE.md
+    """)
+    return 0
+
+
+def main():
+    """Main CLI entry point."""
+    if len(sys.argv) < 2:
+        cmd_help()
+        return 0
+
+    command = sys.argv[1]
+    args = sys.argv[2:]
+
+    commands = {
+        "access": cmd_access,
+        "remote": cmd_remote,
+        "status": cmd_status,
+        "tasks": cmd_tasks,
+        "habits": cmd_habits,
+        "energy": cmd_energy,
+        "help": cmd_help,
+        "--help": cmd_help,
+        "-h": cmd_help
+    }
+
+    cmd_func = commands.get(command)
+
+    if not cmd_func:
+        print(f"{Colors.RED}✗ Unknown command: {command}{Colors.RESET}")
+        print(f"\nRun '{Colors.CYAN}thanos help{Colors.RESET}' for usage")
+        return 1
+
+    try:
+        return cmd_func(args)
+    except KeyboardInterrupt:
+        print(f"\n{Colors.YELLOW}Interrupted{Colors.RESET}")
+        return 130
+    except Exception as e:
+        print(f"{Colors.RED}✗ Error: {e}{Colors.RESET}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -37,3 +37,9 @@ bun "$THANOS_ROOT/Tools/daily-brief.ts" 2>/dev/null || true
 
 # Set visual state to CHAOS (morning disorder, unsorted tasks)
 python3 "$THANOS_ROOT/Tools/wallpaper_manager.py" --auto 2>/dev/null || true
+
+# Ensure Operator daemon is running (background monitoring)
+if ! launchctl list | grep -q com.thanos.operator 2>/dev/null; then
+    echo "[Daemon] Starting Operator..." >&2
+    launchctl start com.thanos.operator 2>/dev/null || true
+fi

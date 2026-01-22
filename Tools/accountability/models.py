@@ -132,6 +132,11 @@ class ClassifiedBrainDump:
     processed_at: datetime = field(default_factory=datetime.now)
     source: str = "unknown"  # telegram, voice, direct
 
+    # AI oversight fields
+    confidence: float = 1.0  # 0-1 confidence in classification
+    needs_review: bool = False  # Flag for AI/human review
+    review_reason: Optional[str] = None  # Why review is needed
+
     # Resulting items
     created_tasks: List[int] = field(default_factory=list)
     linked_projects: List[int] = field(default_factory=list)
@@ -150,6 +155,9 @@ class ClassifiedBrainDump:
             'blockers': self.blockers,
             'processed_at': self.processed_at.isoformat(),
             'source': self.source,
+            'confidence': self.confidence,
+            'needs_review': self.needs_review,
+            'review_reason': self.review_reason,
             'created_tasks': self.created_tasks,
             'linked_projects': self.linked_projects,
         }

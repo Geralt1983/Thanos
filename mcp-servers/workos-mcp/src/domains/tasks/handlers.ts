@@ -293,7 +293,12 @@ export async function handleGetTasks(
 
   // Fallback to Neon
   const conditions = [eq(schema.tasks.category, "work")];
-  if (status) conditions.push(eq(schema.tasks.status, status));
+  if (status) {
+    conditions.push(eq(schema.tasks.status, status));
+  } else {
+    // By default, exclude completed tasks (only return active/queued/backlog)
+    conditions.push(ne(schema.tasks.status, "done"));
+  }
   if (clientId) conditions.push(eq(schema.tasks.clientId, clientId));
 
   const query = db
@@ -880,7 +885,7 @@ export async function handleUpdateTask(
     };
   }
 
-  const { taskId, clientId, title, description, status, valueTier, drainType, cognitiveLoad } = validation.data;
+  const { taskId, clientId, title, description, status, valueTier, drainType, cognitiveLoad, subtasks } = validation.data;
 
   const updateData: any = { updatedAt: new Date() };
   if (clientId !== undefined) updateData.clientId = clientId;
@@ -890,6 +895,7 @@ export async function handleUpdateTask(
   if (valueTier !== undefined) updateData.valueTier = valueTier;
   if (drainType !== undefined) updateData.drainType = drainType;
   if (cognitiveLoad !== undefined) updateData.cognitiveLoad = cognitiveLoad;
+  if (subtasks !== undefined) updateData.subtasks = subtasks;
 
   const [updatedTask] = await db
     .update(schema.tasks)

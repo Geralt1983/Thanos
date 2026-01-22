@@ -13,6 +13,7 @@ Key Features:
     - Session management and persistence
     - Agent switching and context tracking
     - Graceful exit handling (Ctrl+C, Ctrl+D)
+    - Voice synthesis for responses (ElevenLabs integration)
 
 Key Classes:
     ThanosInteractive: Main interactive mode controller
@@ -97,6 +98,19 @@ from Tools.prompt_formatter import PromptFormatter
 from Tools.session_manager import SessionManager
 from Tools.state_reader import StateReader
 from Tools.memos import get_memos
+
+# Voice synthesis import
+try:
+    import sys
+    # Add Shell/lib to path for voice module
+    shell_lib_path = Path(__file__).parent.parent / "Shell" / "lib"
+    if str(shell_lib_path) not in sys.path:
+        sys.path.insert(0, str(shell_lib_path))
+    from voice import synthesize
+    VOICE_AVAILABLE = True
+except ImportError:
+    VOICE_AVAILABLE = False
+    synthesize = None
 
 # MCP Bridge imports for tool execution
 from Tools.adapters.mcp_bridge import MCPBridge
@@ -200,6 +214,15 @@ class ThanosInteractive:
         self._memory_capture: Optional[MemoryCapture] = None
         self._contextual_memory: Optional[ContextualMemory] = None
         self._init_memory_systems()
+
+        # Voice synthesis configuration
+        # Check config for voice settings (default: enabled if available)
+        voice_config = config.get("voice", {}) if 'config' in locals() else {}
+        self.voice_enabled = voice_config.get("enabled", True) and VOICE_AVAILABLE
+        self.voice_auto_play = voice_config.get("auto_play", True)
+
+        if self.voice_enabled:
+            logger.debug("Voice synthesis enabled")
 
     def _init_mcp_bridges(self) -> None:
         """
@@ -727,6 +750,9 @@ class ThanosInteractive:
                 print()  # Blank line before response
                 print(final_content)
 
+                # Synthesize voice for tool response
+                self._synthesize_voice(final_content)
+
             break
 
         # Return standardized response format
@@ -738,6 +764,71 @@ class ThanosInteractive:
                 "cost_usd": total_cost
             } if total_input_tokens or total_output_tokens else None
         }
+
+    def _extract_voice_text(self, content: str, max_sentences: int = 2) -> str:
+        """
+        Extract meaningful text from response for voice synthesis.
+
+        Args:
+            content: Full response content
+            max_sentences: Maximum sentences to synthesize
+
+        Returns:
+            Extracted text suitable for voice synthesis
+        """
+        if not content:
+            return ""
+
+        # Remove markdown code blocks
+        import re
+        content = re.sub(r'```[\s\S]*?```', '', content)
+
+        # Remove inline code
+        content = re.sub(r'`[^`]+`', '', content)
+
+        # Remove URLs
+        content = re.sub(r'http[s]?://\S+', '', content)
+
+        # Split into sentences (basic approach)
+        sentences = []
+        for line in content.split('\n'):
+            line = line.strip()
+            if line and not line.startswith(('#', '-', '*', '>', '|')):
+                # Split by sentence endings
+                for sent in re.split(r'[.!?]+\s+', line):
+                    sent = sent.strip()
+                    if sent and len(sent) > 10:  # Skip very short fragments
+                        sentences.append(sent)
+
+        # Take first N sentences
+        voice_text = '. '.join(sentences[:max_sentences])
+        if voice_text and not voice_text.endswith('.'):
+            voice_text += '.'
+
+        return voice_text
+
+    def _synthesize_voice(self, content: str) -> None:
+        """
+        Synthesize voice for response content.
+
+        Args:
+            content: Response content to speak
+        """
+        if not self.voice_enabled or not content:
+            return
+
+        # Extract meaningful text for voice
+        voice_text = self._extract_voice_text(content)
+
+        if not voice_text or len(voice_text) < 10:
+            return
+
+        try:
+            # Synthesize and optionally play
+            synthesize(voice_text, play=self.voice_auto_play)
+        except Exception as e:
+            # Voice synthesis failure shouldn't break interactive mode
+            logger.debug(f"Voice synthesis failed: {e}")
 
     def run(self) -> None:
         """
@@ -790,6 +881,16 @@ class ThanosInteractive:
                     # Handle /tools command locally (MCP tool listing)
                     if user_input.lower().startswith("/tools"):
                         self._show_mcp_tools()
+                        continue
+
+                    # Handle /voice command locally (voice synthesis toggle)
+                    if user_input.lower().startswith("/voice"):
+                        if not VOICE_AVAILABLE:
+                            print(f"{Colors.DIM}Voice synthesis not available (ELEVENLABS_API_KEY not set){Colors.RESET}")
+                        else:
+                            self.voice_enabled = not self.voice_enabled
+                            status = "enabled" if self.voice_enabled else "disabled"
+                            print(f"{Colors.CYAN}Voice synthesis {status}{Colors.RESET}")
                         continue
 
                     result = self.command_router.route_command(user_input)
@@ -946,6 +1047,9 @@ class ThanosInteractive:
                             tool_calls=tool_calls_made
                         )
 
+                        # Synthesize voice for response
+                        self._synthesize_voice(content)
+
                         # Add blank line after response for visual separation
                         print()
 
@@ -1026,6 +1130,10 @@ class ThanosInteractive:
             tool_count = len(self.mcp_tools)
             server_count = len(self.mcp_bridges)
             print(f"{Colors.DIM}MCP: {tool_count} tools from {server_count} server(s) available{Colors.RESET}")
+
+        # Show voice synthesis status
+        if self.voice_enabled:
+            print(f"{Colors.DIM}Voice: Enabled (use /voice to toggle){Colors.RESET}")
 
         print()  # Extra newline after info
 

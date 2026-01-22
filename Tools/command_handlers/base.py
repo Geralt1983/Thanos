@@ -52,6 +52,15 @@ except ImportError:
     MEMOS_AVAILABLE = False
     MemOS = None
 
+# Memory V2 integration (cloud-first with heat decay)
+try:
+    from Tools.memory_v2 import get_memory_service, MemoryService
+
+    MEMORY_V2_AVAILABLE = True
+except ImportError:
+    MEMORY_V2_AVAILABLE = False
+    MemoryService = None
+
 
 # ANSI color codes for terminal output
 class Colors:
@@ -122,6 +131,10 @@ class BaseHandler:
         self._memos: Optional[MemOS] = None
         self._memos_initialized = False
 
+        # Memory V2 integration (lazy initialization)
+        self._memory_v2: Optional["MemoryService"] = None
+        self._memory_v2_initialized = False
+
     def _get_current_agent(self) -> str:
         """
         Get the current agent name.
@@ -162,6 +175,29 @@ class BaseHandler:
                     self._memos = None
 
         return self._memos
+
+    def _get_memory_v2(self) -> Optional["MemoryService"]:
+        """
+        Get Memory V2 service, initializing if needed.
+
+        Returns:
+            MemoryService instance if available, None otherwise
+        """
+        if not MEMORY_V2_AVAILABLE:
+            return None
+
+        if not self._memory_v2_initialized:
+            try:
+                self._memory_v2 = get_memory_service()
+                self._memory_v2_initialized = True
+            except Exception as e:
+                # Log the error but don't crash
+                import logging
+                logging.getLogger(__name__).warning(f"Memory V2 init failed: {e}")
+                self._memory_v2 = None
+                self._memory_v2_initialized = True  # Mark as initialized to avoid retrying
+
+        return self._memory_v2
 
     def _run_async(self, coro):
         """

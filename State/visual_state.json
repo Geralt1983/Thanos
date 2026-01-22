@@ -1,5 +1,83 @@
 {
   "state": "focus",
   "timestamp": "2026-01-19T16:30:36.815377",
-  "wallpaper": "infinity_gauntlet_fist.png"
+  "wallpaper": "infinity_gauntlet_fist.png",
+  "current_state": "CHAOS",
+  "history": [
+    {
+      "state": "CHAOS",
+      "timestamp": "2026-01-21T01:35:43.488043",
+      "description": "Morning/Unsorted - Tasks in disarray, inbox awaits"
+    },
+    {
+      "state": "FOCUS",
+      "timestamp": "2026-01-21T01:35:44.589437",
+      "description": "Deep Work - Engaged and executing with power"
+    },
+    {
+      "state": "BALANCE",
+      "timestamp": "2026-01-21T01:36:00.882287",
+      "description": "End of Day/Complete - The Garden achieved"
+    },
+    {
+      "state": "CHAOS",
+      "timestamp": "2026-01-21T01:36:18.353795",
+      "description": "Morning/Unsorted - Tasks in disarray, inbox awaits"
+    },
+    {
+      "state": "FOCUS",
+      "timestamp": "2026-01-21T01:36:18.354095",
+      "description": "Deep Work - Engaged and executing with power"
+    },
+    {
+      "state": "BALANCE",
+      "timestamp": "2026-01-21T01:36:18.354270",
+      "description": "End of Day/Complete - The Garden achieved"
+    },
+    {
+      "state": "BALANCE",
+      "timestamp": "2026-01-21T01:36:18.354421",
+      "description": "End of Day/Complete - The Garden achieved"
+    },
+    {
+      "state": "CHAOS",
+      "timestamp": "2026-01-21T01:36:18.354554",
+      "description": "Morning/Unsorted - Tasks in disarray, inbox awaits"
+    },
+    {
+      "state": "BALANCE",
+      "timestamp": "2026-01-21T01:36:43.287681",
+      "description": "End of Day/Complete - The Garden achieved"
+    },
+    {
+      "state": "FOCUS",
+      "timestamp": "2026-01-21T01:36:43.288000",
+      "description": "Deep Work - Engaged and executing with power"
+    },
+    {
+      "state": "CHAOS",
+      "timestamp": "2026-01-21T01:36:43.288301",
+      "description": "Morning/Unsorted - Tasks in disarray, inbox awaits"
+    },
+    {
+      "state": "CHAOS",
+      "timestamp": "2026-01-21T01:47:13.541005",
+      "description": "Morning/Unsorted - Tasks in disarray, inbox awaits"
+    },
+    {
+      "state": "FOCUS",
+      "timestamp": "2026-01-21T01:47:13.541398",
+      "description": "Deep Work - Engaged and executing with power"
+    },
+    {
+      "state": "BALANCE",
+      "timestamp": "2026-01-21T01:47:13.541599",
+      "description": "End of Day/Complete - The Garden achieved"
+    },
+    {
+      "state": "CHAOS",
+      "timestamp": "2026-01-21T01:47:13.546356",
+      "description": "Morning/Unsorted - Tasks in disarray, inbox awaits"
+    }
+  ]
 }

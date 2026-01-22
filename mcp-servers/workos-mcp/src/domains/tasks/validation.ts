@@ -86,6 +86,15 @@ export const CreateTaskSchema = z.object({
  * @property valueTier - Optional new value tier (checkbox, progress, deliverable, milestone)
  * @property drainType - Optional new energy drain type (deep, shallow, admin)
  */
+/**
+ * Schema for subtask items
+ * Each subtask has a title and done status
+ */
+const subtaskSchema = z.object({
+  title: z.string().min(1).max(500),
+  done: z.boolean().default(false),
+});
+
 export const UpdateTaskSchema = z.object({
   taskId: taskIdSchema,
   title: taskTitleSchema.optional(),
@@ -95,6 +104,7 @@ export const UpdateTaskSchema = z.object({
   valueTier: valueTierSchema.optional(),
   drainType: drainTypeSchema.optional(),
   cognitiveLoad: cognitiveLoadSchema.optional(),
+  subtasks: z.array(subtaskSchema).max(50).optional(),
 });
 
 /**

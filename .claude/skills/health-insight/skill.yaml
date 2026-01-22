@@ -1,0 +1,80 @@
+name: health-insight
+version: 1.0.0
+description: Health data interpretation with energy-aware task suggestions
+
+use_when:
+  - "User asks about health, sleep, readiness, or energy"
+  - "Morning brief requested"
+  - "Oura-related queries"
+  - "Energy level questions"
+  - "Health snapshot needed"
+
+tools_required:
+  - oura__get_daily_readiness
+  - oura__get_daily_sleep
+  - oura__get_daily_activity
+  - oura__get_daily_stress
+  - workos_get_tasks
+  - workos_get_energy_aware_tasks
+
+workflow: |
+  1. Fetch today's Oura data (readiness, sleep, activity, stress)
+  2. Calculate health snapshot with scores
+  3. Map readiness to energy level (>85=high, 70-84=medium, <70=low)
+  4. Fetch energy-appropriate tasks from WorkOS
+  5. Format health brief with Thanos voice
+  6. Include visual state recommendation (CHAOS/FOCUS/BALANCE)
+  7. Return formatted response with task suggestions
+
+examples:
+  - input: "What's my readiness today?"
+    action: oura__get_daily_readiness
+    response: "Readiness: 82. The stones are charged. Medium power available."
+
+  - input: "Morning brief"
+    action: full_health_snapshot + energy_aware_tasks
+    response: |
+      ### DESTINY // Morning Brief
+
+      Readiness: 75 | Sleep: 82 | Rec: 45 min
+      Energy: Medium. The universe grants moderate power.
+
+      Suggested sacrifices:
+      - Review Memphis client work (2 points)
+      - Plan Raleigh deliverables (2 points)
+
+      Visual State: CHAOS (inbox awaits)
+
+response_templates:
+  health_snapshot: |
+    ### DESTINY // {time}
+
+    Readiness: {readiness} | Sleep: {sleep_score} | Recovery: {recovery}
+    Energy: {energy_level}. {energy_message}
+
+    {task_suggestions}
+
+    Visual State: {visual_state}
+
+  low_energy: |
+    Readiness: {score}. The stones require charging.
+
+    Light tasks only:
+    {low_complexity_tasks}
+
+    Rest is strategic. The universe will wait.
+
+  high_energy: |
+    Readiness: {score}. All stones are charged.
+
+    High-impact work available:
+    {high_complexity_tasks}
+
+    The Snap awaits.
+
+voice_integration:
+  on_success: true
+  phrases:
+    - "The body reports."
+    - "Biological status noted."
+    - "The vessel's condition assessed."

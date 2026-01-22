@@ -7,22 +7,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/smart-install.js\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/smart-install.js\" >/dev/null 2>&1",
             "timeout": 300
           },
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start >/dev/null 2>&1",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/context-hook.js\"",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/context-hook.js\" >/dev/null 2>&1",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/user-message-hook.js\"",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/user-message-hook.js\" >/dev/null 2>&1",
             "timeout": 60
           }
         ]
@@ -33,12 +33,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start >/dev/null 2>&1",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/new-hook.js\"",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/new-hook.js\" >/dev/null 2>&1",
             "timeout": 60
           }
         ]
@@ -50,12 +50,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start >/dev/null 2>&1",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/save-hook.js\"",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/save-hook.js\" >/dev/null 2>&1",
             "timeout": 120
           }
         ]
@@ -66,12 +66,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/worker-service.cjs\" start >/dev/null 2>&1",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/summary-hook.js\"",
+            "command": "~/.bun/bin/bun \"${CLAUDE_PLUGIN_ROOT}/scripts/summary-hook.js\" >/dev/null 2>&1",
             "timeout": 120
           }
         ]

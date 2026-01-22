@@ -1,0 +1,407 @@
+#!/bin/bash
+################################################################################
+# Thanos CLI - Unified Shell Interface
+#
+# The Executor's command interface with classification routing,
+# persona integration, and multi-modal feedback.
+#
+# Usage:
+#   thanos-cli <command>
+#   thanos-cli --dry-run <command>
+#   thanos-cli --help
+#
+# Classification Types:
+#   - task: Execute via Claude with full orchestration
+#   - question: Direct Claude execution for information
+#   - thinking: Reflective acknowledgment, offer to capture
+#   - venting: Emotional validation, no forced action
+#   - observation: Note acknowledgment, offer to remember
+################################################################################
+
+set -euo pipefail
+
+# Project paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
+
+# State directories
+STATE_DIR="$PROJECT_ROOT/State"
+LOG_FILE="$STATE_DIR/shell_activity.log"
+
+# Ensure state directory exists
+mkdir -p "$STATE_DIR"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+ORANGE='\033[33m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+DIM='\033[2m'
+
+# Configuration
+CLASSIFIER_LIB="$PROJECT_ROOT/Shell/lib/classifier.py"
+VOICE_LIB="$PROJECT_ROOT/Shell/lib/voice.py"
+VISUALS_LIB="$PROJECT_ROOT/Shell/lib/visuals.py"
+NOTIFICATIONS_LIB="$PROJECT_ROOT/Shell/lib/notifications.py"
+
+################################################################################
+# Logging
+################################################################################
+
+log_activity() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+}
+
+################################################################################
+# Thanos Persona
+################################################################################
+
+show_header() {
+    local time_str=$(date +"%I:%M %p" | sed 's/^0//')
+    echo -e "${BOLD}${PURPLE}### DESTINY // $time_str${NC}"
+    echo ""
+}
+
+get_thanos_quote() {
+    local context="$1"
+
+    case "$context" in
+        completion)
+            echo "A small price to pay for salvation. Good."
+            ;;
+        resistance)
+            echo "You could not live with your own failure. And where did that bring you? Back to me."
+            ;;
+        low_energy)
+            echo "Exhaustion is a chemical reaction. It is irrelevant to the objective."
+            ;;
+        thinking)
+            echo "You contemplate the path ahead. The universe listens."
+            ;;
+        venting)
+            echo "The hardest choices require the strongest wills."
+            ;;
+        observation)
+            echo "The universe notes your observation."
+            ;;
+        victory)
+            echo "The Snap is complete. Rest now, and watch the sunrise on a grateful universe."
+            ;;
+        *)
+            echo "Reality is often disappointing. But it doesn't have to be."
+            ;;
+    esac
+}
+
+################################################################################
+# Voice Integration
+################################################################################
+
+speak() {
+    local message="$1"
+
+    # Only speak if voice module available and not in dry-run
+    if [[ "${DRY_RUN:-0}" == "0" ]] && [[ -f "$VOICE_LIB" ]]; then
+        python3 -c "
+import sys
+sys.path.insert(0, '$PROJECT_ROOT')
+try:
+    from Shell.lib.voice import VoiceManager
+    voice = VoiceManager()
+    voice.speak('$message')
+except Exception:
+    pass
+" 2>/dev/null || true
+    fi
+}
+
+################################################################################
+# Visual State Management
+################################################################################
+
+set_visual_state() {
+    local state="$1"  # CHAOS, FOCUS, or BALANCE
+
+    # Only set visual state if not in dry-run
+    if [[ "${DRY_RUN:-0}" == "0" ]] && [[ -f "$VISUALS_LIB" ]]; then
+        python3 -c "
+import sys
+sys.path.insert(0, '$PROJECT_ROOT')
+try:
+    from Shell.lib.visuals import VisualStateManager
+    vsm = VisualStateManager()
+    vsm.set_state('$state')
+except Exception:
+    pass
+" 2>/dev/null || true
+    fi
+}
+
+################################################################################
+# Notification Triggers
+################################################################################
+
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local urgency="${3:-normal}"  # low, normal, critical
+
+    # Only send if not in dry-run
+    if [[ "${DRY_RUN:-0}" == "0" ]] && [[ -f "$NOTIFICATIONS_LIB" ]]; then
+        python3 -c "
+import sys
+sys.path.insert(0, '$PROJECT_ROOT')
+try:
+    from Shell.lib.notifications import NotificationManager
+    nm = NotificationManager()
+    nm.send('$title', '$message', '$urgency')
+except Exception:
+    pass
+" 2>/dev/null || true
+    fi
+}
+
+################################################################################
+# Classification
+################################################################################
+
+classify_input() {
+    local user_input="$1"
+
+    python3 -c "
+import sys
+sys.path.insert(0, '$PROJECT_ROOT')
+from Shell.lib.classifier import classify_input
+result = classify_input('''$user_input''')
+print(result)
+"
+}
+
+################################################################################
+# Command Routing
+################################################################################
+
+route_task() {
+    local user_input="$1"
+
+    echo ""
+    show_header
+    echo ""
+
+    log_activity "INFO" "Task execution: $user_input"
+
+    # Set visual state to FOCUS
+    set_visual_state "FOCUS"
+
+    # Execute via Claude CLI
+    if claude "$user_input"; then
+        # Task completed successfully
+        log_activity "INFO" "Task completed successfully"
+
+        echo ""
+        echo -e "${GREEN}$(get_thanos_quote completion)${NC}"
+
+        # Voice feedback
+        speak "The work is done"
+
+        # Send notification
+        send_notification "Thanos" "Task completed" "normal"
+
+        # Check if daily goal achieved (would require WorkOS integration)
+        # For now, just set visual state back
+        set_visual_state "BALANCE"
+
+        return 0
+    else
+        # Task failed
+        log_activity "ERROR" "Task execution failed"
+
+        echo ""
+        echo -e "${RED}Reality is often disappointing.${NC}"
+
+        return 1
+    fi
+}
+
+route_question() {
+    local user_input="$1"
+
+    log_activity "INFO" "Question: $user_input"
+
+    # Direct execution via Claude
+    claude "$user_input"
+}
+
+route_thinking() {
+    local user_input="$1"
+
+    echo ""
+    show_header
+    echo ""
+    echo -e "${DIM}$(get_thanos_quote thinking)${NC}"
+    echo ""
+    echo "Would you like me to capture this thought?"
+    echo ""
+    echo -e "${DIM}[y/n] or press Enter to continue conversation${NC}"
+
+    log_activity "INFO" "Thinking detected: $user_input"
+
+    read -r response
+
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        # Capture to brain dump
+        log_activity "INFO" "Capturing thought to brain dump"
+        claude "Brain dump this thought: $user_input"
+    fi
+}
+
+route_venting() {
+    local user_input="$1"
+
+    echo ""
+    show_header
+    echo ""
+    echo -e "${ORANGE}$(get_thanos_quote venting)${NC}"
+    echo ""
+    echo -e "${DIM}But I acknowledge your struggle. Rest if needed.${NC}"
+    echo ""
+
+    log_activity "INFO" "Venting detected: $user_input"
+
+    # Voice response
+    speak "But I acknowledge your struggle. Rest if needed."
+}
+
+route_observation() {
+    local user_input="$1"
+
+    echo ""
+    show_header
+    echo ""
+    echo -e "${DIM}$(get_thanos_quote observation)${NC}"
+    echo ""
+    echo "Should I remember this?"
+    echo ""
+    echo -e "${DIM}[y/n] or press Enter to continue${NC}"
+
+    log_activity "INFO" "Observation detected: $user_input"
+
+    read -r response
+
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        # Store in memory
+        log_activity "INFO" "Storing observation"
+        claude "Remember this: $user_input"
+    fi
+}
+
+################################################################################
+# Main Entry Point
+################################################################################
+
+main() {
+    # Check for help flag
+    if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+        cat << EOF
+Thanos CLI - The Executor's Interface
+
+Usage:
+  thanos-cli <command>              Execute command with classification routing
+  thanos-cli --dry-run <command>    Show classification without execution
+  thanos-cli --help                 Show this help message
+
+Classification Types:
+  task        Action-oriented commands (creates, updates, executes)
+  question    Information requests (queries, status checks)
+  thinking    Reflective thoughts (no immediate action)
+  venting     Emotional processing (validation only)
+  observation Informational notes (optional storage)
+
+Examples:
+  thanos-cli "Add a task to review Q4 planning"
+  thanos-cli "What's on my calendar today?"
+  thanos-cli "I'm wondering if we should refactor this"
+  thanos-cli "I'm so tired of this bug"
+  thanos-cli "I noticed the API is slow"
+
+Environment:
+  DRY_RUN=1   Disable voice, visuals, and notifications
+  DEBUG=1     Enable verbose logging
+
+The hardest choices require the strongest wills.
+EOF
+        exit 0
+    fi
+
+    # Check for dry-run flag
+    if [[ "${1:-}" == "--dry-run" ]]; then
+        export DRY_RUN=1
+        shift
+    fi
+
+    # Capture user input
+    if [[ $# -eq 0 ]]; then
+        echo -e "${RED}Error: No input provided${NC}"
+        echo "Usage: thanos-cli <command>"
+        echo "Try: thanos-cli --help"
+        exit 1
+    fi
+
+    USER_INPUT="$*"
+
+    log_activity "INFO" "Input received: $USER_INPUT"
+
+    # Classification gate
+    CLASSIFICATION=$(classify_input "$USER_INPUT")
+
+    log_activity "INFO" "Classification: $CLASSIFICATION"
+
+    # Dry-run mode: show classification and exit
+    if [[ "${DRY_RUN:-0}" == "1" ]]; then
+        echo -e "${DIM}Classification: ${BOLD}$CLASSIFICATION${NC}"
+        echo -e "${DIM}Input: $USER_INPUT${NC}"
+        exit 0
+    fi
+
+    # Route based on classification
+    case "$CLASSIFICATION" in
+        task)
+            route_task "$USER_INPUT"
+            ;;
+
+        question)
+            route_question "$USER_INPUT"
+            ;;
+
+        thinking)
+            route_thinking "$USER_INPUT"
+            ;;
+
+        venting)
+            route_venting "$USER_INPUT"
+            ;;
+
+        observation)
+            route_observation "$USER_INPUT"
+            ;;
+
+        *)
+            # Unknown classification: default to question
+            log_activity "WARN" "Unknown classification: $CLASSIFICATION, defaulting to question"
+            route_question "$USER_INPUT"
+            ;;
+    esac
+}
+
+# Execute main
+main "$@"
+

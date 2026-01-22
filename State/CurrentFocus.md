@@ -7,7 +7,12 @@
 - Personal health and energy management
 
 ## Priorities
-- Complete BriefingEngine core class implementation
-- Write comprehensive unit tests
-- Ensure graceful error handling for missing files
-- Document usage patterns and examples
+- **TOMORROW FIRST:** Fill out passport forms
+- Break down Orlando, Memphis, Kentucky tasks
+
+## Ready to Execute (Raleigh)
+- Task 255: INC0215570 Note Template (10 subtasks)
+- Task 185: Harry emails → NotebookLM (3 subtasks)
+- Task 252: Cosign Restraints (5 subtasks)
+
+*Updated: 2026-01-21 20:11*

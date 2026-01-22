@@ -1,0 +1,449 @@
+{
+  "adr": "ADR-002-work-personal-separation",
+  "created": "2026-01-19",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Enable Existing Router",
+      "description": "Wire the existing BrainDumpClassifier and BrainDumpRouter into the main brain dump flow",
+      "estimated_effort": "1 week",
+      "tasks": [
+        {
+          "id": "1.1",
+          "title": "Create unified brain dump entry point",
+          "description": "Create Tools/brain_dump/pipeline.py with process_brain_dump() that orchestrates classifier -> processor -> router",
+          "file": "Tools/brain_dump/pipeline.py",
+          "dependencies": [],
+          "acceptance_criteria": [
+            "Single async function that accepts raw content",
+            "Calls BrainDumpClassifier for AI classification",
+            "Passes result to BrainDumpProcessor for domain detection",
+            "Routes to BrainDumpRouter for storage",
+            "Returns ProcessingResult with all metadata"
+          ]
+        },
+        {
+          "id": "1.2",
+          "title": "Update Telegram bot to use new pipeline",
+          "description": "Replace direct workos_brain_dump calls with process_brain_dump()",
+          "file": "Tools/telegram_bot.py",
+          "dependencies": ["1.1"],
+          "acceptance_criteria": [
+            "Brain dumps from Telegram go through full pipeline",
+            "User receives appropriate acknowledgment based on classification",
+            "Source is set to 'telegram'"
+          ]
+        },
+        {
+          "id": "1.3",
+          "title": "Add routing decision logging",
+          "description": "Log all classification and routing decisions to journal for validation",
+          "file": "Tools/brain_dump/pipeline.py",
+          "dependencies": ["1.1"],
+          "acceptance_criteria": [
+            "Every brain dump logged to journal with full classification",
+            "Includes confidence scores and routing destination",
+            "Can query journal to see routing patterns"
+          ]
+        },
+        {
+          "id": "1.4",
+          "title": "Create fallback behavior for WorkOS",
+          "description": "If work_task classification, sync to WorkOS; otherwise route locally",
+          "file": "Tools/brain_dump/router.py",
+          "dependencies": ["1.1"],
+          "acceptance_criteria": [
+            "work_task items still appear in WorkOS",
+            "personal_task items do NOT appear in WorkOS",
+            "Habits continue to work through WorkOS"
+          ]
+        },
+        {
+          "id": "1.5",
+          "title": "Add review queue for low-confidence items",
+          "description": "Items with confidence < 0.6 go to review queue instead of auto-routing",
+          "file": "Tools/brain_dump/pipeline.py",
+          "dependencies": ["1.1"],
+          "acceptance_criteria": [
+            "Low confidence items stored in pending_review table",
+            "Can list pending reviews via CLI",
+            "Manual classification triggers routing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "Local Personal Tasks",
+      "description": "Extend SQLite to store personal tasks with impact scoring",
+      "estimated_effort": "1 week",
+      "tasks": [
+        {
+          "id": "2.1",
+          "title": "Extend tasks table schema",
+          "description": "Add domain, impact scores, classification columns to tasks table",
+          "file": "Tools/unified_state.py",
+          "dependencies": ["1.1"],
+          "acceptance_criteria": [
+            "Migration adds new columns without data loss",
+            "domain defaults to 'personal'",
+            "Impact scores are nullable floats"
+          ]
+        },
+        {
+          "id": "2.2",
+          "title": "Update StateStore.add_task() for impact scoring",
+          "description": "Accept impact_score parameter and store individual dimensions",
+          "file": "Tools/unified_state.py",
+          "dependencies": ["2.1"],
+          "acceptance_criteria": [
+            "add_task() accepts optional ImpactScore",
+            "Stores health, stress, financial, relationship, composite",
+            "Backward compatible with existing calls"
+          ]
+        },
+        {
+          "id": "2.3",
+          "title": "Create get_personal_tasks() method",
+          "description": "Query tasks with domain='personal' sorted by impact composite",
+          "file": "Tools/unified_state.py",
+          "dependencies": ["2.1"],
+          "acceptance_criteria": [
+            "Returns only personal domain tasks",
+            "Sorted by impact_composite descending",
+            "Filters by status"
+          ]
+        },
+        {
+          "id": "2.4",
+          "title": "Wire BrainDumpRouter to StateStore for personal tasks",
+          "description": "Update _route_personal_task to use StateStore with impact scoring",
+          "file": "Tools/brain_dump/router.py",
+          "dependencies": ["2.2"],
+          "acceptance_criteria": [
+            "Personal tasks stored in SQLite",
+            "Impact scores persisted",
+            "Classification and confidence stored"
+          ]
+        },
+        {
+          "id": "2.5",
+          "title": "Add CLI commands for personal tasks",
+          "description": "thanos personal list, thanos personal complete, thanos personal add",
+          "file": "Tools/cli/personal_tasks.py",
+          "dependencies": ["2.3"],
+          "acceptance_criteria": [
+            "List shows tasks with impact dimension",
+            "Complete marks task done in SQLite",
+            "Add creates task with impact scoring"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "ChromaDB Pattern Storage",
+      "description": "Route thoughts/ideas/observations to ChromaDB for pattern mining",
+      "estimated_effort": "1 week",
+      "tasks": [
+        {
+          "id": "3.1",
+          "title": "Wire BrainDumpRouter to ChromaAdapter for thoughts",
+          "description": "Update _route_reflective to store in ChromaDB personal_memories collection",
+          "file": "Tools/brain_dump/router.py",
+          "dependencies": ["1.1"],
+          "acceptance_criteria": [
+            "Thoughts stored in personal_memories collection",
+            "Metadata includes classification, timestamp, source",
+            "Embeddings generated via OpenAI"
+          ]
+        },
+        {
+          "id": "3.2",
+          "title": "Add idea-specific storage with category",
+          "description": "Ideas stored with category metadata (feature/improvement/creative/other)",
+          "file": "Tools/brain_dump/router.py",
+          "dependencies": ["3.1"],
+          "acceptance_criteria": [
+            "Ideas have category extracted by classifier",
+            "Category stored in ChromaDB metadata",
+            "Can filter ideas by category"
+          ]
+        },
+        {
+          "id": "3.3",
+          "title": "Create pattern mining queries",
+          "description": "Find similar thoughts, recurring themes, related ideas",
+          "file": "Tools/pattern_recognition/thought_miner.py",
+          "dependencies": ["3.1"],
+          "acceptance_criteria": [
+            "find_similar_thoughts(query, limit) works",
+            "get_recurring_themes() clusters thoughts",
+            "get_related_ideas(thought_id) finds connections"
+          ]
+        },
+        {
+          "id": "3.4",
+          "title": "Add 'similar thoughts' to brain dump response",
+          "description": "When storing a thought, return similar past thoughts",
+          "file": "Tools/brain_dump/pipeline.py",
+          "dependencies": ["3.3"],
+          "acceptance_criteria": [
+            "ProcessingResult includes similar_thoughts list",
+            "Shows up to 3 most similar past thoughts",
+            "Similarity threshold configurable"
+          ]
+        },
+        {
+          "id": "3.5",
+          "title": "Create pattern report command",
+          "description": "CLI command to show thought patterns over time",
+          "file": "Tools/cli/patterns.py",
+          "dependencies": ["3.3"],
+          "acceptance_criteria": [
+            "thanos patterns shows recurring themes",
+            "Groups by domain (health, relationship, etc.)",
+            "Shows frequency and recency"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "Worry Processing",
+      "description": "Implement worry -> journal -> reframe -> task flow",
+      "estimated_effort": "1 week",
+      "tasks": [
+        {
+          "id": "4.1",
+          "title": "Create worries table in SQLite",
+          "description": "New table for tracking worry lifecycle",
+          "file": "Tools/unified_state.py",
+          "dependencies": ["2.1"],
+          "acceptance_criteria": [
+            "worries table with status tracking",
+            "Links to converted task if applicable",
+            "Links to journal entry and chroma memory"
+          ]
+        },
+        {
+          "id": "4.2",
+          "title": "Implement worry -> journal flow",
+          "description": "Worries automatically create journal entries with reframing prompt",
+          "file": "Tools/brain_dump/router.py",
+          "dependencies": ["4.1"],
+          "acceptance_criteria": [
+            "Worry creates journal entry",
+            "Journal entry includes reframing prompt",
+            "Worry linked to journal entry"
+          ]
+        },
+        {
+          "id": "4.3",
+          "title": "Add worry reframing via AI",
+          "description": "Use Claude to reframe worry into actionable form",
+          "file": "Tools/worry_processor.py",
+          "dependencies": ["4.2"],
+          "acceptance_criteria": [
+            "Worry content sent to Claude for reframing",
+            "Reframed content stored",
+            "User can approve/reject reframe"
+          ]
+        },
+        {
+          "id": "4.4",
+          "title": "Implement worry -> task conversion",
+          "description": "Convert processed worry to task with tracking",
+          "file": "Tools/worry_processor.py",
+          "dependencies": ["4.3"],
+          "acceptance_criteria": [
+            "Converted task linked to original worry",
+            "Completing task marks worry resolved",
+            "Can trace task back to worry"
+          ]
+        },
+        {
+          "id": "4.5",
+          "title": "Create worry management CLI",
+          "description": "Commands to list, process, and resolve worries",
+          "file": "Tools/cli/worries.py",
+          "dependencies": ["4.4"],
+          "acceptance_criteria": [
+            "thanos worries list - shows unprocessed",
+            "thanos worries process <id> - triggers reframe",
+            "thanos worries resolve <id> - marks resolved"
+          ]
+        },
+        {
+          "id": "4.6",
+          "title": "Add worry pattern detection",
+          "description": "Detect recurring worries and suggest proactive actions",
+          "file": "Tools/pattern_recognition/worry_patterns.py",
+          "dependencies": ["4.1", "3.1"],
+          "acceptance_criteria": [
+            "Finds worries with similar embeddings",
+            "Tracks worry frequency over time",
+            "Suggests preventive tasks for recurring worries"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "name": "Unified Queries",
+      "description": "Build aggregated views and cross-store search",
+      "estimated_effort": "1 week",
+      "tasks": [
+        {
+          "id": "5.1",
+          "title": "Create unified task view in SQLite",
+          "description": "View that shows all tasks regardless of domain",
+          "file": "Tools/unified_state.py",
+          "dependencies": ["2.1"],
+          "acceptance_criteria": [
+            "View joins work and personal tasks",
+            "Includes domain indicator",
+            "Sortable by due date or impact"
+          ]
+        },
+        {
+          "id": "5.2",
+          "title": "Add WorkOS sync tracking",
+          "description": "Track which tasks have been synced to WorkOS",
+          "file": "Tools/unified_state.py",
+          "dependencies": ["5.1"],
+          "acceptance_criteria": [
+            "workos_sync_id column tracks WorkOS task ID",
+            "workos_synced_at tracks last sync time",
+            "Can identify out-of-sync items"
+          ]
+        },
+        {
+          "id": "5.3",
+          "title": "Create cross-store search",
+          "description": "Search that queries SQLite + ChromaDB + WorkOS",
+          "file": "Tools/search.py",
+          "dependencies": ["5.1", "3.1"],
+          "acceptance_criteria": [
+            "Keyword search hits SQLite tasks",
+            "Semantic search hits ChromaDB memories",
+            "Results merged and ranked"
+          ]
+        },
+        {
+          "id": "5.4",
+          "title": "Build dashboard data aggregator",
+          "description": "Single endpoint for all dashboard data",
+          "file": "Tools/dashboard_data.py",
+          "dependencies": ["5.3"],
+          "acceptance_criteria": [
+            "Returns work tasks from WorkOS",
+            "Returns personal tasks from SQLite",
+            "Returns thought count from ChromaDB",
+            "Returns worry status"
+          ]
+        },
+        {
+          "id": "5.5",
+          "title": "Update statusline to show personal tasks",
+          "description": "Add personal task count and top impact item to statusline",
+          "file": "Tools/thanos_statusline.py",
+          "dependencies": ["5.4"],
+          "acceptance_criteria": [
+            "Shows work task count from WorkOS",
+            "Shows personal task count from SQLite",
+            "Shows top impact personal item"
+          ]
+        },
+        {
+          "id": "5.6",
+          "title": "Create daily brief integration",
+          "description": "Include personal high-impact items in morning brief",
+          "file": "Tools/daily_brief/index.ts",
+          "dependencies": ["5.4"],
+          "acceptance_criteria": [
+            "Brief shows top 3 personal tasks by impact",
+            "Separate section from work tasks",
+            "Impact dimension shown (health, stress, etc.)"
+          ]
+        }
+      ]
+    }
+  ],
+  "migration_tasks": [
+    {
+      "id": "M.1",
+      "title": "Classify existing WorkOS brain dumps",
+      "description": "Run classifier on all existing brain dumps to determine proper domain",
+      "dependencies": ["1.1"],
+      "acceptance_criteria": [
+        "All existing brain dumps classified",
+        "Classification stored in metadata",
+        "Report generated showing distribution"
+      ]
+    },
+    {
+      "id": "M.2",
+      "title": "Move personal items from WorkOS to SQLite",
+      "description": "Migrate items classified as personal to local SQLite",
+      "dependencies": ["M.1", "2.1"],
+      "acceptance_criteria": [
+        "Personal items copied to SQLite with impact scores",
+        "WorkOS items marked as migrated",
+        "No data loss verified"
+      ]
+    },
+    {
+      "id": "M.3",
+      "title": "Move thoughts/ideas to ChromaDB",
+      "description": "Migrate thought/idea/observation items to ChromaDB",
+      "dependencies": ["M.1", "3.1"],
+      "acceptance_criteria": [
+        "Thoughts/ideas/observations in ChromaDB",
+        "Embeddings generated",
+        "Searchable via semantic query"
+      ]
+    }
+  ],
+  "validation_tasks": [
+    {
+      "id": "V.1",
+      "title": "Validate routing accuracy",
+      "description": "Test classification and routing on sample brain dumps",
+      "dependencies": ["1.1"],
+      "test_cases": [
+        "Work task: 'Review PR for client Memphis' -> WorkOS",
+        "Personal task: 'Call dentist for appointment' -> SQLite",
+        "Thought: 'I wonder if we should use GraphQL' -> ChromaDB",
+        "Worry: 'What if the baby arrives early' -> Worry table + Journal",
+        "Mixed: 'Fix bug in auth AND call mom' -> Both routed correctly"
+      ]
+    },
+    {
+      "id": "V.2",
+      "title": "Validate impact scoring accuracy",
+      "description": "Test impact scoring on personal items",
+      "dependencies": ["2.1"],
+      "test_cases": [
+        "'Doctor appointment tomorrow' -> health=high",
+        "'Pay electric bill overdue' -> financial=high, stress=high",
+        "'Call mom for birthday' -> relationship=high",
+        "'Exercise more' -> health=medium (vague)"
+      ]
+    },
+    {
+      "id": "V.3",
+      "title": "Validate semantic search",
+      "description": "Test pattern mining and similarity search",
+      "dependencies": ["3.1"],
+      "test_cases": [
+        "Search 'family' finds relationship thoughts",
+        "Similar thoughts cluster correctly",
+        "Cross-collection search works"
+      ]
+    }
+  ],
+  "estimated_total_effort": "5 weeks",
+  "priority": "high",
+  "rationale": "Personal tasks in WorkOS create noise and miss the impact-based prioritization that matters for life management. This separation enables domain-appropriate handling while maintaining unified visibility."
+}

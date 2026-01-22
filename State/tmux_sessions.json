@@ -1,0 +1,12 @@
+{
+  "thanos-main": {
+    "name": "thanos-main",
+    "created_at": "2026-01-21T14:31:56.705834",
+    "last_attached": "2026-01-21T14:34:32.117603",
+    "window_count": 4,
+    "is_attached": true,
+    "metadata": {
+      "start_directory": "/Users/jeremy/Projects/Thanos"
+    }
+  }
+}

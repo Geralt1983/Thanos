@@ -220,6 +220,17 @@ export function getTaskTools(): ToolDefinition[] {
             description: "Cognitive load: low (admin/simple), medium (standard work), high (complex/deep work)",
             enum: ["low", "medium", "high"],
           },
+          subtasks: {
+            type: "array",
+            description: "Array of subtask objects with title and done status",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                done: { type: "boolean" },
+              },
+            },
+          },
         },
         required: ["taskId"],
       },

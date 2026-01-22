@@ -130,6 +130,49 @@ class FinanceAccount:
     metadata: Optional[Dict] = None
 
 
+@dataclass
+class Habit:
+    """A habit to track."""
+    id: int
+    name: str
+    description: Optional[str] = None
+    emoji: Optional[str] = None
+    frequency: str = "daily"  # daily, weekly, weekdays
+    target_count: int = 1
+    time_of_day: Optional[str] = None  # morning, evening, anytime
+    category: Optional[str] = None  # health, productivity, relationship, personal
+    is_active: bool = True
+    current_streak: int = 0
+    longest_streak: int = 0
+    created_at: Optional[str] = None
+    metadata: Optional[Dict] = None
+
+
+@dataclass
+class HabitCompletion:
+    """A habit completion record."""
+    id: int
+    habit_id: int
+    completed_at: str
+    note: Optional[str] = None
+
+
+@dataclass
+class PendingReview:
+    """A pending review for low-confidence brain dump classification."""
+    id: int
+    dump_id: str
+    raw_content: str
+    source: Optional[str] = None
+    suggested_classification: Optional[str] = None
+    confidence: Optional[float] = None
+    review_reason: Optional[str] = None
+    status: str = "pending"
+    reviewed_at: Optional[str] = None
+    final_classification: Optional[str] = None
+    created_at: Optional[str] = None
+
+
 class StateStore:
     """Unified SQLite state store for all Thanos data."""
 
@@ -267,6 +310,49 @@ class StateStore:
                     metadata JSON
                 );
 
+                -- Habits table (local, not WorkOS)
+                CREATE TABLE IF NOT EXISTS habits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    emoji TEXT,
+                    frequency TEXT DEFAULT 'daily',
+                    target_count INTEGER DEFAULT 1,
+                    time_of_day TEXT,
+                    category TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    current_streak INTEGER DEFAULT 0,
+                    longest_streak INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    metadata JSON
+                );
+
+                -- Habit completions table
+                CREATE TABLE IF NOT EXISTS habit_completions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    habit_id INTEGER NOT NULL,
+                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_date DATE NOT NULL,
+                    note TEXT,
+                    FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE,
+                    UNIQUE(habit_id, completed_date)
+                );
+
+                -- Pending reviews table (for low-confidence brain dump classifications)
+                CREATE TABLE IF NOT EXISTS pending_reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    dump_id TEXT NOT NULL,
+                    raw_content TEXT NOT NULL,
+                    source TEXT,
+                    suggested_classification TEXT,
+                    confidence REAL,
+                    review_reason TEXT,
+                    status TEXT DEFAULT 'pending',
+                    reviewed_at TIMESTAMP,
+                    final_classification TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
                 -- Indexes
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
                 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
@@ -278,6 +364,11 @@ class StateStore:
                 CREATE INDEX IF NOT EXISTS idx_health_type ON health_metrics(metric_type);
                 CREATE INDEX IF NOT EXISTS idx_finances_date ON finances(date);
                 CREATE INDEX IF NOT EXISTS idx_transactions_date ON finance_transactions(date);
+                CREATE INDEX IF NOT EXISTS idx_habits_active ON habits(is_active);
+                CREATE INDEX IF NOT EXISTS idx_habits_time ON habits(time_of_day);
+                CREATE INDEX IF NOT EXISTS idx_habit_completions_habit ON habit_completions(habit_id);
+                CREATE INDEX IF NOT EXISTS idx_habit_completions_date ON habit_completions(completed_date);
+                CREATE INDEX IF NOT EXISTS idx_pending_reviews_status ON pending_reviews(status);
 
                 -- Record schema version
                 INSERT OR IGNORE INTO schema_version (version) VALUES (1);
@@ -630,6 +721,482 @@ class StateStore:
             completed_at=row['completed_at'],
             metadata=json.loads(row['metadata']) if row['metadata'] else None
         )
+
+    # ==================== HABIT OPERATIONS ====================
+
+    def add_habit(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        emoji: Optional[str] = None,
+        frequency: str = "daily",
+        target_count: int = 1,
+        time_of_day: Optional[str] = None,
+        category: Optional[str] = None,
+        metadata: Optional[Dict] = None
+    ) -> int:
+        """Add a new habit.
+
+        Args:
+            name: Habit name
+            description: Optional description
+            emoji: Emoji icon
+            frequency: daily, weekly, weekdays
+            target_count: Times per period
+            time_of_day: morning, evening, anytime
+            category: health, productivity, relationship, personal
+            metadata: Additional data
+
+        Returns:
+            Habit ID
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute('''
+                INSERT INTO habits (name, description, emoji, frequency, target_count,
+                                    time_of_day, category, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                name, description, emoji, frequency, target_count,
+                time_of_day, category,
+                json.dumps(metadata) if metadata else None
+            ))
+            return cursor.lastrowid
+
+    def get_habit(self, habit_id: int) -> Optional[Habit]:
+        """Get habit by ID."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                'SELECT * FROM habits WHERE id = ?', (habit_id,)
+            ).fetchone()
+
+            if row:
+                return self._row_to_habit(row)
+        return None
+
+    def get_habits(self, active_only: bool = True) -> List[Habit]:
+        """Get all habits.
+
+        Args:
+            active_only: Only return active habits
+
+        Returns:
+            List of habits
+        """
+        with self._get_connection() as conn:
+            if active_only:
+                rows = conn.execute(
+                    'SELECT * FROM habits WHERE is_active = TRUE ORDER BY id'
+                ).fetchall()
+            else:
+                rows = conn.execute('SELECT * FROM habits ORDER BY id').fetchall()
+
+            return [self._row_to_habit(row) for row in rows]
+
+    def get_habits_by_time(self, time_of_day: str) -> List[Habit]:
+        """Get habits for specific time of day.
+
+        Args:
+            time_of_day: morning, evening, or anytime
+
+        Returns:
+            Habits matching the time
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute('''
+                SELECT * FROM habits
+                WHERE is_active = TRUE AND (time_of_day = ? OR time_of_day = 'anytime' OR time_of_day IS NULL)
+                ORDER BY id
+            ''', (time_of_day,)).fetchall()
+
+            return [self._row_to_habit(row) for row in rows]
+
+    def complete_habit(
+        self,
+        habit_id: int,
+        note: Optional[str] = None,
+        completion_date: Optional[date] = None
+    ) -> bool:
+        """Mark habit as completed for today (or specified date).
+
+        Args:
+            habit_id: Habit ID
+            note: Optional note
+            completion_date: Date of completion (defaults to today)
+
+        Returns:
+            True if completion was recorded
+        """
+        completion_date = completion_date or date.today()
+        now = datetime.now().isoformat()
+
+        with self._get_connection() as conn:
+            try:
+                conn.execute('''
+                    INSERT INTO habit_completions (habit_id, completed_at, completed_date, note)
+                    VALUES (?, ?, ?, ?)
+                ''', (habit_id, now, completion_date.isoformat(), note))
+
+                # Update streak
+                self._update_habit_streak(conn, habit_id)
+                return True
+
+            except sqlite3.IntegrityError:
+                # Already completed today
+                return False
+
+    def is_habit_completed_today(self, habit_id: int) -> bool:
+        """Check if habit is completed today."""
+        today = date.today().isoformat()
+
+        with self._get_connection() as conn:
+            row = conn.execute('''
+                SELECT COUNT(*) FROM habit_completions
+                WHERE habit_id = ? AND completed_date = ?
+            ''', (habit_id, today)).fetchone()
+
+            return row[0] > 0
+
+    def get_habit_completions(
+        self,
+        habit_id: Optional[int] = None,
+        days: int = 7
+    ) -> List[HabitCompletion]:
+        """Get habit completions for the past N days.
+
+        Args:
+            habit_id: Filter by habit (optional)
+            days: Number of days to look back
+
+        Returns:
+            List of completions
+        """
+        start_date = (date.today() - timedelta(days=days)).isoformat()
+
+        with self._get_connection() as conn:
+            if habit_id:
+                rows = conn.execute('''
+                    SELECT * FROM habit_completions
+                    WHERE habit_id = ? AND completed_date >= ?
+                    ORDER BY completed_date DESC
+                ''', (habit_id, start_date)).fetchall()
+            else:
+                rows = conn.execute('''
+                    SELECT * FROM habit_completions
+                    WHERE completed_date >= ?
+                    ORDER BY completed_date DESC
+                ''', (start_date,)).fetchall()
+
+            return [HabitCompletion(
+                id=row['id'],
+                habit_id=row['habit_id'],
+                completed_at=row['completed_at'],
+                note=row['note']
+            ) for row in rows]
+
+    def get_habit_streak(self, habit_id: int) -> Dict[str, int]:
+        """Get streak information for a habit.
+
+        Returns:
+            Dict with current_streak and longest_streak
+        """
+        habit = self.get_habit(habit_id)
+        if not habit:
+            return {'current_streak': 0, 'longest_streak': 0}
+
+        return {
+            'current_streak': habit.current_streak,
+            'longest_streak': habit.longest_streak
+        }
+
+    def get_habits_due_checkin(
+        self,
+        time_of_day: str = "all",
+        include_completed: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Get habits due for check-in.
+
+        Args:
+            time_of_day: morning, evening, or all
+            include_completed: Include already completed habits
+
+        Returns:
+            List of habit dicts with completion status
+        """
+        if time_of_day == "all":
+            habits = self.get_habits(active_only=True)
+        else:
+            habits = self.get_habits_by_time(time_of_day)
+
+        today = date.today().isoformat()
+        result = []
+
+        with self._get_connection() as conn:
+            for habit in habits:
+                completion = conn.execute('''
+                    SELECT * FROM habit_completions
+                    WHERE habit_id = ? AND completed_date = ?
+                ''', (habit.id, today)).fetchone()
+
+                is_completed = completion is not None
+
+                if include_completed or not is_completed:
+                    result.append({
+                        'id': habit.id,
+                        'name': habit.name,
+                        'emoji': habit.emoji or '📋',
+                        'category': habit.category,
+                        'time_of_day': habit.time_of_day,
+                        'current_streak': habit.current_streak,
+                        'is_completed': is_completed,
+                        'completion_note': completion['note'] if completion else None
+                    })
+
+        return result
+
+    def delete_habit(self, habit_id: int) -> bool:
+        """Delete a habit and all its completions."""
+        with self._get_connection() as conn:
+            cursor = conn.execute('DELETE FROM habits WHERE id = ?', (habit_id,))
+            return cursor.rowcount > 0
+
+    def deactivate_habit(self, habit_id: int) -> bool:
+        """Deactivate a habit (soft delete)."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                'UPDATE habits SET is_active = FALSE WHERE id = ?', (habit_id,)
+            )
+            return cursor.rowcount > 0
+
+    def _update_habit_streak(self, conn: sqlite3.Connection, habit_id: int) -> None:
+        """Update streak count for a habit."""
+        today = date.today()
+        current_streak = 0
+
+        # Count consecutive days backward from today
+        check_date = today
+        while True:
+            row = conn.execute('''
+                SELECT COUNT(*) FROM habit_completions
+                WHERE habit_id = ? AND completed_date = ?
+            ''', (habit_id, check_date.isoformat())).fetchone()
+
+            if row[0] > 0:
+                current_streak += 1
+                check_date -= timedelta(days=1)
+            else:
+                break
+
+        # Update habit record
+        conn.execute('''
+            UPDATE habits
+            SET current_streak = ?,
+                longest_streak = MAX(longest_streak, ?)
+            WHERE id = ?
+        ''', (current_streak, current_streak, habit_id))
+
+    def recalculate_all_streaks(self) -> int:
+        """Recalculate streaks for all active habits.
+
+        Returns:
+            Number of habits updated
+        """
+        habits = self.get_habits(active_only=True)
+        count = 0
+
+        with self._get_connection() as conn:
+            for habit in habits:
+                self._update_habit_streak(conn, habit.id)
+                count += 1
+
+        return count
+
+    def _row_to_habit(self, row: sqlite3.Row) -> Habit:
+        """Convert database row to Habit object."""
+        return Habit(
+            id=row['id'],
+            name=row['name'],
+            description=row['description'],
+            emoji=row['emoji'],
+            frequency=row['frequency'],
+            target_count=row['target_count'],
+            time_of_day=row['time_of_day'],
+            category=row['category'],
+            is_active=bool(row['is_active']),
+            current_streak=row['current_streak'] or 0,
+            longest_streak=row['longest_streak'] or 0,
+            created_at=row['created_at'],
+            metadata=json.loads(row['metadata']) if row['metadata'] else None
+        )
+
+    def get_habit_dashboard(self, days: int = 7) -> Dict[str, Any]:
+        """Get habit dashboard data.
+
+        Returns:
+            Dict with habits, completions, and streaks
+        """
+        habits = self.get_habits(active_only=True)
+        today = date.today()
+
+        # Build completion grid
+        grid = {}
+        for habit in habits:
+            grid[habit.id] = {
+                'name': habit.name,
+                'emoji': habit.emoji or '📋',
+                'streak': habit.current_streak,
+                'completions': []
+            }
+
+        # Get completions for date range
+        start_date = today - timedelta(days=days - 1)
+        completions = self.get_habit_completions(days=days)
+
+        # Map completions to dates
+        completion_map = {}
+        for c in completions:
+            key = (c.habit_id, c.completed_at[:10])  # Date portion only
+            completion_map[key] = True
+
+        # Fill in grid
+        for habit_id in grid:
+            for i in range(days):
+                check_date = (start_date + timedelta(days=i)).isoformat()
+                grid[habit_id]['completions'].append(
+                    (habit_id, check_date) in completion_map
+                )
+
+        return {
+            'habits': grid,
+            'date_range': {
+                'start': start_date.isoformat(),
+                'end': today.isoformat()
+            },
+            'total_habits': len(habits),
+            'dates': [(start_date + timedelta(days=i)).strftime('%a') for i in range(days)]
+        }
+
+    # ==================== PENDING REVIEW OPERATIONS ====================
+
+    def add_pending_review(
+        self,
+        dump_id: str,
+        raw_content: str,
+        source: Optional[str] = None,
+        suggested_classification: Optional[str] = None,
+        confidence: Optional[float] = None,
+        review_reason: Optional[str] = None
+    ) -> int:
+        """Add a pending review for low-confidence brain dump classification.
+
+        Args:
+            dump_id: Brain dump ID
+            raw_content: Raw brain dump content
+            source: Source of the dump (telegram, cli, etc.)
+            suggested_classification: AI-suggested classification
+            confidence: Confidence score (0-1)
+            review_reason: Why this needs review
+
+        Returns:
+            Review ID
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute('''
+                INSERT INTO pending_reviews
+                (dump_id, raw_content, source, suggested_classification, confidence, review_reason)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (dump_id, raw_content, source, suggested_classification, confidence, review_reason))
+            return cursor.lastrowid
+
+    def get_pending_reviews(self, status: str = 'pending') -> List[Dict]:
+        """Get pending reviews by status.
+
+        Args:
+            status: Review status (pending, approved, rejected)
+
+        Returns:
+            List of review dicts
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute('''
+                SELECT * FROM pending_reviews
+                WHERE status = ?
+                ORDER BY created_at DESC
+            ''', (status,)).fetchall()
+
+            return [dict(row) for row in rows]
+
+    def approve_review(
+        self,
+        review_id: int,
+        final_classification: Optional[str] = None
+    ) -> bool:
+        """Approve a pending review.
+
+        Args:
+            review_id: Review ID
+            final_classification: Optional classification override
+
+        Returns:
+            True if review was approved
+        """
+        now = datetime.now().isoformat()
+
+        with self._get_connection() as conn:
+            # Get the review to see suggested classification
+            review = conn.execute(
+                'SELECT suggested_classification FROM pending_reviews WHERE id = ?',
+                (review_id,)
+            ).fetchone()
+
+            if not review:
+                return False
+
+            # Use provided classification or fall back to suggested
+            classification = final_classification or review['suggested_classification']
+
+            cursor = conn.execute('''
+                UPDATE pending_reviews
+                SET status = 'approved',
+                    reviewed_at = ?,
+                    final_classification = ?
+                WHERE id = ?
+            ''', (now, classification, review_id))
+
+            return cursor.rowcount > 0
+
+    def reject_review(self, review_id: int) -> bool:
+        """Reject a pending review.
+
+        Args:
+            review_id: Review ID
+
+        Returns:
+            True if review was rejected
+        """
+        now = datetime.now().isoformat()
+
+        with self._get_connection() as conn:
+            cursor = conn.execute('''
+                UPDATE pending_reviews
+                SET status = 'rejected',
+                    reviewed_at = ?
+                WHERE id = ?
+            ''', (now, review_id))
+
+            return cursor.rowcount > 0
+
+    def count_pending_reviews(self) -> int:
+        """Count pending reviews.
+
+        Returns:
+            Number of pending reviews
+        """
+        with self._get_connection() as conn:
+            row = conn.execute(
+                'SELECT COUNT(*) FROM pending_reviews WHERE status = ?',
+                ('pending',)
+            ).fetchone()
+            return row[0]
 
     # ==================== HEALTH METRICS ====================
 

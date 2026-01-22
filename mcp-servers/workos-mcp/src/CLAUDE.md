@@ -7,6 +7,34 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #339 | 11:55 AM | 🔵 | Thanos WorkOS MCP schema includes PersonalOS integration tables | ~492 |
 | #256 | 10:24 AM | 🔵 | WorkOS MCP server provides comprehensive task and productivity tracking | ~569 |
 </claude-mem-context>
+
+## CRITICAL: Runtime Requirements
+
+**This server MUST be run with Bun, NOT Node.js.**
+
+The server uses Bun-specific features (`bun:sqlite`, `bun:` protocol imports). Running with Node will fail with:
+```
+Error [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported
+```
+
+### Correct MCP Config (in ~/.claude.json)
+```json
+"workos-mcp": {
+  "type": "stdio",
+  "command": "bun",  // NOT "node"
+  "args": ["/Users/jeremy/Projects/Thanos/mcp-servers/workos-mcp/dist/index.js"],
+  "env": {
+    "WORKOS_DATABASE_URL": "..."
+  }
+}
+```
+
+### Build & Run
+```bash
+cd mcp-servers/workos-mcp
+bun install
+bun run build
+bun dist/index.js  # Test locally
+```

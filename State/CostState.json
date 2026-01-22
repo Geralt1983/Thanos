@@ -1,0 +1,37 @@
+{
+  "sessions": [
+    {
+      "timestamp": "2026-01-21T15:36:59.000806",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 6
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-21T20:12:09.007218",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 672
+        }
+      }
+    }
+  ],
+  "lifetime_total": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost": 0.0
+  }
+}

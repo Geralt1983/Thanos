@@ -77,6 +77,9 @@ class BrainDumpProcessor:
             'family', 'home', 'personal', 'doctor', 'appointment',
             'gym', 'exercise', 'kids', 'wife', 'husband', 'birthday',
             'groceries', 'house', 'car', 'insurance', 'health',
+            # Family names (Jeremy-specific)
+            'ashley', 'sullivan', 'baby', 'nanny', 'childcare', 'support',
+            'pregnant', 'pregnancy', 'cushion', 'savings',
         ]
 
     def process(
@@ -98,9 +101,12 @@ class BrainDumpProcessor:
         """
         context = context or {}
         start_time = datetime.now()
+        review_reasons = []
 
-        # Step 1: Classify
-        category = self._classify(content)
+        # Step 1: Classify with confidence
+        category, cat_confidence, cat_review = self._classify(content)
+        if cat_review:
+            review_reasons.append(f"Category: {cat_review}")
 
         # Step 2: Extract metadata
         title = self._extract_title(content)
@@ -109,10 +115,13 @@ class BrainDumpProcessor:
         energy_hint = self._extract_energy_hint(content)
         blockers = self._extract_blockers(content)
 
-        # Step 3: Determine domain (for tasks)
+        # Step 3: Determine domain (for tasks) with confidence
         domain = None
+        domain_confidence = 1.0
         if category in [BrainDumpCategory.TASK, BrainDumpCategory.PROJECT]:
-            domain = self._determine_domain(content)
+            domain, domain_confidence, domain_review = self._determine_domain(content)
+            if domain_review:
+                review_reasons.append(f"Domain: {domain_review}")
 
         # Step 4: Score impact (for personal items)
         impact_score = None
@@ -125,6 +134,14 @@ class BrainDumpProcessor:
                 deadline_days=deadline_days,
                 context={'mentioned_people': [e for e in entities if self._is_person(e)]}
             )
+
+        # Calculate overall confidence (minimum of category and domain confidence)
+        overall_confidence = min(cat_confidence, domain_confidence) if domain else cat_confidence
+
+        # Flag for review if low confidence
+        REVIEW_THRESHOLD = 0.6
+        needs_review = overall_confidence < REVIEW_THRESHOLD or len(review_reasons) > 0
+        review_reason = "; ".join(review_reasons) if review_reasons else None
 
         # Create result
         result = ClassifiedBrainDump(
@@ -140,22 +157,30 @@ class BrainDumpProcessor:
             blockers=blockers,
             processed_at=datetime.now(),
             source=source,
+            confidence=overall_confidence,
+            needs_review=needs_review,
+            review_reason=review_reason,
         )
 
         processing_time = (datetime.now() - start_time).total_seconds()
         logger.info(
             f"Processed brain dump: category={category.value}, "
             f"domain={domain.value if domain else 'N/A'}, "
+            f"confidence={overall_confidence:.2f}, "
+            f"needs_review={needs_review}, "
             f"time={processing_time:.2f}s"
         )
 
         return result
 
-    def _classify(self, content: str) -> BrainDumpCategory:
+    def _classify(self, content: str) -> tuple[BrainDumpCategory, float, str | None]:
         """
-        Classify content into a category.
+        Classify content into a category with confidence score.
 
         Uses keyword matching with priority ordering.
+
+        Returns:
+            Tuple of (category, confidence, review_reason)
         """
         content_lower = content.lower()
         scores = {}
@@ -176,39 +201,88 @@ class BrainDumpProcessor:
 
         # Find highest scoring with priority tiebreaker
         max_score = max(scores.values()) if scores else 0
+        total_matches = sum(scores.values())
 
+        # Calculate confidence based on match clarity
+        review_reason = None
         if max_score == 0:
-            # No keywords matched - default based on length
+            # No keywords matched - low confidence default
+            confidence = 0.3
+            review_reason = "No category keywords matched"
             if len(content) < 50:
-                return BrainDumpCategory.TASK  # Short = likely task
-            return BrainDumpCategory.THOUGHT  # Long = likely thought
+                return BrainDumpCategory.TASK, confidence, review_reason
+            return BrainDumpCategory.THOUGHT, confidence, review_reason
+
+        # Count categories with high scores (competing classifications)
+        high_scorers = sum(1 for s in scores.values() if s >= max_score * 0.7 and s > 0)
+
+        if high_scorers > 2:
+            # Multiple competing categories
+            confidence = 0.4
+            review_reason = f"Mixed signals: {high_scorers} competing categories"
+        elif high_scorers == 2:
+            confidence = 0.6
+            review_reason = "Two possible categories"
+        elif max_score == 1:
+            confidence = 0.7
+            review_reason = None  # Single weak match, but clear
+        else:
+            # Strong, clear match
+            confidence = min(0.95, 0.7 + (max_score * 0.05))
 
         for cat in priority:
             if scores.get(cat, 0) == max_score:
-                return cat
+                return cat, confidence, review_reason
 
-        return BrainDumpCategory.THOUGHT
+        return BrainDumpCategory.THOUGHT, 0.5, "Fallback classification"
 
-    def _determine_domain(self, content: str) -> TaskDomain:
-        """Determine if content is work or personal."""
+    def _determine_domain(self, content: str) -> tuple[TaskDomain, float, str | None]:
+        """
+        Determine if content is work or personal with confidence.
+
+        Returns:
+            Tuple of (domain, confidence, review_reason)
+        """
         content_lower = content.lower()
 
         work_score = sum(1 for w in self.work_indicators if w in content_lower)
         personal_score = sum(1 for p in self.personal_indicators if p in content_lower)
 
-        # Check for explicit markers
+        # Check for explicit markers - high confidence
         if 'work:' in content_lower or '[work]' in content_lower:
-            return TaskDomain.WORK
+            return TaskDomain.WORK, 0.95, None
         if 'personal:' in content_lower or '[personal]' in content_lower:
-            return TaskDomain.PERSONAL
+            return TaskDomain.PERSONAL, 0.95, None
+
+        # Calculate confidence based on score difference
+        total_score = work_score + personal_score
+        if total_score == 0:
+            # No indicators - low confidence default to personal
+            return TaskDomain.PERSONAL, 0.4, "No domain indicators found"
+
+        # Check for mixed signals (both work AND personal indicators)
+        if work_score > 0 and personal_score > 0:
+            diff = abs(work_score - personal_score)
+            if diff <= 1:
+                # Very close - needs review
+                confidence = 0.45
+                review_reason = f"Mixed signals: {work_score} work vs {personal_score} personal indicators"
+            else:
+                # Slight preference
+                confidence = 0.6
+                review_reason = f"Competing indicators: work={work_score}, personal={personal_score}"
+        else:
+            # Clear signal
+            confidence = min(0.9, 0.6 + (max(work_score, personal_score) * 0.1))
+            review_reason = None
 
         if work_score > personal_score:
-            return TaskDomain.WORK
+            return TaskDomain.WORK, confidence, review_reason
         elif personal_score > work_score:
-            return TaskDomain.PERSONAL
+            return TaskDomain.PERSONAL, confidence, review_reason
 
         # Default to personal for safety
-        return TaskDomain.PERSONAL
+        return TaskDomain.PERSONAL, 0.5, "Tie broken toward personal"
 
     def _extract_title(self, content: str) -> str:
         """Extract a title from content."""

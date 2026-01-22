@@ -1,0 +1,89 @@
+name: task-router
+version: 1.0.0
+description: Task management skill with energy-aware gating and priority tracking
+
+use_when:
+  - "User explicitly requests task operation"
+  - "Classified input type is 'task'"
+  - "Action verbs: create, add, complete, finish, review, promote, delete"
+  - "Task-related queries: list tasks, show active, get backlog"
+
+tools_required:
+  - workos_create_task
+  - workos_complete_task
+  - workos_promote_task
+  - workos_update_task
+  - workos_delete_task
+  - workos_get_tasks
+  - workos_get_energy
+  - oura__get_daily_readiness
+
+workflow: |
+  1. Parse user intent (create/complete/review/promote/update/delete/query)
+  2. Check current energy level (workos_get_energy or oura readiness)
+  3. If energy < 60 and task is high-complexity:
+     - Gate the operation
+     - Suggest low-complexity alternatives
+     - Ask for confirmation to proceed anyway
+  4. Execute task operation via appropriate WorkOS tool
+  5. Detect priority shift in user message
+  6. If priority shift detected:
+     - Update State/CurrentFocus.md
+     - Notify user of priority update
+  7. Format response in Thanos voice
+  8. Return result
+
+examples:
+  - input: "Add a task to review the Q4 planning document"
+    classification: task
+    intent: create
+    action: workos_create_task(title="Review Q4 planning document", ...)
+    response: "The task has been added to your sacrifices. Review Q4 planning."
+
+  - input: "Complete the passport application task"
+    classification: task
+    intent: complete
+    action: workos_complete_task(taskId=...)
+    response: "A small price to pay for salvation. Passport task eliminated."
+
+  - input: "Show me my active tasks"
+    classification: task
+    intent: query
+    action: workos_get_tasks(status='active')
+    response: "Your current sacrifices:\n[task list]"
+
+response_templates:
+  task_created: |
+    The task has been added to your sacrifices.
+    {title}
+    +{points} toward the balance.
+
+  task_completed: |
+    A small price to pay for salvation.
+    {title} has been snapped from existence.
+    +{points} toward the balance.
+    {progress}/{target} complete.
+
+  task_promoted: |
+    {title} elevated to active status.
+    The work does not wait.
+
+  energy_gated: |
+    Readiness: {score}. The stones require charging.
+
+    This task demands high cognitive load. Your current state suggests:
+    {suggested_alternatives}
+
+    The universe demands patience. Proceed anyway?
+
+  priority_updated: |
+    Priority shift detected. CurrentFocus updated:
+    {new_priorities}
+
+voice_integration:
+  on_success: true
+  phrases:
+    - "Task acknowledged."
+    - "The work is noted."
+    - "Sacrifice recorded."
+    - "Balance approaches."
