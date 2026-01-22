@@ -787,6 +787,26 @@ export async function handleDailySummary(
     .orderBy(desc(schema.dailyGoals.date))
     .limit(1);
 
+  // Get client risk levels for risk-aware planning
+  const clientRisks = await db
+    .select({
+      clientName: schema.clientMemory.clientName,
+      riskLevel: schema.clientMemory.riskLevel,
+      workDebt: schema.clientMemory.workDebt,
+      importance: schema.clientMemory.importance,
+      avoidanceScore: schema.clientMemory.avoidanceScore,
+      notes: schema.clientMemory.notes,
+    })
+    .from(schema.clientMemory)
+    .where(
+      or(
+        eq(schema.clientMemory.riskLevel, "critical"),
+        eq(schema.clientMemory.riskLevel, "high"),
+        eq(schema.clientMemory.riskLevel, "elevated")
+      )
+    )
+    .orderBy(desc(schema.clientMemory.avoidanceScore));
+
   const earnedPoints = calculateTotalPoints(completedToday);
   const activePoints = activeTasks.reduce((sum, t) => sum + (t.pointsFinal ?? t.pointsAiGuess ?? 2), 0);
 
@@ -886,6 +906,16 @@ export async function handleDailySummary(
             title: t.title,
             client: t.clientName,
           })),
+          clientRiskAlerts: clientRisks.length > 0 ? {
+            message: "These clients have elevated risk levels - consider prioritizing their work:",
+            clients: clientRisks.map(c => ({
+              name: c.clientName,
+              riskLevel: c.riskLevel,
+              workDebt: c.workDebt,
+              avoidanceScore: c.avoidanceScore,
+              notes: c.notes,
+            })),
+          } : null,
         }, null, 2),
       },
     ],
