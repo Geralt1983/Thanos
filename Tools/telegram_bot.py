@@ -7,6 +7,7 @@ Supports voice messages with Whisper transcription.
 """
 
 import os
+import re
 import json
 import asyncio
 import tempfile
@@ -37,6 +38,14 @@ try:
 except ImportError:
     ChromaAdapter = None
     CHROMA_AVAILABLE = False
+
+# Import Memory V2 service for voice transcription memory extraction
+try:
+    from Tools.memory_v2.service import MemoryService
+    MEMORY_V2_AVAILABLE = True
+except ImportError:
+    MemoryService = None
+    MEMORY_V2_AVAILABLE = False
 
 # Database URL for WorkOS sync
 WORKOS_DATABASE_URL = os.getenv('WORKOS_DATABASE_URL')
@@ -189,6 +198,15 @@ class TelegramBrainDumpBot:
         self.workos_enabled = bool(WORKOS_DATABASE_URL)
         if self.workos_enabled:
             logger.info("WorkOS sync enabled for work tasks only")
+
+        # Initialize Memory V2 service for voice transcription memory extraction
+        self.memory_service = None
+        if MEMORY_V2_AVAILABLE:
+            try:
+                self.memory_service = MemoryService()
+                logger.info("Memory V2 service initialized for voice memory extraction")
+            except Exception as e:
+                logger.warning(f"Memory V2 not available: {e}")
 
     def should_filter_content(self, content: str) -> tuple[bool, str]:
         """
@@ -757,6 +775,94 @@ class TelegramBrainDumpBot:
             logger.error(f"Voice transcription failed: {e}")
             return None
 
+    async def extract_memories_from_transcription(self, transcription: str, user_id: int) -> List[Dict[str, Any]]:
+        """
+        Extract and store memories from voice transcription.
+
+        Uses lightweight pattern matching to identify memorable content:
+        - Decisions ("decided to...", "going with...")
+        - Facts about clients/projects
+        - Personal preferences
+        - Important dates/deadlines
+
+        Args:
+            transcription: The transcribed voice text
+            user_id: Telegram user ID for metadata
+
+        Returns:
+            List of stored memory results
+        """
+        if not self.memory_service:
+            logger.debug("Memory V2 service not available, skipping memory extraction")
+            return []
+
+        # Pattern definitions for memory classification
+        patterns = {
+            'decision': [
+                r'\b(?:decided|going with|choosing|will use|picked|selected|chose)\b',
+                r'\b(?:the plan is|we\'re going to|I\'m going to)\b',
+            ],
+            'deadline': [
+                r'\b(?:by|due|deadline|before)\s+(?:end of|next|this|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)',
+                r'\b(?:need to|have to|must)\s+.*\b(?:by|before|until)\b',
+                r'\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}',
+            ],
+            'preference': [
+                r'\b(?:prefer|like to|want to|need to|rather)\b',
+                r'\b(?:always|usually|typically|normally)\s+(?:do|use|work|start)',
+            ],
+            'client_fact': [
+                r'\b(?:client|customer|account)\s+(?:wants|needs|said|mentioned|asked)',
+                r'\b(?:orlando|raleigh|memphis|kentucky|versacare)\b',  # Known clients
+            ],
+            'project_fact': [
+                r'\b(?:project|feature|sprint|release|milestone)\s+(?:is|was|will be|needs)',
+                r'\b(?:thanos|workos|telegram)\s+(?:integration|bot|feature)',  # Known projects
+            ],
+            'commitment': [
+                r'\b(?:promised|committed|agreed|told them|said I would)\b',
+                r'\b(?:will get|will send|will deliver|will have)\b.*\b(?:by|before|tomorrow|monday|tuesday|wednesday|thursday|friday)',
+            ],
+        }
+
+        stored_memories = []
+
+        for memory_type, pattern_list in patterns.items():
+            for pattern in pattern_list:
+                if re.search(pattern, transcription, re.IGNORECASE):
+                    # Found a match - store this as a memory
+                    try:
+                        metadata = {
+                            'source': 'telegram',
+                            'content_type': 'voice',
+                            'type': memory_type,
+                            'user_id': str(user_id),
+                            'timestamp': datetime.now().isoformat(),
+                            'pattern_matched': pattern,
+                        }
+
+                        result = self.memory_service.add(
+                            content=transcription,
+                            metadata=metadata
+                        )
+
+                        if result:
+                            stored_memories.append({
+                                'memory_type': memory_type,
+                                'result': result
+                            })
+                            logger.info(f"Stored {memory_type} memory from voice transcription")
+
+                        # Only store once per transcription (avoid duplicates)
+                        break
+
+                    except Exception as e:
+                        logger.warning(f"Failed to store {memory_type} memory: {e}")
+
+                    break  # Move to next memory type after first match
+
+        return stored_memories
+
     async def parse_content(self, content: str) -> Dict[str, Any]:
         """
         Parse brain dump content using Claude to extract structure.
@@ -1183,6 +1289,12 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                         user_id=update.effective_user.id
                     )
 
+                    # Extract and store memories from transcription
+                    memories_stored = await self.extract_memories_from_transcription(
+                        transcription,
+                        update.effective_user.id
+                    )
+
                     # Build response message
                     response_parts = [f"🎤 *Transcription:*\n_{transcription}_\n"]
 
@@ -1223,6 +1335,11 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
                         if destinations:
                             response_parts.append(f"✓ {', '.join(destinations)}")
+
+                    # Add memory extraction info
+                    if memories_stored:
+                        memory_types = [m['memory_type'].replace('_', ' ') for m in memories_stored]
+                        response_parts.append(f"🧠 Memory stored: {', '.join(memory_types)}")
 
                     # Add review notice if needed
                     if entry.needs_review:

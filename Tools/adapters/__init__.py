@@ -73,6 +73,22 @@ except ImportError:
     CalendarAdapter = None
     CALENDAR_AVAILABLE = False
 
+# WorkOS Memory Bridge (standalone module, no dependencies)
+from .workos_memory_bridge import (
+    store_task_completion,
+    store_decision,
+    write_to_queue,
+    process_queue,
+)
+
+# Calendar Memory Bridge (primes memories before meetings)
+from .calendar_memory_bridge import (
+    extract_entities_from_event,
+    prime_for_meeting,
+    get_meeting_context,
+    prime_upcoming_meetings,
+)
+
 __all__ = [
     "BaseAdapter",
     "ToolResult",
@@ -88,6 +104,16 @@ __all__ = [
     "CHROMADB_AVAILABLE",
     "GOOGLE_CALENDAR_AVAILABLE",
     "CALENDAR_AVAILABLE",
+    # WorkOS Memory Bridge
+    "store_task_completion",
+    "store_decision",
+    "write_to_queue",
+    "process_queue",
+    # Calendar Memory Bridge
+    "extract_entities_from_event",
+    "prime_for_meeting",
+    "get_meeting_context",
+    "prime_upcoming_meetings",
 ]
 
 logger = logging.getLogger(__name__)
