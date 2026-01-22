@@ -1,0 +1,116 @@
+name: meeting-prep
+version: 1.0.0
+description: Prime memories and gather context before calendar meetings
+
+use_when:
+  - "User has an upcoming meeting"
+  - "User asks to prepare for a meeting"
+  - "User mentions a client/project name with meeting context"
+  - "Phrases: prep for meeting, get ready for call, meeting context"
+  - "Before important calendar events"
+
+tools_required:
+  - mcp__plugin_claude-mem_mcp-search__search
+  - mcp__plugin_claude-mem_mcp-search__timeline
+  - mcp__plugin_claude-mem_mcp-search__get_observations
+  - workos_get_clients
+  - workos_get_tasks
+  - workos_get_client_memory
+
+workflow: |
+  1. Extract entities from meeting/event information:
+     - Client names (match against known clients via workos_get_clients)
+     - Project names (from title/description patterns)
+     - Attendee names (if provided)
+     - Key terms for memory search
+
+  2. Search memories for each extracted entity:
+     - Use mcp__plugin_claude-mem_mcp-search__search for semantic search
+     - Get timeline context around relevant observations
+     - Prioritize recent and high-heat memories
+
+  3. Boost related memories (via Python bridge):
+     - Call prime_for_meeting() to boost heat on related memories
+     - This ensures follow-up searches surface the right context
+
+  4. Get client-specific context:
+     - workos_get_client_memory for client status/notes
+     - workos_get_tasks filtered by client for active work
+
+  5. Format context summary:
+     - Key memories (with heat indicators)
+     - Active tasks for this client
+     - Recent decisions/observations
+     - People involved
+
+  6. Deliver in Thanos voice
+
+examples:
+  - input: "Prep me for the Orlando call"
+    entities:
+      clients: ["Orlando"]
+      projects: []
+    actions:
+      - search_memories: "Orlando client work project"
+      - get_client_memory: "Orlando"
+      - get_tasks: {clientName: "Orlando"}
+    response: |
+      ### Meeting Context: Orlando
+
+      **Active Work:**
+      - [Task list for Orlando]
+
+      **Recent Memories:**
+      - [Top relevant memories]
+
+      The stones recall. You are prepared.
+
+  - input: "I have a VersaCare sprint review in 30 minutes"
+    entities:
+      clients: ["VersaCare", "Kentucky"]
+      projects: ["Sprint", "Q1"]
+    actions:
+      - search_memories: "VersaCare Kentucky sprint review"
+      - boost_related: ["VersaCare", "Kentucky"]
+    response: |
+      ### Meeting Context: VersaCare Sprint Review
+
+      **Client:** VersaCare (Kentucky)
+
+      **Recent Memories:**
+      [relevant work history]
+
+      **Active Tasks:**
+      [sprint items]
+
+      Reality is prepared. Execute with precision.
+
+response_templates:
+  context_ready: |
+    ### Meeting Context: {meeting_title}
+
+    {client_section}
+    {memories_section}
+    {tasks_section}
+
+    The stones recall. You are prepared.
+
+  no_context: |
+    No prior context found for {meeting_title}.
+
+    Entities extracted: {entities}
+
+    This appears to be new territory. Proceed with fresh perspective.
+
+  primed: |
+    Boosted {count} memories related to {entities}.
+
+    Context is now primed for recall.
+
+voice_integration:
+  on_success: true
+  phrases:
+    - "Context loaded."
+    - "The stones recall."
+    - "Memories primed."
+    - "You are prepared."

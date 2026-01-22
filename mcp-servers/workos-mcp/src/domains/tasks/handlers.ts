@@ -36,6 +36,7 @@ import {
   UpdateTaskSchema,
   DeleteTaskSchema,
 } from "./validation.js";
+import { queueTaskCompletion } from "../../shared/memory-queue.js";
 
 // =============================================================================
 // TASK DOMAIN HANDLERS
@@ -491,13 +492,21 @@ export async function handleCompleteTask(
 
   const { taskId } = validation.data;
 
-  // First, fetch the task to check if pointsFinal is already set
+  // Fetch the full task with client name for memory capture
   const [existingTask] = await db
     .select({
+      id: schema.tasks.id,
+      title: schema.tasks.title,
+      description: schema.tasks.description,
       pointsFinal: schema.tasks.pointsFinal,
       valueTier: schema.tasks.valueTier,
+      drainType: schema.tasks.drainType,
+      cognitiveLoad: schema.tasks.cognitiveLoad,
+      clientId: schema.tasks.clientId,
+      clientName: schema.clients.name,
     })
     .from(schema.tasks)
+    .leftJoin(schema.clients, eq(schema.tasks.clientId, schema.clients.id))
     .where(eq(schema.tasks.id, taskId))
     .limit(1);
 
@@ -513,11 +522,13 @@ export async function handleCompleteTask(
     POINTS_BY_TIER[existingTask.valueTier || 'checkbox'] ??
     POINTS_BY_TIER.checkbox;
 
+  const completedAt = new Date();
+
   const [updatedTask] = await db
     .update(schema.tasks)
     .set({
       status: "done",
-      completedAt: new Date(),
+      completedAt,
       updatedAt: new Date(),
       pointsFinal,
     })
@@ -537,6 +548,24 @@ export async function handleCompleteTask(
     } catch (_cacheError) {
       // Silent cache sync failure - primary write succeeded
     }
+  }
+
+  // Queue task completion for Memory V2 capture (silent, non-blocking)
+  try {
+    queueTaskCompletion({
+      id: existingTask.id,
+      title: existingTask.title,
+      description: existingTask.description,
+      clientId: existingTask.clientId,
+      clientName: existingTask.clientName,
+      valueTier: existingTask.valueTier,
+      drainType: existingTask.drainType,
+      cognitiveLoad: existingTask.cognitiveLoad,
+      pointsFinal,
+      completedAt: completedAt.toISOString(),
+    });
+  } catch (_memoryError) {
+    // Silent memory queue failure - primary completion succeeded
   }
 
   return {
