@@ -1,5 +1,11 @@
 """
-ChromaDB adapter for Thanos vector memory storage.
+DEPRECATED: ChromaDB is being replaced by Neon pgvector.
+
+See Tools.memory_v2 for the new cloud-first memory architecture.
+
+---
+
+ChromaDB adapter for Thanos vector memory storage (DEPRECATED).
 
 Provides semantic search and vector storage operations for:
 - Commitments (promises, deadlines, accountability)
@@ -72,6 +78,11 @@ VECTOR_SCHEMA = {
         "entities": {
             "description": "People, clients, projects, organizations",
             "metadata_fields": ["name", "type", "domain", "created_at"]
+        },
+        "personal_memories": {
+            "description": "Personal brain dumps, thoughts, and life events",
+            "metadata_fields": ["source", "timestamp", "domains", "is_work", "is_personal",
+                              "energy_level", "entity_count", "task_count", "has_blockers"]
         }
     }
 }
@@ -102,8 +113,8 @@ class ChromaAdapter(BaseAdapter):
                 "chromadb package not installed. Install with: pip install chromadb"
             )
 
-        # Set up ChromaDB
-        self._persist_dir = persist_directory or os.path.expanduser("~/.claude/Memory/vectors")
+        # Set up ChromaDB - pointing to worker service database (ADR-006)
+        self._persist_dir = persist_directory or os.path.expanduser("~/.claude-mem/vector-db")
         self._client = chromadb.Client(Settings(
             persist_directory=self._persist_dir,
             anonymized_telemetry=False
