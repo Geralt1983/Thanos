@@ -1,0 +1,8 @@
+{
+  "pid": 6808,
+  "port": 7681,
+  "started_at": "2026-01-21T16:13:50.333992",
+  "session_name": "thanos-main",
+  "ssl_enabled": true,
+  "auth_enabled": true
+}

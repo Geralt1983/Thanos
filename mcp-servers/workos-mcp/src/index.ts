@@ -29,6 +29,10 @@ import { personalTasksTools, handlePersonalTasksTool } from "./domains/personal-
 // CACHE LAYER
 // =============================================================================
 let cacheInitialized = false;
+let syncInterval: ReturnType<typeof setInterval> | null = null;
+
+// Auto-sync interval (5 minutes)
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 async function ensureCache(): Promise<boolean> {
   if (!cacheInitialized) {
@@ -50,6 +54,36 @@ async function ensureCache(): Promise<boolean> {
     }
   }
   return true;
+}
+
+/**
+ * Start automatic background sync interval
+ */
+function startAutoSync(): void {
+  if (syncInterval) return; // Already running
+
+  syncInterval = setInterval(async () => {
+    try {
+      await syncAll();
+    } catch (error) {
+      // Silent failure - will retry next interval
+    }
+  }, AUTO_SYNC_INTERVAL_MS);
+
+  // Don't block process exit
+  if (syncInterval.unref) {
+    syncInterval.unref();
+  }
+}
+
+/**
+ * Stop automatic background sync
+ */
+function stopAutoSync(): void {
+  if (syncInterval) {
+    clearInterval(syncInterval);
+    syncInterval = null;
+  }
 }
 
 // =============================================================================
@@ -157,8 +191,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // =============================================================================
 async function main() {
   // Initialize cache at startup (non-blocking, silent)
-  ensureCache().then(_success => {
-    // Silent initialization - only log errors
+  ensureCache().then(success => {
+    if (success) {
+      // Start automatic sync every 5 minutes
+      startAutoSync();
+    }
   }).catch(err => {
     console.error("[Cache] Startup initialization failed:", err);
   });
@@ -173,6 +210,7 @@ async function main() {
 // =============================================================================
 function shutdown(_signal: string) {
   // Silent shutdown
+  stopAutoSync();
   closeCache();
   process.exit(0);
 }

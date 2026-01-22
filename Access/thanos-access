@@ -376,8 +376,11 @@ def cmd_emergency(coordinator: AccessCoordinator):
 
 
 def cmd_health(coordinator: AccessCoordinator):
-    """Comprehensive health check."""
+    """Comprehensive health check with daemon monitoring."""
     print_header("HEALTH CHECK")
+
+    # Section 1: Current Component Status (from AccessCoordinator)
+    print(f"{Colors.BOLD}CURRENT STATUS:{Colors.RESET}\n")
 
     status = coordinator.get_full_status()
     all_good = True
@@ -410,6 +413,66 @@ def cmd_health(coordinator: AccessCoordinator):
 
         print()
 
+    # Section 2: Daemon Monitoring Status
+    try:
+        import subprocess
+        import json
+
+        # Query daemon status
+        result = subprocess.run(
+            ['python3', str(PROJECT_ROOT / 'Operator' / 'daemon.py'), '--status'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode == 0:
+            daemon_status = json.loads(result.stdout)
+
+            print(f"\n{Colors.BOLD}DAEMON MONITORING:{Colors.RESET}\n")
+
+            # Check if daemon is running
+            if daemon_status.get('running', False):
+                print_success("Daemon active")
+
+                # Show last run time
+                last_run = daemon_status.get('last_run')
+                if last_run:
+                    from datetime import datetime
+                    last_dt = datetime.fromisoformat(last_run)
+                    print_info("Last check", last_dt.strftime('%Y-%m-%d %H:%M:%S'))
+
+                # Show run stats
+                run_count = daemon_status.get('run_count', 0)
+                total_alerts = daemon_status.get('total_alerts', 0)
+                print_info("Check cycles", str(run_count))
+                print_info("Total alerts", str(total_alerts))
+
+                # Show enabled monitors
+                enabled = daemon_status.get('enabled_monitors', [])
+                if 'access' in enabled:
+                    print_success("AccessMonitor enabled")
+                else:
+                    print_warning("AccessMonitor not enabled")
+                    all_good = False
+
+            else:
+                print_warning("Daemon not running")
+                print()
+                print("  Start daemon: launchctl start com.thanos.operator")
+                all_good = False
+
+            print()
+
+        else:
+            print(f"\n{Colors.YELLOW}⚠{Colors.RESET}  Daemon status unavailable\n")
+
+    except FileNotFoundError:
+        print(f"\n{Colors.YELLOW}⚠{Colors.RESET}  Daemon not configured\n")
+    except Exception as e:
+        print(f"\n{Colors.YELLOW}⚠{Colors.RESET}  Could not query daemon: {e}\n")
+
+    # Summary
     if all_good:
         print_success("All systems operational")
         return 0

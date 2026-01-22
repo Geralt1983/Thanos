@@ -26,15 +26,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from Tools.journal import Journal, EventType, Severity
 
-# Import new classification system
-from Tools.brain_dump import (
-    BrainDumpClassifier,
-    ClassifiedBrainDump,
-    BrainDumpRouter,
-    RoutingResult,
-    Classification,
-)
+# Import new unified pipeline
+from Tools.brain_dump.pipeline import process_brain_dump_sync
 from Tools.state_store import get_db
+
+# Import ChromaDB adapter for vector storage
+try:
+    from Tools.adapters.chroma_adapter import ChromaAdapter
+    CHROMA_AVAILABLE = True
+except ImportError:
+    ChromaAdapter = None
+    CHROMA_AVAILABLE = False
 
 # Database URL for WorkOS sync
 WORKOS_DATABASE_URL = os.getenv('WORKOS_DATABASE_URL')
@@ -55,7 +57,7 @@ class BrainDumpEntry:
     raw_content: str
     content_type: str  # 'text', 'voice', 'photo'
     # New classification system fields
-    classification: Optional[str] = None  # thinking, venting, observation, note, idea, personal_task, work_task, commitment, mixed
+    classification: Optional[str] = None  # thinking, observation, idea, personal_task, work_task, worry
     confidence: float = 0.0
     acknowledgment: Optional[str] = None  # User-friendly response
     # Legacy fields for backwards compatibility
@@ -68,6 +70,9 @@ class BrainDumpEntry:
     user_id: Optional[str] = None
     processed: bool = False
     processing_notes: Optional[str] = None
+    # Review status (from pipeline)
+    needs_review: bool = False
+    review_reason: Optional[str] = None
     # Routing results
     routing_result: Optional[Dict[str, Any]] = None
 
@@ -157,14 +162,17 @@ class TelegramBrainDumpBot:
         # Initialize journal
         self.journal = Journal()
 
-        # Initialize new classification system
-        self.classifier = BrainDumpClassifier(api_key=self.claude_api_key)
+        # Initialize state store for pipeline
         self.state_store = get_db()
-        self.router = BrainDumpRouter(
-            state=self.state_store,
-            journal=self.journal,
-            workos_adapter=None  # Will be set up if WorkOS enabled
-        )
+
+        # Initialize ChromaDB adapter for vector storage
+        self.chroma_adapter = None
+        if CHROMA_AVAILABLE:
+            try:
+                self.chroma_adapter = ChromaAdapter()
+                logger.info("ChromaDB adapter initialized for brain dump storage")
+            except Exception as e:
+                logger.warning(f"ChromaDB not available: {e}")
 
         # Storage for entries (legacy - now also stored in state_store)
         self.entries: List[BrainDumpEntry] = []
@@ -670,13 +678,26 @@ class TelegramBrainDumpBot:
             return None
 
     def _load_entries(self):
-        """Load existing brain dump entries from file."""
+        """Load existing brain dump entries from file.
+
+        Only loads unprocessed entries - processed ones should have been
+        deleted, but we clean up any legacy entries that slipped through.
+        """
         try:
             if self.storage_path.exists():
                 with open(self.storage_path) as f:
                     data = json.load(f)
-                    self.entries = [BrainDumpEntry(**e) for e in data]
-                logger.info(f"Loaded {len(self.entries)} brain dump entries")
+                    all_entries = [BrainDumpEntry(**e) for e in data]
+
+                # Only keep unprocessed entries (inbox only)
+                self.entries = [e for e in all_entries if not e.processed]
+
+                cleaned = len(all_entries) - len(self.entries)
+                if cleaned > 0:
+                    logger.info(f"Cleaned {cleaned} legacy processed entries")
+                    self._save_entries()  # Persist the cleanup
+
+                logger.info(f"Loaded {len(self.entries)} inbox entries")
         except Exception as e:
             logger.warning(f"Could not load brain dump entries: {e}")
             self.entries = []
@@ -868,7 +889,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         parse: bool = True
     ) -> BrainDumpEntry:
         """
-        Capture a brain dump entry using the new classification system.
+        Capture a brain dump entry using the new unified pipeline.
 
         Args:
             content: Raw content (text or transcription).
@@ -888,63 +909,60 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             user_id=str(user_id) if user_id else None
         )
 
-        # Use new classification system
+        # Use new unified pipeline for classification and routing
         if parse and content:
             try:
-                # Classify using the new classifier
-                classified = await self.classifier.classify(
+                # Process through the unified pipeline
+                # This handles classification AND routing automatically
+                result = process_brain_dump_sync(
                     content=content,
                     source='telegram',
-                    user_id=str(user_id) if user_id else None
+                    state_store=self.state_store,
+                    journal=self.journal,
+                    chroma_adapter=self.chroma_adapter,
                 )
 
-                # Update entry with classification results
-                entry.classification = classified.classification
-                entry.confidence = classified.confidence
-                entry.acknowledgment = classified.acknowledgment
-                entry.parsed_priority = classified.priority
-                entry.parsed_entities = classified.entities
+                # Update entry with pipeline results
+                entry.classification = result.classification
+                entry.confidence = result.classification_confidence
+                entry.acknowledgment = result.acknowledgment
+                entry.needs_review = result.needs_review
+                entry.review_reason = result.review_reason
 
-                # Map classification to legacy category for backwards compatibility
+                # Map classification to legacy fields for backwards compatibility
                 classification_to_category = {
                     'thinking': 'thought',
-                    'venting': 'thought',
                     'observation': 'thought',
-                    'note': 'thought',
                     'idea': 'idea',
                     'personal_task': 'task',
                     'work_task': 'task',
-                    'commitment': 'commitment',
-                    'mixed': 'thought',
+                    'worry': 'worry',
                 }
                 entry.parsed_category = classification_to_category.get(
-                    classified.classification, 'thought'
+                    result.classification, 'thought'
                 )
 
-                # Derive context from classification
-                if classified.classification == 'work_task':
-                    entry.parsed_context = 'work'
-                else:
-                    entry.parsed_context = 'personal'
+                # Derive context from domain
+                entry.parsed_context = result.domain or 'personal'
 
-                # Route the classified brain dump
-                routing_result = await self.router.route(classified)
+                # Store routing result
                 entry.routing_result = {
-                    'tasks_created': routing_result.tasks_created,
-                    'commitment_created': routing_result.commitment_created,
-                    'idea_created': routing_result.idea_created,
-                    'note_created': routing_result.note_created,
-                    'workos_task_id': routing_result.workos_task_id,
-                    'acknowledgment': routing_result.acknowledgment,
+                    'tasks_created': bool(result.created_task_id),
+                    'commitment_created': bool(result.created_commitment_id),
+                    'idea_created': result.classification == 'idea' and bool(result.chroma_memory_id),
+                    'note_created': result.classification in ('thinking', 'observation') and bool(result.chroma_memory_id),
+                    'workos_task_id': result.workos_task_id,
+                    'acknowledgment': result.acknowledgment,
                 }
 
                 logger.info(
-                    f"Classified as {classified.classification} "
-                    f"(confidence: {classified.confidence:.0%})"
+                    f"Classified as {result.classification} "
+                    f"(confidence: {result.classification_confidence:.0%}), "
+                    f"routed to {result.destinations}"
                 )
 
             except Exception as e:
-                logger.error(f"Classification failed, falling back to basic parse: {e}")
+                logger.error(f"Pipeline processing failed, falling back to basic parse: {e}")
                 # Fallback to basic parsing
                 parsed = await self.parse_content(content)
                 entry.parsed_category = parsed.get('category')
@@ -953,27 +971,11 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 entry.parsed_entities = parsed.get('entities')
                 entry.parsed_action = parsed.get('action')
                 entry.classification = entry.parsed_category
+                entry.acknowledgment = f"{entry.parsed_category} captured"
 
         # Add to entries list (legacy storage)
         self.entries.append(entry)
         self._save_entries()
-
-        # Also store in unified state store
-        try:
-            self.state_store.create_brain_dump(
-                content=content,
-                source='telegram',
-                category=entry.classification,
-                domain=entry.parsed_context,
-                metadata={
-                    'entry_id': entry_id,
-                    'content_type': content_type,
-                    'user_id': str(user_id) if user_id else None,
-                    'confidence': entry.confidence,
-                }
-            )
-        except Exception as e:
-            logger.warning(f"Failed to store in state store: {e}")
 
         logger.info(f"Captured brain dump: {entry.id} ({entry.classification})")
 
@@ -984,12 +986,17 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         return [e for e in self.entries if not e.processed]
 
     def mark_processed(self, entry_id: str, notes: Optional[str] = None):
-        """Mark an entry as processed."""
-        for entry in self.entries:
+        """Mark an entry as processed by REMOVING it from the inbox.
+
+        The entry has already been routed to the appropriate database
+        (SQLite, ChromaDB, WorkOS), so we delete it from the JSON inbox.
+        """
+        for i, entry in enumerate(self.entries):
             if entry.id == entry_id:
-                entry.processed = True
-                entry.processing_notes = notes
+                # Remove from inbox - it's now in the database
+                self.entries.pop(i)
                 self._save_entries()
+                logger.info(f"Removed processed entry {entry_id} from inbox")
                 return
         raise ValueError(f"Entry not found: {entry_id}")
 
@@ -1017,8 +1024,10 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
         # Security: check if user is allowed
         def is_allowed(user_id: int) -> bool:
+            # SECURITY: Fail-secure - deny access if no users configured
             if not self.allowed_users:
-                return True  # No restrictions if no users specified
+                logger.warning(f"Telegram access denied: No allowed users configured (user_id={user_id})")
+                return False
             return user_id in self.allowed_users
 
         # Command handlers
@@ -1080,51 +1089,49 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 user_id=update.effective_user.id
             )
 
-            # Use acknowledgment from classification if available
-            if entry.acknowledgment:
-                await update.message.reply_text(entry.acknowledgment)
-                return
+            # Build response message
+            response_parts = []
 
-            # Fallback: Send confirmation with emoji based on new classification
+            # Use acknowledgment from pipeline if available
+            if entry.acknowledgment:
+                response_parts.append(entry.acknowledgment)
+
+            # Add classification info
             emoji = {
                 'thinking': '💭',
-                'venting': '😤',
                 'observation': '👁️',
-                'note': '📝',
                 'idea': '💡',
                 'personal_task': '✅',
                 'work_task': '💼',
-                'commitment': '🤝',
-                'mixed': '🔀',
+                'worry': '😰',
                 # Legacy fallbacks
                 'task': '✅',
                 'thought': '💭',
-                'worry': '😰',
-                'question': '❓'
             }.get(entry.classification or entry.parsed_category, '📝')
 
             classification_display = entry.classification or entry.parsed_category or 'captured'
-
-            # Build response based on classification
-            response_parts = [f"{emoji} {classification_display.replace('_', ' ').title()}"]
-
-            # Add context info for tasks
-            if entry.classification in ('personal_task', 'work_task'):
-                domain = 'personal' if entry.classification == 'personal_task' else 'work'
-                response_parts.append(f"Domain: {domain}")
-                if entry.parsed_priority:
-                    response_parts.append(f"Priority: {entry.parsed_priority}")
+            response_parts.append(f"{emoji} {classification_display.replace('_', ' ').title()}")
 
             # Add routing result info
             if entry.routing_result:
+                destinations = []
                 if entry.routing_result.get('tasks_created'):
-                    response_parts.append("Task created ✓")
+                    destinations.append("task created")
                 if entry.routing_result.get('workos_task_id'):
-                    response_parts.append("Synced to WorkOS ✓")
+                    destinations.append("synced to WorkOS")
                 if entry.routing_result.get('idea_created'):
-                    response_parts.append("Idea captured ✓")
+                    destinations.append("idea saved")
                 if entry.routing_result.get('commitment_created'):
-                    response_parts.append("Commitment tracked ✓")
+                    destinations.append("commitment tracked")
+                if entry.routing_result.get('note_created'):
+                    destinations.append("note saved")
+
+                if destinations:
+                    response_parts.append(f"✓ {', '.join(destinations)}")
+
+            # Add review notice if needed (check if entry has this attribute)
+            if hasattr(entry, 'needs_review') and entry.needs_review:
+                response_parts.append("\n⚠️ Needs review - please check later")
 
             await update.message.reply_text("\n".join(response_parts))
 
@@ -1176,34 +1183,52 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                         user_id=update.effective_user.id
                     )
 
-                    # Use acknowledgment or build response
+                    # Build response message
+                    response_parts = [f"🎤 *Transcription:*\n_{transcription}_\n"]
+
+                    # Use acknowledgment from pipeline if available
                     if entry.acknowledgment:
-                        response = f"🎤 *Transcription:*\n_{transcription}_\n\n{entry.acknowledgment}"
-                    else:
-                        emoji = {
-                            'thinking': '💭',
-                            'venting': '😤',
-                            'observation': '👁️',
-                            'note': '📝',
-                            'idea': '💡',
-                            'personal_task': '✅',
-                            'work_task': '💼',
-                            'commitment': '🤝',
-                            'mixed': '🔀',
-                            'task': '✅',
-                            'thought': '💭',
-                        }.get(entry.classification or entry.parsed_category, '📝')
+                        response_parts.append(entry.acknowledgment)
 
-                        classification_display = (
-                            entry.classification or entry.parsed_category or 'captured'
-                        ).replace('_', ' ').title()
+                    # Add classification info
+                    emoji = {
+                        'thinking': '💭',
+                        'observation': '👁️',
+                        'idea': '💡',
+                        'personal_task': '✅',
+                        'work_task': '💼',
+                        'worry': '😰',
+                        'task': '✅',
+                        'thought': '💭',
+                    }.get(entry.classification or entry.parsed_category, '📝')
 
-                        response = (
-                            f"🎤 *Transcription:*\n_{transcription}_\n\n"
-                            f"{emoji} {classification_display}"
-                        )
+                    classification_display = (
+                        entry.classification or entry.parsed_category or 'captured'
+                    ).replace('_', ' ').title()
+                    response_parts.append(f"{emoji} {classification_display}")
 
-                    await processing_msg.edit_text(response, parse_mode='Markdown')
+                    # Add routing result info
+                    if entry.routing_result:
+                        destinations = []
+                        if entry.routing_result.get('tasks_created'):
+                            destinations.append("task created")
+                        if entry.routing_result.get('workos_task_id'):
+                            destinations.append("synced to WorkOS")
+                        if entry.routing_result.get('idea_created'):
+                            destinations.append("idea saved")
+                        if entry.routing_result.get('commitment_created'):
+                            destinations.append("commitment tracked")
+                        if entry.routing_result.get('note_created'):
+                            destinations.append("note saved")
+
+                        if destinations:
+                            response_parts.append(f"✓ {', '.join(destinations)}")
+
+                    # Add review notice if needed
+                    if entry.needs_review:
+                        response_parts.append("\n⚠️ Needs review - please check later")
+
+                    await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
                 else:
                     await processing_msg.edit_text("❌ Could not transcribe voice message")
 

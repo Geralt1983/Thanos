@@ -1,0 +1,119 @@
+# Operator Daemon Configuration - Thanos v2.0 Phase 3
+version: "1.0"
+
+# Check intervals (seconds)
+intervals:
+  check_interval: 300       # Main loop interval (5 minutes)
+  health_check: 900         # 15 minutes
+  task_check: 900           # 15 minutes
+  pattern_check: 1800       # 30 minutes
+
+# Quiet hours (no non-critical alerts)
+quiet_hours:
+  enabled: true
+  start: 22                 # 10 PM
+  end: 7                    # 7 AM
+  timezone: "America/Chicago"
+
+# Alert deduplication
+deduplication:
+  window_seconds: 3600      # 1 hour
+  max_alerts_per_run: 20
+
+# Monitor Configuration
+monitors:
+  health:
+    enabled: true
+    thresholds:
+      readiness_critical: 50
+      readiness_warning: 65
+      hrv_critical_deviation: -25  # % below 30-day average
+      hrv_warning_deviation: -15
+      sleep_hours_critical: 5.0
+      sleep_hours_warning: 6.0
+      stress_high: 75
+      stress_critical: 85
+
+  tasks:
+    enabled: true
+    checks:
+      - overdue_tasks
+      - due_today
+      - due_tomorrow
+      - commitment_violations
+    commitment_check_hours: [9, 14, 18]  # Check at 9am, 2pm, 6pm
+
+  patterns:
+    enabled: true
+    lookback_days: 7
+    thresholds:
+      procrastination_count: 3       # Same task punted 3+ times
+      energy_decline_percent: 20     # 20% decline in weekly avg
+      overcommitment_ratio: 1.5      # Tasks created vs completed
+
+  access:
+    enabled: true
+    checks:
+      - ttyd_health              # Web terminal daemon
+      - tailscale_health         # VPN connection
+      - tmux_health              # Session persistence
+    thresholds:
+      ttyd_check_enabled: true
+      tailscale_check_enabled: true
+      tmux_check_enabled: true
+
+# Data Adapters
+adapters:
+  oura:
+    type: "mcp_cache"
+    cache_db_path: "${HOME}/.oura-cache/oura-health.db"
+    fallback_api: true
+    api_timeout_seconds: 10
+
+  workos:
+    type: "mcp_postgres"
+    database_url: "${WORKOS_DATABASE_URL}"
+    cache_enabled: true
+    cache_ttl_seconds: 300
+
+  state_files:
+    type: "json"
+    base_path: "${THANOS_ROOT}/State"
+    files:
+      - "patterns.json"
+      - "operator_state.json"
+      - "CurrentFocus.md"
+
+# Alerters
+alerters:
+  telegram:
+    enabled: true
+    token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"
+    min_priority: "medium"           # low, medium, high, critical
+    retry_attempts: 3
+    timeout_seconds: 10
+
+  macos:
+    enabled: true
+    min_priority: "high"
+    sound: "Glass"                   # macOS system sound
+
+  journal:
+    enabled: true
+    min_priority: "info"             # Always log everything
+    log_path: "${THANOS_ROOT}/logs/operator.log"
+
+# Circuit Breaker
+circuit_breaker:
+  failure_threshold: 3
+  timeout_seconds: 60
+  half_open_attempts: 1
+
+# Logging
+logging:
+  level: "INFO"                      # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  rotation:
+    max_bytes: 10485760              # 10 MB
+    backup_count: 5

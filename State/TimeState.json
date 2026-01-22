@@ -1,9 +1,9 @@
 {
   "last_interaction": {
-    "timestamp": "2026-01-19T14:01:20.893334-05:00",
-    "type": "session_end",
-    "agent": "ops"
+    "timestamp": "2026-01-22T14:06:45.724419-05:00",
+    "type": "user_prompt",
+    "agent": "thanos"
   },
-  "session_started": null,
-  "interaction_count_today": 89
+  "session_started": "2026-01-22T10:15:22.943657-05:00",
+  "interaction_count_today": 23
 }

@@ -1,0 +1,71 @@
+{
+  "profile": {
+    "name": "Jeremy",
+    "role": "Software Engineer / Founder",
+    "cognitive_style": "ADHD-optimized",
+    "timezone": "America/New_York"
+  },
+  "energy_patterns": {
+    "peak_hours": [9, 10, 11, 14, 15],
+    "low_hours": [13, 16, 17],
+    "best_day": "Tuesday",
+    "worst_day": "Monday",
+    "readiness_correlation": 0.72
+  },
+  "work_patterns": {
+    "avg_tasks_per_day": 6.2,
+    "preferred_task_size": "small",
+    "context_switch_tolerance": "low",
+    "deep_work_capacity_hours": 3,
+    "ideal_break_interval_minutes": 45
+  },
+  "struggle_patterns": {
+    "most_common": ["overwhelmed", "decision_paralysis", "context_switch"],
+    "peak_struggle_time": "afternoon",
+    "recovery_strategies": [
+      "brain_dump",
+      "single_checkbox_task",
+      "short_break"
+    ]
+  },
+  "values": {
+    "work": [
+      "shipping over perfection",
+      "automation over manual",
+      "small wins compound"
+    ],
+    "personal": [
+      "health enables productivity",
+      "relationships matter",
+      "rest is productive"
+    ]
+  },
+  "clients": {
+    "active": ["Orlando", "Raleigh", "Memphis"],
+    "sentiment": {
+      "Orlando": "positive",
+      "Raleigh": "neutral",
+      "Memphis": "positive"
+    }
+  },
+  "projects": {
+    "primary": ["Thanos", "WorkOS"],
+    "recent": ["BriefingEngine", "Memory Architecture"]
+  },
+  "preferences": {
+    "response_style": "concise",
+    "planning_approach": "incremental",
+    "documentation": "minimal",
+    "communication": "async-first"
+  },
+  "boundaries": {
+    "no_work_after": "21:00",
+    "minimum_sleep_hours": 7,
+    "max_meetings_per_day": 3
+  },
+  "meta": {
+    "last_updated": "2026-01-19T22:16:00Z",
+    "version": "1.0",
+    "sources": ["workos", "claude-mem", "claude-flow", "oura"]
+  }
+}

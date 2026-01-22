@@ -63,6 +63,7 @@ class WorkOSMetrics:
     current_streak: int = 0
     readiness_score: Optional[int] = None  # From daily_goals if Oura unavailable
     energy_level: Optional[str] = None  # From daily_goals if available
+    inbox_count: int = 0  # Unprocessed brain dumps
     available: bool = False
 
 
@@ -262,6 +263,35 @@ def get_workos_metrics() -> WorkOSMetrics:
 
 
 # =============================================================================
+# INBOX (BRAIN DUMP) COUNTING
+# =============================================================================
+
+def get_inbox_count() -> int:
+    """
+    Count unprocessed brain dumps from State/brain_dumps.json.
+
+    Items are in inbox if: processed=false OR needs_review=true
+    """
+    brain_dump_path = Path("/Users/jeremy/Projects/Thanos/State/brain_dumps.json")
+
+    if not brain_dump_path.exists():
+        return 0
+
+    try:
+        with open(brain_dump_path, 'r') as f:
+            dumps = json.load(f)
+
+        count = 0
+        for dump in dumps:
+            if not dump.get("processed", False) or dump.get("needs_review", False):
+                count += 1
+
+        return count
+    except (json.JSONDecodeError, OSError, TypeError):
+        return 0
+
+
+# =============================================================================
 # INTELLIGENCE LAYER
 # =============================================================================
 
@@ -417,6 +447,9 @@ def format_statusline(data: StatusData, compact: bool = False, no_color: bool = 
     # Task count
     tasks = data.workos.active_tasks
 
+    # Inbox count
+    inbox = data.workos.inbox_count
+
     # Time indicator
     time_emoji = TIME_EMOJI.get(data.time_of_day, "")
 
@@ -426,6 +459,7 @@ def format_statusline(data: StatusData, compact: bool = False, no_color: bool = 
             f"{energy_emoji}{energy_label}",
             str(readiness),
             f"\U0001F634{sleep}" if sleep != "?" else "",  # Sleep face
+            f"\U0001F4E5{inbox}" if inbox > 0 else "",  # Inbox tray
             f"\u2B50{points_str}",  # Star
             f"\U0001F525{streak}" if streak > 0 else "",  # Fire
             f"\U0001F4CB{tasks}t",  # Clipboard
@@ -436,8 +470,12 @@ def format_statusline(data: StatusData, compact: bool = False, no_color: bool = 
         parts = [
             f"{energy_emoji} {energy_label} {readiness}",
             f"\U0001F634 {sleep}",  # Sleep face
-            f"\u2B50 {points_str}",  # Star
         ]
+
+        if inbox > 0:
+            parts.append(f"\U0001F4E5 {inbox}")  # Inbox tray
+
+        parts.append(f"\u2B50 {points_str}")  # Star
 
         if streak > 0:
             parts.append(f"\U0001F525{streak}")  # Fire
@@ -469,6 +507,7 @@ def format_json(data: StatusData) -> str:
             "points_earned": data.workos.points_earned,
             "target_points": data.workos.target_points,
             "current_streak": data.workos.current_streak,
+            "inbox_count": data.workos.inbox_count,
             "available": data.workos.available,
         },
         "formatted": format_statusline(data, compact=False, no_color=True),
@@ -485,6 +524,9 @@ def fetch_status_data() -> StatusData:
     """Fetch all status data from sources."""
     oura = get_oura_metrics()
     workos = get_workos_metrics()
+
+    # Get inbox count (unprocessed brain dumps)
+    workos.inbox_count = get_inbox_count()
 
     # If Oura readiness is missing, use WorkOS readiness as fallback
     if oura.readiness_score is None and workos.readiness_score is not None:
