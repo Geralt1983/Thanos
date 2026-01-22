@@ -98,7 +98,7 @@ class OperatorConfig:
     quiet_hours_end: int = 7  # 7 AM
 
     # Enabled monitors
-    enabled_monitors: List[str] = field(default_factory=lambda: ['health', 'tasks', 'patterns', 'access'])
+    enabled_monitors: List[str] = field(default_factory=lambda: ['health', 'tasks', 'patterns', 'access', 'checkpoint'])
 
     # Paths
     state_file: str = "State/operator_state.json"
@@ -304,7 +304,7 @@ class OperatorDaemon:
 
         # Import monitor classes
         try:
-            from Operator.monitors import HealthMonitor, TaskMonitor, PatternMonitor, AccessMonitor
+            from Operator.monitors import HealthMonitor, TaskMonitor, PatternMonitor, AccessMonitor, CheckpointMonitor
 
             for monitor_name in self.config.enabled_monitors:
                 self.logger.info(f"Initializing monitor: {monitor_name}")
@@ -336,6 +336,19 @@ class OperatorDaemon:
                     )
                     self.monitors.append(monitor)
                     self.logger.info(f"✓ AccessMonitor initialized")
+
+                elif monitor_name == 'checkpoint':
+                    # CheckpointMonitor for session crash recovery
+                    monitor = CheckpointMonitor(
+                        circuit=self.circuits['workos'],
+                        config={
+                            'process_orphans': True,
+                            'orphan_threshold_hours': 2.0,
+                            'max_orphans_per_run': 5
+                        }
+                    )
+                    self.monitors.append(monitor)
+                    self.logger.info(f"✓ CheckpointMonitor initialized")
 
                 else:
                     self.logger.warning(f"Unknown monitor type: {monitor_name}")
