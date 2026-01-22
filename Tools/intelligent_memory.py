@@ -1,6 +1,28 @@
 #!/usr/bin/env python3
 """
-Intelligent Memory System for Thanos.
+DEPRECATED: Use Tools.memory_v2 instead.
+
+This module is being replaced by Memory V2 which uses:
+- Neon pgvector (cloud PostgreSQL) instead of local ChromaDB
+- mem0 for automatic fact extraction
+- Heat decay for ADHD-friendly memory surfacing
+
+Migration path:
+    # Old (deprecated):
+    from Tools.intelligent_memory import get_memory
+    memory = get_memory()
+    memory.search_memories("query")
+
+    # New (preferred):
+    from Tools.memory_v2 import get_memory_service
+    service = get_memory_service()
+    service.search("query")
+
+See docs/adr/012-memory-v2-voyage-neon-heat.md for details.
+
+---
+
+Intelligent Memory System for Thanos (DEPRECATED).
 
 Captures and organizes memories from conversations automatically:
 - Activities: What you did, tasks, conversations, decisions

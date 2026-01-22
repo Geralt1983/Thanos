@@ -9,10 +9,15 @@ yaspin>=3.0.0          # Animated loading spinners for CLI
 python-dotenv>=1.0.0   # Load environment variables from .env
 litellm>=1.0.0         # Unified LLM client
 
-# MemOS - Hybrid Memory System
+# Memory V2 - Cloud-First Architecture (Preferred)
+psycopg2-binary>=2.9.0 # PostgreSQL driver for Neon pgvector
+mem0ai>=0.1.0          # Automatic fact extraction
+voyageai>=0.2.0        # Voyage embeddings (optional, falls back to OpenAI)
+openai>=1.0.0          # OpenAI embeddings and LLM
+
+# MemOS - Hybrid Memory System (Legacy, being deprecated)
 neo4j>=5.0.0           # Neo4j graph database driver (AuraDB)
-chromadb>=0.5.0        # ChromaDB vector database
-openai>=1.0.0          # OpenAI embeddings for vector search
+chromadb>=0.5.0        # ChromaDB vector database (used by memos.py)
 
 # Google Calendar Integration
 google-auth>=2.0.0               # Google authentication library
