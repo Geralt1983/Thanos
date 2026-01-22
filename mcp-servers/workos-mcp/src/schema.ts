@@ -83,6 +83,8 @@ export const clientMemory = pgTable("client_memory", {
   importance: text("importance").default("medium"),
   avoidanceScore: integer("avoidance_score").default(0),
   blockerReason: text("blocker_reason"),
+  riskLevel: text("risk_level").default("normal"), // normal, elevated, high, critical
+  workDebt: text("work_debt"), // Description of outstanding work/promises
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
