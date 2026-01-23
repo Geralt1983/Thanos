@@ -3,7 +3,7 @@
 Thanos Telegram Brain Dump Bot.
 
 Mobile-first capture interface for quick thoughts, tasks, and ideas.
-Supports voice messages with Whisper transcription.
+Supports voice messages with Whisper transcription and photo capture with classification.
 """
 
 import os
@@ -86,7 +86,7 @@ class TelegramBrainDumpBot:
     Features:
     - Text message capture
     - Voice message transcription via Whisper
-    - Photo/image capture with optional OCR
+    - Photo/image capture with auto-classification (receipt, document, screenshot, etc.)
     - AI parsing to extract tasks, commitments, ideas
     - Direct integration with WorkOS brain dump
     - Journal logging for all captures
@@ -311,6 +311,46 @@ class TelegramBrainDumpBot:
         except Exception as e:
             logger.error(f"Command handling failed: {e}")
             return f"Sorry, I couldn't fetch that information: {e}"
+
+    def _classify_photo(self, caption: str) -> str:
+        """
+        Classify photo type based on caption keywords.
+
+        Returns:
+            Photo type: receipt, document, screenshot, whiteboard, note, reference, personal, unknown
+        """
+        caption_lower = caption.lower() if caption else ""
+
+        # Receipt keywords
+        if any(kw in caption_lower for kw in ['receipt', 'invoice', 'bill', 'purchase', 'expense', 'payment', 'bought', 'paid']):
+            return 'receipt'
+
+        # Document keywords
+        if any(kw in caption_lower for kw in ['document', 'contract', 'form', 'paper', 'letter', 'certificate', 'license', 'id', 'passport']):
+            return 'document'
+
+        # Screenshot keywords
+        if any(kw in caption_lower for kw in ['screenshot', 'screen', 'app', 'error', 'bug', 'ui', 'interface']):
+            return 'screenshot'
+
+        # Whiteboard keywords
+        if any(kw in caption_lower for kw in ['whiteboard', 'board', 'diagram', 'flowchart', 'meeting', 'brainstorm']):
+            return 'whiteboard'
+
+        # Reference keywords
+        if any(kw in caption_lower for kw in ['reference', 'save', 'remember', 'later', 'bookmark', 'look up']):
+            return 'reference'
+
+        # Note keywords
+        if any(kw in caption_lower for kw in ['note', 'notes', 'handwritten', 'written', 'list', 'todo']):
+            return 'note'
+
+        # Personal photo keywords
+        if any(kw in caption_lower for kw in ['photo', 'picture', 'selfie', 'family', 'kids', 'fun', 'vacation']):
+            return 'personal'
+
+        # No caption or unknown
+        return 'unknown' if not caption else 'reference'
 
     async def _get_tasks_response(self, status: str = 'active') -> str:
         """Fetch tasks from WorkOS and format response."""
@@ -1357,6 +1397,108 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             finally:
                 os.unlink(tmp_path)
 
+        async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Handle photo/image uploads with classification and storage."""
+            if not is_allowed(update.effective_user.id):
+                return
+
+            # Get the largest photo size (Telegram sends multiple resolutions)
+            photo = update.message.photo[-1]  # Last is highest resolution
+            caption = update.message.caption or ""
+
+            # Generate unique filename
+            timestamp = datetime.now()
+            date_str = timestamp.strftime("%Y%m%d_%H%M%S")
+            photo_id = photo.file_unique_id[:8]
+            filename = f"{date_str}_{photo_id}.jpg"
+
+            # Setup photo storage
+            photos_dir = Path(__file__).parent.parent / "State" / "photos"
+            photos_dir.mkdir(parents=True, exist_ok=True)
+            photo_path = photos_dir / filename
+            metadata_path = photos_dir / f"{date_str}_{photo_id}.json"
+
+            try:
+                processing_msg = await update.message.reply_text("📷 Processing photo...")
+
+                # Download photo
+                file = await context.bot.get_file(photo.file_id)
+                await file.download_to_drive(str(photo_path))
+
+                # Classify photo based on caption keywords
+                photo_type = self._classify_photo(caption)
+
+                # Build metadata
+                metadata = {
+                    "id": photo.file_unique_id,
+                    "filename": filename,
+                    "timestamp": timestamp.isoformat(),
+                    "user_id": str(update.effective_user.id),
+                    "caption": caption,
+                    "photo_type": photo_type,
+                    "width": photo.width,
+                    "height": photo.height,
+                    "file_size": photo.file_size,
+                    "processed": False,
+                    "source": "telegram"
+                }
+
+                # Save metadata
+                with open(metadata_path, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+
+                logger.info(f"Photo saved: {filename} (type: {photo_type})")
+
+                # If caption provided, process through brain dump pipeline
+                entry = None
+                if caption.strip():
+                    entry = await self.capture_entry(
+                        content=f"[PHOTO: {photo_type}] {caption}",
+                        content_type='photo',
+                        user_id=update.effective_user.id
+                    )
+
+                # Build response
+                type_emoji = {
+                    'receipt': '🧾',
+                    'document': '📄',
+                    'screenshot': '📱',
+                    'whiteboard': '📋',
+                    'note': '📝',
+                    'personal': '📸',
+                    'reference': '🔖',
+                    'unknown': '🖼️'
+                }.get(photo_type, '🖼️')
+
+                response_parts = [f"{type_emoji} *Photo captured*"]
+                response_parts.append(f"Type: {photo_type.title()}")
+                response_parts.append(f"Size: {photo.width}x{photo.height}")
+
+                if caption:
+                    response_parts.append(f"\n📝 _{caption}_")
+
+                if entry and entry.acknowledgment:
+                    response_parts.append(f"\n{entry.acknowledgment}")
+
+                if entry and entry.routing_result:
+                    destinations = []
+                    if entry.routing_result.get('tasks_created'):
+                        destinations.append("task created")
+                    if entry.routing_result.get('workos_task_id'):
+                        destinations.append("synced to WorkOS")
+                    if entry.routing_result.get('idea_created'):
+                        destinations.append("idea saved")
+                    if destinations:
+                        response_parts.append(f"✓ {', '.join(destinations)}")
+
+                response_parts.append(f"\n💾 Saved: `{filename}`")
+
+                await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
+
+            except Exception as e:
+                logger.error(f"Photo processing failed: {e}")
+                await update.message.reply_text(f"❌ Error processing photo: {e}")
+
         async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not is_allowed(update.effective_user.id):
                 return
@@ -1507,6 +1649,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         self.application.add_handler(CommandHandler("health", health_command))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         self.application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+        self.application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         self.application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
         return True
