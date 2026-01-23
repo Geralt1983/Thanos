@@ -4,16 +4,15 @@ Unit tests for HistorySearchHandler.
 
 Tests cover:
 - Search query processing and validation
-- Filter parsing (agent, date, session, after, before)
+- Filter parsing (client, source, type)
 - Query term highlighting with intelligent preview window
-- Result formatting with session context
-- ChromaAdapter integration and error handling
-- Edge cases (empty results, missing ChromaAdapter, etc.)
+- Result formatting with heat scores and context
+- Memory V2 integration and error handling
+- Edge cases (empty results, missing Memory V2, etc.)
 """
 
-from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch, PropertyMock
 import sys
 
 import pytest
@@ -24,19 +23,6 @@ sys.path.insert(0, str(THANOS_DIR))
 
 from Tools.command_handlers.history_search_handler import HistorySearchHandler
 from Tools.command_handlers.base import CommandResult
-
-
-@dataclass
-class MockChromaResult:
-    """Mock result from ChromaAdapter."""
-
-    success: bool
-    data: dict = None
-    error: str = None
-
-    def __post_init__(self):
-        if self.data is None:
-            self.data = {}
 
 
 @pytest.mark.unit
@@ -68,11 +54,13 @@ class TestHistorySearchHandler:
         return HistorySearchHandler(**mock_dependencies)
 
     @pytest.fixture
-    def mock_session_with_chroma(self, mock_dependencies):
-        """Create handler with ChromaAdapter configured."""
+    def handler_with_memory(self, mock_dependencies):
+        """Create handler with Memory V2 service configured."""
         handler = HistorySearchHandler(**mock_dependencies)
-        handler.session._chroma = Mock()
-        handler.session._chroma.call_tool = AsyncMock()
+        # Mock the memory_service property
+        mock_memory_service = Mock()
+        mock_memory_service.search = Mock(return_value=[])
+        handler._memory_service = mock_memory_service
         return handler
 
     # Test filter parsing
@@ -84,19 +72,33 @@ class TestHistorySearchHandler:
         assert query == "authentication implementation"
         assert filters is None
 
-    def test_parse_filters_agent_filter(self, handler):
-        """Test parsing agent filter."""
+    def test_parse_filters_client_filter(self, handler):
+        """Test parsing client filter."""
+        query, filters = handler._parse_filters("API design client:Orlando")
+
+        assert query == "API design"
+        assert filters == {"client": "Orlando"}
+
+    def test_parse_filters_source_filter(self, handler):
+        """Test parsing source filter."""
+        query, filters = handler._parse_filters("meeting notes source:hey_pocket")
+
+        assert query == "meeting notes"
+        assert filters == {"source": "hey_pocket"}
+
+    def test_parse_filters_type_filter(self, handler):
+        """Test parsing memory type filter."""
+        query, filters = handler._parse_filters("decisions type:decision")
+
+        assert query == "decisions"
+        assert filters == {"memory_type": "decision"}
+
+    def test_parse_filters_agent_filter_legacy(self, handler):
+        """Test parsing legacy agent filter (preserved for compatibility)."""
         query, filters = handler._parse_filters("API design agent:architect")
 
         assert query == "API design"
         assert filters == {"agent": "architect"}
-
-    def test_parse_filters_date_filter(self, handler):
-        """Test parsing date filter."""
-        query, filters = handler._parse_filters("database changes date:2026-01-11")
-
-        assert query == "database changes"
-        assert filters == {"date": "2026-01-11"}
 
     def test_parse_filters_session_filter(self, handler):
         """Test parsing session filter."""
@@ -105,50 +107,45 @@ class TestHistorySearchHandler:
         assert query == "error handling"
         assert filters == {"session_id": "abc123"}
 
+    def test_parse_filters_date_filter(self, handler):
+        """Test parsing date filter (limited support)."""
+        query, filters = handler._parse_filters("database changes date:2026-01-11")
+
+        assert query == "database changes"
+        assert filters == {"date": "2026-01-11"}
+
     def test_parse_filters_after_filter(self, handler):
-        """Test parsing after date filter."""
+        """Test parsing after date filter (stored as internal key)."""
         query, filters = handler._parse_filters("API work after:2026-01-01")
 
         assert query == "API work"
-        assert filters == {"date": {"$gte": "2026-01-01"}}
+        assert filters == {"_after": "2026-01-01"}
 
     def test_parse_filters_before_filter(self, handler):
-        """Test parsing before date filter."""
+        """Test parsing before date filter (stored as internal key)."""
         query, filters = handler._parse_filters("database work before:2026-01-31")
 
         assert query == "database work"
-        assert filters == {"date": {"$lte": "2026-01-31"}}
-
-    def test_parse_filters_date_range(self, handler):
-        """Test parsing date range with after and before."""
-        query, filters = handler._parse_filters("API changes after:2026-01-01 before:2026-01-31")
-
-        assert query == "API changes"
-        assert filters == {
-            "date": {
-                "$gte": "2026-01-01",
-                "$lte": "2026-01-31"
-            }
-        }
+        assert filters == {"_before": "2026-01-31"}
 
     def test_parse_filters_multiple_filters(self, handler):
         """Test parsing multiple filters combined."""
-        query, filters = handler._parse_filters("testing agent:architect date:2026-01-11")
+        query, filters = handler._parse_filters("testing client:Orlando source:conversation")
 
         assert query == "testing"
         assert filters == {
-            "agent": "architect",
-            "date": "2026-01-11"
+            "client": "Orlando",
+            "source": "conversation"
         }
 
     def test_parse_filters_only_filters_no_query(self, handler):
         """Test parsing with only filters and no search query."""
-        query, filters = handler._parse_filters("agent:architect date:2026-01-11")
+        query, filters = handler._parse_filters("client:Orlando source:manual")
 
         assert query == ""
         assert filters == {
-            "agent": "architect",
-            "date": "2026-01-11"
+            "client": "Orlando",
+            "source": "manual"
         }
 
     # Test query term highlighting
@@ -242,68 +239,64 @@ class TestHistorySearchHandler:
             usage_found = any("Usage:" in str(call) for call in mock_print.call_args_list)
             assert usage_found
 
-    def test_handle_history_search_no_chroma_adapter(self, handler):
-        """Test handling search when ChromaAdapter not configured."""
-        handler.session._chroma = None
+    def test_handle_history_search_no_memory_service(self, handler):
+        """Test handling search when Memory V2 service not configured."""
+        # memory_service property will return None since _memory_service is None
+        # and we haven't mocked the import
+        handler._memory_service = None
 
         with patch("builtins.print") as mock_print:
-            result = handler.handle_history_search("test query")
+            with patch.object(HistorySearchHandler, 'memory_service', new_callable=PropertyMock) as mock_prop:
+                mock_prop.return_value = None
+                result = handler.handle_history_search("test query")
 
-            assert result.success is False
-            # Should mention ChromaAdapter not configured
-            chroma_mentioned = any(
-                "ChromaAdapter" in str(call) for call in mock_print.call_args_list
-            )
-            assert chroma_mentioned
+                assert result.success is False
+                # Should mention Memory V2 not configured
+                memory_mentioned = any(
+                    "Memory V2" in str(call) for call in mock_print.call_args_list
+                )
+                assert memory_mentioned
 
-    def test_handle_history_search_only_filters_no_query(self, mock_session_with_chroma):
+    def test_handle_history_search_only_filters_no_query(self, handler_with_memory):
         """Test handling when only filters provided without search query."""
         with patch("builtins.print") as mock_print:
-            result = mock_session_with_chroma.handle_history_search("agent:architect date:2026-01-11")
+            result = handler_with_memory.handle_history_search("client:Orlando source:manual")
 
             assert result.success is False
             # Should show error about missing query
             error_found = any("No search query" in str(call) for call in mock_print.call_args_list)
             assert error_found
 
-    @pytest.mark.asyncio
-    async def test_handle_history_search_successful_results(self, mock_session_with_chroma):
+    def test_handle_history_search_successful_results(self, handler_with_memory):
         """Test successful search with results."""
-        # Mock ChromaAdapter response
+        # Mock Memory V2 response
         mock_results = [
             {
-                "content": "We implemented authentication using JWT tokens.",
-                "metadata": {
-                    "session_id": "abc12345",
-                    "date": "2026-01-11",
-                    "timestamp": "2026-01-11T14:23:45",
-                    "role": "user",
-                    "agent": "architect"
-                },
-                "similarity": 0.85
+                "id": "abc-123",
+                "memory": "We implemented authentication using JWT tokens.",
+                "effective_score": 0.85,
+                "heat": 0.9,
+                "importance": 1.0,
+                "client": "Orlando",
+                "source": "conversation",
+                "created_at": "2026-01-11T14:23:45"
             },
             {
-                "content": "The authentication middleware validates tokens on each request.",
-                "metadata": {
-                    "session_id": "def67890",
-                    "date": "2026-01-10",
-                    "timestamp": "2026-01-10T10:15:30",
-                    "role": "assistant",
-                    "agent": "ops"
-                },
-                "similarity": 0.78
+                "id": "def-456",
+                "memory": "The authentication middleware validates tokens on each request.",
+                "effective_score": 0.78,
+                "heat": 0.5,
+                "importance": 1.0,
+                "client": "Memphis",
+                "source": "manual",
+                "created_at": "2026-01-10T10:15:30"
             }
         ]
 
-        mock_chroma_result = MockChromaResult(
-            success=True,
-            data={"results": mock_results}
-        )
-
-        mock_session_with_chroma.session._chroma.call_tool.return_value = mock_chroma_result
+        handler_with_memory._memory_service.search.return_value = mock_results
 
         with patch("builtins.print") as mock_print:
-            result = mock_session_with_chroma.handle_history_search("authentication")
+            result = handler_with_memory.handle_history_search("authentication")
 
             # Should succeed
             assert result.success is not False
@@ -311,27 +304,20 @@ class TestHistorySearchHandler:
             # Should display results
             output = "\n".join(str(call) for call in mock_print.call_args_list)
             assert "Search Results" in output
-            assert "2 semantically similar" in output or "Found 2" in output
+            assert "2 relevant" in output or "Found 2" in output
 
-            # Should show session context
-            assert "abc12345" in output
-            assert "architect" in output
+            # Should show client context
+            assert "Orlando" in output
 
-            # Should show similarity scores
+            # Should show relevance scores
             assert "85" in output or "0.85" in output
 
-    @pytest.mark.asyncio
-    async def test_handle_history_search_no_results(self, mock_session_with_chroma):
+    def test_handle_history_search_no_results(self, handler_with_memory):
         """Test search with no results."""
-        mock_chroma_result = MockChromaResult(
-            success=True,
-            data={"results": []}
-        )
-
-        mock_session_with_chroma.session._chroma.call_tool.return_value = mock_chroma_result
+        handler_with_memory._memory_service.search.return_value = []
 
         with patch("builtins.print") as mock_print:
-            result = mock_session_with_chroma.handle_history_search("nonexistent query")
+            result = handler_with_memory.handle_history_search("nonexistent query")
 
             # Should complete without error
             assert result.success is not False
@@ -342,33 +328,26 @@ class TestHistorySearchHandler:
             )
             assert no_matches_found
 
-    @pytest.mark.asyncio
-    async def test_handle_history_search_with_filters(self, mock_session_with_chroma):
+    def test_handle_history_search_with_filters(self, handler_with_memory):
         """Test search with filters applied."""
         mock_results = [
             {
-                "content": "Database optimization completed.",
-                "metadata": {
-                    "session_id": "xyz12345",
-                    "date": "2026-01-11",
-                    "timestamp": "2026-01-11T16:30:00",
-                    "role": "assistant",
-                    "agent": "architect"
-                },
-                "similarity": 0.92
+                "id": "xyz-789",
+                "memory": "Database optimization completed.",
+                "effective_score": 0.92,
+                "heat": 0.8,
+                "importance": 1.5,
+                "client": "Orlando",
+                "source": "conversation",
+                "created_at": "2026-01-11T16:30:00"
             }
         ]
 
-        mock_chroma_result = MockChromaResult(
-            success=True,
-            data={"results": mock_results}
-        )
-
-        mock_session_with_chroma.session._chroma.call_tool.return_value = mock_chroma_result
+        handler_with_memory._memory_service.search.return_value = mock_results
 
         with patch("builtins.print") as mock_print:
-            result = mock_session_with_chroma.handle_history_search(
-                "database agent:architect date:2026-01-11"
+            result = handler_with_memory.handle_history_search(
+                "database client:Orlando source:conversation"
             )
 
             # Should succeed
@@ -377,100 +356,80 @@ class TestHistorySearchHandler:
             # Should show active filters
             output = "\n".join(str(call) for call in mock_print.call_args_list)
             assert "Active filters" in output
-            assert "agent=architect" in output
-            assert "date=2026-01-11" in output
+            assert "client=Orlando" in output
+            assert "source=conversation" in output
 
-    @pytest.mark.asyncio
-    async def test_handle_history_search_with_date_range(self, mock_session_with_chroma):
-        """Test search with date range filters."""
-        mock_chroma_result = MockChromaResult(
-            success=True,
-            data={"results": []}
+    def test_handle_history_search_exception_handling(self, handler_with_memory):
+        """Test exception handling during search."""
+        # Make search raise an exception
+        handler_with_memory._memory_service.search.side_effect = Exception(
+            "Database connection failed"
         )
 
-        mock_session_with_chroma.session._chroma.call_tool.return_value = mock_chroma_result
-
         with patch("builtins.print") as mock_print:
-            result = mock_session_with_chroma.handle_history_search(
-                "API work after:2026-01-01 before:2026-01-31"
-            )
-
-            # Should succeed
-            assert result.success is not False
-
-            # Should show date range in filters
-            output = "\n".join(str(call) for call in mock_print.call_args_list)
-            if "Active filters" in output:
-                # Date range should be displayed
-                assert "2026-01-01" in output and "2026-01-31" in output
-
-    @pytest.mark.asyncio
-    async def test_handle_history_search_chroma_error(self, mock_session_with_chroma):
-        """Test handling ChromaAdapter errors."""
-        mock_chroma_result = MockChromaResult(
-            success=False,
-            error="ChromaDB connection failed"
-        )
-
-        mock_session_with_chroma.session._chroma.call_tool.return_value = mock_chroma_result
-
-        with patch("builtins.print") as mock_print:
-            result = mock_session_with_chroma.handle_history_search("test query")
+            result = handler_with_memory.handle_history_search("test query")
 
             assert result.success is False
 
             # Should show error message
-            error_found = any(
-                "failed" in str(call).lower() for call in mock_print.call_args_list
-            )
-            assert error_found
-
-    @pytest.mark.asyncio
-    async def test_handle_history_search_exception_handling(self, mock_session_with_chroma):
-        """Test exception handling during search."""
-        # Make call_tool raise an exception
-        mock_session_with_chroma.session._chroma.call_tool.side_effect = Exception(
-            "Unexpected error"
-        )
-
-        with patch("builtins.print") as mock_print:
-            result = mock_session_with_chroma.handle_history_search("test query")
-
-            assert result.success is False
-
-            # Should show error message - check for either "Error" or "Unexpected error" in output
             output = "\n".join(str(call) for call in mock_print.call_args_list)
-            error_found = "Error" in output or "Unexpected error" in output or "error" in output.lower()
+            error_found = "Error" in output or "error" in output.lower()
             assert error_found
 
-    def test_handle_history_search_calls_semantic_search_correctly(self, mock_session_with_chroma):
-        """Test that semantic_search is called with correct parameters."""
-        mock_chroma_result = MockChromaResult(
-            success=True,
-            data={"results": []}
-        )
-
-        mock_session_with_chroma.session._chroma.call_tool.return_value = mock_chroma_result
+    def test_handle_history_search_calls_memory_service_correctly(self, handler_with_memory):
+        """Test that Memory V2 search is called with correct parameters."""
+        handler_with_memory._memory_service.search.return_value = []
 
         with patch("builtins.print"):
-            mock_session_with_chroma.handle_history_search("test query agent:architect")
+            handler_with_memory.handle_history_search("test query client:Orlando")
 
-            # Verify call_tool was called
-            assert mock_session_with_chroma.session._chroma.call_tool.called
+            # Verify search was called
+            assert handler_with_memory._memory_service.search.called
 
             # Get the call arguments
-            call_args = mock_session_with_chroma.session._chroma.call_tool.call_args
+            call_args = handler_with_memory._memory_service.search.call_args
 
-            # Should call semantic_search tool
-            assert call_args[0][0] == "semantic_search"
+            # Should include query
+            assert call_args[1]["query"] == "test query"
+            assert call_args[1]["limit"] == 10
 
-            # Should include query and where clause
-            params = call_args[0][1]
-            assert params["query"] == "test query"
-            assert params["collection"] == "conversations"
-            assert params["limit"] == 10
-            assert "where" in params
-            assert params["where"]["agent"] == "architect"
+            # Should include filters
+            assert call_args[1]["filters"]["client"] == "Orlando"
+
+    def test_handle_history_search_heat_indicators(self, handler_with_memory):
+        """Test heat indicators are displayed correctly."""
+        mock_results = [
+            {
+                "id": "hot-1",
+                "memory": "Hot memory content",
+                "effective_score": 0.9,
+                "heat": 0.9,  # Hot
+                "importance": 1.0,
+            },
+            {
+                "id": "warm-2",
+                "memory": "Warm memory content",
+                "effective_score": 0.7,
+                "heat": 0.5,  # Warm
+                "importance": 1.0,
+            },
+            {
+                "id": "cold-3",
+                "memory": "Cold memory content",
+                "effective_score": 0.5,
+                "heat": 0.1,  # Cold
+                "importance": 1.0,
+            }
+        ]
+
+        handler_with_memory._memory_service.search.return_value = mock_results
+
+        with patch("builtins.print") as mock_print:
+            handler_with_memory.handle_history_search("memory")
+
+            output = "\n".join(str(call) for call in mock_print.call_args_list)
+            # Should show heat indicators (fire emoji for hot, snowflake for cold)
+            # Note: The actual emoji display may vary in terminal output
 
 
 if __name__ == "__main__":

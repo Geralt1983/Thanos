@@ -26,9 +26,16 @@ Tests cover:
 Total: 67 comprehensive unit tests
 """
 
+import re
+
 import pytest
 
 from Tools.prompt_formatter import Colors, PromptFormatter
+
+
+def strip_ansi(text: str) -> str:
+    """Strip ANSI escape codes from text for comparison."""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
 
 
 @pytest.mark.unit
@@ -41,7 +48,7 @@ class TestPromptFormatterInitialization:
         assert formatter.low_cost_threshold == 0.50
         assert formatter.medium_cost_threshold == 2.00
         assert formatter.enable_colors is True
-        assert formatter.default_prompt == "Thanos> "
+        assert strip_ansi(formatter.default_prompt) == "Thanos> "
 
     def test_custom_initialization(self):
         """Test formatter creation with custom values."""
@@ -76,7 +83,7 @@ class TestCompactMode:
             "message_count": 8
         }
         result = formatter.format(stats, mode="compact")
-        assert result == "(1.2K | $0.04) Thanos> "
+        assert strip_ansi(result) == "(1.2K | $0.04) Thanos> "
 
     def test_compact_with_small_token_count(self, formatter):
         """Test compact mode with token count < 1000."""
@@ -88,7 +95,7 @@ class TestCompactMode:
             "message_count": 3
         }
         result = formatter.format(stats, mode="compact")
-        assert result == "(700 | $0.02) Thanos> "
+        assert strip_ansi(result) == "(700 | $0.02) Thanos> "
 
     def test_compact_with_large_token_count(self, formatter):
         """Test compact mode with token count >= 1M."""
@@ -100,7 +107,7 @@ class TestCompactMode:
             "message_count": 50
         }
         result = formatter.format(stats, mode="compact")
-        assert result == "(1.0M | $15.00) Thanos> "
+        assert strip_ansi(result) == "(1.0M | $15.00) Thanos> "
 
 
 @pytest.mark.unit
@@ -122,7 +129,7 @@ class TestStandardMode:
             "message_count": 8
         }
         result = formatter.format(stats, mode="standard")
-        assert result == "(15m | 1.2K tokens | $0.04) Thanos> "
+        assert strip_ansi(result) == "(15m | 1.2K tokens | $0.04) Thanos> "
 
     def test_standard_with_hours(self, formatter):
         """Test standard mode with duration in hours."""
@@ -134,7 +141,7 @@ class TestStandardMode:
             "message_count": 25
         }
         result = formatter.format(stats, mode="standard")
-        assert result == "(1h30m | 12.0K tokens | $0.50) Thanos> "
+        assert strip_ansi(result) == "(1h30m | 12.0K tokens | $0.50) Thanos> "
 
     def test_standard_with_exact_hours(self, formatter):
         """Test standard mode with exact hours (no remaining minutes)."""
@@ -146,7 +153,7 @@ class TestStandardMode:
             "message_count": 30
         }
         result = formatter.format(stats, mode="standard")
-        assert result == "(2h | 12.0K tokens | $0.50) Thanos> "
+        assert strip_ansi(result) == "(2h | 12.0K tokens | $0.50) Thanos> "
 
 
 @pytest.mark.unit
@@ -168,7 +175,7 @@ class TestVerboseMode:
             "message_count": 8
         }
         result = formatter.format(stats, mode="verbose")
-        assert result == "(15m | 8 msgs | 500 in | 700 out | $0.04) Thanos> "
+        assert strip_ansi(result) == "(15m | 8 msgs | 500 in | 700 out | $0.04) Thanos> "
 
     def test_verbose_with_large_tokens(self, formatter):
         """Test verbose mode with large token counts."""
@@ -180,7 +187,7 @@ class TestVerboseMode:
             "message_count": 25
         }
         result = formatter.format(stats, mode="verbose")
-        assert result == "(1h30m | 25 msgs | 12.0K in | 34.0K out | $2.50) Thanos> "
+        assert strip_ansi(result) == "(1h30m | 25 msgs | 12.0K in | 34.0K out | $2.50) Thanos> "
 
 
 @pytest.mark.unit
@@ -347,12 +354,12 @@ class TestEdgeCases:
     def test_none_stats(self, formatter):
         """Test handling of None stats."""
         result = formatter.format(None)
-        assert result == "Thanos> "
+        assert strip_ansi(result) == "Thanos> "
 
     def test_empty_dict_stats(self, formatter):
         """Test handling of empty dict stats."""
         result = formatter.format({})
-        assert result == "Thanos> "
+        assert strip_ansi(result) == "Thanos> "
 
     def test_zero_tokens_zero_cost(self, formatter):
         """Test handling of brand new session (no stats yet)."""
@@ -364,7 +371,7 @@ class TestEdgeCases:
             "message_count": 0
         }
         result = formatter.format(stats)
-        assert result == "Thanos> "
+        assert strip_ansi(result) == "Thanos> "
 
     def test_missing_keys(self):
         """Test handling of stats dict with missing keys."""
@@ -375,16 +382,16 @@ class TestEdgeCases:
         }
         result = formatter.format(stats, mode="compact")
         # Should use defaults for missing keys
-        assert "(100 | $0.00) Thanos> " == result
+        assert strip_ansi(result) == "(100 | $0.00) Thanos> "
 
     def test_invalid_stats_type(self, formatter):
         """Test handling of invalid stats type (not dict)."""
         result = formatter.format("invalid")
-        assert result == "Thanos> "
+        assert strip_ansi(result) == "Thanos> "
         result = formatter.format(123)
-        assert result == "Thanos> "
+        assert strip_ansi(result) == "Thanos> "
         result = formatter.format([1, 2, 3])
-        assert result == "Thanos> "
+        assert strip_ansi(result) == "Thanos> "
 
     def test_invalid_mode(self, formatter):
         """Test handling of invalid mode (falls back to compact)."""
@@ -436,7 +443,7 @@ class TestIntegration:
             "message_count": 2
         }
         result1 = formatter.format(stats1, mode="standard")
-        assert result1 == "(2m | 300 tokens | $0.01) Thanos> "
+        assert strip_ansi(result1) == "(2m | 300 tokens | $0.01) Thanos> "
 
         # Mid session (medium cost)
         stats2 = {
@@ -447,7 +454,7 @@ class TestIntegration:
             "message_count": 15
         }
         result2 = formatter.format(stats2, mode="standard")
-        assert result2 == "(25m | 5.0K tokens | $0.75) Thanos> "
+        assert strip_ansi(result2) == "(25m | 5.0K tokens | $0.75) Thanos> "
 
         # Late session (high cost)
         stats3 = {
@@ -458,7 +465,7 @@ class TestIntegration:
             "message_count": 50
         }
         result3 = formatter.format(stats3, mode="standard")
-        assert result3 == "(2h | 50.0K tokens | $3.50) Thanos> "
+        assert strip_ansi(result3) == "(2h | 50.0K tokens | $3.50) Thanos> "
 
     def test_mode_comparison(self):
         """Test same stats formatted in all three modes."""
@@ -476,9 +483,9 @@ class TestIntegration:
         standard = formatter.format(stats, mode="standard")
         verbose = formatter.format(stats, mode="verbose")
 
-        assert compact == "(12.0K | $0.50) Thanos> "
-        assert standard == "(45m | 12.0K tokens | $0.50) Thanos> "
-        assert verbose == "(45m | 20 msgs | 5.0K in | 7.0K out | $0.50) Thanos> "
+        assert strip_ansi(compact) == "(12.0K | $0.50) Thanos> "
+        assert strip_ansi(standard) == "(45m | 12.0K tokens | $0.50) Thanos> "
+        assert strip_ansi(verbose) == "(45m | 20 msgs | 5.0K in | 7.0K out | $0.50) Thanos> "
 
     def test_color_progression(self):
         """Test color changes as cost increases."""
@@ -548,7 +555,7 @@ class TestAdditionalEdgeCases:
         }
         # Implementation allows negative totals (shows them as-is)
         result = formatter.format(stats)
-        assert "(-300 | $0.04) Thanos> " == result
+        assert strip_ansi(result) == "(-300 | $0.04) Thanos> "
 
     def test_float_token_counts(self, formatter):
         """Test handling of float token counts (should handle gracefully)."""
@@ -676,7 +683,7 @@ class TestAdditionalEdgeCases:
         }
         result = formatter.format(stats, mode="compact")
         # Should ignore extra keys and work normally
-        assert result == "(1.2K | $0.04) Thanos> "
+        assert strip_ansi(result) == "(1.2K | $0.04) Thanos> "
 
     def test_partial_stats_only_tokens(self, formatter):
         """Test stats with only token fields present."""
@@ -686,7 +693,7 @@ class TestAdditionalEdgeCases:
         }
         result = formatter.format(stats, mode="compact")
         # Should use defaults for missing fields
-        assert "(1.2K | $0.00) Thanos> " == result
+        assert strip_ansi(result) == "(1.2K | $0.00) Thanos> "
 
     def test_partial_stats_only_cost(self, formatter):
         """Test stats with only cost field present."""
@@ -695,7 +702,7 @@ class TestAdditionalEdgeCases:
         }
         result = formatter.format(stats, mode="compact")
         # Implementation shows stats even with 0 tokens if there's a cost
-        assert result == "(0 | $0.50) Thanos> "
+        assert strip_ansi(result) == "(0 | $0.50) Thanos> "
 
     def test_maximum_integer_values(self, formatter):
         """Test handling of extremely large integer values."""
@@ -752,7 +759,7 @@ class TestAdditionalEdgeCases:
         # Invalid mode (wrong case) should fall back to compact
         result = formatter.format(stats, mode="COMPACT")
         # Should fall back to compact mode
-        assert "(1.2K | $0.04) Thanos> " == result
+        assert strip_ansi(result) == "(1.2K | $0.04) Thanos> "
 
     def test_malformed_config_json(self):
         """Test handling of corrupted config file."""
@@ -834,12 +841,12 @@ class TestConfiguration:
             "message_count": 8
         }
         result_enabled = formatter_enabled.format(stats)
-        assert "1.2K" in result_enabled or "Thanos>" in result_enabled
+        assert "1.2K" in strip_ansi(result_enabled) or "Thanos>" in strip_ansi(result_enabled)
 
         # Test with enabled=False
         formatter_enabled.enabled = False
         result_disabled = formatter_enabled.format(stats)
-        assert result_disabled == "Thanos> "
+        assert strip_ansi(result_disabled) == "Thanos> "
 
     def test_config_default_mode(self):
         """Test that default mode from config is used when mode not specified."""
@@ -921,8 +928,8 @@ class TestConfiguration:
 
         # Explicitly request compact mode (should override config)
         result = formatter.format(stats, mode="compact")
-        assert result == "(1.2K | $0.04) Thanos> "
-        assert "msgs" not in result  # Compact mode doesn't include msgs
+        assert strip_ansi(result) == "(1.2K | $0.04) Thanos> "
+        assert "msgs" not in strip_ansi(result)  # Compact mode doesn't include msgs
 
     def test_config_graceful_fallback(self):
         """Test that formatter gracefully handles missing config."""

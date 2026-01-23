@@ -10,10 +10,12 @@ Uses HYBRID classification:
 Routes content to appropriate storage based on classification:
 - work_task -> WorkOS (only work tasks)
 - personal_task -> Local SQLite with impact scoring
-- thought/idea/observation -> ChromaDB for pattern mining
-- worry -> Journal + SQLite worries table
-- commitment -> Local SQLite
+- thought/idea/observation -> Memory V2 (Neon pgvector) for pattern mining
+- worry -> Journal + SQLite worries table + Memory V2
+- commitment -> Local SQLite + Memory V2
 - habit -> Local SQLite (NOT WorkOS)
+
+NOTE: ChromaDB has been deprecated in favor of Memory V2 (Neon pgvector).
 """
 
 import logging
@@ -160,9 +162,9 @@ class BrainDumpPipeline:
     Storage mapping:
     - work_task -> WorkOS
     - personal_task -> SQLite (with impact scores)
-    - thought/idea/observation -> ChromaDB
-    - worry -> Journal + SQLite worries table
-    - commitment -> SQLite
+    - thought/idea/observation -> Memory V2 (Neon pgvector)
+    - worry -> Journal + SQLite worries table + Memory V2
+    - commitment -> SQLite + Memory V2
     - habit -> SQLite (local, not WorkOS)
     """
 
@@ -179,7 +181,7 @@ class BrainDumpPipeline:
         self,
         state_store=None,
         journal=None,
-        chroma_adapter=None,
+        memory_service=None,
         workos_bridge=None,
         use_ai_classifier: bool = True,
     ):
@@ -189,14 +191,14 @@ class BrainDumpPipeline:
         Args:
             state_store: SQLite state store for local data
             journal: Journal for logging all events
-            chroma_adapter: ChromaDB adapter for vector storage
+            memory_service: Memory V2 service for vector storage (Neon pgvector)
             workos_bridge: WorkOS MCP bridge (only for work_task sync)
             use_ai_classifier: Enable AI classifier for voice/ambiguous content
         """
         self.processor = BrainDumpProcessor() if BrainDumpProcessor else None
         self.state_store = state_store
         self.journal = journal
-        self.chroma_adapter = chroma_adapter
+        self.memory_service = memory_service
         self.workos_bridge = workos_bridge
 
         # Initialize AI classifier for voice notes and ambiguous cases
@@ -430,7 +432,7 @@ class BrainDumpPipeline:
             await self._route_personal_task(result, classified)
 
         elif classification in ('thinking', 'observation', 'venting', 'note'):
-            # All reflective content goes to ChromaDB for pattern mining
+            # All reflective content goes to Memory V2 for pattern mining
             # Venting and notes are treated like thinking - no task creation
             await self._route_reflective(result, classified)
 
@@ -478,24 +480,23 @@ class BrainDumpPipeline:
             result.destinations.append("sqlite")
 
     async def _route_reflective(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
-        """Route thinking/observation to ChromaDB for pattern mining."""
+        """Route thinking/observation to Memory V2 (pgvector) for pattern mining."""
 
-        if self.chroma_adapter:
+        if self.memory_service:
             try:
-                memory_id = await self._store_in_chroma(
+                memory_id = await self._store_in_memory(
                     result,
-                    collection='personal_memories',
                     classification=result.classification,
                 )
-                result.chroma_memory_id = memory_id
-                result.destinations.append("chromadb")
+                result.chroma_memory_id = memory_id  # Legacy field name, now stores Memory V2 ID
+                result.destinations.append("memory_v2")
 
                 # Get similar thoughts
                 similar = await self._find_similar_thoughts(result.raw_content)
                 result.similar_thoughts = similar[:3]
 
             except Exception as e:
-                logger.error(f"Failed to store in ChromaDB: {e}")
+                logger.error(f"Failed to store in Memory V2: {e}")
 
         # Always log to journal
         if self.journal:
@@ -514,22 +515,21 @@ class BrainDumpPipeline:
             result.destinations.append("journal")
 
     async def _route_idea(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
-        """Route idea to ChromaDB with category metadata."""
+        """Route idea to Memory V2 with category metadata."""
 
-        if self.chroma_adapter:
+        if self.memory_service:
             try:
-                memory_id = await self._store_in_chroma(
+                memory_id = await self._store_in_memory(
                     result,
-                    collection='personal_memories',
                     classification='idea',
                     extra_metadata={
                         'idea_title': classified.title,
                     }
                 )
-                result.chroma_memory_id = memory_id
-                result.destinations.append("chromadb")
+                result.chroma_memory_id = memory_id  # Legacy field name, now stores Memory V2 ID
+                result.destinations.append("memory_v2")
             except Exception as e:
-                logger.error(f"Failed to store idea in ChromaDB: {e}")
+                logger.error(f"Failed to store idea in Memory V2: {e}")
 
     async def _route_worry(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
         """Route worry to journal first, then SQLite worries table."""
@@ -560,18 +560,17 @@ class BrainDumpPipeline:
             result.created_worry_id = worry_id
             result.destinations.append("sqlite_worries")
 
-        # Also store in ChromaDB for pattern detection
-        if self.chroma_adapter:
+        # Also store in Memory V2 for pattern detection
+        if self.memory_service:
             try:
-                memory_id = await self._store_in_chroma(
+                memory_id = await self._store_in_memory(
                     result,
-                    collection='personal_memories',
                     classification='worry',
                 )
-                result.chroma_memory_id = memory_id
-                result.destinations.append("chromadb")
+                result.chroma_memory_id = memory_id  # Legacy field name, now stores Memory V2 ID
+                result.destinations.append("memory_v2")
             except Exception as e:
-                logger.error(f"Failed to store worry in ChromaDB: {e}")
+                logger.error(f"Failed to store worry in Memory V2: {e}")
 
     async def _route_commitment(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
         """Route commitment to journal and SQLite for tracking."""
@@ -601,18 +600,17 @@ class BrainDumpPipeline:
             result.created_commitment_id = commitment_id
             result.destinations.append("sqlite_commitments")
 
-        # Also store in ChromaDB for tracking
-        if self.chroma_adapter:
+        # Also store in Memory V2 for tracking
+        if self.memory_service:
             try:
-                memory_id = await self._store_in_chroma(
+                memory_id = await self._store_in_memory(
                     result,
-                    collection='personal_memories',
                     classification='commitment',
                 )
-                result.chroma_memory_id = memory_id
-                result.destinations.append("chromadb")
+                result.chroma_memory_id = memory_id  # Legacy field name, now stores Memory V2 ID
+                result.destinations.append("memory_v2")
             except Exception as e:
-                logger.error(f"Failed to store commitment in ChromaDB: {e}")
+                logger.error(f"Failed to store commitment in Memory V2: {e}")
 
     async def _store_for_review(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
         """Store item in review queue for manual classification."""
@@ -701,21 +699,20 @@ class BrainDumpPipeline:
 
         return task_id
 
-    async def _store_in_chroma(
+    async def _store_in_memory(
         self,
         result: ProcessingResult,
-        collection: str,
         classification: str,
         extra_metadata: Optional[Dict] = None,
     ) -> Optional[str]:
-        """Store content in ChromaDB for semantic search."""
+        """Store content in Memory V2 (Neon pgvector) for semantic search."""
 
-        if not self.chroma_adapter:
+        if not self.memory_service:
             return None
 
         metadata = {
             'source': 'brain_dump',
-            'classification': classification,
+            'type': classification,  # Memory V2 uses 'type' field
             'timestamp': result.processed_at,
             'dump_id': result.id,
             'brain_dump_source': result.source,
@@ -726,33 +723,54 @@ class BrainDumpPipeline:
 
         # Add impact dimensions if available
         if result.impact_score:
-            metadata['impact_domains'] = [
+            # Convert list to string for pgvector metadata compatibility
+            impact_domains = [
                 k for k, v in result.impact_score.items()
                 if k != 'composite' and v and v > 5
             ]
+            if impact_domains:
+                metadata['impact_domains'] = ','.join(impact_domains)
 
-        memory_id = self.chroma_adapter.add_memory(
-            collection=collection,
+        # Memory V2 MemoryService.add() returns dict with 'id' key
+        add_result = self.memory_service.add(
             content=result.raw_content,
             metadata=metadata,
         )
 
-        return memory_id
+        # Extract memory ID from result
+        if add_result:
+            # mem0 returns {"results": [{"id": "..."}]}
+            if isinstance(add_result, dict):
+                if "results" in add_result and add_result["results"]:
+                    return add_result["results"][0].get("id")
+                elif "id" in add_result:
+                    return add_result["id"]
+        return None
 
     async def _find_similar_thoughts(self, content: str, limit: int = 3) -> List[Dict[str, Any]]:
-        """Find similar past thoughts in ChromaDB."""
+        """Find similar past thoughts in Memory V2 (pgvector)."""
 
-        if not self.chroma_adapter:
+        if not self.memory_service:
             return []
 
         try:
-            results = self.chroma_adapter.search(
-                collection='personal_memories',
+            # Memory V2 search returns list of memories with heat-based ranking
+            results = self.memory_service.search(
                 query=content,
                 limit=limit,
-                where={'classification': {'$in': ['thinking', 'observation', 'idea']}},
+                filters={'memory_type': 'thinking'}  # Memory V2 filter syntax
             )
-            return results
+
+            # Format results for compatibility
+            formatted = []
+            for mem in results:
+                formatted.append({
+                    'id': mem.get('id'),
+                    'content': mem.get('memory', mem.get('content', '')),
+                    'similarity': mem.get('effective_score', mem.get('score', 0)),
+                    'heat': mem.get('heat', 1.0),
+                })
+            return formatted
         except Exception as e:
             logger.error(f"Failed to find similar thoughts: {e}")
             return []
@@ -781,7 +799,7 @@ async def process_brain_dump(
     source: str = "direct",
     state_store=None,
     journal=None,
-    chroma_adapter=None,
+    memory_service=None,
     workos_bridge=None,
     use_ai_classifier: bool = True,
 ) -> ProcessingResult:
@@ -797,7 +815,7 @@ async def process_brain_dump(
         source: Source of the dump (voice notes get AI classification)
         state_store: SQLite state store
         journal: Journal for logging
-        chroma_adapter: ChromaDB adapter
+        memory_service: Memory V2 service (Neon pgvector)
         workos_bridge: WorkOS bridge (for work tasks only)
         use_ai_classifier: Enable AI classifier for voice/ambiguous content
 
@@ -807,7 +825,7 @@ async def process_brain_dump(
     pipeline = BrainDumpPipeline(
         state_store=state_store,
         journal=journal,
-        chroma_adapter=chroma_adapter,
+        memory_service=memory_service,
         workos_bridge=workos_bridge,
         use_ai_classifier=use_ai_classifier,
     )

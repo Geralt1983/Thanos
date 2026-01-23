@@ -3,9 +3,8 @@
 HistorySearchHandler - Handles semantic search of conversation history.
 
 This module provides semantic search capabilities for conversation history
-using ChromaAdapter's vector search on the 'conversations' collection. Messages
-indexed by SessionManager can be searched using natural language queries to find
-relevant past conversations.
+using Memory V2 (Neon pgvector). Messages can be searched using natural
+language queries to find relevant past conversations.
 
 Commands:
     /history-search <query>  - Semantically search conversation history
@@ -17,19 +16,21 @@ Dependencies:
     - BaseHandler: Provides shared utilities and dependency injection
     - CommandResult: Standard result format for command execution
     - Colors: ANSI color codes for formatted output
-    - ChromaAdapter: Vector search engine for semantic similarity
-    - SessionManager: Manages sessions with ChromaAdapter integration
+    - MemoryService: Memory V2 service for semantic search (Neon pgvector)
 
 Architecture:
-    Messages are indexed to ChromaAdapter's 'conversations' collection with metadata:
+    Memories are stored in Neon pgvector with metadata:
+    - source: Where the memory came from (conversation, manual, etc.)
+    - client: Associated client name
+    - project: Associated project name
     - session_id: Session identifier for grouping messages
     - timestamp: Message timestamp (ISO format)
     - role: Message role (user, assistant)
     - agent: Agent name that handled the message
     - date: Date string for filtering (YYYY-MM-DD)
 
-    Semantic search uses vector embeddings to find semantically similar messages
-    across all indexed sessions, enabling "what did we discuss about X?" queries.
+    Semantic search uses vector embeddings (mem0 + Voyage AI) ranked by
+    similarity * heat * importance to find relevant memories.
 
 Example:
     handler = HistorySearchHandler(orchestrator, session_mgr, context_mgr,
@@ -38,17 +39,19 @@ Example:
     # Search conversation history
     result = handler.handle_history_search("authentication implementation")
 
-    # Results show relevant messages with session context and similarity scores
+    # Results show relevant memories with context and relevance scores
 
 See Also:
     - Tools.command_handlers.base: Base handler infrastructure
-    - Tools.adapters.chroma_adapter: ChromaAdapter for vector search
-    - Tools.session_manager: SessionManager with indexing capabilities
+    - Tools.memory_v2: Memory V2 service for semantic search
 """
 
 import re
+import logging
 
 from Tools.command_handlers.base import BaseHandler, CommandResult, Colors
+
+logger = logging.getLogger(__name__)
 
 
 class HistorySearchHandler(BaseHandler):
@@ -56,10 +59,10 @@ class HistorySearchHandler(BaseHandler):
     Handler for semantic search of conversation history.
 
     Provides functionality for:
-    - Semantic search across all indexed conversation messages
-    - Filtering by session, date, agent, or role
-    - Displaying results with session context and similarity scores
-    - Graceful degradation when ChromaAdapter is not available
+    - Semantic search across all memories using Memory V2 (Neon pgvector)
+    - Filtering by client, source, or memory type
+    - Displaying results with context, heat scores, and relevance
+    - Heat-based ranking (recent/accessed memories rank higher)
     """
 
     def __init__(
@@ -90,6 +93,21 @@ class HistorySearchHandler(BaseHandler):
             thanos_dir,
             current_agent_getter,
         )
+
+        # Initialize Memory V2 service (lazy loading)
+        self._memory_service = None
+
+    @property
+    def memory_service(self):
+        """Lazy-load Memory V2 service."""
+        if self._memory_service is None:
+            try:
+                from Tools.memory_v2 import get_memory_service
+                self._memory_service = get_memory_service()
+            except Exception as e:
+                logger.warning(f"Failed to initialize Memory V2: {e}")
+                return None
+        return self._memory_service
 
     def _highlight_query_terms(self, content: str, query: str, max_length: int = 300) -> str:
         """
@@ -152,88 +170,97 @@ class HistorySearchHandler(BaseHandler):
         Parse search query and optional filters from command arguments.
 
         Supports filter syntax:
-        - agent:<name> - Filter by agent name
-        - date:<YYYY-MM-DD> - Filter by specific date
-        - session:<id> - Filter by session ID
-        - after:<YYYY-MM-DD> - Filter messages after date (inclusive)
-        - before:<YYYY-MM-DD> - Filter messages before date (inclusive)
+        - client:<name> - Filter by client name
+        - source:<name> - Filter by source (conversation, manual, telegram, etc.)
+        - type:<name> - Filter by memory type
+        - agent:<name> - Filter by agent name (legacy, maps to source)
+        - date:<YYYY-MM-DD> - Filter by specific date (note: limited support)
+        - session:<id> - Filter by session ID (note: limited support)
+
+        Note: Memory V2 uses simpler filtering than ChromaDB. Date ranges
+        (after/before) are not directly supported. For complex date queries,
+        consider using the memory_v2 service directly with SQL.
 
         Examples:
-        - "authentication agent:architect"
-        - "API decisions date:2026-01-11"
-        - "error handling session:abc123"
-        - "database changes after:2026-01-01 before:2026-01-31"
+        - "authentication client:Orlando"
+        - "API decisions source:conversation"
+        - "error handling type:decision"
+        - "database changes client:Memphis"
 
         Args:
             args: Raw command arguments with query and filters
 
         Returns:
-            Tuple of (query_string, where_clause_dict)
+            Tuple of (query_string, filter_dict)
         """
         # Pattern to match key:value filters
         filter_pattern = r'(\w+):([^\s]+)'
 
         # Extract all filters
-        filters = {}
+        raw_filters = {}
         matches = re.findall(filter_pattern, args)
 
         for key, value in matches:
-            filters[key] = value
+            raw_filters[key] = value
 
         # Remove filters from query to get clean search query
         query = re.sub(filter_pattern, '', args).strip()
 
-        # Build ChromaDB where clause
-        where_clause = {}
+        # Build Memory V2 filter dict
+        filters = {}
 
-        # Direct equality filters
-        if 'agent' in filters:
-            where_clause['agent'] = filters['agent']
+        # Map filter keys to Memory V2 schema
+        if 'client' in raw_filters:
+            filters['client'] = raw_filters['client']
 
-        if 'session' in filters or 'session_id' in filters:
-            session_id = filters.get('session') or filters.get('session_id')
-            where_clause['session_id'] = session_id
+        if 'source' in raw_filters:
+            filters['source'] = raw_filters['source']
 
-        if 'date' in filters:
-            where_clause['date'] = filters['date']
+        # Legacy agent filter - map to source if it looks like a source type
+        if 'agent' in raw_filters:
+            # For backward compatibility, treat agent as a generic filter
+            # Memory V2 doesn't have native agent support, but we preserve
+            # it for display purposes
+            filters['agent'] = raw_filters['agent']
 
-        # Date range filters (ChromaDB uses $gte and $lte operators)
-        if 'after' in filters and 'before' in filters:
-            # Combined range: after <= date <= before
-            where_clause['date'] = {
-                '$gte': filters['after'],
-                '$lte': filters['before']
-            }
-        elif 'after' in filters:
-            # Only after: date >= after
-            where_clause['date'] = {'$gte': filters['after']}
-        elif 'before' in filters:
-            # Only before: date <= before
-            where_clause['date'] = {'$lte': filters['before']}
+        if 'type' in raw_filters or 'memory_type' in raw_filters:
+            filters['memory_type'] = raw_filters.get('type') or raw_filters.get('memory_type')
 
-        return query, where_clause if where_clause else None
+        # Session and date filters (preserved for compatibility)
+        if 'session' in raw_filters or 'session_id' in raw_filters:
+            session_id = raw_filters.get('session') or raw_filters.get('session_id')
+            filters['session_id'] = session_id
+
+        if 'date' in raw_filters:
+            filters['date'] = raw_filters['date']
+
+        # Note: after/before date ranges not directly supported in Memory V2
+        # Store them for display purposes but they won't filter results
+        if 'after' in raw_filters:
+            filters['_after'] = raw_filters['after']
+        if 'before' in raw_filters:
+            filters['_before'] = raw_filters['before']
+
+        return query, filters if filters else None
 
     def handle_history_search(self, args: str) -> CommandResult:
         """
-        Handle /history-search command - Search conversation history using semantic similarity.
+        Handle /history-search command - Search memories using semantic similarity.
 
-        Uses ChromaAdapter's semantic_search to query the 'conversations' collection,
-        finding messages that are semantically similar to the query. Results include
-        session context (date, agent, role) and similarity scores.
+        Uses Memory V2's semantic search with heat-based ranking to find relevant
+        memories. Results are ranked by similarity * heat * importance.
 
         Query syntax:
         - Basic: /history-search authentication
         - Multi-word: /history-search API implementation patterns
         - Context-aware: /history-search what did we decide about testing
-        - With filters: /history-search database changes agent:architect date:2026-01-11
-        - Date range: /history-search API work after:2026-01-01 before:2026-01-31
+        - With filters: /history-search database changes client:Orlando
+        - Source filter: /history-search meeting notes source:hey_pocket
 
         Supported filters:
-        - agent:<name> - Filter by agent name
-        - date:<YYYY-MM-DD> - Filter by specific date
-        - session:<id> - Filter by session ID (prefix matching supported)
-        - after:<YYYY-MM-DD> - Messages on or after this date
-        - before:<YYYY-MM-DD> - Messages on or before this date
+        - client:<name> - Filter by client name
+        - source:<name> - Filter by source (conversation, manual, telegram, hey_pocket)
+        - type:<name> - Filter by memory type
 
         Args:
             args: Search query (natural language) with optional filters
@@ -244,13 +271,12 @@ class HistorySearchHandler(BaseHandler):
         if not args:
             print(f"{Colors.DIM}Usage: /history-search <query> [filters]{Colors.RESET}")
             print(f"{Colors.DIM}Example: /history-search authentication implementation{Colors.RESET}")
-            print(f"{Colors.DIM}Filters: agent:<name> date:<YYYY-MM-DD> session:<id>{Colors.RESET}")
-            print(f"{Colors.DIM}         after:<date> before:<date>{Colors.RESET}")
-            print(f"{Colors.DIM}Tip: Use natural language to search past conversations{Colors.RESET}")
+            print(f"{Colors.DIM}Filters: client:<name> source:<name> type:<type>{Colors.RESET}")
+            print(f"{Colors.DIM}Tip: Use natural language to search memories{Colors.RESET}")
             return CommandResult()
 
         # Parse query and filters
-        query, where_filter = self._parse_filters(args)
+        query, filters = self._parse_filters(args)
 
         # Validate that we have a query after filter extraction
         if not query:
@@ -258,124 +284,116 @@ class HistorySearchHandler(BaseHandler):
             print(f"{Colors.DIM}Filters must be combined with a search query{Colors.RESET}")
             return CommandResult(success=False)
 
-        # Check if SessionManager has ChromaAdapter configured
-        if not hasattr(self.session, "_chroma") or self.session._chroma is None:
+        # Check if Memory V2 service is available
+        if self.memory_service is None:
             print(
-                f"{Colors.DIM}ChromaAdapter not configured. "
-                f"Conversation history search requires ChromaDB.{Colors.RESET}"
+                f"{Colors.DIM}Memory V2 not configured. "
+                f"Memory search requires THANOS_MEMORY_DATABASE_URL.{Colors.RESET}"
             )
             print(
                 f"{Colors.DIM}Falling back to /recall command for simple text search.{Colors.RESET}"
             )
             return CommandResult(success=False)
 
-        # Perform semantic search on conversations collection
+        # Perform semantic search using Memory V2
         try:
-            # Build search parameters
-            search_params = {
-                "query": query,
-                "collection": "conversations",
-                "limit": 10,
-            }
+            # Extract filters for Memory V2 (only supported ones)
+            memory_filters = None
+            if filters:
+                memory_filters = {
+                    k: v for k, v in filters.items()
+                    if k in ('client', 'source', 'memory_type') and not k.startswith('_')
+                }
+                if not memory_filters:
+                    memory_filters = None
 
-            # Add where clause if filters were provided
-            if where_filter:
-                search_params["where"] = where_filter
-
-            result = self._run_async(
-                self.session._chroma.call_tool(
-                    "semantic_search",
-                    search_params,
-                )
+            # Search using Memory V2
+            results = self.memory_service.search(
+                query=query,
+                limit=10,
+                filters=memory_filters
             )
-
-            if not result or not result.success:
-                error_msg = result.error if result else "Unknown error"
-                print(f"{Colors.DIM}Search failed: {error_msg}{Colors.RESET}")
-                return CommandResult(success=False)
-
-            # Extract and format results
-            results = result.data.get("results", [])
 
             if not results:
                 print(f"{Colors.DIM}No matches found for: {query}{Colors.RESET}")
                 print(
-                    f"{Colors.DIM}Tip: Messages must be indexed first. "
-                    f"Use SessionManager.index_session() to index current session.{Colors.RESET}"
+                    f"{Colors.DIM}Tip: Memories are automatically indexed when added.{Colors.RESET}"
                 )
                 return CommandResult()
 
             # Display results with context and highlighting
-            print(f"\n{Colors.CYAN}Conversation History Search Results:{Colors.RESET}")
+            print(f"\n{Colors.CYAN}Memory Search Results:{Colors.RESET}")
 
             # Show active filters if any
-            if where_filter:
+            if filters:
                 filter_parts = []
-                for key, value in where_filter.items():
-                    if isinstance(value, dict):
-                        # Date range filter
-                        if '$gte' in value and '$lte' in value:
-                            filter_parts.append(f"{key}: {value['$gte']} to {value['$lte']}")
-                        elif '$gte' in value:
-                            filter_parts.append(f"{key} >= {value['$gte']}")
-                        elif '$lte' in value:
-                            filter_parts.append(f"{key} <= {value['$lte']}")
-                    else:
+                for key, value in filters.items():
+                    if not key.startswith('_'):  # Skip internal keys
                         filter_parts.append(f"{key}={value}")
-                print(f"{Colors.DIM}Active filters: {', '.join(filter_parts)}{Colors.RESET}")
+                if filter_parts:
+                    print(f"{Colors.DIM}Active filters: {', '.join(filter_parts)}{Colors.RESET}")
 
-            print(f"{Colors.DIM}Found {len(results)} semantically similar messages:{Colors.RESET}\n")
+            print(f"{Colors.DIM}Found {len(results)} relevant memories:{Colors.RESET}\n")
 
             for i, match in enumerate(results, 1):
-                content = match.get("content", "")
-                metadata = match.get("metadata", {})
-                similarity = match.get("similarity", 0)
+                # Memory V2 uses 'memory' key, fall back to 'content'
+                content = match.get("memory", match.get("content", ""))
 
-                # Extract metadata
-                session_id = metadata.get("session_id", "unknown")
-                date = metadata.get("date", "unknown")
-                timestamp = metadata.get("timestamp", "")
-                role = metadata.get("role", "unknown")
-                agent = metadata.get("agent", "unknown")
+                # Get scores
+                effective_score = match.get("effective_score", match.get("score", 0))
+                heat = match.get("heat", 1.0)
+                importance = match.get("importance", 1.0)
 
-                # Format similarity score as percentage
-                score_pct = similarity * 100
+                # Get metadata
+                client = match.get("client", "")
+                source = match.get("source", "")
+                memory_type = match.get("memory_type", "")
+                created_at = match.get("created_at", "")
 
-                # Color code by role
-                role_color = Colors.PURPLE if role == "user" else Colors.CYAN
+                # Format score as percentage
+                score_pct = effective_score * 100 if effective_score <= 1 else effective_score
 
-                # Get time from timestamp if available
-                time_str = ""
-                if timestamp and "T" in timestamp:
-                    time_str = timestamp.split("T")[1][:5]  # HH:MM
+                # Heat indicator
+                if heat > 0.7:
+                    heat_indicator = f"{Colors.RED}🔥{Colors.RESET}"
+                elif heat > 0.3:
+                    heat_indicator = "•"
+                else:
+                    heat_indicator = f"{Colors.CYAN}❄️{Colors.RESET}"
 
-                # Format session context line
-                context_parts = [
-                    f"{date}",
-                    f"{time_str}" if time_str else None,
-                    f"agent:{agent}",
-                    f"session:{session_id[:8]}"
-                ]
-                context_str = " • ".join(p for p in context_parts if p)
+                # Format context line
+                context_parts = []
+                if client:
+                    context_parts.append(f"client:{client}")
+                if source:
+                    context_parts.append(f"source:{source}")
+                if memory_type:
+                    context_parts.append(f"type:{memory_type}")
+                if created_at:
+                    # Extract date part
+                    date_str = str(created_at)[:10] if created_at else ""
+                    if date_str:
+                        context_parts.append(date_str)
+                context_str = " • ".join(context_parts) if context_parts else "no context"
 
                 # Display result with enhanced formatting
-                print(f"  {i}. {Colors.BOLD}[{score_pct:.1f}% match]{Colors.RESET}")
+                print(f"  {i}. {heat_indicator} {Colors.BOLD}[{score_pct:.1f}% relevance]{Colors.RESET}")
                 print(f"     {Colors.DIM}{context_str}{Colors.RESET}")
 
                 # Highlight query terms in content preview
                 highlighted_preview = self._highlight_query_terms(content, query, max_length=250)
-                print(f"     {role_color}{role}:{Colors.RESET} {highlighted_preview}")
+                print(f"     {highlighted_preview}")
                 print()
 
             # Show helpful tips
-            print(f"{Colors.DIM}💡 Tips:{Colors.RESET}")
-            print(f"{Colors.DIM}   • Use /resume <session_id> to restore a session{Colors.RESET}")
-            print(f"{Colors.DIM}   • Query terms are highlighted in {Colors.BOLD}bold{Colors.RESET}{Colors.DIM}{Colors.RESET}")
-            print(f"{Colors.DIM}   • Add filters: agent:<name> date:<YYYY-MM-DD> session:<id>{Colors.RESET}")
-            print(f"{Colors.DIM}   • Date ranges: after:<date> before:<date>{Colors.RESET}\n")
+            print(f"{Colors.DIM}Tips:{Colors.RESET}")
+            print(f"{Colors.DIM}   - 🔥 = hot (recently accessed)  • = warm  ❄️ = cold (neglected){Colors.RESET}")
+            print(f"{Colors.DIM}   - Add filters: client:<name> source:<name> type:<type>{Colors.RESET}")
+            print(f"{Colors.DIM}   - Use /memory-hot to see current focus areas{Colors.RESET}\n")
 
             return CommandResult()
 
         except Exception as e:
-            print(f"{Colors.DIM}Error searching conversation history: {e}{Colors.RESET}")
+            logger.error(f"Memory search failed: {e}")
+            print(f"{Colors.DIM}Error searching memories: {e}{Colors.RESET}")
             return CommandResult(success=False)
