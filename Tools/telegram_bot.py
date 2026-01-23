@@ -31,15 +31,8 @@ from Tools.journal import Journal, EventType, Severity
 from Tools.brain_dump.pipeline import process_brain_dump_sync
 from Tools.state_store import get_db
 
-# Import ChromaDB adapter for vector storage
-try:
-    from Tools.adapters.chroma_adapter import ChromaAdapter
-    CHROMA_AVAILABLE = True
-except ImportError:
-    ChromaAdapter = None
-    CHROMA_AVAILABLE = False
-
-# Import Memory V2 service for voice transcription memory extraction
+# Import Memory V2 service for vector storage (unified pgvector backend)
+# NOTE: ChromaDB has been deprecated in favor of Memory V2 (Neon pgvector)
 try:
     from Tools.memory_v2.service import MemoryService
     MEMORY_V2_AVAILABLE = True
@@ -174,14 +167,15 @@ class TelegramBrainDumpBot:
         # Initialize state store for pipeline
         self.state_store = get_db()
 
-        # Initialize ChromaDB adapter for vector storage
-        self.chroma_adapter = None
-        if CHROMA_AVAILABLE:
+        # Initialize Memory V2 service for vector storage (Neon pgvector)
+        # This is the primary vector storage for brain dumps, ideas, and memories
+        self.memory_service = None
+        if MEMORY_V2_AVAILABLE:
             try:
-                self.chroma_adapter = ChromaAdapter()
-                logger.info("ChromaDB adapter initialized for brain dump storage")
+                self.memory_service = MemoryService()
+                logger.info("Memory V2 service initialized for brain dump storage")
             except Exception as e:
-                logger.warning(f"ChromaDB not available: {e}")
+                logger.warning(f"Memory V2 not available: {e}")
 
         # Storage for entries (legacy - now also stored in state_store)
         self.entries: List[BrainDumpEntry] = []
@@ -198,15 +192,6 @@ class TelegramBrainDumpBot:
         self.workos_enabled = bool(WORKOS_DATABASE_URL)
         if self.workos_enabled:
             logger.info("WorkOS sync enabled for work tasks only")
-
-        # Initialize Memory V2 service for voice transcription memory extraction
-        self.memory_service = None
-        if MEMORY_V2_AVAILABLE:
-            try:
-                self.memory_service = MemoryService()
-                logger.info("Memory V2 service initialized for voice memory extraction")
-            except Exception as e:
-                logger.warning(f"Memory V2 not available: {e}")
 
     def should_filter_content(self, content: str) -> tuple[bool, str]:
         """
@@ -1029,7 +1014,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     source=pipeline_source,
                     state_store=self.state_store,
                     journal=self.journal,
-                    chroma_adapter=self.chroma_adapter,
+                    memory_service=self.memory_service,
                 )
 
                 # Update entry with pipeline results
@@ -1102,7 +1087,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         """Mark an entry as processed by REMOVING it from the inbox.
 
         The entry has already been routed to the appropriate database
-        (SQLite, ChromaDB, WorkOS), so we delete it from the JSON inbox.
+        (SQLite, Memory V2, WorkOS), so we delete it from the JSON inbox.
         """
         for i, entry in enumerate(self.entries):
             if entry.id == entry_id:
@@ -1250,6 +1235,127 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 response_parts.append("\n⚠️ Needs review - please check later")
 
             await update.message.reply_text("\n".join(response_parts))
+
+        async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Handle document/file uploads (text files, etc.)"""
+            if not is_allowed(update.effective_user.id):
+                return
+
+            document = update.message.document
+            file_name = document.file_name or "unknown"
+            mime_type = document.mime_type or ""
+
+            # Only process text files
+            supported_extensions = ('.txt', '.md', '.text', '.log')
+            supported_mimes = ('text/plain', 'text/markdown', 'text/x-markdown')
+
+            is_text_file = (
+                file_name.lower().endswith(supported_extensions) or
+                mime_type in supported_mimes
+            )
+
+            if not is_text_file:
+                await update.message.reply_text(
+                    f"📄 Received: {file_name}\n\n"
+                    "Currently only text files (.txt, .md) are supported.\n"
+                    "For other files, please copy and paste the content."
+                )
+                return
+
+            # Download the file
+            file = await context.bot.get_file(document.file_id)
+
+            with tempfile.NamedTemporaryFile(suffix='.txt', delete=False, mode='wb') as tmp:
+                await file.download_to_drive(tmp.name)
+                tmp_path = tmp.name
+
+            try:
+                # Read file content
+                processing_msg = await update.message.reply_text(f"📄 Processing: {file_name}...")
+
+                with open(tmp_path, 'r', encoding='utf-8', errors='replace') as f:
+                    content = f.read()
+
+                if not content.strip():
+                    await processing_msg.edit_text(f"📄 {file_name} is empty.")
+                    return
+
+                # Check content length - handle large files
+                if len(content) > 10000:
+                    await processing_msg.edit_text(
+                        f"📄 {file_name}\n\n"
+                        f"File is large ({len(content):,} chars). Processing first 10,000 characters.\n"
+                        "Consider breaking into smaller files for better classification."
+                    )
+                    content = content[:10000]
+
+                # Check if content should be filtered
+                should_filter, filter_reason = self.should_filter_content(content)
+                if should_filter:
+                    logger.info(f"Filtered document ({filter_reason}): {file_name}")
+                    await processing_msg.edit_text(
+                        f"📄 {file_name}\n\n"
+                        f"🔇 Content filtered ({filter_reason})"
+                    )
+                    return
+
+                # Process through brain dump pipeline
+                entry = await self.capture_entry(
+                    content=content,
+                    content_type='document',
+                    user_id=update.effective_user.id
+                )
+
+                # Build response
+                response_parts = [f"📄 *{file_name}*\n"]
+
+                # Preview of content
+                preview = content[:200].replace('*', '').replace('_', '')
+                if len(content) > 200:
+                    preview += "..."
+                response_parts.append(f"```\n{preview}\n```\n")
+
+                # Acknowledgment
+                if entry.acknowledgment:
+                    response_parts.append(entry.acknowledgment)
+
+                # Classification
+                emoji = {
+                    'thinking': '💭', 'venting': '😤', 'observation': '👁️',
+                    'note': '📝', 'idea': '💡', 'personal_task': '✅',
+                    'work_task': '💼', 'worry': '😰', 'commitment': '🤝',
+                    'task': '✅', 'thought': '💭',
+                }.get(entry.classification or entry.parsed_category, '📝')
+
+                classification_display = (entry.classification or entry.parsed_category or 'captured').replace('_', ' ').title()
+                response_parts.append(f"{emoji} {classification_display}")
+
+                # Routing info
+                if entry.routing_result:
+                    destinations = []
+                    if entry.routing_result.get('tasks_created'):
+                        destinations.append("task created")
+                    if entry.routing_result.get('workos_task_id'):
+                        destinations.append("synced to WorkOS")
+                    if entry.routing_result.get('idea_created'):
+                        destinations.append("idea saved")
+                    if entry.routing_result.get('commitment_created'):
+                        destinations.append("commitment tracked")
+                    if entry.routing_result.get('note_created'):
+                        destinations.append("note saved")
+                    if destinations:
+                        response_parts.append(f"✓ {', '.join(destinations)}")
+
+                if entry.needs_review:
+                    response_parts.append("\n⚠️ Needs review")
+
+                await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
+
+            except Exception as e:
+                logger.error(f"Document processing failed: {e}")
+                await update.message.reply_text(f"❌ Error processing {file_name}: {e}")
+            finally:
+                os.unlink(tmp_path)
 
         async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not is_allowed(update.effective_user.id):
@@ -1401,6 +1507,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         self.application.add_handler(CommandHandler("health", health_command))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         self.application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+        self.application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
         return True
 
