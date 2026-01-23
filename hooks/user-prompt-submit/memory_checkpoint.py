@@ -5,133 +5,81 @@ Memory Checkpoint Hook - UserPromptSubmit
 Records prompt interactions and writes periodic checkpoints
 for crash-resilient memory capture.
 
-Runs on every UserPromptSubmit event but only writes to disk
-when thresholds are met (every 10 prompts or 30 minutes).
+Uses filesystem-based session discovery (workaround for passStdin issues).
 """
 
 import sys
 import os
-import json
 import logging
 from pathlib import Path
+
+# Suppress stdout to avoid hook framework issues
+_original_stdout = sys.stdout
+sys.stdout = open(os.devnull, 'w')
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from Tools.memory_checkpoint import checkpoint_prompt
+# Set up logging ONLY to file (not stderr - causes hook issues)
+LOG_DIR = PROJECT_ROOT / "logs"
+LOG_DIR.mkdir(exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(PROJECT_ROOT / "logs" / "memory_checkpoint.log"),
-        logging.StreamHandler(sys.stderr)
+        logging.FileHandler(LOG_DIR / "memory_checkpoint.log")
     ]
 )
 logger = logging.getLogger(__name__)
 
-
-def extract_context_from_event(event_data: dict) -> dict:
-    """Extract relevant context from hook event data."""
-    context = {
-        "prompt_summary": "",
-        "key_facts": [],
-        "files_modified": [],
-        "tools_used": []
-    }
-
-    # Extract from conversation if available
-    conversation = event_data.get("conversation", [])
-    if conversation:
-        last_msg = conversation[-1] if conversation else {}
-        content = last_msg.get("content", "")
-
-        # Simple extraction - could be enhanced with LLM
-        if isinstance(content, str):
-            # Truncate for summary
-            context["prompt_summary"] = content[:200] + "..." if len(content) > 200 else content
-
-    # Extract tool usage from event
-    tool_calls = event_data.get("tool_calls", [])
-    if tool_calls:
-        context["tools_used"] = [t.get("name", "unknown") for t in tool_calls]
-
-    # Extract file modifications (if tracked)
-    files = event_data.get("files_modified", [])
-    if files:
-        context["files_modified"] = files
-
-    return context
-
-
-def infer_project_from_cwd(cwd: str) -> tuple:
-    """Infer project and client from working directory."""
-    project = None
-    client = None
-
-    cwd_lower = cwd.lower()
-
-    # Known project patterns
-    if "thanos" in cwd_lower:
-        project = "thanos"
-    elif "versacare" in cwd_lower or "kentucky" in cwd_lower:
-        project = "versacare"
-        client = "kentucky"
-    elif "orlando" in cwd_lower:
-        client = "orlando"
-    elif "memphis" in cwd_lower:
-        client = "memphis"
-    elif "raleigh" in cwd_lower:
-        client = "raleigh"
-
-    return project, client
+# Import after path setup
+from Tools.session_discovery import discover_session_context, infer_project_client
+from Tools.memory_checkpoint import checkpoint_prompt
 
 
 def main():
     """Main hook entry point."""
     try:
-        # Read event data from stdin
-        if sys.stdin.isatty():
-            logger.warning("No stdin data provided")
-            return
+        logger.info("Memory checkpoint hook invoked")
 
-        event_data = json.load(sys.stdin)
+        # Use filesystem-based discovery (stdin is unreliable)
+        context = discover_session_context(prefer_stdin=True, max_age_seconds=120)
 
-        # Extract session info
-        session_id = event_data.get("session_id")
+        session_id = context.get('session_id')
         if not session_id:
-            logger.warning("No session_id in event data")
+            logger.warning("Could not discover session_id")
             return
+
+        logger.info(f"Discovered session: {session_id} (source: {context.get('_discovery_source')})")
 
         # Get process info
-        claude_pid = event_data.get("claude_pid") or os.getppid()
-        cwd = event_data.get("cwd") or os.getcwd()
+        claude_pid = os.getppid()
+        cwd = context.get('cwd') or os.getcwd()
 
         # Infer project/client
-        project, client = infer_project_from_cwd(cwd)
+        project, client = infer_project_client(cwd)
 
-        # Extract context
-        context = extract_context_from_event(event_data)
-
-        # Record checkpoint
+        # Record checkpoint (prompt_summary will be empty but that's ok -
+        # the checkpoint tracks session activity, not individual prompt content)
         wrote_checkpoint = checkpoint_prompt(
             session_id=session_id,
             claude_pid=claude_pid,
             working_directory=cwd,
-            prompt_summary=context["prompt_summary"],
-            key_facts=context["key_facts"],
-            files_modified=context["files_modified"],
-            tools_used=context["tools_used"],
+            prompt_summary="",  # Not available without stdin
+            key_facts=[],
+            files_modified=[],
+            tools_used=[],
             project=project,
             client=client
         )
 
         if wrote_checkpoint:
             logger.info(f"Wrote checkpoint for session {session_id}")
+        else:
+            logger.debug(f"Checkpoint recorded (no write yet) for session {session_id}")
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse event data: {e}")
     except Exception as e:
         logger.error(f"Checkpoint hook error: {e}", exc_info=True)
 
