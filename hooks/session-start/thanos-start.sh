@@ -6,6 +6,9 @@
 THANOS_ROOT="${THANOS_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 cd "$THANOS_ROOT" || exit 1
 
+# Activate venv for Python dependencies
+export PATH="$THANOS_ROOT/.venv/bin:$PATH"
+
 # Get current time context
 HOUR=$(date +%H)
 TIME_DISPLAY=$(date "+%I:%M %p")
