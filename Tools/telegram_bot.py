@@ -338,7 +338,7 @@ class TelegramBrainDumpBot:
             return 'whiteboard'
 
         # Reference keywords
-        if any(kw in caption_lower for kw in ['reference', 'save', 'remember', 'later', 'bookmark', 'look up']):
+        if any(kw in caption_lower for kw in ['reference', 'save', 'remember', 'later', 'bookmark', 'look up', 'calendar', 'schedule']):
             return 'reference'
 
         # Note keywords
@@ -1141,11 +1141,12 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
     async def setup_handlers(self):
         """Set up Telegram bot handlers."""
         try:
-            from telegram import Update
+            from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
             from telegram.ext import (
                 Application,
                 CommandHandler,
                 MessageHandler,
+                CallbackQueryHandler,
                 filters,
                 ContextTypes
             )
@@ -1449,7 +1450,28 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
                 logger.info(f"Photo saved: {filename} (type: {photo_type})")
 
-                # If caption provided, process through brain dump pipeline
+                # Check if this is a calendar photo - flag for Claude Code processing
+                caption_lower = caption.lower()
+                is_calendar = any(kw in caption_lower for kw in ['calendar', 'schedule', 'event', 'appointment'])
+
+                if is_calendar:
+                    # Mark as needing calendar processing (Claude Code will handle via vision)
+                    metadata['needs_calendar_processing'] = True
+                    metadata['photo_type'] = 'calendar'
+
+                    # Update metadata file
+                    with open(metadata_path, 'w') as f:
+                        json.dump(metadata, f, indent=2)
+
+                    await processing_msg.edit_text(
+                        f"📅 *Calendar photo saved*\n\n"
+                        f"📷 `{filename}`\n\n"
+                        f"_Events will be extracted when you chat with Claude._",
+                        parse_mode='Markdown'
+                    )
+                    return
+
+                # Normal photo handling (non-calendar or extraction failed)
                 entry = None
                 if caption.strip():
                     entry = await self.capture_entry(
@@ -1498,6 +1520,88 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             except Exception as e:
                 logger.error(f"Photo processing failed: {e}")
                 await update.message.reply_text(f"❌ Error processing photo: {e}")
+
+        async def handle_calendar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Handle calendar selection callbacks."""
+            query = update.callback_query
+            await query.answer()
+
+            data = query.data
+            if not data.startswith("cal_"):
+                return
+
+            parts = data.split("_", 2)
+            if len(parts) < 3:
+                return
+
+            action = parts[1]  # work, personal, or skip
+            events_key = f"cal_{parts[2]}"
+
+            # Get stored events
+            stored = context.bot_data.get(events_key)
+            if not stored:
+                await query.edit_message_text("⚠️ Session expired. Please send the photo again.")
+                return
+
+            if action == "skip":
+                del context.bot_data[events_key]
+                await query.edit_message_text("📷 Photo saved without adding to calendar.")
+                return
+
+            # Determine calendar ID
+            calendar_id = "primary" if action == "personal" else os.getenv("GOOGLE_WORK_CALENDAR_ID", "primary")
+            calendar_name = "Personal" if action == "personal" else "Work"
+
+            try:
+                # Create events in Google Calendar
+                from Tools.adapters.google_calendar.legacy import GoogleCalendarAdapter
+                adapter = GoogleCalendarAdapter()
+
+                created_count = 0
+                events = stored['events']
+
+                for event_data in events:
+                    try:
+                        # Build event for Google Calendar
+                        from Tools.photo_processors import ExtractedEvent
+                        event = ExtractedEvent(**event_data)
+                        gcal_event = event.to_gcal_format()
+
+                        # Create the event
+                        result = await adapter._tool_create_event({
+                            "summary": gcal_event["summary"],
+                            "start_time": gcal_event["start"].get("dateTime", gcal_event["start"].get("date")),
+                            "end_time": gcal_event["end"].get("dateTime", gcal_event["end"].get("date")),
+                            "calendar_id": calendar_id,
+                            "description": gcal_event.get("description", ""),
+                            "location": gcal_event.get("location", "")
+                        })
+
+                        if result.success:
+                            created_count += 1
+                        else:
+                            logger.warning(f"Failed to create event: {result.error}")
+
+                    except Exception as e:
+                        logger.error(f"Error creating event: {e}")
+
+                # Cleanup
+                del context.bot_data[events_key]
+
+                if created_count > 0:
+                    await query.edit_message_text(
+                        f"✅ Added {created_count} event(s) to {calendar_name} calendar!"
+                    )
+                else:
+                    await query.edit_message_text(
+                        f"⚠️ Could not add events to calendar. Please add them manually."
+                    )
+
+            except ImportError:
+                await query.edit_message_text("❌ Google Calendar adapter not available.")
+            except Exception as e:
+                logger.error(f"Calendar creation failed: {e}")
+                await query.edit_message_text(f"❌ Error: {e}")
 
         async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not is_allowed(update.effective_user.id):
@@ -1651,6 +1755,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         self.application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         self.application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         self.application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+        self.application.add_handler(CallbackQueryHandler(handle_calendar_callback, pattern="^cal_"))
 
         return True
 
