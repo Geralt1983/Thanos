@@ -262,29 +262,18 @@ def main():
     """Main entry point - process session and extract learnings."""
     logger.info("Memory capture hook started")
     try:
-        if sys.stdin.isatty():
-            logger.warning("No stdin data - running in test mode")
-            return
-        stdin_data = ""
-        try:
-            import select
-            if select.select([sys.__stdin__], [], [], 0.1)[0]:
-                stdin_data = sys.__stdin__.read()
-        except:
-            pass
-        if not stdin_data:
-            logger.warning("No hook event data received")
-            return
-        try:
-            event_data = json.loads(stdin_data)
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid hook event JSON: {e}")
-            return
+        # Import session discovery (workaround for passStdin issues)
+        from Tools.session_discovery import discover_session_context
 
-        session_id = event_data.get('session_id', 'unknown')
-        transcript_path = event_data.get('transcript_path')
-        cwd = event_data.get('cwd', '')
-        reason = event_data.get('reason', 'unknown')
+        # Use filesystem-based discovery (stdin is unreliable)
+        context = discover_session_context(prefer_stdin=True, max_age_seconds=300)
+
+        session_id = context.get('session_id', 'unknown')
+        transcript_path = context.get('transcript_path')
+        cwd = context.get('cwd', '')
+        reason = 'session_end'
+
+        logger.info(f"Discovered session: {session_id} (source: {context.get('_discovery_source')})")
         logger.info(f"Processing session {session_id}, reason: {reason}")
 
         # FIRST: Try checkpoint-based capture (crash-resilient path)
