@@ -3,7 +3,9 @@
 Unified Brain Dump Pipeline for Thanos.
 
 This is the single entry point for all brain dump processing.
-Uses RULE-BASED classification only - no API calls needed.
+Uses HYBRID classification:
+- Rule-based classifier for fast initial classification
+- AI classifier (Claude) for voice notes and ambiguous cases
 
 Routes content to appropriate storage based on classification:
 - work_task -> WorkOS (only work tasks)
@@ -23,6 +25,20 @@ from pathlib import Path
 
 # Configure logging
 logger = logging.getLogger('brain_dump_pipeline')
+
+# Import AI classifier for voice notes and ambiguous cases
+try:
+    from Tools.brain_dump.classifier import BrainDumpClassifier, ClassifiedBrainDump as AIClassifiedBrainDump
+    AI_CLASSIFIER_AVAILABLE = True
+except ImportError:
+    try:
+        from .classifier import BrainDumpClassifier, ClassifiedBrainDump as AIClassifiedBrainDump
+        AI_CLASSIFIER_AVAILABLE = True
+    except ImportError:
+        BrainDumpClassifier = None
+        AIClassifiedBrainDump = None
+        AI_CLASSIFIER_AVAILABLE = False
+        logger.warning("AI classifier not available - using rule-based only")
 
 # Handle both module and direct imports for processor
 try:
@@ -137,8 +153,9 @@ class BrainDumpPipeline:
     """
     Unified pipeline for processing brain dumps.
 
-    Uses RULE-BASED classification only (BrainDumpProcessor).
-    No API calls - all classification happens locally via keyword matching.
+    Uses HYBRID classification:
+    - Rule-based (BrainDumpProcessor) for fast initial classification
+    - AI classifier (Claude) for voice notes and low-confidence cases
 
     Storage mapping:
     - work_task -> WorkOS
@@ -152,12 +169,19 @@ class BrainDumpPipeline:
     # Confidence threshold for auto-routing
     CONFIDENCE_THRESHOLD = 0.6
 
+    # Threshold below which AI classification is triggered
+    AI_CLASSIFICATION_THRESHOLD = 0.65
+
+    # Sources that always use AI classification (voice notes need better understanding)
+    AI_CLASSIFICATION_SOURCES = {'voice', 'telegram_voice'}
+
     def __init__(
         self,
         state_store=None,
         journal=None,
         chroma_adapter=None,
         workos_bridge=None,
+        use_ai_classifier: bool = True,
     ):
         """
         Initialize the pipeline.
@@ -167,12 +191,23 @@ class BrainDumpPipeline:
             journal: Journal for logging all events
             chroma_adapter: ChromaDB adapter for vector storage
             workos_bridge: WorkOS MCP bridge (only for work_task sync)
+            use_ai_classifier: Enable AI classifier for voice/ambiguous content
         """
         self.processor = BrainDumpProcessor() if BrainDumpProcessor else None
         self.state_store = state_store
         self.journal = journal
         self.chroma_adapter = chroma_adapter
         self.workos_bridge = workos_bridge
+
+        # Initialize AI classifier for voice notes and ambiguous cases
+        self.ai_classifier = None
+        self.use_ai_classifier = use_ai_classifier
+        if use_ai_classifier and AI_CLASSIFIER_AVAILABLE:
+            try:
+                self.ai_classifier = BrainDumpClassifier()
+                logger.info("AI classifier initialized for voice/ambiguous classification")
+            except Exception as e:
+                logger.warning(f"AI classifier initialization failed: {e}")
 
     async def process(
         self,
@@ -183,7 +218,9 @@ class BrainDumpPipeline:
         """
         Process a brain dump through the full pipeline.
 
-        All classification is rule-based - no API calls.
+        Uses hybrid classification:
+        - Rule-based for fast initial pass
+        - AI classifier for voice notes and ambiguous cases
 
         Args:
             content: Raw brain dump content
@@ -209,11 +246,64 @@ class BrainDumpPipeline:
                 acknowledgment="Unable to process. System error.",
             )
 
-        # Step 1: Classify using RULE-BASED processor (no API)
+        # Step 1: Check if we should use AI classification
+        # Voice notes and telegram voice always use AI for better understanding
+        use_ai = (
+            self.ai_classifier is not None and
+            source in self.AI_CLASSIFICATION_SOURCES
+        )
+
+        ai_result = None
+        if use_ai:
+            # Use AI classifier for voice notes - they need better context understanding
+            ai_result = await self._classify_with_ai(content, source)
+            if ai_result:
+                logger.info(
+                    f"AI classifier result: {ai_result.classification} "
+                    f"(confidence: {ai_result.confidence:.2f})"
+                )
+
+        # Step 2: Classify using RULE-BASED processor
         classified = self.processor.process(content, source, {'id': dump_id})
 
-        # Step 2: Map category to classification string
+        # Step 3: Determine final classification
+        # If AI classifier was used and has high confidence, prefer its result
+        # for non-task classifications (thinking, venting, worry, observation, idea)
         classification = self._map_classification(classified, force_domain)
+
+        if ai_result and ai_result.confidence >= 0.7:
+            # AI classifier found something - check if it's a non-task classification
+            # that the rule-based classifier might have missed
+            ai_class = ai_result.classification
+            non_task_types = {'thinking', 'venting', 'observation', 'worry', 'idea', 'note', 'commitment'}
+
+            if ai_class in non_task_types:
+                # AI says it's NOT a task - trust it (prevents over-eager task creation)
+                classification = ai_class
+                logger.info(
+                    f"Using AI classification '{ai_class}' over rule-based '{classification}' "
+                    f"(AI confidence: {ai_result.confidence:.2f})"
+                )
+            elif ai_class in ('personal_task', 'work_task') and classification in non_task_types:
+                # AI says task but rule-based says non-task - be conservative, keep non-task
+                logger.info(
+                    f"Keeping rule-based '{classification}' - AI wanted '{ai_class}' "
+                    f"but we default to not creating tasks"
+                )
+
+        # Also check: if rule-based has LOW confidence, consult AI
+        if (
+            not ai_result and
+            self.ai_classifier is not None and
+            classified.confidence < self.AI_CLASSIFICATION_THRESHOLD
+        ):
+            ai_result = await self._classify_with_ai(content, source)
+            if ai_result and ai_result.confidence > classified.confidence:
+                classification = ai_result.classification
+                logger.info(
+                    f"Low-confidence rule-based ({classified.confidence:.2f}) - "
+                    f"using AI classification '{classification}' ({ai_result.confidence:.2f})"
+                )
 
         # Get domain
         domain = None
@@ -303,6 +393,31 @@ class BrainDumpPipeline:
         # Direct mapping for other categories
         return CATEGORY_TO_CLASSIFICATION.get(category, 'thinking')
 
+    async def _classify_with_ai(self, content: str, source: str) -> Optional[AIClassifiedBrainDump]:
+        """
+        Use AI classifier for nuanced classification.
+
+        Particularly important for voice notes which often contain
+        context that rule-based classifiers miss (worries, venting,
+        thinking expressed as "need to" statements).
+
+        Args:
+            content: Raw content to classify
+            source: Source of the content
+
+        Returns:
+            AIClassifiedBrainDump or None if classification fails
+        """
+        if not self.ai_classifier:
+            return None
+
+        try:
+            result = await self.ai_classifier.classify(content, source)
+            return result
+        except Exception as e:
+            logger.warning(f"AI classification failed, falling back to rule-based: {e}")
+            return None
+
     async def _route(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
         """Route to appropriate storage based on classification."""
 
@@ -314,7 +429,9 @@ class BrainDumpPipeline:
         elif classification == 'personal_task':
             await self._route_personal_task(result, classified)
 
-        elif classification in ('thinking', 'observation'):
+        elif classification in ('thinking', 'observation', 'venting', 'note'):
+            # All reflective content goes to ChromaDB for pattern mining
+            # Venting and notes are treated like thinking - no task creation
             await self._route_reflective(result, classified)
 
         elif classification == 'idea':
@@ -322,6 +439,10 @@ class BrainDumpPipeline:
 
         elif classification == 'worry':
             await self._route_worry(result, classified)
+
+        elif classification == 'commitment':
+            # Commitments go to journal + SQLite for tracking
+            await self._route_commitment(result, classified)
 
     async def _route_work_task(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
         """Route work task to WorkOS."""
@@ -451,6 +572,47 @@ class BrainDumpPipeline:
                 result.destinations.append("chromadb")
             except Exception as e:
                 logger.error(f"Failed to store worry in ChromaDB: {e}")
+
+    async def _route_commitment(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
+        """Route commitment to journal and SQLite for tracking."""
+
+        # Log to journal
+        if self.journal:
+            entry_id = self.journal.log(
+                event_type="brain_dump_commitment",
+                source="brain_dump",
+                title=f"Commitment: {result.raw_content[:50]}...",
+                data={
+                    'dump_id': result.id,
+                    'raw_content': result.raw_content,
+                },
+                severity="info"
+            )
+            result.journal_entry_id = entry_id
+            result.destinations.append("journal")
+
+        # Store in commitments table if available
+        if self.state_store and hasattr(self.state_store, 'add_commitment'):
+            commitment_id = self.state_store.add_commitment(
+                raw_content=result.raw_content,
+                journal_entry_id=result.journal_entry_id,
+                dump_id=result.id,
+            )
+            result.created_commitment_id = commitment_id
+            result.destinations.append("sqlite_commitments")
+
+        # Also store in ChromaDB for tracking
+        if self.chroma_adapter:
+            try:
+                memory_id = await self._store_in_chroma(
+                    result,
+                    collection='personal_memories',
+                    classification='commitment',
+                )
+                result.chroma_memory_id = memory_id
+                result.destinations.append("chromadb")
+            except Exception as e:
+                logger.error(f"Failed to store commitment in ChromaDB: {e}")
 
     async def _store_for_review(self, result: ProcessingResult, classified: ClassifiedBrainDump) -> None:
         """Store item in review queue for manual classification."""
@@ -600,11 +762,14 @@ class BrainDumpPipeline:
 
         acknowledgments = {
             'thinking': "Thought noted. Take your time.",
+            'venting': "Heard. That sounds frustrating.",
             'observation': "Observation recorded.",
+            'note': "Note saved for reference.",
             'idea': "Idea captured for later exploration.",
             'personal_task': "Personal task created.",
             'work_task': "Work task created and synced.",
             'worry': "Worry captured. We'll process this together.",
+            'commitment': "Commitment tracked.",
         }
 
         return acknowledgments.get(classification, "Brain dump received.")
@@ -618,19 +783,23 @@ async def process_brain_dump(
     journal=None,
     chroma_adapter=None,
     workos_bridge=None,
+    use_ai_classifier: bool = True,
 ) -> ProcessingResult:
     """
     Process a brain dump through the full pipeline.
 
-    All classification is RULE-BASED - no API calls.
+    Uses HYBRID classification:
+    - Rule-based for fast initial classification
+    - AI classifier (Claude) for voice notes and ambiguous cases
 
     Args:
         content: Raw brain dump content
-        source: Source of the dump
+        source: Source of the dump (voice notes get AI classification)
         state_store: SQLite state store
         journal: Journal for logging
         chroma_adapter: ChromaDB adapter
         workos_bridge: WorkOS bridge (for work tasks only)
+        use_ai_classifier: Enable AI classifier for voice/ambiguous content
 
     Returns:
         ProcessingResult with all metadata
@@ -640,6 +809,7 @@ async def process_brain_dump(
         journal=journal,
         chroma_adapter=chroma_adapter,
         workos_bridge=workos_bridge,
+        use_ai_classifier=use_ai_classifier,
     )
     return await pipeline.process(content, source)
 

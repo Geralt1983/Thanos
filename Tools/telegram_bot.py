@@ -1020,9 +1020,13 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             try:
                 # Process through the unified pipeline
                 # This handles classification AND routing automatically
+                # IMPORTANT: Voice content uses 'voice' source to trigger AI classification
+                # This ensures voice notes about work concerns aren't misclassified as tasks
+                pipeline_source = 'voice' if content_type == 'voice' else 'telegram'
+
                 result = process_brain_dump_sync(
                     content=content,
-                    source='telegram',
+                    source=pipeline_source,
                     state_store=self.state_store,
                     journal=self.journal,
                     chroma_adapter=self.chroma_adapter,
@@ -1038,11 +1042,14 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 # Map classification to legacy fields for backwards compatibility
                 classification_to_category = {
                     'thinking': 'thought',
+                    'venting': 'thought',  # Venting is reflective, not a task
                     'observation': 'thought',
+                    'note': 'thought',
                     'idea': 'idea',
                     'personal_task': 'task',
                     'work_task': 'task',
                     'worry': 'worry',
+                    'commitment': 'commitment',
                 }
                 entry.parsed_category = classification_to_category.get(
                     result.classification, 'thought'
@@ -1205,11 +1212,14 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             # Add classification info
             emoji = {
                 'thinking': '💭',
+                'venting': '😤',
                 'observation': '👁️',
+                'note': '📝',
                 'idea': '💡',
                 'personal_task': '✅',
                 'work_task': '💼',
                 'worry': '😰',
+                'commitment': '🤝',
                 # Legacy fallbacks
                 'task': '✅',
                 'thought': '💭',
@@ -1305,11 +1315,15 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     # Add classification info
                     emoji = {
                         'thinking': '💭',
+                        'venting': '😤',
                         'observation': '👁️',
+                        'note': '📝',
                         'idea': '💡',
                         'personal_task': '✅',
                         'work_task': '💼',
                         'worry': '😰',
+                        'commitment': '🤝',
+                        # Legacy fallbacks
                         'task': '✅',
                         'thought': '💭',
                     }.get(entry.classification or entry.parsed_category, '📝')
