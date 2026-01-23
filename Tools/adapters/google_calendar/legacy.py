@@ -23,7 +23,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from .base import BaseAdapter, ToolResult
+from ..base import BaseAdapter, ToolResult
 from . import utils
 
 logger = logging.getLogger(__name__)
