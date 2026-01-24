@@ -2,9 +2,10 @@
 Configuration for Thanos Memory V2.
 
 Integrates:
-- mem0 for fact extraction
-- Voyage AI for embeddings (direct API, not via mem0)
+- mem0 for fact extraction and embedding generation
+- OpenAI text-embedding-3-small for embeddings (1536 dimensions)
 - Neon pgvector for storage
+- Heat decay for ADHD-friendly memory surfacing
 """
 
 import os
@@ -65,7 +66,7 @@ MEM0_CONFIG = {
         "provider": "pgvector",
         "config": {
             **NEON_CONFIG,
-            "collection_name": "thanos_memories"
+            "collection_name": "memories"  # Must match setup_neon.sql table name
         }
     },
     "version": "v1.1"
