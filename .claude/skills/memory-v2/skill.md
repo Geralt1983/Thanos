@@ -274,13 +274,6 @@ For full payload (filename, content_type, category, etc.), query DB directly:
 cur.execute("SELECT payload FROM thanos_memories WHERE id = %s", (memory_id,))
 ```
 
-## Family Context
-
-Watch for these names (personal domain):
-- **Corin** - daughter, EF Tours France/England trip
-- **Chayah** - daughter, EF Tours France/England trip
-- **Sullivan** - son (baby), sleep training
-
 ## Self-Improvement
 
 **Update this skill when you learn:**

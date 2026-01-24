@@ -197,9 +197,41 @@ export class OuraAPIClient {
   // ===========================================================================
 
   /**
-   * Fetches daily sleep data for a given date range
+   * Fetches daily sleep SCORES for a given date range (summary only)
    * @param options - Optional date range and pagination parameters
-   * @returns Array of daily sleep records
+   * @returns Array of daily sleep score records
+   */
+  public async getDailySleepScores(
+    options: APIRequestOptions = {}
+  ): Promise<DailySleep[]> {
+    const params: Record<string, string> = {};
+
+    if (options.startDate) params.start_date = options.startDate;
+    if (options.endDate) params.end_date = options.endDate;
+    if (options.nextToken) params.next_token = options.nextToken;
+
+    const response = await this.requestWithRetry<OuraAPIResponse<DailySleep>>({
+      method: "GET",
+      url: "/usercollection/daily_sleep",
+      params,
+    });
+
+    // Handle pagination if next_token is present
+    if (response.next_token) {
+      const nextPage = await this.getDailySleepScores({
+        ...options,
+        nextToken: response.next_token,
+      });
+      return [...response.data, ...nextPage];
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Fetches detailed sleep period data with durations, stages, timing
+   * @param options - Optional date range and pagination parameters
+   * @returns Array of detailed sleep period records
    */
   public async getDailySleep(
     options: APIRequestOptions = {}
@@ -212,7 +244,7 @@ export class OuraAPIClient {
 
     const response = await this.requestWithRetry<OuraAPIResponse<DailySleep>>({
       method: "GET",
-      url: "/usercollection/daily_sleep",
+      url: "/usercollection/sleep",
       params,
     });
 

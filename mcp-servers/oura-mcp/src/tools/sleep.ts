@@ -146,10 +146,10 @@ function formatSleepData(data: DailySleep): any {
           : "N/A",
     },
     timing: {
-      bedtime_start: data.timing.bedtime_start,
-      bedtime_end: data.timing.bedtime_end,
-      latency: formatDuration(data.latency),
-      latency_seconds: data.latency,
+      bedtime_start: data.timing?.bedtime_start ?? null,
+      bedtime_end: data.timing?.bedtime_end ?? null,
+      latency: formatDuration(data.latency ?? null),
+      latency_seconds: data.latency ?? null,
       latency_meaning:
         data.latency !== null
           ? data.latency <= 600
