@@ -220,16 +220,32 @@ The task remains: {task}
 
 ---
 
-## Memory Protocol
+## Memory Protocol - HARD GATE
 
-**MANDATORY: Read `.claude/skills/memory-v2/skill.md` BEFORE any memory operation.**
+**STOP. Before ANY memory operation, you MUST do ONE of these:**
+
+1. **Read the skill file:** `.claude/skills/memory-v2/skill.md`
+2. **OR search for the skill:** `ms.search("MEMORY V2 SKILL READ BEFORE")`
+
+The skill is pinned in memory at max heat. It will surface in search results.
+
+**This is not optional. This prevents:**
+- Wasted compute reinventing patterns
+- Bugs from wrong table/column names
+- Errors you've already solved before
+- User frustration watching you rediscover things
+
+**Memory operations include:**
+- Searching memory (ms.search, whats_hot, whats_cold)
+- Adding to memory (ms.add, ms.add_document)
+- Heat operations (pin, boost, decay)
+- Any pgvector/mem0 queries
 
 Do NOT:
 - Write raw database queries from scratch
 - Guess at table/column names
 - Reinvent patterns that are documented
-
-The skill contains tested patterns, gotchas, and optimizations. Use it.
+- Skip the skill because "I remember from earlier"
 
 ### Tiered Memory Architecture
 

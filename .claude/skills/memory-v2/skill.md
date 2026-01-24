@@ -10,16 +10,48 @@ Memory V2 is Jeremy's vectorized memory system using Neon pgvector + OpenAI embe
 
 | Layer | Latency | Contents | How to Access |
 |-------|---------|----------|---------------|
-| **Hot** | 0ms | Session context, high-heat items | Loaded at session start via hook |
+| **Hot** | 0ms | High-heat items, recently accessed | `ms.whats_hot()` or hot_memory_loader |
 | **Warm** | ~0.5s | Semantic search with cached embeddings | `ms.search()` with LRU cache |
 | **Cold** | ~1s | Full corpus, low-heat, deep search | Direct DB query or uncached search |
 
-**Hot layer loading (session start):**
+**Hot layer loading (for long sessions use time-based refresh):**
 ```python
-# Loads recent high-heat memories into context
-hot_memories = ms.search("", limit=10)  # Top by heat
-recent = ms.search("", limit=10, filters={"days": 1})  # Last 24h
+from Tools.hot_memory_loader import load_hot_memories, load_if_stale
+
+# Force load (session start or manual refresh)
+context = load_hot_memories(limit=10)
+
+# Only load if cache is stale (for long sessions)
+# Returns empty string if loaded within last hour
+context = load_if_stale(hours=1, limit=10)
 ```
+
+**Quick heat summary:**
+```bash
+python Tools/hot_memory_loader.py --summary
+# 📊 Memory: 38623 total | 🔥 415 hot | ❄️ 23471 cold | Avg heat: 0.29
+```
+
+## Heat Tracking
+
+Heat is stored in payload as `heat` field (0.05 to 2.0):
+- **New memories:** Start at 1.0
+- **Accessed memories:** Boosted by +0.15
+- **Mentioned client/project:** Boosted by +0.10
+- **Daily decay:** heat *= 0.97 (run via cron)
+- **Pinned memories:** Never decay, heat = 2.0
+
+**Heat thresholds:**
+- 🔥 Hot: > 0.7 (recent, actively used)
+- • Warm: 0.3 - 0.7 (moderate activity)
+- ❄️ Cold: < 0.3 (neglected, may need attention)
+
+**Legacy data:** Memories without heat field use recency-based calculation:
+- Last 6 hours → 1.0
+- Last 24 hours → 0.85
+- Last 48 hours → 0.7
+- Last 7 days → 0.5
+- Older → 0.3
 
 ## Deprecated: State Files
 
@@ -67,7 +99,11 @@ results = ms.search("trip itinerary", limit=10)
 - `domain`: work or personal
 - `category`: For personal docs (financial, insurance, medical, travel, etc.)
 - `created_at`: Timestamp
-- `heat`: Activity score (1.0 = hot, 0.05 = cold)
+- `heat`: Activity score (1.0 = hot, 0.05 = cold) - see Heat Tracking
+- `importance`: Manual boost multiplier (default 1.0)
+- `pinned`: Boolean, if true never decays
+- `access_count`: Number of times accessed
+- `last_accessed`: Last access timestamp
 
 ## Search Results
 

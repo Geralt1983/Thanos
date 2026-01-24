@@ -33,6 +33,9 @@ cat << EOF
 $TIME_MSG
 
 $CONTEXT_OUTPUT
+
+📚 **Skills (read before operations):**
+- memory-v2: Search "MEMORY V2 SKILL" or read .claude/skills/memory-v2/skill.md
 EOF
 
 # Run daily brief for meaningful context (suppress errors)
