@@ -1,5 +1,34 @@
 # Thanos Intelligent Memory Architecture
 
+> ⚠️ **LEGACY DOCUMENT**
+>
+> **Memory V2 is now the PRIMARY architecture.**
+> See [ADR-012: Memory V2](adr/012-memory-v2-voyage-neon-heat.md) for the current implementation.
+>
+> **Key Changes (2026-01-23):**
+> - All memory operations route through `Tools/memory_router.py` (defaults to V2)
+> - Memory V2 uses: **mem0 + Neon pgvector + OpenAI embeddings + Heat Decay**
+> - Legacy systems (ChromaDB, SQLite) available as explicit fallbacks only
+> - Migration utility: `scripts/migrate_to_memory_v2.py`
+>
+> **Usage:**
+> ```python
+> from Tools.memory_router import add_memory, search_memory, whats_hot, whats_cold
+>
+> add_memory("Meeting notes with Orlando", metadata={"client": "Orlando"})
+> results = search_memory("What did Orlando say?")
+> hot = whats_hot()  # Current focus
+> cold = whats_cold()  # What am I neglecting?
+> ```
+
+---
+
+## Legacy Architecture (Historical Reference)
+
+The content below describes the original SQLite + ChromaDB architecture. This is retained for historical reference and understanding legacy code paths.
+
+---
+
 ## Executive Summary
 
 This document defines the architecture for an intelligent memory system that captures daily activities, detects struggles, recognizes what matters to the user, and provides temporal intelligence for natural language queries. The system builds on Thanos's existing four-pillar architecture (Trust, Capture, Clarity, Resilience) by adding a fifth pillar: **Memory**.
