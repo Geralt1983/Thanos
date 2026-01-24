@@ -4,7 +4,7 @@
 // Implements cache-first strategy with TTL-based staleness detection
 // =============================================================================
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 import { getDb } from "./db.js";
 import { calculateExpiresAt, isExpired } from "./schema.js";
 import type {
@@ -47,7 +47,7 @@ const DEFAULT_CACHE_TTL_HOURS = 1;
  */
 export function getCachedSleep(day: DateString): DailySleep | null {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM sleep_data WHERE day = ?
   `);
   const row = stmt.get(day) as CachedSleep | undefined;
@@ -79,7 +79,7 @@ export function getCachedSleepRange(
   endDate: DateString
 ): DailySleep[] {
   const db = getDb();
-  const stmt = db.prepare<[string, string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM sleep_data
     WHERE day >= ? AND day <= ?
     ORDER BY day DESC
@@ -120,7 +120,7 @@ export function setCachedSleep(
  */
 export function deleteCachedSleep(day: DateString): void {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     DELETE FROM sleep_data WHERE day = ?
   `);
   stmt.run(day);
@@ -139,7 +139,7 @@ export function deleteCachedSleep(day: DateString): void {
  */
 export function getCachedReadiness(day: DateString): DailyReadiness | null {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM readiness_data WHERE day = ?
   `);
   const row = stmt.get(day) as CachedReadiness | undefined;
@@ -171,7 +171,7 @@ export function getCachedReadinessRange(
   endDate: DateString
 ): DailyReadiness[] {
   const db = getDb();
-  const stmt = db.prepare<[string, string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM readiness_data
     WHERE day >= ? AND day <= ?
     ORDER BY day DESC
@@ -212,7 +212,7 @@ export function setCachedReadiness(
  */
 export function deleteCachedReadiness(day: DateString): void {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     DELETE FROM readiness_data WHERE day = ?
   `);
   stmt.run(day);
@@ -231,7 +231,7 @@ export function deleteCachedReadiness(day: DateString): void {
  */
 export function getCachedActivity(day: DateString): DailyActivity | null {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM activity_data WHERE day = ?
   `);
   const row = stmt.get(day) as CachedActivity | undefined;
@@ -263,7 +263,7 @@ export function getCachedActivityRange(
   endDate: DateString
 ): DailyActivity[] {
   const db = getDb();
-  const stmt = db.prepare<[string, string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM activity_data
     WHERE day >= ? AND day <= ?
     ORDER BY day DESC
@@ -304,7 +304,7 @@ export function setCachedActivity(
  */
 export function deleteCachedActivity(day: DateString): void {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     DELETE FROM activity_data WHERE day = ?
   `);
   stmt.run(day);
@@ -323,7 +323,7 @@ export function deleteCachedActivity(day: DateString): void {
  */
 export function getCachedHeartRate(day: DateString): HeartRateData[] {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM heart_rate_data
     WHERE day = ?
     ORDER BY timestamp ASC
@@ -351,7 +351,7 @@ export function getCachedHeartRateRange(
   endDate: DateString
 ): HeartRateData[] {
   const db = getDb();
-  const stmt = db.prepare<[string, string]>(`
+  const stmt = db.prepare(`
     SELECT * FROM heart_rate_data
     WHERE day >= ? AND day <= ?
     ORDER BY timestamp ASC
@@ -414,7 +414,7 @@ export function setCachedHeartRate(
  */
 export function deleteCachedHeartRate(day: DateString): void {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     DELETE FROM heart_rate_data WHERE day = ?
   `);
   stmt.run(day);
@@ -432,7 +432,7 @@ export function deleteCachedHeartRate(day: DateString): void {
  */
 export function getCacheMeta(key: string): string | null {
   const db = getDb();
-  const stmt = db.prepare<[string]>(`
+  const stmt = db.prepare(`
     SELECT value FROM cache_meta WHERE key = ?
   `);
   const row = stmt.get(key) as CacheMeta | undefined;

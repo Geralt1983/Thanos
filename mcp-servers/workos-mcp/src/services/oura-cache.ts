@@ -4,7 +4,7 @@
 // Provides read-only access to cached Oura health data
 // =============================================================================
 
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
@@ -74,7 +74,7 @@ export function ouraDbExists(): boolean {
  * Get Oura database instance (read-only)
  * Returns null if database doesn't exist
  */
-function getOuraDb(): Database.Database | null {
+function getOuraDb(): Database | null {
   if (!ouraDbExists()) {
     return null;
   }
@@ -125,7 +125,7 @@ export function getCachedReadiness(date?: string): OuraReadiness | null {
   try {
     const targetDate = date || getTodayDate();
 
-    const stmt = db.prepare<[string]>(`
+    const stmt = db.prepare(`
       SELECT * FROM readiness_data WHERE day = ?
     `);
     const row = stmt.get(targetDate) as
@@ -172,7 +172,7 @@ export function getCachedSleep(date?: string): OuraSleep | null {
   try {
     const targetDate = date || getTodayDate();
 
-    const stmt = db.prepare<[string]>(`
+    const stmt = db.prepare(`
       SELECT * FROM sleep_data WHERE day = ?
     `);
     const row = stmt.get(targetDate) as

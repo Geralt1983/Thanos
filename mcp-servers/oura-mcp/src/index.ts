@@ -35,6 +35,9 @@ import { errorResponse } from "./shared/types.js";
 // Import database utilities for graceful shutdown
 import { registerShutdownHandlers } from "./cache/db.js";
 
+// Import cache sync for automatic data refresh
+import { getCacheSync } from "./cache/sync.js";
+
 // =============================================================================
 // SERVER CONFIGURATION
 // =============================================================================
@@ -136,6 +139,16 @@ async function main() {
 
   // Connect server to transport
   await server.connect(transport);
+
+  // Initialize cache sync - automatically syncs if data is stale
+  try {
+    const cacheSync = getCacheSync();
+    await cacheSync.initializeSync();
+    const status = cacheSync.getSyncStatus();
+    console.error(`Cache sync initialized (last sync: ${status.lastSyncTime?.toISOString() || 'never'})`);
+  } catch (error) {
+    console.error(`Cache sync initialization failed: ${error}`);
+  }
 
   // Log server start (to stderr to not interfere with stdio communication)
   console.error(

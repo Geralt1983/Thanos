@@ -75,10 +75,18 @@ export class OuraOAuthClient {
       redirectUri: process.env.OURA_REDIRECT_URI,
     };
 
-    // Validate configuration
+    // Allow personal access token mode (skip OAuth if PAT is set)
+    const personalToken = process.env.OURA_PERSONAL_ACCESS_TOKEN || process.env.OURA_ACCESS_TOKEN;
+    if (personalToken) {
+      // Personal access token mode - no OAuth needed
+      this.tokenCachePath = "";
+      return;
+    }
+
+    // Validate OAuth configuration (only if not using personal access token)
     if (!this.config.clientId || !this.config.clientSecret) {
       throw new Error(
-        "OAuth configuration missing: OURA_CLIENT_ID and OURA_CLIENT_SECRET are required"
+        "OAuth configuration missing: Set OURA_PERSONAL_ACCESS_TOKEN for simple auth, or OURA_CLIENT_ID and OURA_CLIENT_SECRET for OAuth"
       );
     }
 
@@ -318,7 +326,13 @@ export class OuraOAuthClient {
    * This is the main method to use when you need an access token for API calls
    */
   public async getValidAccessToken(): Promise<string> {
-    // First, try to use environment variable (for testing/development)
+    // First, try personal access token (simplest auth method)
+    const personalToken = process.env.OURA_PERSONAL_ACCESS_TOKEN;
+    if (personalToken) {
+      return personalToken;
+    }
+
+    // Then try legacy access token env var (for testing/development)
     const envToken = process.env.OURA_ACCESS_TOKEN;
     if (envToken && !this.cachedTokens) {
       return envToken;
@@ -357,7 +371,7 @@ export class OuraOAuthClient {
    * Checks if we have valid credentials (either cached tokens or env token)
    */
   public hasValidCredentials(): boolean {
-    return !!(process.env.OURA_ACCESS_TOKEN || this.cachedTokens);
+    return !!(process.env.OURA_PERSONAL_ACCESS_TOKEN || process.env.OURA_ACCESS_TOKEN || this.cachedTokens);
   }
 
   // ===========================================================================

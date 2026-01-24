@@ -37,6 +37,7 @@ import {
   DeleteTaskSchema,
 } from "./validation.js";
 import { queueTaskCompletion } from "../../shared/memory-queue.js";
+import { notifyTaskComplete, notifyMilestone } from "../../services/notifications.js";
 
 // =============================================================================
 // TASK DOMAIN HANDLERS
@@ -566,6 +567,17 @@ export async function handleCompleteTask(
     });
   } catch (_memoryError) {
     // Silent memory queue failure - primary completion succeeded
+  }
+
+  // Send mobile notification (silent, non-blocking)
+  try {
+    if (existingTask.valueTier === "milestone") {
+      await notifyMilestone(existingTask.title, pointsFinal);
+    } else {
+      await notifyTaskComplete(existingTask.title, pointsFinal, existingTask.clientName);
+    }
+  } catch (_notifyError) {
+    // Silent notification failure - primary completion succeeded
   }
 
   return {

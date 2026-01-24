@@ -1,10 +1,10 @@
 // =============================================================================
 // OURA MCP CACHE SCHEMA
 // SQLite schema for caching Oura Ring API data locally
-// Uses better-sqlite3 for fast, synchronous database operations
+// Uses bun:sqlite for fast, synchronous database operations
 // =============================================================================
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 import type {
   DailySleep,
   DailyReadiness,
@@ -269,7 +269,7 @@ export const CREATE_CACHE_META_TABLE = `
  *
  * @param db - better-sqlite3 database instance
  */
-export function initializeSchema(db: Database.Database): void {
+export function initializeSchema(db: Database): void {
   // Create tables
   db.exec(CREATE_SLEEP_DATA_TABLE);
   db.exec(CREATE_READINESS_DATA_TABLE);
@@ -302,7 +302,7 @@ export function initializeSchema(db: Database.Database): void {
  * @param db - better-sqlite3 database instance
  * @returns Current schema version number
  */
-export function getSchemaVersion(db: Database.Database): number {
+export function getSchemaVersion(db: Database): number {
   try {
     const stmt = db.prepare("SELECT value FROM cache_meta WHERE key = ?");
     const row = stmt.get("schema_version") as CacheMeta | undefined;
@@ -319,7 +319,7 @@ export function getSchemaVersion(db: Database.Database): number {
  * @param db - better-sqlite3 database instance
  * @param version - Schema version number to set
  */
-export function setSchemaVersion(db: Database.Database, version: number): void {
+export function setSchemaVersion(db: Database, version: number): void {
   const now = new Date().toISOString();
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO cache_meta (key, value, updated_at)
@@ -339,7 +339,7 @@ export const CURRENT_SCHEMA_VERSION = 1;
  *
  * @param db - better-sqlite3 database instance
  */
-export function runMigrations(db: Database.Database): void {
+export function runMigrations(db: Database): void {
   const currentVersion = getSchemaVersion(db);
 
   if (currentVersion < CURRENT_SCHEMA_VERSION) {
@@ -388,7 +388,7 @@ export function isExpired(expiresAt: DateTimeString): boolean {
  * @param db - better-sqlite3 database instance
  * @returns Number of deleted rows across all tables
  */
-export function cleanupExpiredCache(db: Database.Database): number {
+export function cleanupExpiredCache(db: Database): number {
   const now = new Date().toISOString();
   let totalDeleted = 0;
 
