@@ -435,8 +435,8 @@ class TelegramBrainDumpBot:
             'duke': 'Duke',
         }
 
-        # Document type patterns
-        doc_types = {
+        # Work document type patterns
+        work_doc_types = {
             'proposal': 'proposal',
             'contract': 'contract',
             'invoice': 'invoice',
@@ -455,6 +455,64 @@ class TelegramBrainDumpBot:
             'guide': 'guide',
         }
 
+        # Personal document type patterns
+        personal_doc_types = {
+            # Financial
+            'receipt': 'receipt',
+            'statement': 'statement',
+            'tax': 'tax',
+            '1099': 'tax',
+            'w2': 'tax',
+            'w-2': 'tax',
+            '1040': 'tax',
+            'return': 'tax_return',
+            # Insurance
+            'insurance': 'insurance',
+            'policy': 'insurance_policy',
+            'claim': 'insurance_claim',
+            'eob': 'explanation_of_benefits',
+            'coverage': 'insurance',
+            # Medical/Health
+            'prescription': 'medical',
+            'lab': 'medical',
+            'results': 'medical',
+            'immunization': 'medical',
+            'vaccination': 'medical',
+            # Travel
+            'passport': 'travel',
+            'visa': 'travel',
+            'itinerary': 'travel',
+            'boarding': 'travel',
+            'ticket': 'travel',
+            'reservation': 'travel',
+            'confirmation': 'confirmation',
+            # Legal
+            'will': 'legal',
+            'trust': 'legal',
+            'deed': 'legal',
+            'title': 'legal',
+            'certificate': 'certificate',
+            'license': 'license',
+            # Home
+            'mortgage': 'home',
+            'lease': 'home',
+            'rental': 'home',
+            'utility': 'home',
+            'hoa': 'home',
+            # Vehicle
+            'registration': 'vehicle',
+            'inspection': 'vehicle',
+            'maintenance': 'vehicle',
+            # Education
+            'transcript': 'education',
+            'diploma': 'education',
+            'enrollment': 'education',
+            # Kids/Family
+            'sullivan': 'family',
+            'school': 'family',
+            'pediatric': 'family',
+        }
+
         filename_lower = filename.lower().replace('.pdf', '').replace('_', ' ').replace('-', ' ')
 
         # Check filename for client
@@ -464,11 +522,21 @@ class TelegramBrainDumpBot:
                 metadata['domain'] = 'work'
                 break
 
-        # Check filename for document type
-        for key, doc_type in doc_types.items():
+        # Check filename for work document type
+        for key, doc_type in work_doc_types.items():
             if key in filename_lower:
                 metadata['document_type'] = doc_type
+                metadata['domain'] = 'work'
                 break
+
+        # Check filename for personal document type (if not already matched)
+        if 'document_type' not in metadata:
+            for key, doc_type in personal_doc_types.items():
+                if key in filename_lower:
+                    metadata['document_type'] = doc_type
+                    metadata['domain'] = 'personal'
+                    metadata['category'] = doc_type  # personal docs get a category
+                    break
 
         # Analyze first page content for additional context
         first_page = content.split("--- Page 2 ---")[0] if "--- Page 2 ---" in content else content[:3000]
@@ -489,6 +557,37 @@ class TelegramBrainDumpBot:
             metadata['industry'] = 'healthcare'
             if 'epic' in first_page_lower:
                 metadata['system'] = 'Epic'
+
+        # Check for personal document indicators in content (if not already work)
+        if metadata.get('domain') != 'work' and 'document_type' not in metadata:
+            # Financial personal docs
+            if any(term in first_page_lower for term in ['account statement', 'credit card', 'bank of america', 'chase', 'wells fargo', 'fidelity', 'vanguard', 'schwab', 'ira', '401k', 'brokerage']):
+                metadata['domain'] = 'personal'
+                metadata['category'] = 'financial'
+            # Insurance docs
+            elif any(term in first_page_lower for term in ['blue cross', 'aetna', 'cigna', 'united health', 'humana', 'explanation of benefits', 'deductible', 'copay', 'premium']):
+                metadata['domain'] = 'personal'
+                metadata['category'] = 'insurance'
+            # Tax docs
+            elif any(term in first_page_lower for term in ['internal revenue', 'irs', 'form 1040', 'form w-2', 'form 1099', 'tax return', 'turbotax', 'h&r block']):
+                metadata['domain'] = 'personal'
+                metadata['category'] = 'tax'
+            # Medical docs
+            elif any(term in first_page_lower for term in ['diagnosis', 'prescription', 'lab results', 'immunization record', 'medical record', 'hospital', 'pharmacy']):
+                metadata['domain'] = 'personal'
+                metadata['category'] = 'medical'
+            # Travel docs
+            elif any(term in first_page_lower for term in ['boarding pass', 'flight confirmation', 'hotel reservation', 'passport', 'united states of america', 'department of state']):
+                metadata['domain'] = 'personal'
+                metadata['category'] = 'travel'
+            # Vehicle docs
+            elif any(term in first_page_lower for term in ['vehicle registration', 'dmv', 'department of motor', 'vin', 'odometer', 'carfax']):
+                metadata['domain'] = 'personal'
+                metadata['category'] = 'vehicle'
+            # Home docs
+            elif any(term in first_page_lower for term in ['mortgage', 'deed of trust', 'property tax', 'homeowner', 'hoa', 'lease agreement', 'landlord', 'tenant']):
+                metadata['domain'] = 'personal'
+                metadata['category'] = 'home'
 
         # Extract potential title from first lines
         lines = first_page.replace("--- Page 1 ---\n", "").strip().split('\n')
@@ -1619,6 +1718,8 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                             meta_parts.append(f"Title: {detected['title'][:40]}")
                         if detected.get("document_type"):
                             meta_parts.append(f"Type: {detected['document_type']}")
+                        if detected.get("category"):
+                            meta_parts.append(f"Category: {detected['category']}")
                         if detected.get("system"):
                             meta_parts.append(f"System: {detected['system']}")
                         if detected.get("domain"):
