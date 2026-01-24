@@ -55,7 +55,14 @@ class MemoryService:
 
     Uses mem0 for fact extraction and embedding generation,
     with custom heat decay for ADHD-friendly memory surfacing.
+
+    IMPORTANT: Read skill before use:
+    - File: .claude/skills/memory-v2/skill.md
+    - Or search: ms.search("MEMORY V2 SKILL READ BEFORE")
     """
+
+    # Class-level flag for skill reminder (once per session)
+    _skill_reminded = False
 
     def __init__(self, database_url: str = None, user_id: str = None):
         self.database_url = database_url or NEON_DATABASE_URL
@@ -74,6 +81,12 @@ class MemoryService:
                 logger.info("mem0 initialized successfully")
             except Exception as e:
                 logger.warning(f"Could not initialize mem0: {e}")
+
+    def _ensure_skill_reminder(self):
+        """Show skill reminder on first use per session."""
+        if not MemoryService._skill_reminded:
+            MemoryService._skill_reminded = True
+            logger.info("📚 Memory V2: Skill patterns available. Search 'MEMORY V2 SKILL' for docs.")
 
     @contextmanager
     def _get_connection(self):
@@ -101,6 +114,7 @@ class MemoryService:
         Returns:
             Result of memory addition
         """
+        self._ensure_skill_reminder()
         metadata = metadata or {}
 
         if self.memory:
@@ -158,6 +172,12 @@ class MemoryService:
             "hash": content_hash,
             "user_id": self.user_id,
             "created_at": datetime.now().isoformat(),
+            # Heat tracking for tiered memory
+            "heat": 1.0,  # New memories are hot
+            "importance": metadata.get("importance", 1.0),
+            "pinned": metadata.get("pinned", False),
+            "access_count": 0,
+            "last_accessed": datetime.now().isoformat(),
         }
         # Copy all metadata into payload
         for key, value in metadata.items():
@@ -234,6 +254,9 @@ class MemoryService:
         Returns:
             List of memories ranked by effective_score (similarity * heat * importance)
         """
+        # Skill reminder on first use
+        self._ensure_skill_reminder()
+
         # Always use direct search with cached embeddings for speed
         # mem0.search() calls OpenAI per-query without caching
         return self._direct_search(query, limit, filters)
@@ -403,6 +426,7 @@ class MemoryService:
 
         Returns highest-heat memories for current focus context.
         """
+        self._ensure_skill_reminder()
         return self.heat_service.get_hot_memories(limit)
 
     def whats_cold(self, threshold: float = 0.2, limit: int = 10) -> List[Dict[str, Any]]:
@@ -411,6 +435,7 @@ class MemoryService:
 
         Returns lowest-heat memories that might need attention.
         """
+        self._ensure_skill_reminder()
         return self.heat_service.get_cold_memories(threshold, limit)
 
     def pin(self, memory_id: str) -> bool:

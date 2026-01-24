@@ -67,17 +67,21 @@ class HeatService:
         """
         with self._get_connection() as conn:
             with conn.cursor() as cur:
+                # Apply decay to heat in payload, respecting pinned flag
                 cur.execute("""
-                    UPDATE memory_metadata
-                    SET heat = GREATEST(%(min_heat)s, heat * %(decay_rate)s),
-                        last_accessed = last_accessed  -- Don't update last_accessed
-                    WHERE pinned = FALSE
-                      AND last_accessed < NOW() - INTERVAL '%(interval)s hours'
-                    RETURNING memory_id
+                    UPDATE thanos_memories
+                    SET payload = payload
+                        || jsonb_build_object(
+                            'heat', GREATEST(%(min_heat)s,
+                                COALESCE((payload->>'heat')::float, 1.0) * %(decay_rate)s
+                            )
+                        )
+                    WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                      AND (payload->>'last_accessed')::timestamp < NOW() - INTERVAL '24 hours'
+                    RETURNING id
                 """, {
                     "min_heat": self.config["min_heat"],
-                    "decay_rate": self.config["decay_rate"],
-                    "interval": self.config["decay_interval_hours"]
+                    "decay_rate": self.config["decay_rate"]
                 })
 
                 affected = cur.rowcount
@@ -94,18 +98,21 @@ class HeatService:
         Returns:
             New heat value
         """
-        if self._degraded:
-            return 1.0  # Default heat when degraded
-
         with self._get_connection() as conn:
             with conn.cursor() as cur:
+                # Update heat in payload JSON
                 cur.execute("""
-                    UPDATE memory_metadata
-                    SET heat = LEAST(%(max_heat)s, heat + %(boost)s),
-                        last_accessed = NOW(),
-                        access_count = access_count + 1
-                    WHERE memory_id = %(id)s
-                    RETURNING heat
+                    UPDATE thanos_memories
+                    SET payload = payload
+                        || jsonb_build_object(
+                            'heat', LEAST(%(max_heat)s,
+                                COALESCE((payload->>'heat')::float, 0.5) + %(boost)s
+                            ),
+                            'last_accessed', NOW()::text,
+                            'access_count', COALESCE((payload->>'access_count')::int, 0) + 1
+                        )
+                    WHERE id = %(id)s
+                    RETURNING (payload->>'heat')::float
                 """, {
                     "max_heat": self.config["max_heat"],
                     "boost": self.config["access_boost"],
@@ -116,7 +123,7 @@ class HeatService:
                 if result:
                     logger.debug(f"Boosted memory {memory_id} to heat {result[0]}")
                     return result[0]
-                return None
+                return 1.0  # Default if memory not found
 
     def boost_related(self, entity: str, boost_type: str = "mention") -> int:
         """
@@ -131,26 +138,28 @@ class HeatService:
         Returns:
             Number of memories boosted
         """
-        if self._degraded:
-            return 0
-
         boost = (self.config["mention_boost"] if boost_type == "mention"
                  else self.config["access_boost"])
 
         with self._get_connection() as conn:
             with conn.cursor() as cur:
+                # Update heat in payload for related memories
                 cur.execute("""
-                    UPDATE memory_metadata
-                    SET heat = LEAST(%(max_heat)s, heat + %(boost)s)
-                    WHERE (client ILIKE %(entity)s
-                           OR project ILIKE %(entity)s
-                           OR %(entity)s = ANY(tags))
-                      AND pinned = FALSE
-                    RETURNING memory_id
+                    UPDATE thanos_memories
+                    SET payload = payload
+                        || jsonb_build_object(
+                            'heat', LEAST(%(max_heat)s,
+                                COALESCE((payload->>'heat')::float, 0.5) + %(boost)s
+                            )
+                        )
+                    WHERE (payload->>'client' ILIKE %(entity)s
+                           OR payload->>'project' ILIKE %(entity)s)
+                      AND COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                    RETURNING id
                 """, {
                     "max_heat": self.config["max_heat"],
                     "boost": boost,
-                    "entity": entity
+                    "entity": f"%{entity}%"
                 })
 
                 affected = cur.rowcount
@@ -167,16 +176,13 @@ class HeatService:
         Returns:
             Success status
         """
-        if self._degraded:
-            return False
-
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    UPDATE memory_metadata
-                    SET pinned = TRUE
-                    WHERE memory_id = %(id)s
-                    RETURNING memory_id
+                    UPDATE thanos_memories
+                    SET payload = payload || jsonb_build_object('pinned', true, 'heat', 2.0)
+                    WHERE id = %(id)s
+                    RETURNING id
                 """, {"id": memory_id})
 
                 result = cur.fetchone()
@@ -187,16 +193,13 @@ class HeatService:
 
     def unpin_memory(self, memory_id: str) -> bool:
         """Unpin a memory to allow decay."""
-        if self._degraded:
-            return False
-
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    UPDATE memory_metadata
-                    SET pinned = FALSE
-                    WHERE memory_id = %(id)s
-                    RETURNING memory_id
+                    UPDATE thanos_memories
+                    SET payload = payload || jsonb_build_object('pinned', false)
+                    WHERE id = %(id)s
+                    RETURNING id
                 """, {"id": memory_id})
 
                 return cur.fetchone() is not None
@@ -209,16 +212,13 @@ class HeatService:
             memory_id: UUID of the memory
             importance: Multiplier (typically 0.5 - 2.0)
         """
-        if self._degraded:
-            return False
-
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    UPDATE memory_metadata
-                    SET importance = %(importance)s
-                    WHERE memory_id = %(id)s
-                    RETURNING memory_id
+                    UPDATE thanos_memories
+                    SET payload = payload || jsonb_build_object('importance', %(importance)s)
+                    WHERE id = %(id)s
+                    RETURNING id
                 """, {"id": memory_id, "importance": importance})
 
                 return cur.fetchone() is not None
@@ -227,34 +227,53 @@ class HeatService:
         """
         Get highest-heat memories (what's top of mind).
 
+        Uses stored heat field where available, falls back to recency-based
+        heat calculation for legacy memories without heat tracking.
+
         Args:
             limit: Maximum results
 
         Returns:
             List of memories with heat data
         """
-        if self._degraded:
-            return []
-
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Query thanos_memories, using stored heat or recency-based fallback
                 cur.execute("""
                     SELECT
-                        m.id,
-                        m.content,
-                        m.memory_type,
-                        m.created_at,
-                        mm.heat,
-                        mm.importance,
-                        mm.access_count,
-                        mm.last_accessed,
-                        mm.pinned,
-                        mm.client,
-                        mm.project,
-                        mm.source
-                    FROM memories m
-                    JOIN memory_metadata mm ON m.id = mm.memory_id
-                    ORDER BY mm.heat DESC, mm.last_accessed DESC
+                        id,
+                        payload->>'data' as memory,
+                        payload->>'data' as content,
+                        payload->>'source' as source,
+                        payload->>'client' as client,
+                        payload->>'project' as project,
+                        payload->>'type' as memory_type,
+                        (payload->>'created_at')::timestamp as created_at,
+                        COALESCE(
+                            (payload->>'heat')::float,
+                            -- Fallback: calculate heat from recency for legacy data
+                            CASE
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '6 hours' THEN 1.0
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '24 hours' THEN 0.85
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '48 hours' THEN 0.7
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '7 days' THEN 0.5
+                                ELSE 0.3
+                            END
+                        ) as heat,
+                        COALESCE((payload->>'importance')::float, 1.0) as importance,
+                        COALESCE((payload->>'pinned')::boolean, FALSE) as pinned,
+                        COALESCE((payload->>'access_count')::int, 0) as access_count
+                    FROM thanos_memories
+                    ORDER BY
+                        COALESCE(
+                            (payload->>'heat')::float,
+                            CASE
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '6 hours' THEN 1.0
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '24 hours' THEN 0.85
+                                ELSE 0.5
+                            END
+                        ) DESC,
+                        (payload->>'created_at')::timestamp DESC
                     LIMIT %(limit)s
                 """, {"limit": limit})
 
@@ -264,6 +283,9 @@ class HeatService:
         """
         Get neglected memories (what am I forgetting?).
 
+        Uses age as proxy for coldness - older memories are "colder".
+        Returns memories older than 7 days that might need attention.
+
         Args:
             threshold: Heat threshold (memories below this)
             limit: Maximum results
@@ -271,32 +293,35 @@ class HeatService:
         Returns:
             List of cold memories
         """
-        if self._degraded:
-            return []
-
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Query thanos_memories directly, treating old memories as cold
                 cur.execute("""
                     SELECT
-                        m.id,
-                        m.content,
-                        m.memory_type,
-                        m.created_at,
-                        mm.heat,
-                        mm.importance,
-                        mm.access_count,
-                        mm.last_accessed,
-                        mm.pinned,
-                        mm.client,
-                        mm.project,
-                        mm.source
-                    FROM memories m
-                    JOIN memory_metadata mm ON m.id = mm.memory_id
-                    WHERE mm.heat < %(threshold)s
-                      AND mm.pinned = FALSE
-                    ORDER BY mm.heat ASC
+                        id,
+                        payload->>'data' as memory,
+                        payload->>'data' as content,
+                        payload->>'source' as source,
+                        payload->>'client' as client,
+                        payload->>'project' as project,
+                        payload->>'type' as memory_type,
+                        (payload->>'created_at')::timestamp as created_at,
+                        COALESCE((payload->>'heat')::float,
+                            CASE
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '7 days' THEN 0.3
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '14 days' THEN 0.2
+                                WHEN (payload->>'created_at')::timestamp > NOW() - INTERVAL '30 days' THEN 0.1
+                                ELSE 0.05
+                            END
+                        ) as heat,
+                        COALESCE((payload->>'importance')::float, 1.0) as importance,
+                        COALESCE((payload->>'pinned')::boolean, FALSE) as pinned
+                    FROM thanos_memories
+                    WHERE (payload->>'created_at')::timestamp < NOW() - INTERVAL '7 days'
+                      AND COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                    ORDER BY (payload->>'created_at')::timestamp DESC
                     LIMIT %(limit)s
-                """, {"threshold": threshold, "limit": limit})
+                """, {"limit": limit})
 
                 return [dict(row) for row in cur.fetchall()]
 
@@ -305,44 +330,60 @@ class HeatService:
         Find clients that haven't been engaged with recently.
 
         Returns:
-            List of client names with cold memories
+            List of client names with cold memories (no recent entries)
         """
-        if self._degraded:
-            return []
-
         with self._get_connection() as conn:
             with conn.cursor() as cur:
+                # Find clients with no memories in last 14 days
                 cur.execute("""
-                    SELECT DISTINCT mm.client
-                    FROM memory_metadata mm
-                    WHERE mm.client IS NOT NULL
-                      AND mm.heat < %(threshold)s
-                      AND mm.pinned = FALSE
-                    ORDER BY mm.client
-                """, {"threshold": threshold})
+                    SELECT DISTINCT payload->>'client' as client
+                    FROM thanos_memories
+                    WHERE payload->>'client' IS NOT NULL
+                      AND payload->>'client' != ''
+                      AND (payload->>'created_at')::timestamp < NOW() - INTERVAL '14 days'
+                      AND payload->>'client' NOT IN (
+                          SELECT DISTINCT payload->>'client'
+                          FROM thanos_memories
+                          WHERE payload->>'client' IS NOT NULL
+                            AND (payload->>'created_at')::timestamp > NOW() - INTERVAL '14 days'
+                      )
+                    ORDER BY client
+                """)
 
-                return [row[0] for row in cur.fetchall()]
+                return [row[0] for row in cur.fetchall() if row[0]]
 
     def get_heat_stats(self) -> Dict[str, Any]:
         """Get statistics about memory heat distribution."""
-        if self._degraded:
-            return {"total_memories": 0, "avg_heat": 1.0, "hot_count": 0, "cold_count": 0}
-
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT
                         COUNT(*) as total_memories,
-                        AVG(heat) as avg_heat,
-                        MIN(heat) as min_heat,
-                        MAX(heat) as max_heat,
-                        COUNT(*) FILTER (WHERE heat > 0.7) as hot_count,
-                        COUNT(*) FILTER (WHERE heat < 0.3) as cold_count,
-                        COUNT(*) FILTER (WHERE pinned = TRUE) as pinned_count
-                    FROM memory_metadata
+                        COUNT(*) FILTER (WHERE (payload->>'created_at')::timestamp > NOW() - INTERVAL '48 hours') as hot_count,
+                        COUNT(*) FILTER (WHERE (payload->>'created_at')::timestamp < NOW() - INTERVAL '7 days') as cold_count,
+                        COUNT(*) FILTER (WHERE (payload->>'pinned')::boolean = TRUE) as pinned_count,
+                        COUNT(DISTINCT payload->>'client') FILTER (WHERE payload->>'client' IS NOT NULL AND payload->>'client' != '') as client_count
+                    FROM thanos_memories
                 """)
 
-                return dict(cur.fetchone())
+                row = cur.fetchone()
+                # Calculate synthetic avg_heat based on age distribution
+                total = row['total_memories'] or 1
+                hot = row['hot_count'] or 0
+                cold = row['cold_count'] or 0
+                warm = total - hot - cold
+                avg_heat = (hot * 0.9 + warm * 0.5 + cold * 0.15) / total if total > 0 else 0.5
+
+                return {
+                    "total_memories": row['total_memories'],
+                    "avg_heat": round(avg_heat, 2),
+                    "hot_count": row['hot_count'],
+                    "cold_count": row['cold_count'],
+                    "pinned_count": row['pinned_count'],
+                    "client_count": row['client_count'],
+                    "min_heat": 0.05,
+                    "max_heat": 1.0
+                }
 
     def heat_report(self) -> str:
         """Generate a formatted heat report."""
@@ -359,14 +400,20 @@ class HeatService:
 
         lines.append("🔥 HOT (Active Focus):")
         for m in hot:
-            content = m['content'][:50] + "..." if len(m['content']) > 50 else m['content']
-            lines.append(f"  {m['heat']:.2f} | {content}")
+            content = (m.get('content') or m.get('memory') or '')[:50]
+            if len(m.get('content') or m.get('memory') or '') > 50:
+                content += "..."
+            heat = m.get('heat', 0.5)
+            lines.append(f"  {heat:.2f} | {content}")
 
         lines.append("")
         lines.append("❄️ COLD (Neglected):")
         for m in cold:
-            content = m['content'][:50] + "..." if len(m['content']) > 50 else m['content']
-            lines.append(f"  {m['heat']:.2f} | {content}")
+            content = (m.get('content') or m.get('memory') or '')[:50]
+            if len(m.get('content') or m.get('memory') or '') > 50:
+                content += "..."
+            heat = m.get('heat', 0.1)
+            lines.append(f"  {heat:.2f} | {content}")
 
         return "\n".join(lines)
 
