@@ -414,6 +414,102 @@ class TelegramBrainDumpBot:
         except Exception as e:
             return None, f"PDF extraction failed: {e}"
 
+    def _extract_pdf_metadata(self, filename: str, content: str) -> Dict[str, Any]:
+        """
+        Automatically extract metadata from PDF filename and content.
+
+        Analyzes:
+        - Filename for client names, document types
+        - First page content for titles, headers, key terms
+        """
+        metadata = {}
+
+        # Known clients to detect
+        known_clients = {
+            'orlando': 'Orlando',
+            'raleigh': 'Raleigh',
+            'memphis': 'Memphis',
+            'kentucky': 'Kentucky',
+            'versacare': 'VersaCare',
+            'unc': 'UNC',
+            'duke': 'Duke',
+        }
+
+        # Document type patterns
+        doc_types = {
+            'proposal': 'proposal',
+            'contract': 'contract',
+            'invoice': 'invoice',
+            'report': 'report',
+            'spec': 'specification',
+            'requirements': 'requirements',
+            'sow': 'statement_of_work',
+            'msa': 'master_agreement',
+            'nda': 'nda',
+            'workflow': 'workflow',
+            'flowsheet': 'flowsheet',
+            'policy': 'policy',
+            'procedure': 'procedure',
+            'training': 'training',
+            'manual': 'manual',
+            'guide': 'guide',
+        }
+
+        filename_lower = filename.lower().replace('.pdf', '').replace('_', ' ').replace('-', ' ')
+
+        # Check filename for client
+        for key, client_name in known_clients.items():
+            if key in filename_lower:
+                metadata['client'] = client_name
+                metadata['domain'] = 'work'
+                break
+
+        # Check filename for document type
+        for key, doc_type in doc_types.items():
+            if key in filename_lower:
+                metadata['document_type'] = doc_type
+                break
+
+        # Analyze first page content for additional context
+        first_page = content.split("--- Page 2 ---")[0] if "--- Page 2 ---" in content else content[:3000]
+        first_page_lower = first_page.lower()
+
+        # Check content for client mentions if not found in filename
+        if 'client' not in metadata:
+            for key, client_name in known_clients.items():
+                if key in first_page_lower:
+                    metadata['client'] = client_name
+                    metadata['domain'] = 'work'
+                    break
+
+        # Check for Epic/healthcare context (common in Jeremy's work)
+        healthcare_terms = ['epic', 'flowsheet', 'clindoc', 'emr', 'ehr', 'patient', 'clinical', 'nursing', 'physician', 'ambulatory', 'inpatient']
+        if any(term in first_page_lower for term in healthcare_terms):
+            metadata['domain'] = 'work'
+            metadata['industry'] = 'healthcare'
+            if 'epic' in first_page_lower:
+                metadata['system'] = 'Epic'
+
+        # Extract potential title from first lines
+        lines = first_page.replace("--- Page 1 ---\n", "").strip().split('\n')
+        for line in lines[:5]:
+            line = line.strip()
+            # Title candidates: short, no punctuation at end, capitalized
+            if 5 < len(line) < 100 and not line.endswith(('.', ',', ':')):
+                if line[0].isupper():
+                    metadata['title'] = line
+                    break
+
+        # Default domain to work if document looks professional
+        if 'domain' not in metadata:
+            work_indicators = ['confidential', 'proprietary', 'copyright', 'prepared by', 'submitted to', 'client', 'project']
+            if any(ind in first_page_lower for ind in work_indicators):
+                metadata['domain'] = 'work'
+            else:
+                metadata['domain'] = 'personal'
+
+        return metadata
+
     async def ingest_pdf_to_memory(
         self,
         content: str,
@@ -438,6 +534,9 @@ class TelegramBrainDumpBot:
             return {"status": "skipped", "reason": "Memory V2 not available"}
 
         try:
+            # Auto-extract metadata from filename and content
+            auto_metadata = self._extract_pdf_metadata(filename, content)
+
             # Build metadata
             metadata = {
                 "source": "telegram",
@@ -446,6 +545,7 @@ class TelegramBrainDumpBot:
                 "user_id": str(user_id) if user_id else None,
                 "timestamp": datetime.now().isoformat(),
                 "type": "document",
+                **auto_metadata,  # Merge auto-extracted metadata
             }
 
             if caption:
@@ -476,8 +576,8 @@ class TelegramBrainDumpBot:
             )
 
             if result:
-                logger.info(f"Ingested PDF to Memory V2: {filename}")
-                return {"status": "success", "result": result}
+                logger.info(f"Ingested PDF to Memory V2: {filename} (metadata: {auto_metadata})")
+                return {"status": "success", "result": result, "metadata": auto_metadata}
             else:
                 return {"status": "failed", "reason": "Memory service returned no result"}
 
@@ -1509,6 +1609,24 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     # Memory status
                     if memory_result["status"] == "success":
                         response_parts.append("✅ Ingested to memory")
+
+                        # Show detected metadata
+                        detected = memory_result.get("metadata", {})
+                        meta_parts = []
+                        if detected.get("client"):
+                            meta_parts.append(f"Client: {detected['client']}")
+                        if detected.get("title"):
+                            meta_parts.append(f"Title: {detected['title'][:40]}")
+                        if detected.get("document_type"):
+                            meta_parts.append(f"Type: {detected['document_type']}")
+                        if detected.get("system"):
+                            meta_parts.append(f"System: {detected['system']}")
+                        if detected.get("domain"):
+                            meta_parts.append(f"Domain: {detected['domain']}")
+
+                        if meta_parts:
+                            response_parts.append(f"🏷️ _{' | '.join(meta_parts)}_")
+
                         if caption:
                             response_parts.append(f"📝 Context: _{caption}_")
                     elif memory_result["status"] == "skipped":
