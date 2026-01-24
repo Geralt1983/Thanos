@@ -1,10 +1,10 @@
 // =============================================================================
 // OURA MCP DATABASE INITIALIZATION
 // SQLite database setup for caching Oura Ring API data locally
-// Uses better-sqlite3 for fast, synchronous database operations
+// Uses bun:sqlite for fast, synchronous database operations
 // =============================================================================
 
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -27,7 +27,7 @@ const DB_PATH = path.join(CACHE_DIR, "oura-health.db");
 /**
  * Singleton database instance
  */
-let dbInstance: Database.Database | null = null;
+let dbInstance: Database | null = null;
 
 // =============================================================================
 // DATABASE INITIALIZATION
@@ -38,9 +38,9 @@ let dbInstance: Database.Database | null = null;
  * Creates the cache directory and database file if they don't exist
  * This function is idempotent - safe to call multiple times
  *
- * @returns better-sqlite3 database instance
+ * @returns bun:sqlite database instance
  */
-export function initDb(): Database.Database {
+export function initDb(): Database {
   // Return existing instance if already initialized
   if (dbInstance) {
     return dbInstance;
@@ -56,7 +56,7 @@ export function initDb(): Database.Database {
 
   // Enable WAL mode for better concurrent access
   // WAL (Write-Ahead Logging) allows multiple readers while a write is in progress
-  dbInstance.pragma("journal_mode = WAL");
+  dbInstance.exec("PRAGMA journal_mode = WAL");
 
   // Run migrations to set up schema
   runMigrations(dbInstance);
@@ -68,9 +68,9 @@ export function initDb(): Database.Database {
  * Get the database instance, initializing if needed
  * This is the primary method to use for accessing the database
  *
- * @returns better-sqlite3 database instance
+ * @returns bun:sqlite database instance
  */
-export function getDb(): Database.Database {
+export function getDb(): Database {
   if (!dbInstance) {
     return initDb();
   }
@@ -176,17 +176,17 @@ export function getDbStats(): {
   }
 
   const db = getDb();
-  const pageCountResult = db.pragma("page_count", { simple: true }) as number;
-  const pageSizeResult = db.pragma("page_size", { simple: true }) as number;
-  const journalModeResult = db.pragma("journal_mode", { simple: true }) as string;
+  const pageCountResult = db.query("PRAGMA page_count").get() as { page_count: number } | null;
+  const pageSizeResult = db.query("PRAGMA page_size").get() as { page_size: number } | null;
+  const journalModeResult = db.query("PRAGMA journal_mode").get() as { journal_mode: string } | null;
 
   return {
     path: DB_PATH,
     exists: true,
     size,
-    pageCount: pageCountResult,
-    pageSize: pageSizeResult,
-    walMode: journalModeResult === "wal",
+    pageCount: pageCountResult?.page_count ?? 0,
+    pageSize: pageSizeResult?.page_size ?? 0,
+    walMode: journalModeResult?.journal_mode === "wal",
   };
 }
 
