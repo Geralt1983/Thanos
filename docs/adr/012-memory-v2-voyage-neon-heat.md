@@ -1,20 +1,51 @@
-# ADR-012: Memory V2 - Voyage + Neon + Heat Decay
+# ADR-012: Memory V2 - OpenAI + Neon + Heat Decay
 
 **Date:** 2026-01-22
-**Status:** Implementation In Progress
+**Status:** Implemented (PRIMARY ARCHITECTURE)
 **Supersedes:** ADR-001, ADR-005 (previous memory architecture)
 
 ## Decision
 
-Migrate Thanos memory from the current fragmented architecture (OpenAI embeddings + ChromaDB + local SQLite) to a unified cloud-first system:
+Migrate Thanos memory from the current fragmented architecture (local ChromaDB + SQLite) to a unified cloud-first system:
 
 | Component | Old | New |
 |-----------|-----|-----|
-| Embeddings | OpenAI text-embedding-3-small | **Voyage AI voyage-2** |
+| Embeddings | ChromaDB default | **OpenAI text-embedding-3-small** |
 | Vector Storage | ChromaDB (local) | **Neon pgvector (cloud)** |
 | Fact Extraction | Manual / none | **mem0 (auto-extraction)** |
 | Decay System | None | **Heat-based decay** |
 | Local Storage | Multiple SQLite DBs | **None (all cloud)** |
+
+## Implementation Status (as of 2026-01-23)
+
+**Memory V2 is now the PRIMARY architecture.** All new memory operations route through V2 by default.
+
+| Artifact | Status | Location |
+|----------|--------|----------|
+| MemoryService | ✅ Complete | `Tools/memory_v2/service.py` |
+| HeatService | ✅ Complete | `Tools/memory_v2/heat.py` |
+| Unified Router | ✅ Complete | `Tools/memory_router.py` |
+| MCP Tools | ✅ Complete | `mcp-servers/memory-v2/` |
+| Migration Utility | ✅ Complete | `scripts/migrate_to_memory_v2.py` |
+| CLI Integration | ✅ Complete | Uses V2 via `_get_memory_v2()` |
+| Legacy Systems | ⚠️ Fallback Only | `Tools/memory/`, `memory/` |
+
+### Routing Architecture
+
+```
+ALL MEMORY OPERATIONS
+         │
+         ▼
+┌─────────────────────────┐
+│   Tools/memory_router   │  ← Unified entry point
+│   (defaults to V2)      │
+└──────────┬──────────────┘
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+ Memory V2    Legacy (opt-in)
+ (PRIMARY)    (fallback only)
+```
 
 ## Context
 
@@ -27,11 +58,11 @@ Migrate Thanos memory from the current fragmented architecture (OpenAI embedding
 
 ### Why These Choices
 
-**Voyage AI:**
-- Anthropic-recommended embeddings
-- No local storage
-- voyage-2: 1536 dimensions, excellent quality/cost
-- Better semantic understanding than OpenAI for personal data
+**OpenAI text-embedding-3-small:**
+- Proven quality, widely supported
+- 1536 dimensions, excellent for semantic search
+- Already integrated with mem0 for seamless coordination
+- No additional API key needed (OpenAI used for LLM extraction anyway)
 
 **Neon pgvector:**
 - Serverless PostgreSQL - no local disk
@@ -80,10 +111,10 @@ Migrate Thanos memory from the current fragmented architecture (OpenAI embedding
               ┌──────────────┴──────────────┐
               ▼                             ▼
 ┌─────────────────────────┐   ┌─────────────────────────┐
-│      VOYAGE AI          │   │      NEON POSTGRES      │
+│       OPENAI            │   │      NEON POSTGRES      │
 │  (embeddings API)       │   │  (pgvector storage)     │
 │                         │   │                         │
-│  - voyage-2 model       │   │  - memories table       │
+│  - text-embedding-3-sm  │   │  - memories table       │
 │  - 1536 dimensions      │   │  - metadata + heat      │
 │  - Remote, no local     │   │  - Full-text + vector   │
 └─────────────────────────┘   └─────────────────────────┘
@@ -189,10 +220,7 @@ effective_score = similarity * heat * importance
 # Neon (Postgres + pgvector)
 NEON_DATABASE_URL=postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/thanos
 
-# Voyage AI (embeddings)
-VOYAGE_API_KEY=pa-xxxxxxxxxxxx
-
-# OpenAI (for mem0 LLM extraction)
+# OpenAI (for mem0 LLM extraction AND embeddings)
 OPENAI_API_KEY=sk-xxxxxxxxxxxx
 ```
 
@@ -208,17 +236,17 @@ MEM0_CONFIG = {
         }
     },
     "embedder": {
-        "provider": "voyage",
+        "provider": "openai",
         "config": {
-            "api_key": os.getenv("VOYAGE_API_KEY"),
-            "model": "voyage-2"
+            "api_key": os.getenv("OPENAI_API_KEY"),
+            "model": "text-embedding-3-small"
         }
     },
     "vector_store": {
         "provider": "pgvector",
         "config": {
             "url": os.getenv("NEON_DATABASE_URL"),
-            "collection_name": "thanos_memories"
+            "collection_name": "memories"
         }
     },
     "version": "v1.1"
@@ -294,7 +322,7 @@ memory_pin(memory_id: str) -> dict
 
 ### Files to Update
 - `requirements.txt` - Add mem0ai, remove chromadb
-- `.env` - Add VOYAGE_API_KEY, NEON_DATABASE_URL
+- `.env` - Add NEON_DATABASE_URL (OPENAI_API_KEY already exists)
 
 ## Implementation Order
 
