@@ -222,7 +222,22 @@ The task remains: {task}
 
 ## Memory Protocol
 
-**Skill reference:** `.claude/skills/memory-v2/skill.md`
+**MANDATORY: Read `.claude/skills/memory-v2/skill.md` BEFORE any memory operation.**
+
+Do NOT:
+- Write raw database queries from scratch
+- Guess at table/column names
+- Reinvent patterns that are documented
+
+The skill contains tested patterns, gotchas, and optimizations. Use it.
+
+### Tiered Memory Architecture
+
+| Layer | Latency | Contents | Access |
+|-------|---------|----------|--------|
+| **Hot** | 0ms | Session context, last 24h, high-heat items | Auto-loaded at session start |
+| **Warm** | ~0.5s | Memory V2 search (cached embeddings) | On-demand via skill patterns |
+| **Cold** | ~1s | Full pgvector corpus, low-heat | Explicit deep search |
 
 ### Auto-Search Triggers
 
