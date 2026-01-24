@@ -24,5 +24,8 @@ google-auth>=2.0.0               # Google authentication library
 google-auth-oauthlib>=1.0.0      # OAuth 2.0 flow for Google APIs
 google-api-python-client>=2.0.0  # Google Calendar API client
 
+# Document Processing
+PyPDF2>=3.0.0                    # PDF text extraction for Telegram bot
+
 # Future: MCP SDK for full protocol support
 # mcp>=1.0.0

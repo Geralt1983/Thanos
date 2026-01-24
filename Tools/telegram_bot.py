@@ -87,6 +87,7 @@ class TelegramBrainDumpBot:
     - Text message capture
     - Voice message transcription via Whisper
     - Photo/image capture with auto-classification (receipt, document, screenshot, etc.)
+    - PDF document intake with text extraction and memory ingestion
     - AI parsing to extract tasks, commitments, ideas
     - Direct integration with WorkOS brain dump
     - Journal logging for all captures
@@ -351,6 +352,138 @@ class TelegramBrainDumpBot:
 
         # No caption or unknown
         return 'unknown' if not caption else 'reference'
+
+    async def extract_pdf_text(self, pdf_path: str) -> tuple[Optional[str], Optional[str]]:
+        """
+        Extract text from a PDF file.
+
+        Args:
+            pdf_path: Path to the PDF file.
+
+        Returns:
+            Tuple of (extracted_text, error_message) - one will be None.
+        """
+        # Try PyPDF2 first (most common)
+        try:
+            import PyPDF2
+
+            with open(pdf_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                text_parts = []
+
+                for page_num, page in enumerate(reader.pages):
+                    try:
+                        page_text = page.extract_text()
+                        if page_text and page_text.strip():
+                            text_parts.append(f"--- Page {page_num + 1} ---\n{page_text}")
+                    except Exception as e:
+                        logger.warning(f"Failed to extract page {page_num + 1}: {e}")
+                        continue
+
+                if text_parts:
+                    return "\n\n".join(text_parts), None
+                else:
+                    return None, "PDF contains no extractable text (may be scanned/image-based)"
+
+        except ImportError:
+            pass  # Try pdfplumber
+
+        # Try pdfplumber as fallback (better for complex layouts)
+        try:
+            import pdfplumber
+
+            text_parts = []
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages):
+                    try:
+                        page_text = page.extract_text()
+                        if page_text and page_text.strip():
+                            text_parts.append(f"--- Page {page_num + 1} ---\n{page_text}")
+                    except Exception as e:
+                        logger.warning(f"Failed to extract page {page_num + 1}: {e}")
+                        continue
+
+            if text_parts:
+                return "\n\n".join(text_parts), None
+            else:
+                return None, "PDF contains no extractable text (may be scanned/image-based)"
+
+        except ImportError:
+            return None, "No PDF library available. Install with: pip install PyPDF2 or pip install pdfplumber"
+
+        except Exception as e:
+            return None, f"PDF extraction failed: {e}"
+
+    async def ingest_pdf_to_memory(
+        self,
+        content: str,
+        filename: str,
+        user_id: Optional[int] = None,
+        caption: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Ingest PDF content to Memory V2.
+
+        Args:
+            content: Extracted text content from PDF.
+            filename: Original PDF filename.
+            user_id: Telegram user ID.
+            caption: Optional caption/context from user.
+
+        Returns:
+            Result dict with memory_id and status.
+        """
+        if not self.memory_service:
+            logger.warning("Memory V2 not available, PDF content not persisted")
+            return {"status": "skipped", "reason": "Memory V2 not available"}
+
+        try:
+            # Build metadata
+            metadata = {
+                "source": "telegram",
+                "content_type": "pdf",
+                "filename": filename,
+                "user_id": str(user_id) if user_id else None,
+                "timestamp": datetime.now().isoformat(),
+                "type": "document",
+            }
+
+            if caption:
+                metadata["caption"] = caption
+                # If caption contains context clues, add them
+                caption_lower = caption.lower()
+                if any(kw in caption_lower for kw in ['client', 'work', 'project', 'meeting']):
+                    metadata["domain"] = "work"
+                elif any(kw in caption_lower for kw in ['personal', 'family', 'home']):
+                    metadata["domain"] = "personal"
+
+            # For large documents, chunk and store
+            # Memory V2 handles embedding, so we just store the content
+            MAX_CONTENT_LENGTH = 50000  # Reasonable limit for embedding
+
+            if len(content) > MAX_CONTENT_LENGTH:
+                # Store summary and reference
+                summary_content = f"[PDF: {filename}]\n\n{content[:MAX_CONTENT_LENGTH]}\n\n[... {len(content) - MAX_CONTENT_LENGTH:,} more characters truncated]"
+                metadata["truncated"] = True
+                metadata["original_length"] = len(content)
+                content_to_store = summary_content
+            else:
+                content_to_store = f"[PDF: {filename}]\n\n{content}"
+
+            result = self.memory_service.add(
+                content=content_to_store,
+                metadata=metadata
+            )
+
+            if result:
+                logger.info(f"Ingested PDF to Memory V2: {filename}")
+                return {"status": "success", "result": result}
+            else:
+                return {"status": "failed", "reason": "Memory service returned no result"}
+
+        except Exception as e:
+            logger.error(f"PDF memory ingestion failed: {e}")
+            return {"status": "error", "reason": str(e)}
 
     async def _get_tasks_response(self, status: str = 'active') -> str:
         """Fetch tasks from WorkOS and format response."""
@@ -1055,6 +1188,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     state_store=self.state_store,
                     journal=self.journal,
                     memory_service=self.memory_service,
+                    use_ai_classifier=False,  # Use Claude Code for interpretation, not API
                 )
 
                 # Update entry with pipeline results
@@ -1180,7 +1314,8 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 "Just send me anything:\n"
                 "• 📝 Text messages\n"
                 "• 🎤 Voice messages\n"
-                "• 📸 Photos (with text)\n\n"
+                "• 📸 Photos (with text)\n"
+                "• 📕 PDF documents\n\n"
                 "I'll capture it, parse it, and add it to your brain dump queue.\n\n"
                 "*Commands:*\n"
                 "/status - Quick status overview\n"
@@ -1278,49 +1413,113 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             await update.message.reply_text("\n".join(response_parts))
 
         async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            """Handle document/file uploads (text files, etc.)"""
+            """Handle document/file uploads (text files, PDFs, etc.)"""
             if not is_allowed(update.effective_user.id):
                 return
 
             document = update.message.document
             file_name = document.file_name or "unknown"
             mime_type = document.mime_type or ""
+            caption = update.message.caption or ""
 
-            # Only process text files
-            supported_extensions = ('.txt', '.md', '.text', '.log')
-            supported_mimes = ('text/plain', 'text/markdown', 'text/x-markdown')
-
-            is_text_file = (
-                file_name.lower().endswith(supported_extensions) or
-                mime_type in supported_mimes
+            # Determine file type
+            is_pdf = (
+                file_name.lower().endswith('.pdf') or
+                mime_type == 'application/pdf'
             )
 
-            if not is_text_file:
+            supported_text_extensions = ('.txt', '.md', '.text', '.log')
+            supported_text_mimes = ('text/plain', 'text/markdown', 'text/x-markdown')
+
+            is_text_file = (
+                file_name.lower().endswith(supported_text_extensions) or
+                mime_type in supported_text_mimes
+            )
+
+            if not is_text_file and not is_pdf:
                 await update.message.reply_text(
                     f"📄 Received: {file_name}\n\n"
-                    "Currently only text files (.txt, .md) are supported.\n"
+                    "Supported formats:\n"
+                    "• Text files (.txt, .md)\n"
+                    "• PDF documents (.pdf)\n\n"
                     "For other files, please copy and paste the content."
                 )
                 return
 
             # Download the file
             file = await context.bot.get_file(document.file_id)
+            suffix = '.pdf' if is_pdf else '.txt'
 
-            with tempfile.NamedTemporaryFile(suffix='.txt', delete=False, mode='wb') as tmp:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, mode='wb') as tmp:
                 await file.download_to_drive(tmp.name)
                 tmp_path = tmp.name
 
             try:
-                # Read file content
-                processing_msg = await update.message.reply_text(f"📄 Processing: {file_name}...")
+                # Send processing message
+                processing_msg = await update.message.reply_text(
+                    f"{'📕' if is_pdf else '📄'} Processing: {file_name}..."
+                )
 
-                with open(tmp_path, 'r', encoding='utf-8', errors='replace') as f:
-                    content = f.read()
+                # Extract content based on file type
+                if is_pdf:
+                    content, error = await self.extract_pdf_text(tmp_path)
+                    if error:
+                        await processing_msg.edit_text(
+                            f"📕 *{file_name}*\n\n"
+                            f"❌ {error}",
+                            parse_mode='Markdown'
+                        )
+                        return
+                else:
+                    # Text file
+                    with open(tmp_path, 'r', encoding='utf-8', errors='replace') as f:
+                        content = f.read()
 
-                if not content.strip():
-                    await processing_msg.edit_text(f"📄 {file_name} is empty.")
+                if not content or not content.strip():
+                    await processing_msg.edit_text(f"{'📕' if is_pdf else '📄'} {file_name} is empty.")
                     return
 
+                # For PDFs, ingest to Memory V2 and show different response
+                if is_pdf:
+                    # Ingest to memory
+                    memory_result = await self.ingest_pdf_to_memory(
+                        content=content,
+                        filename=file_name,
+                        user_id=update.effective_user.id,
+                        caption=caption
+                    )
+
+                    # Count pages and words
+                    page_count = content.count("--- Page ")
+                    word_count = len(content.split())
+
+                    # Build response
+                    response_parts = [f"📕 *{file_name}*\n"]
+
+                    # Stats
+                    response_parts.append(f"📊 {page_count} pages | {word_count:,} words\n")
+
+                    # Preview of content
+                    preview_text = content.replace("--- Page 1 ---\n", "").strip()[:300]
+                    preview_text = preview_text.replace('*', '').replace('_', '').replace('`', '')
+                    if len(content) > 300:
+                        preview_text += "..."
+                    response_parts.append(f"```\n{preview_text}\n```\n")
+
+                    # Memory status
+                    if memory_result["status"] == "success":
+                        response_parts.append("✅ Ingested to memory")
+                        if caption:
+                            response_parts.append(f"📝 Context: _{caption}_")
+                    elif memory_result["status"] == "skipped":
+                        response_parts.append("⚠️ Memory not available - content displayed only")
+                    else:
+                        response_parts.append(f"❌ Memory error: {memory_result.get('reason', 'unknown')}")
+
+                    await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
+                    return
+
+                # For text files, continue with existing brain dump pipeline
                 # Check content length - handle large files
                 if len(content) > 10000:
                     await processing_msg.edit_text(
