@@ -166,6 +166,63 @@ class HeatService:
                 logger.info(f"Boosted {affected} memories related to '{entity}'")
                 return affected
 
+    def boost_by_filter(
+        self,
+        filter_key: str,
+        filter_value: str,
+        boost: float = 0.1
+    ) -> int:
+        """
+        Boost heat for all memories matching a metadata filter.
+
+        Useful when switching context to a client/project - boost all related
+        memories to surface them in searches.
+
+        Args:
+            filter_key: Payload key to match (e.g., "client", "project", "domain")
+            filter_value: Value to match (e.g., "Orlando", "ScottCare", "work")
+            boost: Heat amount to add (default 0.1)
+
+        Returns:
+            Number of memories boosted
+
+        Examples:
+            hs.boost_by_filter("client", "Orlando", boost=0.15)  # Working on Orlando
+            hs.boost_by_filter("project", "VersaCare", boost=0.2)  # Deep diving VersaCare
+            hs.boost_by_filter("domain", "work")  # Starting work day
+        """
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Use parameterized query for the value, but we need to inject the key
+                # since JSONB path can't be parameterized directly
+                # Validate filter_key to prevent injection (only allow known keys)
+                allowed_keys = {"client", "project", "domain", "source", "type", "category"}
+                if filter_key not in allowed_keys:
+                    logger.warning(f"Invalid filter_key '{filter_key}'. Allowed: {allowed_keys}")
+                    return 0
+
+                cur.execute(f"""
+                    UPDATE thanos_memories
+                    SET payload = payload
+                        || jsonb_build_object(
+                            'heat', LEAST(%(max_heat)s,
+                                COALESCE((payload->>'heat')::float, 0.5) + %(boost)s
+                            ),
+                            'last_accessed', NOW()::text
+                        )
+                    WHERE payload->>'{filter_key}' = %(filter_value)s
+                      AND COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                    RETURNING id
+                """, {
+                    "max_heat": self.config["max_heat"],
+                    "boost": boost,
+                    "filter_value": filter_value
+                })
+
+                affected = cur.rowcount
+                logger.info(f"Boosted {affected} memories where {filter_key}='{filter_value}' by {boost}")
+                return affected
+
     def pin_memory(self, memory_id: str) -> bool:
         """
         Pin a memory so it never decays.
@@ -279,23 +336,39 @@ class HeatService:
 
                 return [dict(row) for row in cur.fetchall()]
 
-    def get_cold_memories(self, threshold: float = 0.2, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_cold_memories(
+        self,
+        threshold: float = 0.3,
+        limit: int = 20,
+        min_age_days: int = 7
+    ) -> List[Dict[str, Any]]:
         """
         Get neglected memories (what am I forgetting?).
 
-        Uses age as proxy for coldness - older memories are "colder".
-        Returns memories older than 7 days that might need attention.
+        Returns memories that are both:
+        1. Below the heat threshold (cold)
+        2. Older than min_age_days (not just new)
+
+        This prevents surfacing very recent memories that are cold simply
+        because they're new - they're cold because they're neglected.
 
         Args:
-            threshold: Heat threshold (memories below this)
+            threshold: Heat threshold (memories below this are "cold")
             limit: Maximum results
+            min_age_days: Exclude memories newer than this (default 7 days)
+                         New memories haven't had time to be "neglected"
 
         Returns:
-            List of cold memories
+            List of cold memories sorted by heat (coldest first)
+
+        Examples:
+            hs.get_cold_memories()  # Default: cold memories > 7 days old
+            hs.get_cold_memories(min_age_days=3)  # More aggressive surfacing
+            hs.get_cold_memories(threshold=0.5, limit=20)  # Include warmer memories
         """
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Query thanos_memories directly, treating old memories as cold
+                # Query thanos_memories for memories below heat threshold and older than min_age_days
                 cur.execute("""
                     SELECT
                         id,
@@ -317,11 +390,13 @@ class HeatService:
                         COALESCE((payload->>'importance')::float, 1.0) as importance,
                         COALESCE((payload->>'pinned')::boolean, FALSE) as pinned
                     FROM thanos_memories
-                    WHERE (payload->>'created_at')::timestamp < NOW() - INTERVAL '7 days'
+                    WHERE (payload->>'created_at')::timestamp < NOW() - INTERVAL '1 day' * %(min_age_days)s
                       AND COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
-                    ORDER BY (payload->>'created_at')::timestamp DESC
+                      AND COALESCE((payload->>'heat')::float, 0.1) < %(threshold)s
+                    ORDER BY COALESCE((payload->>'heat')::float, 0.1) ASC,
+                             (payload->>'created_at')::timestamp DESC
                     LIMIT %(limit)s
-                """, {"limit": limit})
+                """, {"limit": limit, "min_age_days": min_age_days, "threshold": threshold})
 
                 return [dict(row) for row in cur.fetchall()]
 

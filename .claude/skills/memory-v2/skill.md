@@ -78,10 +78,20 @@ Heat is stored in payload as `heat` field (0.05 to 2.0):
 # Quick search via MCP tool
 mcp__memory-v2__thanos_memory_search(query="trip plans", limit=5)
 
-# Or via Python for more control
+# Filtered search - within client context
+mcp__memory-v2__thanos_memory_search(query="API integration", client="Orlando")
+
+# Filtered search - within project
+mcp__memory-v2__thanos_memory_search(query="authentication", project="VersaCare")
+
+# Filtered search - personal domain only
+mcp__memory-v2__thanos_memory_search(query="family vacation", domain="personal")
+
+# Python for more control
 from Tools.memory_v2.service import MemoryService
 ms = MemoryService()
 results = ms.search("trip itinerary", limit=10)
+results = ms.search("Epic interface", client="Kentucky", project="VersaCare")
 ```
 
 ## Database Structure
@@ -107,17 +117,23 @@ results = ms.search("trip itinerary", limit=10)
 
 ## Search Results
 
-Results are ranked by `effective_score = similarity * heat * importance`
+Results are ranked by **weighted addition** (not multiplication):
+```
+effective_score = (0.6 * similarity) + (0.3 * heat) + (0.1 * importance)
+```
+
+**Why weighted addition?** The old multiplicative formula (`similarity * heat * importance`) would bury semantically perfect matches if they were cold. A memory with similarity=0.95 but heat=0.1 scored only 0.095. Now it scores ~0.62, ensuring cold-but-relevant memories still surface.
 
 ```python
 {
     "id": "uuid",
     "memory": "The content",
     "content": "Same as memory",
-    "score": 0.85,        # Raw similarity
-    "heat": 0.95,         # Activity level
-    "importance": 1.0,    # Manual boost
-    "effective_score": 0.81,  # Final ranking
+    "score": 0.85,        # Raw cosine distance (lower = better)
+    "similarity": 0.15,   # 1 - score (higher = better)
+    "heat": 0.95,         # Activity level (0.05-2.0)
+    "importance": 1.0,    # Manual boost (0.5-2.0)
+    "effective_score": 0.62,  # Final weighted ranking
     "source": "telegram",
     "client": "Orlando",
     "created_at": "2026-01-24T..."
@@ -159,13 +175,36 @@ mcp__memory-v2__thanos_memory_whats_hot(limit=10)
 
 **What's cold (neglected/forgotten):**
 ```python
-mcp__memory-v2__thanos_memory_whats_cold(limit=10, threshold=0.2)
+# Default: cold memories older than 7 days (truly neglected, not just new)
+mcp__memory-v2__thanos_memory_whats_cold(limit=10, threshold=0.3)
+
+# More aggressive: include memories neglected for 3+ days
+mcp__memory-v2__thanos_memory_whats_cold(limit=10, threshold=0.3, min_age_days=3)
 ```
+Note: `min_age_days` prevents surfacing brand-new memories that are "cold" simply because they're new, not because they're neglected.
 
 **Pin critical memory (never decays):**
 ```python
 mcp__memory-v2__thanos_memory_pin(memory_id="uuid")
 ```
+
+**Boost context (prime memory system when switching context):**
+```python
+# Starting work on a specific client - boost all related memories
+mcp__memory-v2__thanos_memory_boost_context(filter_key="client", filter_value="Orlando")
+
+# Deep dive into a project
+mcp__memory-v2__thanos_memory_boost_context(filter_key="project", filter_value="VersaCare", boost=0.2)
+
+# Starting work day - boost all work memories
+mcp__memory-v2__thanos_memory_boost_context(filter_key="domain", filter_value="work")
+
+# Via Python
+from Tools.memory_v2.heat import get_heat_service
+hs = get_heat_service()
+hs.boost_by_filter("client", "Orlando", boost=0.15)
+```
+Use this when switching contexts to surface relevant memories in subsequent searches.
 
 ## Environment
 
