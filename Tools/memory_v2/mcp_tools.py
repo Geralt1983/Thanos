@@ -17,35 +17,49 @@ from .service import get_memory_service
 from .heat import get_heat_service
 
 
-def memory_search(query: str, limit: int = 10, client: str = None, source: str = None) -> List[Dict[str, Any]]:
+def memory_search(
+    query: str,
+    limit: int = 10,
+    client: str = None,
+    project: str = None,
+    domain: str = None,
+    source: str = None
+) -> List[Dict[str, Any]]:
     """
     Search Jeremy's memories for relevant context.
 
     Uses semantic similarity search, re-ranked by heat score.
     Recent and frequently-accessed memories rank higher.
 
+    Ranking Formula:
+        effective_score = (0.6 * similarity) + (0.3 * heat) + (0.1 * importance)
+
     Args:
-        query: Natural language search query
+        query: Natural language search query (e.g., "Orlando project status")
         limit: Maximum results to return (default 10)
-        client: Optional filter by client name
+        client: Optional filter by client name (e.g., "Orlando", "Kentucky")
+        project: Optional filter by project (e.g., "ScottCare", "VersaCare")
+        domain: Optional filter by domain ("work" or "personal")
         source: Optional filter by source (hey_pocket, telegram, manual)
 
     Returns:
         List of relevant memories with scores and metadata
 
-    Example:
-        results = memory_search("Orlando project status")
-        results = memory_search("health concerns", client="personal")
+    Examples:
+        memory_search("API integration")  # Search all memories
+        memory_search("API integration", client="Orlando")  # Within client context
+        memory_search("authentication", project="VersaCare")  # Within project
+        memory_search("family plans", domain="personal")  # Personal only
     """
     service = get_memory_service()
-
-    filters = {}
-    if client:
-        filters["client"] = client
-    if source:
-        filters["source"] = source
-
-    return service.search(query, limit=limit, filters=filters if filters else None)
+    return service.search(
+        query,
+        limit=limit,
+        client=client,
+        project=project,
+        domain=domain,
+        source=source
+    )
 
 
 def memory_add(
@@ -137,7 +151,11 @@ def memory_whats_hot(limit: int = 10) -> List[Dict[str, Any]]:
     return service.whats_hot(limit)
 
 
-def memory_whats_cold(threshold: float = 0.2, limit: int = 10) -> List[Dict[str, Any]]:
+def memory_whats_cold(
+    threshold: float = 0.3,
+    limit: int = 10,
+    min_age_days: int = 7
+) -> List[Dict[str, Any]]:
     """
     What am I neglecting? Returns lowest-heat memories.
 
@@ -147,15 +165,19 @@ def memory_whats_cold(threshold: float = 0.2, limit: int = 10) -> List[Dict[str,
     - "Cold leads"
     - "Things I should revisit"
 
+    Great for ADHD review - surfaces things that may have slipped through the cracks.
+
     Args:
-        threshold: Heat threshold (memories below this, default 0.2)
+        threshold: Heat threshold (memories below this, default 0.3)
         limit: Maximum results (default 10)
+        min_age_days: Exclude memories newer than this (default 7 days).
+                     New memories are cold because they're new, not neglected.
 
     Returns:
         List of cold memories that may need attention
     """
     service = get_memory_service()
-    return service.whats_cold(threshold, limit)
+    return service.whats_cold(threshold, limit, min_age_days)
 
 
 def memory_pin(memory_id: str) -> Dict[str, Any]:
@@ -241,13 +263,13 @@ def memory_delete(memory_id: str) -> Dict[str, Any]:
 
 def memory_boost_entity(entity: str) -> Dict[str, Any]:
     """
-    Manually boost memories related to an entity.
+    Manually boost memories related to an entity (fuzzy match).
 
     Useful when you know you'll be working on a client/project
     and want to prime the memory system.
 
     Args:
-        entity: Client name, project name, or tag
+        entity: Client name, project name, or tag (uses ILIKE fuzzy matching)
 
     Returns:
         Number of memories boosted
@@ -255,6 +277,41 @@ def memory_boost_entity(entity: str) -> Dict[str, Any]:
     heat_service = get_heat_service()
     count = heat_service.boost_related(entity, "access")
     return {"entity": entity, "memories_boosted": count}
+
+
+def memory_boost_context(
+    filter_key: str,
+    filter_value: str,
+    boost: float = 0.15
+) -> Dict[str, Any]:
+    """
+    Boost all memories matching a specific context (exact match).
+
+    Use when switching to work on a specific client/project to surface
+    all related memories in subsequent searches.
+
+    Args:
+        filter_key: The metadata field to match. Allowed values:
+                   "client", "project", "domain", "source", "type", "category"
+        filter_value: Exact value to match (e.g., "Orlando", "VersaCare", "work")
+        boost: Heat amount to add (default 0.15, max effect limited by max_heat=2.0)
+
+    Returns:
+        Number of memories boosted
+
+    Examples:
+        memory_boost_context("client", "Orlando")  # Starting Orlando work
+        memory_boost_context("project", "VersaCare", boost=0.2)  # Deep dive VersaCare
+        memory_boost_context("domain", "work")  # Beginning work day
+    """
+    heat_service = get_heat_service()
+    count = heat_service.boost_by_filter(filter_key, filter_value, boost)
+    return {
+        "filter_key": filter_key,
+        "filter_value": filter_value,
+        "boost": boost,
+        "memories_boosted": count
+    }
 
 
 # Export all tools for MCP registration
@@ -270,6 +327,7 @@ MCP_TOOLS = [
     memory_heat_report,
     memory_delete,
     memory_boost_entity,
+    memory_boost_context,
 ]
 
 __all__ = [
@@ -284,5 +342,6 @@ __all__ = [
     'memory_heat_report',
     'memory_delete',
     'memory_boost_entity',
+    'memory_boost_context',
     'MCP_TOOLS',
 ]
