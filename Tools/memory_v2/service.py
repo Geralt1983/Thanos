@@ -13,14 +13,29 @@ ADHD helpers:
 """
 
 import logging
+import hashlib
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from functools import lru_cache
+from typing import Optional, List, Dict, Any, Tuple
 from contextlib import contextmanager
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from .config import NEON_DATABASE_URL, MEM0_CONFIG, DEFAULT_USER_ID, validate_config
+from .config import NEON_DATABASE_URL, MEM0_CONFIG, DEFAULT_USER_ID, OPENAI_API_KEY, validate_config
+
+# Query embedding cache - avoids repeated OpenAI API calls
+@lru_cache(maxsize=256)
+def _cached_query_embedding(query: str) -> Tuple[float, ...]:
+    """Cache query embeddings to reduce OpenAI API latency."""
+    import openai
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=query
+    )
+    return tuple(response.data[0].embedding)
+
 from .heat import HeatService, get_heat_service
 
 logger = logging.getLogger(__name__)
@@ -46,6 +61,7 @@ class MemoryService:
         self.database_url = database_url or NEON_DATABASE_URL
         self.user_id = user_id or DEFAULT_USER_ID
         self.heat_service = get_heat_service()
+        self._persistent_conn = None  # Reuse connection for speed
 
         if not self.database_url:
             raise ValueError("Database URL not configured")
@@ -61,16 +77,18 @@ class MemoryService:
 
     @contextmanager
     def _get_connection(self):
-        """Get database connection with context manager."""
-        conn = psycopg2.connect(self.database_url)
+        """Get database connection, reusing persistent connection when possible."""
+        # Reuse persistent connection for speed (avoids ~300ms TCP handshake to Neon)
+        if self._persistent_conn is None or self._persistent_conn.closed:
+            self._persistent_conn = psycopg2.connect(self.database_url)
+        conn = self._persistent_conn
         try:
             yield conn
             conn.commit()
         except Exception:
             conn.rollback()
             raise
-        finally:
-            conn.close()
+        # Note: Don't close - we're reusing this connection
 
     def add(self, content: str, metadata: dict = None) -> Dict[str, Any]:
         """
@@ -177,6 +195,9 @@ class MemoryService:
         """
         Search memories by semantic similarity, RE-RANKED BY HEAT.
 
+        Uses direct vector search with cached embeddings for speed.
+        (mem0 is used for add/fact-extraction, not search)
+
         Args:
             query: Natural language search query
             limit: Maximum results to return
@@ -185,51 +206,18 @@ class MemoryService:
         Returns:
             List of memories ranked by effective_score (similarity * heat * importance)
         """
-        if self.memory:
-            # Get more results than needed for re-ranking
-            raw_results = self.memory.search(
-                query=query,
-                user_id=self.user_id,
-                limit=limit * 3
-            )
-
-            # mem0.search returns {'results': [...]} - extract the list
-            if isinstance(raw_results, dict) and 'results' in raw_results:
-                raw_results = raw_results['results']
-
-            # Re-rank by heat
-            ranked = self._apply_heat_ranking(raw_results)
-
-            # Apply additional filters
-            if filters:
-                ranked = self._apply_filters(ranked, filters)
-
-            # Boost accessed memories (top results only)
-            for mem in ranked[:limit]:
-                if "id" in mem:
-                    self.heat_service.boost_on_access(mem["id"])
-
-            return ranked[:limit]
-        else:
-            # Fallback: Direct search without mem0
-            return self._direct_search(query, limit, filters)
+        # Always use direct search with cached embeddings for speed
+        # mem0.search() calls OpenAI per-query without caching
+        return self._direct_search(query, limit, filters)
 
     def _direct_search(self, query: str, limit: int, filters: dict = None) -> List[Dict[str, Any]]:
-        """Direct semantic search when mem0 is not available."""
-        import openai
-        from .config import OPENAI_API_KEY
-
+        """Direct semantic search with cached embeddings."""
         if not OPENAI_API_KEY:
             logger.warning("No OPENAI_API_KEY, falling back to text search")
             return self._text_search(query, limit, filters)
 
-        # Generate query embedding
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=query
-        )
-        query_embedding = response.data[0].embedding
+        # Use cached embedding (LRU cache avoids repeated API calls)
+        query_embedding = list(_cached_query_embedding(query))
 
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -244,7 +232,7 @@ class MemoryService:
                         payload->>'client' as client,
                         payload->>'project' as project,
                         payload->>'source' as source,
-                        1 - (vector <=> %(embedding)s::vector) as score
+                        (vector <=> %(embedding)s::vector) as score
                     FROM thanos_memories
                     WHERE payload->>'user_id' = %(user_id)s
                     ORDER BY vector <=> %(embedding)s::vector
@@ -252,18 +240,24 @@ class MemoryService:
                 """, {
                     "user_id": self.user_id,
                     "embedding": query_embedding,
-                    "limit": limit
+                    "limit": limit * 3  # Fetch more for re-ranking
                 })
 
                 results = [dict(row) for row in cur.fetchall()]
 
-                # Add default heat values (thanos_memories doesn't have heat column)
-                for r in results:
-                    r['heat'] = 1.0
-                    r['importance'] = 1.0
-                    r['effective_score'] = r.get('score', 0.5)
+        # Apply heat ranking (converts distance to similarity, multiplies by heat/importance)
+        ranked = self._apply_heat_ranking(results)
 
-                return results
+        # Apply filters if provided
+        if filters:
+            ranked = self._apply_filters(ranked, filters)
+
+        # Boost accessed memories
+        for mem in ranked[:limit]:
+            if "id" in mem:
+                self.heat_service.boost_on_access(mem["id"])
+
+        return ranked[:limit]
 
     def _text_search(self, query: str, limit: int, filters: dict = None) -> List[Dict[str, Any]]:
         """Fallback text search when no embedding available."""
