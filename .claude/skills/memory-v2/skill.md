@@ -126,6 +126,15 @@ results = ms.search(f"filename:{filename}", limit=1)
 exists = len(results) > 0 and filename in results[0].get('memory', '')
 ```
 
+## Priority: Memory > State Files
+
+**CRITICAL:** When checking current state (tasks, focus, what's done):
+1. Search memory FIRST for recent updates
+2. State files (CurrentFocus.md, etc.) get stale quickly
+3. Memory has real-time task completions, state files may lag
+
+Example: User says "we finished the passports" - memory will have it, CurrentFocus.md may still show "pending".
+
 ## Troubleshooting
 
 **Empty search results:**
@@ -141,3 +150,38 @@ exists = len(results) > 0 and filename in results[0].get('memory', '')
 - Heat decay may have lowered ranking
 - Search with exact terms from content
 - Check `source` filter if applicable
+
+**created_at is datetime object:**
+```python
+# Wrong - will error
+print(r['created_at'][:10])
+
+# Right - format datetime
+created = r.get('created_at', '')
+if hasattr(created, 'strftime'):
+    created = created.strftime('%Y-%m-%d')
+print(created)
+```
+
+**Search results missing payload fields:**
+Search returns: id, memory, content, score, heat, importance, effective_score, source, client, created_at
+
+For full payload (filename, content_type, category, etc.), query DB directly:
+```python
+cur.execute("SELECT payload FROM thanos_memories WHERE id = %s", (memory_id,))
+```
+
+## Family Context
+
+Watch for these names (personal domain):
+- **Corin** - daughter, EF Tours France/England trip
+- **Chayah** - daughter, EF Tours France/England trip
+- **Sullivan** - son (baby), sleep training
+
+## Self-Improvement
+
+**Update this skill when you learn:**
+- New gotchas or type issues
+- Better search patterns
+- Missing payload fields
+- Context that helps future queries
