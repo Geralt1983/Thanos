@@ -314,7 +314,11 @@ class MemoryService:
             result["heat"] = payload.get("heat", result.get("heat", 1.0))
             result["importance"] = payload.get("importance", result.get("importance", 1.0))
 
-            similarity = result.get("score", 0.5)
+            # mem0 returns cosine DISTANCE (lower = better match)
+            # Convert to similarity (higher = better) for intuitive ranking
+            raw_score = result.get("score", 0.5)
+            similarity = 1 - raw_score
+
             result["effective_score"] = (
                 similarity *
                 result["heat"] *
