@@ -68,6 +68,28 @@ PATTERN_PATTERNS = [
     r"(?:this works because|key insight is|remember that)\s+(.{20,200})",
 ]
 
+# PLANS - Weekend, tomorrow, scheduling
+PLAN_PATTERNS = [
+    r"(?:this weekend|tomorrow|tonight|saturday|sunday)(?:'s plan|,)?\s*(?:we'll|I'll|let's|going to|plan to|will)\s+(.{20,300})",
+    r"(?:plan for|scheduled for|agenda for)\s+(?:this weekend|tomorrow|tonight|saturday|sunday)\s*[:\-]?\s*(.{20,300})",
+    r"(?:weekend tasks?|tomorrow's tasks?|chill tasks?)[:\-]?\s*(.{20,500})",
+    r"(?:let's do|we should do|I should do|need to do)\s+(?:this weekend|tomorrow)?\s*[:\-]?\s*(.{20,300})",
+]
+
+# COMMITMENTS - Promises, intentions
+COMMITMENT_PATTERNS = [
+    r"(?:I'll|we'll|I will|we will|going to|plan to|committed to)\s+(.{20,200})",
+    r"(?:need to|have to|must|should)\s+(?:finish|complete|do|handle|take care of)\s+(.{20,200})",
+    r"(?:don't forget|remember to|make sure to)\s+(.{20,200})",
+]
+
+# COMPLETED - Already done items
+COMPLETED_PATTERNS = [
+    r"(?:already done|already finished|completed|done with|finished)\s+(.{20,200})",
+    r"(?:passport forms?|forms?)\s+(?:are|were|is)\s+(?:done|completed|finished|submitted)",
+    r"(?:checked off|crossed off|marked as done)\s+(.{20,200})",
+]
+
 
 def extract_project_context(cwd: str) -> dict:
     context = {"project": None, "client": None}
@@ -133,6 +155,8 @@ def extract_text_content(messages: list) -> str:
 def extract_learnings(content: str) -> list:
     learnings = []
     seen = set()
+
+    # Technical learnings
     for pattern in DECISION_PATTERNS:
         for match in re.finditer(pattern, content, re.IGNORECASE):
             text = match.group(1).strip()
@@ -151,8 +175,33 @@ def extract_learnings(content: str) -> list:
             if text and text not in seen and len(text) > 30:
                 learnings.append({"type": "pattern", "content": _clean_learning(text), "confidence": 0.6})
                 seen.add(text)
+
+    # LIFE PLANS - High confidence, important for recall
+    for pattern in PLAN_PATTERNS:
+        for match in re.finditer(pattern, content, re.IGNORECASE):
+            text = match.group(1).strip()
+            if text and text not in seen and len(text) > 20:
+                learnings.append({"type": "plan", "content": _clean_learning(text), "confidence": 0.9})
+                seen.add(text)
+
+    # COMMITMENTS - What we said we'd do
+    for pattern in COMMITMENT_PATTERNS:
+        for match in re.finditer(pattern, content, re.IGNORECASE):
+            text = match.group(1).strip()
+            if text and text not in seen and len(text) > 20:
+                learnings.append({"type": "commitment", "content": _clean_learning(text), "confidence": 0.85})
+                seen.add(text)
+
+    # COMPLETED items - Update status on things done
+    for pattern in COMPLETED_PATTERNS:
+        for match in re.finditer(pattern, content, re.IGNORECASE):
+            text = match.group(0).strip() if match.lastindex is None else match.group(1).strip()
+            if text and text not in seen and len(text) > 15:
+                learnings.append({"type": "completed", "content": _clean_learning(text), "confidence": 0.95})
+                seen.add(text)
+
     learnings.sort(key=lambda x: x['confidence'], reverse=True)
-    return learnings[:10]
+    return learnings[:20]  # Increased limit for life items
 
 
 def _clean_learning(text: str) -> str:
@@ -171,23 +220,44 @@ def store_learnings(learnings: list, context: dict, session_id: str) -> int:
         for learning in learnings:
             if learning['confidence'] < 0.5:
                 continue
-            memory_type = {'decision': 'decision', 'bug_fix': 'learning', 'pattern': 'pattern'}.get(learning['type'], 'learning')
+            # Map types to memory categories
+            memory_type = {
+                'decision': 'decision',
+                'bug_fix': 'learning',
+                'pattern': 'pattern',
+                'plan': 'plan',           # Weekend plans, future tasks
+                'commitment': 'goal',      # What we said we'd do
+                'completed': 'fact',       # Status updates
+            }.get(learning['type'], 'learning')
+
+            # Life items get higher importance for heat ranking
+            importance = 1.0
+            if learning['type'] in ('plan', 'commitment'):
+                importance = 1.5  # Boost plans and commitments
+            elif learning['type'] == 'completed':
+                importance = 1.2  # Completed items are noteworthy
+
             metadata = {
                 "source": "claude_code",
                 "memory_type": memory_type,
                 "session_id": session_id,
                 "extracted_at": datetime.now().isoformat(),
                 "confidence": learning['confidence'],
+                "importance": importance,
+                "extraction_type": learning['type'],  # Original type for debugging
             }
             if context.get('client'):
                 metadata['client'] = context['client']
             if context.get('project'):
                 metadata['project'] = context['project']
-            content = f"[{memory_type.upper()}] {learning['content']}"
+
+            # Format content with type prefix
+            type_label = learning['type'].upper().replace('_', ' ')
+            content = f"[{type_label}] {learning['content']}"
             try:
                 service.add(content, metadata)
                 stored += 1
-                logger.info(f"Stored learning: {content[:100]}...")
+                logger.info(f"Stored {learning['type']}: {content[:100]}...")
             except Exception as e:
                 logger.error(f"Failed to store learning: {e}")
     except ImportError as e:
