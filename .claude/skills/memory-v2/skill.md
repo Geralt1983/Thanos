@@ -1,8 +1,36 @@
 # Memory V2 Skill
 
+**THIS SKILL IS MANDATORY.** Read before any memory operation. Do not reinvent patterns.
+
 ## Overview
 
 Memory V2 is Jeremy's vectorized memory system using Neon pgvector + OpenAI embeddings. It stores facts, documents, and context with heat-based decay for ADHD-friendly surfacing.
+
+## Tiered Memory Architecture
+
+| Layer | Latency | Contents | How to Access |
+|-------|---------|----------|---------------|
+| **Hot** | 0ms | Session context, high-heat items | Loaded at session start via hook |
+| **Warm** | ~0.5s | Semantic search with cached embeddings | `ms.search()` with LRU cache |
+| **Cold** | ~1s | Full corpus, low-heat, deep search | Direct DB query or uncached search |
+
+**Hot layer loading (session start):**
+```python
+# Loads recent high-heat memories into context
+hot_memories = ms.search("", limit=10)  # Top by heat
+recent = ms.search("", limit=10, filters={"days": 1})  # Last 24h
+```
+
+## Deprecated: State Files
+
+**DO NOT rely on these files for current state:**
+- `State/CurrentFocus.md` - gets stale, use WorkOS + memory instead
+- Other markdown state files - same issue
+
+**Source of truth:**
+- Tasks/habits → WorkOS MCP tools
+- Context/history → Memory V2 search
+- Health/energy → Oura MCP tools
 
 ## When to Search Memory
 
