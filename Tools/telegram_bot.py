@@ -669,7 +669,8 @@ class TelegramBrainDumpBot:
             else:
                 content_to_store = f"[PDF: {filename}]\n\n{content}"
 
-            result = self.memory_service.add(
+            # Use add_document() for direct storage (bypasses mem0 fact extraction)
+            result = self.memory_service.add_document(
                 content=content_to_store,
                 metadata=metadata
             )

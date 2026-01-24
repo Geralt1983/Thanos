@@ -149,22 +149,20 @@ class MemoryService:
         )
         embedding = response.data[0].embedding
 
-        # Build payload matching mem0 format
+        # Build payload matching mem0 format with all metadata
         import hashlib
         content_hash = hashlib.md5(content.encode()).hexdigest()
 
         payload = {
             "data": content,
             "hash": content_hash,
-            "type": metadata.get("type", "note"),
-            "source": metadata.get("source", "direct"),
             "user_id": self.user_id,
             "created_at": datetime.now().isoformat(),
         }
-        if metadata.get("client"):
-            payload["client"] = metadata["client"]
-        if metadata.get("project"):
-            payload["project"] = metadata["project"]
+        # Copy all metadata into payload
+        for key, value in metadata.items():
+            if value is not None:
+                payload[key] = value
 
         with self._get_connection() as conn:
             with conn.cursor() as cur:
@@ -181,6 +179,36 @@ class MemoryService:
 
         logger.info(f"Stored memory with direct embedding: {memory_id}")
         return {"id": memory_id, "content": content, "embedding_dims": len(embedding)}
+
+    def add_document(self, content: str, metadata: dict = None) -> Dict[str, Any]:
+        """
+        Add a document to memory with direct embedding storage.
+
+        Unlike add(), this bypasses mem0's fact extraction and stores
+        the full document content directly. Use for:
+        - PDF documents
+        - Long-form content
+        - Content that should be stored verbatim
+
+        Args:
+            content: Document content to store
+            metadata: Document metadata (source, filename, type, etc.)
+
+        Returns:
+            Result with memory_id
+        """
+        metadata = metadata or {}
+
+        # Always use direct embedding for documents
+        result = self._direct_add_with_embedding(content, metadata)
+
+        # Boost related entities
+        if metadata.get("client"):
+            self.heat_service.boost_related(metadata["client"], "mention")
+        if metadata.get("project"):
+            self.heat_service.boost_related(metadata["project"], "mention")
+
+        return result
 
     def _store_metadata(self, memory_id: str, metadata: dict, cursor=None):
         """Store extended metadata.
