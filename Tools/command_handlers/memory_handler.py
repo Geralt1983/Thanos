@@ -24,7 +24,7 @@ Dependencies:
 Architecture:
     Memory V2 (Primary):
     - mem0: Automatic fact extraction and deduplication
-    - Voyage AI: Embeddings (voyage-2, 1536 dimensions)
+    - OpenAI: Embeddings (text-embedding-3-small, 1536 dimensions)
     - Neon pgvector: Vector storage (serverless PostgreSQL)
     - Heat decay: Recent/accessed memories surface naturally
 
@@ -198,6 +198,8 @@ class MemoryHandler(BaseHandler):
             metadata["client"] = client
         if entities:
             metadata["entities"] = entities
+            # Also store as tags for heat boosting and filtering
+            metadata["tags"] = entities
 
         # Try Memory V2 first (primary)
         memory_v2 = self._get_memory_v2()
@@ -495,13 +497,13 @@ class MemoryHandler(BaseHandler):
                 if unique_clients or unique_projects:
                     print(f"    📁 Clients: {unique_clients}, Projects: {unique_projects}")
 
-                print("    🔗 Backend: Voyage AI + Neon pgvector")
+                print("    🔗 Backend: OpenAI embeddings + Neon pgvector")
             except Exception as e:
                 print(f"    {Colors.YELLOW}⚠ Could not fetch stats: {e}{Colors.RESET}")
         else:
             if MEMORY_V2_AVAILABLE:
                 print(f"    {Colors.YELLOW}⚠ Memory V2 available but not initialized{Colors.RESET}")
-                print(f"    {Colors.YELLOW}💡 Check NEON_DATABASE_URL and VOYAGE_API_KEY{Colors.RESET}")
+                print(f"    {Colors.YELLOW}💡 Check THANOS_MEMORY_DATABASE_URL and OPENAI_API_KEY in .env{Colors.RESET}")
             else:
                 print("    ✗ Memory V2 not available")
                 print(f"    {Colors.YELLOW}💡 Install mem0ai and psycopg2 packages{Colors.RESET}")
