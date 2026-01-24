@@ -29,11 +29,16 @@ logger = logging.getLogger(__name__)
 
 
 class HeatService:
-    """Manages heat scores for memory decay."""
+    """Manages heat scores for memory decay.
+
+    Note: After migration to thanos_memories, heat is stored in payload.
+    This service gracefully degrades until heat is fully integrated.
+    """
 
     def __init__(self, database_url: str = None):
         self.database_url = database_url or NEON_DATABASE_URL
         self.config = HEAT_CONFIG
+        self._degraded = True  # No memory_metadata table
 
         if not self.database_url:
             raise ValueError("Database URL not configured")
@@ -89,6 +94,9 @@ class HeatService:
         Returns:
             New heat value
         """
+        if self._degraded:
+            return 1.0  # Default heat when degraded
+
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -123,6 +131,9 @@ class HeatService:
         Returns:
             Number of memories boosted
         """
+        if self._degraded:
+            return 0
+
         boost = (self.config["mention_boost"] if boost_type == "mention"
                  else self.config["access_boost"])
 
@@ -156,6 +167,9 @@ class HeatService:
         Returns:
             Success status
         """
+        if self._degraded:
+            return False
+
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -173,6 +187,9 @@ class HeatService:
 
     def unpin_memory(self, memory_id: str) -> bool:
         """Unpin a memory to allow decay."""
+        if self._degraded:
+            return False
+
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -192,6 +209,9 @@ class HeatService:
             memory_id: UUID of the memory
             importance: Multiplier (typically 0.5 - 2.0)
         """
+        if self._degraded:
+            return False
+
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -213,6 +233,9 @@ class HeatService:
         Returns:
             List of memories with heat data
         """
+        if self._degraded:
+            return []
+
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
@@ -248,6 +271,9 @@ class HeatService:
         Returns:
             List of cold memories
         """
+        if self._degraded:
+            return []
+
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
@@ -281,6 +307,9 @@ class HeatService:
         Returns:
             List of client names with cold memories
         """
+        if self._degraded:
+            return []
+
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -296,6 +325,9 @@ class HeatService:
 
     def get_heat_stats(self) -> Dict[str, Any]:
         """Get statistics about memory heat distribution."""
+        if self._degraded:
+            return {"total_memories": 0, "avg_heat": 1.0, "hot_count": 0, "cold_count": 0}
+
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""

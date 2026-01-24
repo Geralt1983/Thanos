@@ -165,39 +165,13 @@ class MemoryService:
         return {"id": memory_id, "content": content, "embedding_dims": len(embedding)}
 
     def _store_metadata(self, memory_id: str, metadata: dict, cursor=None):
-        """Store extended metadata with initial heat."""
-        def _insert(cur):
-            cur.execute("""
-                INSERT INTO memory_metadata (
-                    memory_id, source, source_file, original_timestamp,
-                    client, project, tags, heat, importance, created_at
-                )
-                VALUES (
-                    %(memory_id)s, %(source)s, %(source_file)s, %(timestamp)s,
-                    %(client)s, %(project)s, %(tags)s, 1.0, %(importance)s, NOW()
-                )
-                ON CONFLICT (memory_id) DO UPDATE SET
-                    source = EXCLUDED.source,
-                    client = EXCLUDED.client,
-                    project = EXCLUDED.project,
-                    tags = EXCLUDED.tags
-            """, {
-                "memory_id": memory_id,
-                "source": metadata.get("source", "manual"),
-                "source_file": metadata.get("source_file"),
-                "timestamp": metadata.get("original_timestamp"),
-                "client": metadata.get("client"),
-                "project": metadata.get("project"),
-                "tags": metadata.get("tags"),
-                "importance": metadata.get("importance", 1.0)
-            })
+        """Store extended metadata.
 
-        if cursor:
-            _insert(cursor)
-        else:
-            with self._get_connection() as conn:
-                with conn.cursor() as cur:
-                    _insert(cur)
+        Note: mem0 stores metadata in payload column of thanos_memories.
+        This is now a no-op since we migrated to unified storage.
+        """
+        # Metadata is stored in payload by mem0, no separate table needed
+        pass
 
     def search(self, query: str, limit: int = 10, filters: dict = None) -> List[Dict[str, Any]]:
         """
@@ -318,33 +292,27 @@ class MemoryService:
                 return [dict(row) for row in cur.fetchall()]
 
     def _apply_heat_ranking(self, results: List[Dict]) -> List[Dict]:
-        """Re-rank results by similarity * heat * importance."""
+        """Re-rank results by similarity * heat * importance.
+
+        Heat data is stored in payload for thanos_memories table.
+        Falls back to defaults if not present.
+        """
         if not results:
             return []
 
-        memory_ids = [r.get("id") for r in results if r.get("id")]
-
-        if not memory_ids:
-            return results
-
-        # Fetch heat data
-        with self._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT memory_id, heat, importance
-                    FROM memory_metadata
-                    WHERE memory_id = ANY(%(ids)s::uuid[])
-                """, {"ids": memory_ids})
-
-                heat_map = {str(row["memory_id"]): row for row in cur.fetchall()}
-
-        # Calculate effective scores
+        # Calculate effective scores using payload data or defaults
         for result in results:
-            mem_id = str(result.get("id", ""))
-            meta = heat_map.get(mem_id, {"heat": 0.5, "importance": 1.0})
+            # Try to get heat/importance from payload (thanos_memories format)
+            payload = result.get("payload", {})
+            if isinstance(payload, str):
+                import json
+                try:
+                    payload = json.loads(payload)
+                except:
+                    payload = {}
 
-            result["heat"] = meta.get("heat", 0.5)
-            result["importance"] = meta.get("importance", 1.0)
+            result["heat"] = payload.get("heat", result.get("heat", 1.0))
+            result["importance"] = payload.get("importance", result.get("importance", 1.0))
 
             similarity = result.get("score", 0.5)
             result["effective_score"] = (
@@ -435,9 +403,16 @@ class MemoryService:
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT * FROM memories_with_heat
-                    WHERE user_id = %(user_id)s
-                    ORDER BY created_at DESC
+                    SELECT
+                        id,
+                        payload->>'data' as memory,
+                        payload->>'type' as memory_type,
+                        payload->>'source' as source,
+                        payload->>'client' as client,
+                        payload->>'created_at' as created_at
+                    FROM thanos_memories
+                    WHERE payload->>'user_id' = %(user_id)s
+                    ORDER BY (payload->>'created_at')::timestamp DESC NULLS LAST
                     LIMIT %(limit)s
                 """, {"user_id": self.user_id, "limit": limit})
 
@@ -451,30 +426,25 @@ class MemoryService:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    DELETE FROM memories WHERE id = %(id)s
+                    DELETE FROM thanos_memories WHERE id = %(id)s
                 """, {"id": memory_id})
                 return cur.rowcount > 0
 
     def stats(self) -> Dict[str, Any]:
         """Get memory statistics."""
-        heat_stats = self.heat_service.get_heat_stats()
-
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT
                         COUNT(*) as total,
-                        COUNT(DISTINCT client) as unique_clients,
-                        COUNT(DISTINCT project) as unique_projects,
-                        COUNT(DISTINCT source) as unique_sources
-                    FROM memories m
-                    LEFT JOIN memory_metadata mm ON m.id = mm.memory_id
-                    WHERE m.user_id = %(user_id)s
+                        COUNT(DISTINCT payload->>'client') as unique_clients,
+                        COUNT(DISTINCT payload->>'project') as unique_projects,
+                        COUNT(DISTINCT payload->>'source') as unique_sources
+                    FROM thanos_memories
+                    WHERE payload->>'user_id' = %(user_id)s
                 """, {"user_id": self.user_id})
 
-                general_stats = dict(cur.fetchone())
-
-        return {**general_stats, **heat_stats}
+                return dict(cur.fetchone())
 
 
 # Singleton instance
