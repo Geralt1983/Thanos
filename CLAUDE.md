@@ -222,15 +222,29 @@ The task remains: {task}
 
 ## Memory Protocol
 
+**Skill reference:** `.claude/skills/memory-v2/skill.md`
+
+### Auto-Search Triggers
+
+**ALWAYS search Memory V2 when user:**
+- References stored content ("the trip", "that document", "what I said about...")
+- Mentions client names (Orlando, Raleigh, Memphis, Kentucky, VersaCare)
+- Asks about past context, decisions, or conversations
+- Uses phrases like "remember", "recall", "did I mention"
+- Asks questions that seem to need historical context
+
+**Quick search:**
+```python
+from Tools.memory_v2.service import MemoryService
+ms = MemoryService()
+results = ms.search("[query]", limit=5)
+# Use results[0]['memory'] if effective_score > 0.3
+```
+
 ### Before Solving Problems
 
-1. **Search history** for similar issues:
-   ```
-   mcp__plugin_claude-mem_mcp-search__search(query="[problem keywords]")
-   ```
-
+1. **Search history** for similar issues
 2. **Check learnings** in memory for patterns that worked before
-
 3. **Review recent context** to understand current state
 
 ### After Making Decisions
@@ -238,6 +252,11 @@ The task remains: {task}
 1. **Store the decision** with rationale
 2. **Log the outcome** when known
 3. **Update patterns** if this reveals a reusable approach
+
+### Storing Content
+
+- **Facts/notes:** `ms.add(content, metadata)` - uses mem0 fact extraction
+- **Documents/PDFs:** `ms.add_document(content, metadata)` - direct storage with embeddings
 
 ---
 
