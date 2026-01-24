@@ -108,33 +108,61 @@ class MemoryService:
 
             return result
         else:
-            # Fallback: Direct storage without mem0
-            return self._direct_add(content, metadata)
+            # Fallback: Generate embedding manually via OpenAI
+            logger.warning("mem0 unavailable, using direct OpenAI embedding")
+            return self._direct_add_with_embedding(content, metadata)
 
-    def _direct_add(self, content: str, metadata: dict) -> Dict[str, Any]:
-        """Direct storage when mem0 is not available."""
+    def _direct_add_with_embedding(self, content: str, metadata: dict) -> Dict[str, Any]:
+        """Direct storage with manual OpenAI embedding when mem0 unavailable."""
         import uuid
+        import openai
+        from .config import OPENAI_API_KEY
+
+        if not OPENAI_API_KEY:
+            raise ValueError("Cannot store memory: mem0 unavailable and OPENAI_API_KEY not set")
 
         memory_id = str(uuid.uuid4())
 
+        # Generate embedding via OpenAI
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        response = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=content
+        )
+        embedding = response.data[0].embedding
+
+        # Build payload matching mem0 format
+        import hashlib
+        content_hash = hashlib.md5(content.encode()).hexdigest()
+
+        payload = {
+            "data": content,
+            "hash": content_hash,
+            "type": metadata.get("type", "note"),
+            "source": metadata.get("source", "direct"),
+            "user_id": self.user_id,
+            "created_at": datetime.now().isoformat(),
+        }
+        if metadata.get("client"):
+            payload["client"] = metadata["client"]
+        if metadata.get("project"):
+            payload["project"] = metadata["project"]
+
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                # Insert into memories
+                # Insert into thanos_memories (mem0's table)
                 cur.execute("""
-                    INSERT INTO memories (id, user_id, content, memory_type, created_at)
-                    VALUES (%(id)s, %(user_id)s, %(content)s, %(type)s, NOW())
+                    INSERT INTO thanos_memories (id, vector, payload)
+                    VALUES (%(id)s, %(vector)s, %(payload)s)
                     RETURNING id
                 """, {
                     "id": memory_id,
-                    "user_id": self.user_id,
-                    "content": content,
-                    "type": metadata.get("type", "note")
+                    "vector": embedding,
+                    "payload": psycopg2.extras.Json(payload)
                 })
 
-                # Insert metadata
-                self._store_metadata(memory_id, metadata, cur)
-
-        return {"id": memory_id, "content": content}
+        logger.info(f"Stored memory with direct embedding: {memory_id}")
+        return {"id": memory_id, "content": content, "embedding_dims": len(embedding)}
 
     def _store_metadata(self, memory_id: str, metadata: dict, cursor=None):
         """Store extended metadata with initial heat."""
@@ -213,28 +241,73 @@ class MemoryService:
             return self._direct_search(query, limit, filters)
 
     def _direct_search(self, query: str, limit: int, filters: dict = None) -> List[Dict[str, Any]]:
-        """Direct search when mem0 is not available (text-based)."""
+        """Direct semantic search when mem0 is not available."""
+        import openai
+        from .config import OPENAI_API_KEY
+
+        if not OPENAI_API_KEY:
+            logger.warning("No OPENAI_API_KEY, falling back to text search")
+            return self._text_search(query, limit, filters)
+
+        # Generate query embedding
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        response = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=query
+        )
+        query_embedding = response.data[0].embedding
+
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Basic text search
+                # Vector similarity search on thanos_memories
                 cur.execute("""
                     SELECT
-                        m.id,
-                        m.content,
-                        m.memory_type,
-                        m.created_at,
-                        mm.heat,
-                        mm.importance,
-                        mm.client,
-                        mm.project,
-                        mm.source,
-                        0.5 as score,
-                        (0.5 * COALESCE(mm.heat, 1.0) * COALESCE(mm.importance, 1.0)) as effective_score
-                    FROM memories m
-                    LEFT JOIN memory_metadata mm ON m.id = mm.memory_id
-                    WHERE m.user_id = %(user_id)s
-                      AND m.content ILIKE %(pattern)s
-                    ORDER BY effective_score DESC
+                        id,
+                        payload->>'data' as memory,
+                        payload->>'data' as content,
+                        payload->>'type' as memory_type,
+                        (payload->>'created_at')::timestamp as created_at,
+                        payload->>'client' as client,
+                        payload->>'project' as project,
+                        payload->>'source' as source,
+                        1 - (vector <=> %(embedding)s::vector) as score
+                    FROM thanos_memories
+                    WHERE payload->>'user_id' = %(user_id)s
+                    ORDER BY vector <=> %(embedding)s::vector
+                    LIMIT %(limit)s
+                """, {
+                    "user_id": self.user_id,
+                    "embedding": query_embedding,
+                    "limit": limit
+                })
+
+                results = [dict(row) for row in cur.fetchall()]
+
+                # Add default heat values (thanos_memories doesn't have heat column)
+                for r in results:
+                    r['heat'] = 1.0
+                    r['importance'] = 1.0
+                    r['effective_score'] = r.get('score', 0.5)
+
+                return results
+
+    def _text_search(self, query: str, limit: int, filters: dict = None) -> List[Dict[str, Any]]:
+        """Fallback text search when no embedding available."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT
+                        id,
+                        payload->>'data' as memory,
+                        payload->>'data' as content,
+                        payload->>'type' as memory_type,
+                        (payload->>'created_at')::timestamp as created_at,
+                        payload->>'client' as client,
+                        payload->>'source' as source,
+                        0.5 as score
+                    FROM thanos_memories
+                    WHERE payload->>'user_id' = %(user_id)s
+                      AND payload->>'data' ILIKE %(pattern)s
                     LIMIT %(limit)s
                 """, {
                     "user_id": self.user_id,
