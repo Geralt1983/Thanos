@@ -66,7 +66,7 @@ MEM0_CONFIG = {
         "provider": "pgvector",
         "config": {
             **NEON_CONFIG,
-            "collection_name": "memories"  # Must match setup_neon.sql table name
+            "collection_name": "thanos_memories"  # mem0 creates its own table
         }
     },
     "version": "v1.1"
