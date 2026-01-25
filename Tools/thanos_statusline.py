@@ -408,6 +408,34 @@ ENERGY_EMOJI = {
     "unknown": "\U00002754",   # Question mark
 }
 
+
+def get_daemon_status() -> str:
+    """
+    Check Thanos daemon status via launchctl.
+
+    Returns:
+        🟢 = Running with PID
+        🟡 = Loaded but no PID
+        🔴 = Not running
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["launchctl", "list"],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        for line in result.stdout.split('\n'):
+            if 'com.thanos.daemon' in line:
+                parts = line.split()
+                if parts and parts[0].isdigit():
+                    return "🟢"  # Running with PID
+                return "🟡"  # Loaded but no PID
+        return "🔴"  # Not found
+    except Exception:
+        return "🔴"
+
 TIME_EMOJI = {
     "morning": "\U0001F305",   # Sunrise
     "afternoon": "\U00002600\uFE0F",  # Sun
@@ -453,9 +481,13 @@ def format_statusline(data: StatusData, compact: bool = False, no_color: bool = 
     # Time indicator
     time_emoji = TIME_EMOJI.get(data.time_of_day, "")
 
+    # Daemon status indicator
+    daemon = get_daemon_status()
+
     if compact:
         # Compact: minimal separators
         parts = [
+            daemon,  # Daemon status first
             f"{energy_emoji}{energy_label}",
             str(readiness),
             f"\U0001F634{sleep}" if sleep != "?" else "",  # Sleep face
@@ -468,6 +500,7 @@ def format_statusline(data: StatusData, compact: bool = False, no_color: bool = 
     else:
         # Full format with separators
         parts = [
+            daemon,  # Daemon status first
             f"{energy_emoji} {energy_label} {readiness}",
             f"\U0001F634 {sleep}",  # Sleep face
         ]
