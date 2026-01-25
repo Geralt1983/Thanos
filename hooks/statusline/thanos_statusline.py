@@ -215,6 +215,34 @@ def get_interaction_count() -> int:
         return 0
 
 
+def get_daemon_status() -> str:
+    """
+    Check Thanos daemon status via launchctl.
+
+    Returns:
+        🟢 = Running with PID
+        🟡 = Loaded but no PID
+        🔴 = Not running
+    """
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["launchctl", "list"],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        for line in result.stdout.split('\n'):
+            if 'com.thanos.daemon' in line:
+                parts = line.split()
+                if parts and parts[0].isdigit():
+                    return "🟢"  # Running with PID
+                return "🟡"  # Loaded but no PID
+        return "🔴"  # Not found
+    except Exception:
+        return "🔴"
+
+
 def get_model_from_context(context: dict) -> str:
     """Extract model name from Claude Code context."""
     model = context.get("model", {})
@@ -297,6 +325,10 @@ def generate_statusline(context: dict = None) -> str:
     """
     context = context or {}
     parts = []
+
+    # Daemon status (first - most important health indicator)
+    daemon = get_daemon_status()
+    parts.append(f"{daemon}")
 
     # Project identifier
     parts.append(f"{Colors.BOLD}{Colors.MAGENTA}Thanos{Colors.RESET}")

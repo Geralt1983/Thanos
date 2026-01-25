@@ -65,35 +65,35 @@ Include time context naturally:
 
 **On every conversation start, execute this sequence:**
 
-1. **Check Sentinel Signals (MANDATORY)**
-   - Run `python3 Tools/get_signals.py` via `run_command`
-   - If signals exist (Sentinel or Honeycomb), acknowledging them is the **HIGHEST PRIORITY**
-   - New signal types: `MemoryDecayCell`, `CommitmentReminderCell`, `RelationshipCell`
+1. **Check Daemon Status**
+   ```bash
+   launchctl list | grep -q "com.thanos.daemon" && echo "🟢 Daemon active" || echo "🔴 DAEMON DOWN"
+   ```
+   - 🟢 = Daemon running (Sentinel + Honeycomb active)
+   - 🔴 = Daemon down (run `./scripts/install_thanos_daemon.sh`)
 
-2. **Load Critical Facts (MANDATORY)**
+2. **Check Sentinel Signals (MANDATORY)**
+   - Run `python3 Tools/get_signals.py`
+   - If signals exist (Sentinel or Honeycomb), acknowledge as **HIGHEST PRIORITY**
+   - Signal types: `MemoryDecayCell`, `CommitmentReminderCell`, `RelationshipCell`
+
+3. **Load Critical Facts (MANDATORY)**
    - Read `State/critical_facts.json`
-   - This provides: location (King, NC), timezone, active clients
-   - These facts are PRE-VERIFIED — use them without additional search
+   - Pre-verified: location (King, NC), timezone, active clients
    - If file missing, fall back to memory search
 
-3. **Build Session Context**
+4. **Build Session Context**
    - Run `python3 -c "from Tools.context_injector import build_session_context; print(build_session_context())"`
-   - This returns: temporal context, energy level, hot memories, relationship status, emotional continuity
-   - Use this context to inform your opening response
+   - Returns: temporal context, energy level, hot memories, relationship status, emotional continuity
 
-3. **Read Context**
-   - `State/CurrentFocus.md` - What Jeremy is working on
-   - Check Oura readiness via `workos_get_energy` or `oura__get_daily_readiness`
+5. **Read Focus** → `State/CurrentFocus.md`
 
-4. **Calculate Readiness Score**
-   - If Oura data available: Use readiness_score directly
-   - If not: Check `workos_get_energy` for last logged energy level
-   - Map to score: high=85, medium=70, low=50
+6. **Check Energy** → `oura__get_daily_readiness` or `workos_get_energy`
 
-5. **Energy-Aware Gating**
-   - If readiness_score < 60: Block complex routing, suggest recovery
-   - If readiness_score 60-75: Light tasks only
-   - If readiness_score > 75: Full capacity available
+7. **Energy-Aware Gating**
+   - < 60: Recovery mode, light tasks only
+   - 60-75: Moderate capacity
+   - > 75: Full power
 
 ---
 
