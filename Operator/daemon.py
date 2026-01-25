@@ -368,11 +368,36 @@ class OperatorDaemon:
         """Initialize enabled alerters."""
         self.logger.debug("Initializing alerters")
 
-        # Placeholder - actual alerters will be in Operator/alerters/
-        # For now, just log what would be initialized
-        self.logger.info("Alerters: telegram, macos, journal")
-        # TODO: Actual alerter initialization
-        # from Operator.alerters import TelegramAlerter, MacOSAlerter, JournalAlerter
+        try:
+            # Get Thanos root for path references
+            thanos_root = Path(__file__).parent.parent
+
+            # TelegramAlerter - uses env vars for token/chat_id
+            telegram_alerter = TelegramAlerter(
+                min_severity="warning",
+                dry_run=self.dry_run
+            )
+            self.alerters.append(telegram_alerter)
+            self.logger.info("✓ TelegramAlerter initialized")
+
+            # NotificationAlerter - macOS notifications
+            notification_alerter = NotificationAlerter(
+                min_severity="warning",
+                dry_run=self.dry_run
+            )
+            self.alerters.append(notification_alerter)
+            self.logger.info("✓ NotificationAlerter initialized")
+
+            # JournalAlerter - always logs to journal (append-only audit trail)
+            journal_alerter = JournalAlerter(
+                thanos_root=str(thanos_root),
+                dry_run=self.dry_run
+            )
+            self.alerters.append(journal_alerter)
+            self.logger.info("✓ JournalAlerter initialized")
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize alerters: {e}", exc_info=True)
 
     def _is_quiet_hours(self) -> bool:
         """Check if current time is within quiet hours."""

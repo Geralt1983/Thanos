@@ -1,0 +1,43 @@
+2026-01-25 17:15:38 - operator - INFO - ============================================================
+2026-01-25 17:15:38 - operator - INFO - OPERATOR DAEMON INITIALIZING
+2026-01-25 17:15:38 - operator - INFO - ============================================================
+2026-01-25 17:15:38 - operator - WARNING - DRY RUN MODE - No alerts will be sent
+2026-01-25 17:15:38 - operator - INFO - Loaded state: 259 previous runs
+2026-01-25 17:15:38 - operator - DEBUG - Initializing circuit breakers
+2026-01-25 17:15:38 - operator - INFO - Initialized 2 circuit breakers
+2026-01-25 17:15:38 - operator - DEBUG - Initializing monitors
+2026-01-25 17:15:38 - operator - INFO - Initializing monitor: health
+2026-01-25 17:15:38 - operator - INFO - ✓ HealthMonitor initialized
+2026-01-25 17:15:38 - operator - INFO - Initializing monitor: tasks
+2026-01-25 17:15:38 - operator - INFO - ✓ TaskMonitor initialized
+2026-01-25 17:15:38 - operator - INFO - Initializing monitor: patterns
+2026-01-25 17:15:38 - operator - INFO - ✓ PatternMonitor initialized
+2026-01-25 17:15:38 - operator - INFO - Initializing monitor: access
+2026-01-25 17:15:38 - operator - INFO - ✓ AccessMonitor initialized
+2026-01-25 17:15:38 - operator - INFO - Initializing monitor: checkpoint
+2026-01-25 17:15:38 - operator - INFO - ✓ CheckpointMonitor initialized
+2026-01-25 17:15:38 - operator - DEBUG - Initializing alerters
+2026-01-25 17:15:38 - operator - INFO - ✓ TelegramAlerter initialized
+2026-01-25 17:15:38 - operator - INFO - ✓ NotificationAlerter initialized
+2026-01-25 17:15:38 - operator - INFO - ✓ JournalAlerter initialized
+2026-01-25 17:15:38 - operator - INFO - Initialized with 5 monitors, 3 alerters
+2026-01-25 17:15:38 - operator - INFO - ============================================================
+2026-01-25 17:15:38 - operator - INFO - CHECK CYCLE START - 2026-01-25 17:15:38
+2026-01-25 17:15:38 - operator - INFO - ============================================================
+2026-01-25 17:15:38 - operator - DEBUG - Cleaned 3 expired dedup keys
+2026-01-25 17:15:38 - operator - DEBUG - Running monitor: HealthMonitor
+2026-01-25 17:15:38 - operator - DEBUG - Monitor HealthMonitor: 0 alerts
+2026-01-25 17:15:38 - operator - DEBUG - Running monitor: TaskMonitor
+2026-01-25 17:15:38 - operator - DEBUG - Monitor TaskMonitor: 0 alerts
+2026-01-25 17:15:38 - operator - DEBUG - Running monitor: PatternMonitor
+2026-01-25 17:15:38 - operator - DEBUG - Monitor PatternMonitor: 0 alerts
+2026-01-25 17:15:38 - operator - DEBUG - Running monitor: AccessMonitor
+2026-01-25 17:15:38 - operator - DEBUG - Monitor AccessMonitor: 0 alerts
+2026-01-25 17:15:38 - operator - DEBUG - Running monitor: CheckpointMonitor
+2026-01-25 17:15:38 - operator - DEBUG - Monitor CheckpointMonitor: 2 alerts
+2026-01-25 17:15:38 - operator - INFO - Monitors generated 2 total alerts
+2026-01-25 17:15:38 - operator - INFO - After deduplication: 2 new alerts
+2026-01-25 17:15:38 - operator - INFO - DRY RUN: Would send 2 alerts
+2026-01-25 17:15:38 - operator - INFO -   [WARNING] Multiple Orphaned Sessions
+2026-01-25 17:15:38 - operator - INFO -   [INFO] Orphaned Sessions Recovered
+2026-01-25 17:15:38 - operator - INFO - Check cycle complete: 2 alerts sent (0.08s)

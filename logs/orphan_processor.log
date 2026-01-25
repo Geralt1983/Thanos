@@ -1,0 +1,35 @@
+2026-01-25 17:15:38,804 - __main__ - INFO - Starting orphan checkpoint processing...
+2026-01-25 17:15:38,805 - Tools.memory_checkpoint - INFO - Processing orphaned session: 9ed969ac-eb67-40ce-a058-344eace4fb89
+2026-01-25 17:15:38,806 - Tools.memory_checkpoint - INFO - Processing orphaned session: 808b6899-d147-4bb2-bbc3-dbdbda691f5a
+2026-01-25 17:15:38,806 - Tools.memory_checkpoint - INFO - Processing orphaned session: af7cd79e-46e1-4c81-9d73-8ad7bd4622a7
+2026-01-25 17:15:38,807 - Tools.memory_checkpoint - INFO - Processing orphaned session: 5b19b076-421b-47df-9a04-b484dd3c116c
+2026-01-25 17:15:38,807 - Tools.memory_checkpoint - INFO - Processing orphaned session: 6910dd3b-b4fc-4e03-8e48-19d6b400443a
+2026-01-25 17:15:38,808 - Tools.memory_checkpoint - INFO - Processing orphaned session: 3be246d0-a717-495f-a8c1-23117b16eb50
+2026-01-25 17:15:38,808 - Tools.memory_checkpoint - INFO - Processing orphaned session: 3aa684b8-730b-4cb0-b2d7-a6daa0c762a2
+2026-01-25 17:15:38,809 - Tools.memory_checkpoint - INFO - Processing orphaned session: 72484e24-d63f-4c9e-b5d9-1c20124d5410
+2026-01-25 17:15:38,809 - __main__ - INFO - Found 8 orphaned sessions
+2026-01-25 17:15:38,809 - __main__ - INFO - Processing session 9ed969ac-eb67-40ce-a058-344eace4fb89...
+2026-01-25 17:15:38,809 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,810 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/9ed969ac-eb67-40ce-a058-344eace4fb89_20260125_171538.json
+2026-01-25 17:15:38,810 - __main__ - INFO - Processing session 808b6899-d147-4bb2-bbc3-dbdbda691f5a...
+2026-01-25 17:15:38,810 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,810 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/808b6899-d147-4bb2-bbc3-dbdbda691f5a_20260125_171538.json
+2026-01-25 17:15:38,810 - __main__ - INFO - Processing session af7cd79e-46e1-4c81-9d73-8ad7bd4622a7...
+2026-01-25 17:15:38,810 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,810 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/af7cd79e-46e1-4c81-9d73-8ad7bd4622a7_20260125_171538.json
+2026-01-25 17:15:38,810 - __main__ - INFO - Processing session 5b19b076-421b-47df-9a04-b484dd3c116c...
+2026-01-25 17:15:38,810 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,810 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/5b19b076-421b-47df-9a04-b484dd3c116c_20260125_171538.json
+2026-01-25 17:15:38,810 - __main__ - INFO - Processing session 6910dd3b-b4fc-4e03-8e48-19d6b400443a...
+2026-01-25 17:15:38,810 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,810 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/6910dd3b-b4fc-4e03-8e48-19d6b400443a_20260125_171538.json
+2026-01-25 17:15:38,810 - __main__ - INFO - Processing session 3be246d0-a717-495f-a8c1-23117b16eb50...
+2026-01-25 17:15:38,810 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,810 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/3be246d0-a717-495f-a8c1-23117b16eb50_20260125_171538.json
+2026-01-25 17:15:38,810 - __main__ - INFO - Processing session 3aa684b8-730b-4cb0-b2d7-a6daa0c762a2...
+2026-01-25 17:15:38,811 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,811 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/3aa684b8-730b-4cb0-b2d7-a6daa0c762a2_20260125_171538.json
+2026-01-25 17:15:38,811 - __main__ - INFO - Processing session 72484e24-d63f-4c9e-b5d9-1c20124d5410...
+2026-01-25 17:15:38,811 - __main__ - WARNING - Memory V2 not available, skipping extraction
+2026-01-25 17:15:38,811 - __main__ - INFO - Stored extraction to fallback: /Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/044-alerter-system-full-initialization/State/session_checkpoints/extracted/72484e24-d63f-4c9e-b5d9-1c20124d5410_20260125_171538.json
+2026-01-25 17:15:38,811 - __main__ - INFO - Processed 8/8 sessions successfully
