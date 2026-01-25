@@ -30,6 +30,23 @@ class BaselineResult:
     max_value: float  # Maximum HRV in dataset
 
 
+@dataclass
+class DeviationResult:
+    """
+    HRV deviation from baseline result.
+
+    Compares current HRV against baseline to identify stress or recovery state.
+    Lower HRV (negative deviation) indicates higher stress or poor recovery.
+    Higher HRV (positive deviation) indicates good recovery.
+    """
+    current_hrv: float  # Current HRV value being evaluated
+    baseline_mean: float  # Baseline mean HRV
+    deviation: float  # Absolute deviation from baseline (current - mean)
+    percent_deviation: float  # Percentage deviation from baseline
+    status: str  # "normal", "warning", or "critical"
+    confidence: float  # Baseline confidence level (0-1)
+
+
 async def sync_hrv_data(days: int = 14) -> None:
     """
     Sync HRV data from Oura for the specified number of past days.
@@ -179,18 +196,60 @@ def calculate_baseline(days: int = 14, min_data_points: int = 3) -> Optional[Bas
     )
 
 
-async def detect_deviation(current_hrv: float) -> Optional[dict]:
+def detect_deviation(current_hrv: float) -> Optional[DeviationResult]:
     """
-    Detect deviation from baseline.
+    Detect deviation from baseline and assess stress/recovery status.
+
+    Compares current HRV against calculated baseline to determine if the value
+    represents normal variation or a significant deviation indicating stress or
+    poor recovery state.
 
     Args:
-        current_hrv: Current HRV value to compare
+        current_hrv: Current HRV value to compare against baseline
 
     Returns:
-        dict with deviation metrics or None if no baseline
+        DeviationResult with deviation metrics and status, or None if no baseline available
+
+    Status Categories:
+        - "normal": Deviation <= 15% from baseline (within normal range)
+        - "warning": Deviation > 15% and <= 25% from baseline (moderate stress/recovery issue)
+        - "critical": Deviation > 25% from baseline (significant stress/recovery issue)
+
+    Note: Only negative deviations (low HRV) trigger warning/critical status.
+          Positive deviations (high HRV) indicate good recovery and return "normal" status.
     """
-    # TODO: Implement in subtask-2-3
-    raise NotImplementedError("Deviation detection not yet implemented")
+    # Calculate baseline from stored data
+    baseline = calculate_baseline()
+
+    # Return None if no baseline is available
+    if baseline is None:
+        return None
+
+    # Calculate deviation metrics
+    deviation = current_hrv - baseline.mean
+    percent_deviation = (deviation / baseline.mean) * 100 if baseline.mean != 0 else 0.0
+
+    # Determine status based on deviation thresholds
+    # Only flag warnings/critical for LOW HRV (negative deviation = stress/poor recovery)
+    # High HRV (positive deviation) is good and always returns "normal"
+    if percent_deviation >= -15.0:
+        # Within normal range or above baseline (good recovery)
+        status = "normal"
+    elif percent_deviation >= -25.0:
+        # 15-25% below baseline (moderate stress/poor recovery)
+        status = "warning"
+    else:
+        # >25% below baseline (significant stress/poor recovery)
+        status = "critical"
+
+    return DeviationResult(
+        current_hrv=current_hrv,
+        baseline_mean=baseline.mean,
+        deviation=deviation,
+        percent_deviation=round(percent_deviation, 1),
+        status=status,
+        confidence=baseline.confidence
+    )
 
 
 if __name__ == "__main__":
