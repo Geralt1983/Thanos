@@ -477,6 +477,55 @@ def _analyze_stress(stress: Dict[str, Any]) -> List[str]:
     return insights
 
 
+def _analyze_hrv(data: Dict[str, Any]) -> List[str]:
+    """
+    Analyze HRV data and generate insights based on baseline deviation.
+
+    Args:
+        data: Health data from OuraAdapter
+
+    Returns:
+        List of HRV-specific insight strings
+    """
+    insights = []
+
+    # Extract current HRV
+    current_hrv = _get_current_hrv(data)
+    if current_hrv is None:
+        return insights
+
+    # Detect deviation from baseline
+    deviation_result = detect_deviation(current_hrv)
+
+    # If no baseline available yet, provide basic HRV info
+    if deviation_result is None:
+        insights.append(f"💓 HRV: {current_hrv:.1f} ms - baseline still establishing")
+        return insights
+
+    # Analyze based on deviation status
+    if deviation_result.status == "critical":
+        insights.append(f"🚨 HRV critically low ({deviation_result.percent_deviation:.1f}% below baseline) - indicates high stress or poor recovery")
+        insights.append("💡 Body is under significant strain - prioritize rest and recovery today")
+    elif deviation_result.status == "warning":
+        insights.append(f"⚠️ HRV moderately low ({deviation_result.percent_deviation:.1f}% below baseline) - elevated stress or recovery need")
+        insights.append("💡 Reduce training intensity and focus on stress management")
+    else:
+        # Normal or elevated HRV
+        if deviation_result.percent_deviation > 10:
+            insights.append(f"✅ HRV elevated ({deviation_result.percent_deviation:+.1f}% from baseline) - excellent recovery state")
+        elif deviation_result.percent_deviation > 0:
+            insights.append(f"✅ HRV above baseline ({deviation_result.percent_deviation:+.1f}%) - good recovery")
+        else:
+            insights.append(f"✅ HRV within normal range ({deviation_result.current_hrv:.1f} ms)")
+
+    # Add context about baseline confidence if it's low
+    if deviation_result.confidence < 0.8:
+        confidence_pct = int(deviation_result.confidence * 100)
+        insights.append(f"📊 Baseline confidence: {confidence_pct}% - more data will improve accuracy")
+
+    return insights
+
+
 def _get_current_hrv(data: Dict[str, Any]) -> Optional[float]:
     """
     Extract current HRV value from health data.
@@ -796,6 +845,7 @@ def format_health_summary(data: dict) -> str:
     output.append("\n" + format_header("Insights"))
 
     all_insights = []
+    all_insights.extend(_analyze_hrv(data))
     all_insights.extend(_analyze_readiness(readiness))
     all_insights.extend(_analyze_sleep_quality(sleep))
     all_insights.extend(_analyze_stress(stress))
