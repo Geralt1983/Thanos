@@ -128,17 +128,32 @@
     "zsh"
   ],
   "stack_commands": [
+    "ar",
+    "clang",
+    "clang++",
+    "cmake",
     "createdb",
     "createuser",
+    "dotnet",
     "dropdb",
     "dropuser",
+    "g++",
+    "gcc",
     "initdb",
     "ipython",
     "jupyter",
+    "ld",
+    "make",
+    "meson",
+    "msbuild",
+    "ninja",
+    "nm",
     "node",
     "notebook",
     "npm",
     "npx",
+    "nuget",
+    "objdump",
     "pdb",
     "pg_ctl",
     "pg_dump",
@@ -155,17 +170,23 @@
     "python",
     "python3",
     "ruff",
+    "strip",
     "ts-node",
     "tsc",
     "tsx"
   ],
-  "script_commands": [],
+  "script_commands": [
+    "./start_daemon.sh"
+  ],
   "custom_commands": [],
   "detected_stack": {
     "languages": [
       "python",
       "javascript",
-      "typescript"
+      "typescript",
+      "csharp",
+      "c",
+      "cpp"
     ],
     "package_managers": [
       "pip"
@@ -187,9 +208,12 @@
     "make_targets": [],
     "poetry_scripts": [],
     "cargo_aliases": [],
-    "shell_scripts": []
+    "shell_scripts": [
+      "start_daemon.sh"
+    ]
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/010-add-token-count-and-cost-estimate-to-cli-prompt",
-  "created_at": "2026-01-11T22:55:43.544486",
-  "project_hash": "1f6d18ad961a41b570aa768cd83d6850"
+  "project_dir": "/Users/jeremy/Projects/Thanos",
+  "created_at": "2026-01-25T08:15:49.023922",
+  "project_hash": "423fd35af864deff9b5dae88dc03e1b5",
+  "inherited_from": "/Users/jeremy/Projects/Thanos"
 }

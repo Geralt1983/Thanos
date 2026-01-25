@@ -254,6 +254,11 @@ class HealthMonitor:
                 data['sleep_hours'] = total_sleep_seconds / 3600.0
                 data['sleep_score'] = sleep_json.get('score')
 
+                # Extract HRV from sleep data (if available)
+                hrv_value = sleep_json.get('hrv_average') or sleep_json.get('average_hrv')
+                if hrv_value:
+                    data['hrv'] = float(hrv_value)
+
             logger.debug(f"Cache data: readiness={data['readiness_score']}, sleep={data['sleep_hours']}h")
             return data
 
@@ -369,8 +374,8 @@ class HealthMonitor:
         """
         Check HRV deviation from baseline.
 
-        Note: HRV tracking requires baseline calculation over 30 days.
-        Currently placeholder until HRV data available in cache.
+        Uses personalized baseline calculated from 14-day rolling window
+        to detect stress or poor recovery states.
 
         Args:
             health_data: Health metrics dictionary
@@ -382,9 +387,65 @@ class HealthMonitor:
         if hrv is None:
             return None
 
-        # TODO: Implement HRV baseline calculation
-        # For now, return None
-        return None
+        try:
+            # Import baseline detection module
+            from Tools.health.hrv_baseline import detect_deviation
+
+            # Check deviation from baseline
+            deviation = detect_deviation(current_hrv=hrv)
+
+            # If no baseline available yet, skip alerting
+            if deviation is None:
+                logger.debug("No HRV baseline available yet - skipping HRV check")
+                return None
+
+            # Generate alerts based on deviation status
+            if deviation.status == 'critical':
+                return Alert(
+                    type='health',
+                    severity='critical',
+                    title='Critical: HRV Significantly Below Baseline',
+                    message=(
+                        f"Your HRV is {hrv:.1f} ms ({deviation.percent_deviation:+.1f}% from baseline). "
+                        f"This indicates high stress or poor recovery. Prioritize rest and recovery."
+                    ),
+                    data={
+                        'current_hrv': hrv,
+                        'baseline_mean': deviation.baseline_mean,
+                        'deviation_percent': deviation.percent_deviation,
+                        'confidence': deviation.confidence,
+                        'metric': 'hrv'
+                    },
+                    timestamp=datetime.now().isoformat(),
+                    dedup_key=f"health:hrv:critical:{health_data.get('date')}"
+                )
+
+            elif deviation.status == 'warning':
+                return Alert(
+                    type='health',
+                    severity='warning',
+                    title='HRV Below Baseline Detected',
+                    message=(
+                        f"Your HRV is {hrv:.1f} ms ({deviation.percent_deviation:+.1f}% from baseline). "
+                        f"Consider lighter tasks and stress management today."
+                    ),
+                    data={
+                        'current_hrv': hrv,
+                        'baseline_mean': deviation.baseline_mean,
+                        'deviation_percent': deviation.percent_deviation,
+                        'confidence': deviation.confidence,
+                        'metric': 'hrv'
+                    },
+                    timestamp=datetime.now().isoformat(),
+                    dedup_key=f"health:hrv:warning:{health_data.get('date')}"
+                )
+
+            # Normal status - no alert needed
+            return None
+
+        except Exception as e:
+            logger.error(f"Error checking HRV baseline: {e}", exc_info=True)
+            return None  # Graceful degradation
 
     def _check_stress(self, health_data: Dict[str, Any]) -> Optional[Alert]:
         """

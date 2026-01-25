@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "010-add-token-count-and-cost-estimate-to-cli-prompt",
+  "spec": "045-hrv-baseline-calculation-implementation",
   "state": "building",
   "subtasks": {
-    "completed": 0,
-    "total": 0,
+    "completed": 6,
+    "total": 11,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Testing & Documentation",
+    "current": "Health Monitor Integration",
     "id": null,
-    "total": 4
+    "total": 2
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 15,
-    "started_at": "2026-01-11T22:40:44.645807"
+    "number": 3,
+    "started_at": "2026-01-25T17:49:58.417086"
   },
-  "last_update": "2026-01-11T23:53:41.165304"
+  "last_update": "2026-01-25T17:55:11.136235"
 }
