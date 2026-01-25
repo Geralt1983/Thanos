@@ -466,10 +466,30 @@ class OperatorDaemon:
             return
 
         for alerter in self.alerters:
-            try:
-                await alerter.send_batch(alerts)
-            except Exception as e:
-                self.logger.error(f"Alerter {alerter.__class__.__name__} failed: {e}")
+            for alert in alerts:
+                try:
+                    # Convert daemon Alert to AlerterAlert
+                    alerter_alert = AlerterAlert(
+                        title=alert.title,
+                        message=alert.message,
+                        severity=alert.priority,
+                        source_type=alert.alert_type,
+                        source_id=alert.entity_id,
+                        timestamp=datetime.fromisoformat(alert.timestamp) if isinstance(alert.timestamp, str) else alert.timestamp,
+                        metadata=alert.metadata,
+                        dedup_key=alert.dedup_key
+                    )
+
+                    # Send individual alert
+                    success = await alerter.send(alerter_alert)
+                    if not success:
+                        self.logger.warning(
+                            f"Alerter {alerter.__class__.__name__} failed to send: {alert.title}"
+                        )
+                except Exception as e:
+                    self.logger.error(
+                        f"Alerter {alerter.__class__.__name__} error sending {alert.title}: {e}"
+                    )
 
     async def check_cycle(self):
         """Run one complete check cycle."""
