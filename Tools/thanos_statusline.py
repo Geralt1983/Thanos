@@ -409,16 +409,35 @@ ENERGY_EMOJI = {
 }
 
 
-def get_daemon_status() -> str:
+def get_daemon_status() -> Tuple[str, str]:
     """
-    Check Thanos daemon status via launchctl.
+    Check all Thanos daemon statuses via launchctl.
 
-    Returns:
-        🟢 = Running with PID
-        🟡 = Loaded but no PID
-        🔴 = Not running
+    Returns tuple of:
+        - Individual indicators: "🟢D 🟢O 🟡M" (Daemon, Operator, Memory)
+        - Summary: "3/8⚡" (running/total)
     """
     import subprocess
+
+    # Key daemons to track (short label, launchctl name)
+    DAEMONS = [
+        ("D", "com.thanos.daemon"),      # Main daemon (Sentinel + Honeycomb)
+        ("O", "com.thanos.operator"),    # Operator
+        ("M", "com.thanos.memory"),      # Memory
+    ]
+
+    # All daemons for summary count
+    ALL_DAEMONS = [
+        "com.thanos.daemon",
+        "com.thanos.operator",
+        "com.thanos.memory",
+        "com.thanos.backup",
+        "com.thanos.daily-sync",
+        "com.thanos.vigilance",
+        "com.jeremy.thanos-vigilance",
+        "com.thanos.workos-sync",
+    ]
+
     try:
         result = subprocess.run(
             ["launchctl", "list"],
@@ -426,15 +445,36 @@ def get_daemon_status() -> str:
             text=True,
             timeout=2
         )
-        for line in result.stdout.split('\n'):
-            if 'com.thanos.daemon' in line:
-                parts = line.split()
-                if parts and parts[0].isdigit():
-                    return "🟢"  # Running with PID
-                return "🟡"  # Loaded but no PID
-        return "🔴"  # Not found
+        lines = result.stdout.split('\n')
+
+        # Build daemon status map
+        status_map = {}
+        for line in lines:
+            for daemon in ALL_DAEMONS:
+                if daemon in line:
+                    parts = line.split()
+                    if parts and parts[0].isdigit():
+                        status_map[daemon] = "🟢"  # Running with PID
+                    else:
+                        status_map[daemon] = "🟡"  # Loaded but no PID
+                    break
+
+        # Individual indicators for key daemons
+        indicators = []
+        for label, daemon in DAEMONS:
+            status = status_map.get(daemon, "🔴")
+            indicators.append(f"{status}{label}")
+        individual = " ".join(indicators)
+
+        # Summary count
+        running = sum(1 for d in ALL_DAEMONS if status_map.get(d) == "🟢")
+        total = len(ALL_DAEMONS)
+        summary = f"{running}/{total}⚡"
+
+        return individual, summary
+
     except Exception:
-        return "🔴"
+        return "🔴D 🔴O 🔴M", "0/8⚡"
 
 TIME_EMOJI = {
     "morning": "\U0001F305",   # Sunrise
@@ -481,13 +521,13 @@ def format_statusline(data: StatusData, compact: bool = False, no_color: bool = 
     # Time indicator
     time_emoji = TIME_EMOJI.get(data.time_of_day, "")
 
-    # Daemon status indicator
-    daemon = get_daemon_status()
+    # Daemon status indicators
+    daemon_individual, daemon_summary = get_daemon_status()
 
     if compact:
         # Compact: minimal separators
         parts = [
-            daemon,  # Daemon status first
+            daemon_summary,  # Just summary in compact mode
             f"{energy_emoji}{energy_label}",
             str(readiness),
             f"\U0001F634{sleep}" if sleep != "?" else "",  # Sleep face
@@ -500,7 +540,7 @@ def format_statusline(data: StatusData, compact: bool = False, no_color: bool = 
     else:
         # Full format with separators
         parts = [
-            daemon,  # Daemon status first
+            f"{daemon_individual} {daemon_summary}",  # Both indicators
             f"{energy_emoji} {energy_label} {readiness}",
             f"\U0001F634 {sleep}",  # Sleep face
         ]
