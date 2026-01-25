@@ -162,6 +162,8 @@ class OuraAdapter(BaseAdapter):
                 return await self._get_daily_summary(client, start_date, end_date)
             elif tool_name == "get_today_health":
                 return await self._get_today_health(client)
+            elif tool_name == "get_sleep":
+                return await self._get_sleep(client, start_date, end_date)
             elif tool_name in endpoint_map:
                 return await self._fetch_endpoint(
                     client, endpoint_map[tool_name], start_date, end_date
@@ -192,6 +194,26 @@ class OuraAdapter(BaseAdapter):
         response = await client.get("/usercollection/personal_info")
         response.raise_for_status()
         return ToolResult.ok(response.json())
+
+    async def _get_sleep(
+        self, client: httpx.AsyncClient, start_date: str, end_date: str
+    ) -> ToolResult:
+        """Get detailed sleep sessions with HRV extraction."""
+        response = await client.get(
+            "/usercollection/sleep", params={"start_date": start_date, "end_date": end_date}
+        )
+        response.raise_for_status()
+        data = response.json()
+        sessions = data.get("data", [])
+
+        # Extract HRV from each session for easy access
+        # Oura API v2 returns average_hrv directly in the sleep session object
+        for session in sessions:
+            if "average_hrv" in session:
+                # Add hrv_average alias for consistency with time_series expectations
+                session["hrv_average"] = session["average_hrv"]
+
+        return ToolResult.ok(sessions)
 
     async def _get_daily_summary(
         self, client: httpx.AsyncClient, start_date: str, end_date: str
