@@ -1265,6 +1265,127 @@ class StateStore:
         metrics = self.get_health_metrics(metric_date=date.today())
         return {m.metric_type: m.value for m in metrics}
 
+    def get_adjusted_energy_state(
+        self,
+        base_energy: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate energy state with HRV baseline adjustment.
+
+        Integrates HRV deviation from baseline to provide a more accurate
+        energy state assessment. Low HRV (relative to baseline) reduces
+        the energy state and triggers lighter task recommendations.
+
+        Args:
+            base_energy: Base energy level (0-100). If None, uses readiness score from health metrics.
+
+        Returns:
+            Dict with:
+                - adjusted_energy: Energy score adjusted for HRV deviation (0-100)
+                - base_energy: Original/base energy score (0-100)
+                - hrv_status: HRV deviation status (normal/warning/critical/unavailable)
+                - hrv_adjustment: Amount energy was reduced due to HRV (-50 to 0)
+                - recommendation: Suggested workload level (full/moderate/light/recovery)
+                - hrv_deviation_percent: Percent deviation from HRV baseline
+
+        Example:
+            >>> store = StateStore()
+            >>> state = store.get_adjusted_energy_state()
+            >>> if state['recommendation'] == 'light':
+            >>>     # Show only low-cognitive-load tasks
+        """
+        try:
+            # Import locally to avoid dependency issues
+            from Tools.health.hrv_baseline import detect_deviation
+        except ImportError:
+            # HRV baseline module not available, return base energy without adjustment
+            base = base_energy if base_energy is not None else 70.0
+            return {
+                'adjusted_energy': base,
+                'base_energy': base,
+                'hrv_status': 'unavailable',
+                'hrv_adjustment': 0.0,
+                'recommendation': self._energy_to_recommendation(base),
+                'hrv_deviation_percent': None
+            }
+
+        # Get base energy level
+        if base_energy is None:
+            # Use readiness score from today's health metrics
+            today_health = self.get_today_health()
+            base_energy = today_health.get('readiness', today_health.get('daily_readiness', 70.0))
+
+        # Get today's HRV value
+        today_health = self.get_today_health()
+        current_hrv = today_health.get('hrv')
+
+        # If no HRV data available, return base energy without adjustment
+        if current_hrv is None:
+            return {
+                'adjusted_energy': base_energy,
+                'base_energy': base_energy,
+                'hrv_status': 'unavailable',
+                'hrv_adjustment': 0.0,
+                'recommendation': self._energy_to_recommendation(base_energy),
+                'hrv_deviation_percent': None
+            }
+
+        # Detect HRV deviation from baseline
+        deviation = detect_deviation(current_hrv)
+
+        # If no baseline available yet, return base energy
+        if deviation is None:
+            return {
+                'adjusted_energy': base_energy,
+                'base_energy': base_energy,
+                'hrv_status': 'no_baseline',
+                'hrv_adjustment': 0.0,
+                'recommendation': self._energy_to_recommendation(base_energy),
+                'hrv_deviation_percent': None
+            }
+
+        # Calculate energy adjustment based on HRV deviation status
+        hrv_adjustment = 0.0
+
+        if deviation.status == 'warning':
+            # 15-25% below baseline: Reduce energy by 20 points
+            hrv_adjustment = -20.0
+        elif deviation.status == 'critical':
+            # >25% below baseline: Reduce energy by 40 points
+            hrv_adjustment = -40.0
+        # Normal status: no adjustment (hrv_adjustment stays 0.0)
+
+        # Apply adjustment (ensure result stays in 0-100 range)
+        adjusted_energy = max(0.0, min(100.0, base_energy + hrv_adjustment))
+
+        return {
+            'adjusted_energy': adjusted_energy,
+            'base_energy': base_energy,
+            'hrv_status': deviation.status,
+            'hrv_adjustment': hrv_adjustment,
+            'recommendation': self._energy_to_recommendation(adjusted_energy),
+            'hrv_deviation_percent': deviation.percent_deviation
+        }
+
+    def _energy_to_recommendation(self, energy: float) -> str:
+        """
+        Convert energy score to workload recommendation.
+
+        Args:
+            energy: Energy score (0-100)
+
+        Returns:
+            Recommendation level: full, moderate, light, or recovery
+        """
+        if energy >= 75:
+            return 'full'
+        elif energy >= 60:
+            return 'moderate'
+        elif energy >= 40:
+            return 'light'
+        else:
+            return 'recovery'
+
     def _row_to_health_metric(self, row: sqlite3.Row) -> HealthMetric:
         """Convert database row to HealthMetric object."""
         return HealthMetric(
