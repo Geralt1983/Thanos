@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from Tools.adapters.oura import OuraAdapter
 from Tools.litellm_client import get_client
 from Tools.output_formatter import format_header, format_list, is_mobile, wrap_text
+from Tools.health.hrv_baseline import detect_deviation
 
 
 # System prompt for health summary persona (used for optional LLM enhancement)
@@ -476,6 +477,88 @@ def _analyze_stress(stress: Dict[str, Any]) -> List[str]:
     return insights
 
 
+def _get_current_hrv(data: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract current HRV value from health data.
+
+    Args:
+        data: Health data from OuraAdapter
+
+    Returns:
+        Current HRV value or None if not available
+    """
+    sleep = data.get("sleep", {})
+    if not sleep:
+        return None
+
+    # Try both possible HRV field names
+    hrv = sleep.get("average_hrv") or sleep.get("hrv_average")
+    return float(hrv) if hrv else None
+
+
+def _format_hrv_baseline(data: Dict[str, Any]) -> str:
+    """
+    Format HRV baseline section showing baseline, current HRV, and deviation.
+
+    Args:
+        data: Health data from OuraAdapter
+
+    Returns:
+        Formatted HRV baseline section string
+    """
+    mobile = is_mobile()
+
+    # Extract current HRV from sleep data
+    current_hrv = _get_current_hrv(data)
+
+    # If no current HRV, can't show baseline comparison
+    if current_hrv is None:
+        return ""
+
+    # Detect deviation from baseline
+    deviation_result = detect_deviation(current_hrv)
+
+    # If no baseline available yet, show message
+    if deviation_result is None:
+        return "\n💓 HRV: {:.1f} ms (baseline not yet established)\n".format(current_hrv)
+
+    # Format the HRV baseline section
+    output = []
+
+    # Status emoji based on deviation status
+    status_emoji_map = {
+        "normal": "🟢",
+        "warning": "🟡",
+        "critical": "🔴"
+    }
+    status_emoji = status_emoji_map.get(deviation_result.status, "⚪")
+
+    # Main HRV line with status
+    output.append(f"\n{status_emoji} HRV Baseline: {deviation_result.baseline_mean:.1f} ms")
+
+    # HRV details
+    hrv_items = []
+    hrv_items.append(f"Current: {deviation_result.current_hrv:.1f} ms")
+
+    # Deviation with appropriate formatting
+    deviation_sign = "+" if deviation_result.percent_deviation >= 0 else ""
+    hrv_items.append(f"Deviation: {deviation_sign}{deviation_result.percent_deviation:.1f}%")
+
+    # Confidence level
+    confidence_pct = int(deviation_result.confidence * 100)
+    hrv_items.append(f"Confidence: {confidence_pct}%")
+
+    # Status interpretation for warning/critical
+    if deviation_result.status == "warning":
+        hrv_items.append("⚠️ Moderately low - elevated stress/recovery need")
+    elif deviation_result.status == "critical":
+        hrv_items.append("🚨 Critically low - high stress/poor recovery")
+
+    output.append(format_list(hrv_items))
+
+    return "\n".join(output)
+
+
 def _generate_recommendations(data: Dict[str, Any]) -> List[str]:
     """
     Generate personalized recommendations based on health data.
@@ -495,6 +578,16 @@ def _generate_recommendations(data: Dict[str, Any]) -> List[str]:
 
     readiness_score = readiness.get("score", 0) if readiness else 0
     sleep_score = sleep.get("score", 0) if sleep else 0
+
+    # Check HRV baseline deviation
+    current_hrv = _get_current_hrv(data)
+    if current_hrv:
+        deviation_result = detect_deviation(current_hrv)
+        if deviation_result:
+            if deviation_result.status == "critical":
+                recommendations.append("🚨 **Priority**: HRV critically low - prioritize rest and recovery")
+            elif deviation_result.status == "warning":
+                recommendations.append("⚠️ HRV below baseline - reduce stress and prioritize recovery")
 
     # Priority 1: Critical issues
     if readiness_score < 55:
@@ -693,6 +786,11 @@ def format_health_summary(data: dict) -> str:
         score = activity["score"]
         emoji = _get_status_emoji(score)
         output.append(f"\n{emoji} Activity: {score}/100")
+
+    # HRV Baseline Section
+    hrv_baseline_section = _format_hrv_baseline(data)
+    if hrv_baseline_section:
+        output.append(hrv_baseline_section)
 
     # Health Insights Section
     output.append("\n" + format_header("Insights"))
