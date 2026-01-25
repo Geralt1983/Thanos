@@ -194,6 +194,67 @@ class TelegramBrainDumpBot:
         if self.workos_enabled:
             logger.info("WorkOS sync enabled for work tasks only")
 
+        # Chat mode - when enabled, messages route through ThanosOrchestrator for AI responses
+        # Toggle with /chat command, or use /ask for one-shot queries
+        self.chat_mode: Dict[int, bool] = {}  # user_id -> chat_mode_enabled
+        self._orchestrator = None  # Lazy-loaded ThanosOrchestrator
+
+    @property
+    def orchestrator(self):
+        """Lazy-load ThanosOrchestrator for chat mode."""
+        if self._orchestrator is None:
+            try:
+                from Tools.thanos_orchestrator import ThanosOrchestrator
+                self._orchestrator = ThanosOrchestrator()
+                logger.info("ThanosOrchestrator initialized for chat mode")
+            except Exception as e:
+                logger.error(f"Failed to initialize ThanosOrchestrator: {e}")
+                raise
+        return self._orchestrator
+
+    def is_chat_mode_enabled(self, user_id: int) -> bool:
+        """Check if chat mode is enabled for a user."""
+        return self.chat_mode.get(user_id, False)
+
+    def toggle_chat_mode(self, user_id: int) -> bool:
+        """Toggle chat mode for a user. Returns new state."""
+        current = self.chat_mode.get(user_id, False)
+        self.chat_mode[user_id] = not current
+        return not current
+
+    async def get_ai_response(self, message: str, user_id: int) -> str:
+        """
+        Get AI response via ThanosOrchestrator.
+
+        Routes message through the orchestrator which handles:
+        - Agent selection based on content
+        - State/context injection
+        - Memory integration
+        - Tool execution
+
+        Args:
+            message: User's message
+            user_id: Telegram user ID
+
+        Returns:
+            AI response text
+        """
+        try:
+            # Route through orchestrator
+            response = self.orchestrator.route(message, stream=False)
+
+            # Handle different response types
+            if isinstance(response, dict):
+                # Response with metadata
+                return response.get('response', response.get('content', str(response)))
+            elif isinstance(response, str):
+                return response
+            else:
+                return str(response)
+        except Exception as e:
+            logger.error(f"AI response error: {e}")
+            return f"⚠️ Error getting response: {str(e)[:100]}"
+
     def should_filter_content(self, content: str) -> tuple[bool, str]:
         """
         Check if content should be filtered out (noise, incomplete, gibberish).
@@ -1433,6 +1494,14 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     f"routed to {result.destinations}"
                 )
 
+                # Sync ALL brain dumps to WorkOS brain_dump table for visibility via life_get_brain_dump()
+                # This includes personal_task, thoughts, ideas, worries - everything captured
+                if self.workos_enabled:
+                    workos_id = await self.sync_to_workos(entry)
+                    if workos_id:
+                        entry.routing_result['workos_brain_dump_id'] = workos_id
+                        logger.info(f"Synced brain dump to WorkOS brain_dump #{workos_id}")
+
             except Exception as e:
                 logger.error(f"Pipeline processing failed, falling back to basic parse: {e}")
                 # Fallback to basic parsing
@@ -1444,6 +1513,15 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 entry.parsed_action = parsed.get('action')
                 entry.classification = entry.parsed_category
                 entry.acknowledgment = f"{entry.parsed_category} captured"
+
+                # Sync to WorkOS even in fallback case
+                if self.workos_enabled:
+                    workos_id = await self.sync_to_workos(entry)
+                    if workos_id:
+                        if not entry.routing_result:
+                            entry.routing_result = {}
+                        entry.routing_result['workos_brain_dump_id'] = workos_id
+                        logger.info(f"Synced brain dump to WorkOS brain_dump #{workos_id} (fallback)")
 
         # Add to entries list (legacy storage)
         self.entries.append(entry)
@@ -1522,7 +1600,9 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 "/health - Oura Ring health metrics\n"
                 "/tasks - View active tasks\n"
                 "/habits - View habits\n"
-                "/dumps - View pending brain dumps\n\n"
+                "/dumps - View pending brain dumps\n"
+                "/chat - Toggle chat mode (AI conversation)\n"
+                "/ask <question> - One-shot AI query\n\n"
                 "*Natural Language:*\n"
                 "Ask \"what tasks do I have?\" or \"show my habits\"",
                 parse_mode='Markdown'
@@ -1539,12 +1619,30 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 return
 
             text = update.message.text
+            user_id = update.effective_user.id
 
             # Check if this is a command/query first
             command_type, params = self.detect_command(text)
             if command_type:
                 response = await self.handle_command(command_type, params or {})
                 await update.message.reply_text(response, parse_mode='Markdown')
+                return
+
+            # Chat mode - route through AI for full conversational response
+            if self.is_chat_mode_enabled(user_id):
+                # Show typing indicator while processing
+                await update.message.chat.send_action('typing')
+
+                # Get AI response via orchestrator
+                response = await self.get_ai_response(text, user_id)
+
+                # Send response (handle long messages)
+                if len(response) > 4000:
+                    # Split long messages
+                    for i in range(0, len(response), 4000):
+                        await update.message.reply_text(response[i:i+4000])
+                else:
+                    await update.message.reply_text(response, parse_mode='Markdown')
                 return
 
             # Check if content should be filtered
@@ -2163,6 +2261,61 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             response = await self._get_health_response()
             await update.message.reply_text(response, parse_mode='Markdown')
 
+        async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Toggle chat mode - when enabled, all messages get AI responses."""
+            if not is_allowed(update.effective_user.id):
+                return
+
+            user_id = update.effective_user.id
+            new_state = self.toggle_chat_mode(user_id)
+
+            if new_state:
+                await update.message.reply_text(
+                    "💬 *Chat mode enabled*\n\n"
+                    "All your messages will now get AI responses.\n"
+                    "Use /chat again to return to brain dump mode.\n\n"
+                    "_Tip: Use /ask <question> for one-off questions without enabling chat mode._",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                    "📝 *Brain dump mode restored*\n\n"
+                    "Messages will be captured as thoughts/tasks.\n"
+                    "Use /chat to enable conversational mode.",
+                    parse_mode='Markdown'
+                )
+
+        async def ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """One-shot AI query without enabling chat mode."""
+            if not is_allowed(update.effective_user.id):
+                return
+
+            user_id = update.effective_user.id
+
+            # Get the question (everything after /ask)
+            question = ' '.join(context.args) if context.args else None
+
+            if not question:
+                await update.message.reply_text(
+                    "❓ *Usage:* `/ask <your question>`\n\n"
+                    "Example: `/ask What should I prioritize today?`",
+                    parse_mode='Markdown'
+                )
+                return
+
+            # Show typing indicator
+            await update.message.chat.send_action('typing')
+
+            # Get AI response
+            response = await self.get_ai_response(question, user_id)
+
+            # Send response
+            if len(response) > 4000:
+                for i in range(0, len(response), 4000):
+                    await update.message.reply_text(response[i:i+4000])
+            else:
+                await update.message.reply_text(response, parse_mode='Markdown')
+
         # Register handlers
         self.application.add_handler(CommandHandler("start", start_command))
         self.application.add_handler(CommandHandler("status", status_command))
@@ -2170,6 +2323,8 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         self.application.add_handler(CommandHandler("habits", habits_command))
         self.application.add_handler(CommandHandler("dumps", dumps_command))
         self.application.add_handler(CommandHandler("health", health_command))
+        self.application.add_handler(CommandHandler("chat", chat_command))
+        self.application.add_handler(CommandHandler("ask", ask_command))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         self.application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         self.application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
