@@ -3,7 +3,13 @@
     "name": "Jeremy",
     "role": "Software Engineer / Founder",
     "cognitive_style": "ADHD-optimized",
-    "timezone": "America/New_York"
+    "timezone": "America/New_York",
+    "location": {
+      "city": "King",
+      "state": "NC",
+      "country": "USA",
+      "weather_query": "King,NC,US"
+    }
   },
   "energy_patterns": {
     "peak_hours": [9, 10, 11, 14, 15],

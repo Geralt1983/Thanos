@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "last_verified": "2026-01-25",
+  "personal": {
+    "location": "King, North Carolina",
+    "weather_location": "King,NC,US",
+    "timezone": "America/New_York",
+    "born": "New Orleans, Louisiana"
+  },
+  "work": {
+    "active_clients": ["Orlando", "Raleigh", "Memphis", "Kentucky"],
+    "primary_projects": ["Thanos", "WorkOS", "VersaCare"]
+  },
+  "context_triggers": {
+    "weather": "Use personal.weather_location",
+    "time": "Use personal.timezone",
+    "clients": "Verify against work.active_clients before assuming"
+  },
+  "meta": {
+    "purpose": "Pre-verified facts loaded at session start to prevent assumptions",
+    "refresh": "Update when personal facts change"
+  }
+}
