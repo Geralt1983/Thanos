@@ -40,6 +40,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from Tools.journal import Journal, EventType, Severity
 from Tools.circuit_breaker import CircuitBreaker, CircuitState
+from Operator.alerters import (
+    Alert as AlerterAlert,
+    AlerterInterface,
+    AlertSeverity,
+    TelegramAlerter,
+    NotificationAlerter,
+    JournalAlerter,
+)
 
 
 # Configure logging
