@@ -1073,6 +1073,40 @@ class StateStore:
             ))
             return cursor.lastrowid
 
+    def add_health_metric(
+        self,
+        metric_date: str,
+        metric_type: str,
+        value: float,
+        source: str = "oura",
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """Add a health metric (convenience method).
+
+        Args:
+            metric_date: Date string in ISO format (YYYY-MM-DD)
+            metric_type: Type of metric (hrv, sleep_score, readiness, etc.)
+            value: Metric value
+            source: Data source (default 'oura')
+            metadata: Additional metadata
+
+        Returns:
+            Metric ID
+        """
+        # Parse date string to date object
+        if isinstance(metric_date, str):
+            metric_date_obj = datetime.fromisoformat(metric_date).date()
+        else:
+            metric_date_obj = metric_date
+
+        return self.log_health_metric(
+            metric_type=metric_type,
+            value=value,
+            metric_date=metric_date_obj,
+            source=source,
+            metadata=metadata
+        )
+
     def get_health_metrics(
         self,
         metric_date: Optional[date] = None,
