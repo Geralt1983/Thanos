@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 def get_tool_catalog_text() -> str:
     """Get a text description of available tools for routing prompts.
-    
+
     Returns:
         Formatted string describing available tools.
     """
@@ -25,6 +25,11 @@ def get_tool_catalog_text() -> str:
 - focus: Set current focus item
 - energy: Track energy levels
 - blockers: Log and manage blockers
+- memory_search: Search semantic memory for relevant context (clients, projects, decisions)
+- memory_context: Get formatted memory context for current query
+- memory_whats_hot: See what's top of mind (high heat memories)
+- memory_whats_cold: Find neglected items that need attention
+- memory_add: Store new information to memory
 """
 
 
@@ -136,7 +141,47 @@ class Router:
                 confidence=0.7,
                 parameters={"action": "list"}
             )
-        
+
+        # Memory tools - semantic search and context
+        if any(kw in message_lower for kw in ["remember", "recall", "what did i say", "did i mention", "context about"]):
+            # Extract search query from message
+            query = message_lower.replace("remember", "").replace("recall", "").strip()
+            return RoutingResult(
+                tool_name="memory_search",
+                confidence=0.8,
+                parameters={"action": "search", "query": query or message}
+            )
+
+        if any(kw in message_lower for kw in ["what's hot", "whats hot", "top of mind", "focused on", "current priorities"]):
+            return RoutingResult(
+                tool_name="memory_whats_hot",
+                confidence=0.8,
+                parameters={"action": "hot"}
+            )
+
+        if any(kw in message_lower for kw in ["neglected", "forgetting", "cold", "what am i missing"]):
+            return RoutingResult(
+                tool_name="memory_whats_cold",
+                confidence=0.8,
+                parameters={"action": "cold"}
+            )
+
+        if any(kw in message_lower for kw in ["store this", "remember this", "save this", "note this"]):
+            return RoutingResult(
+                tool_name="memory_add",
+                confidence=0.8,
+                parameters={"action": "add", "content": message}
+            )
+
+        # Client/project context triggers memory search
+        clients = ["orlando", "raleigh", "memphis", "kentucky", "versacare", "scottcare", "baptist", "nova"]
+        if any(client in message_lower for client in clients):
+            return RoutingResult(
+                tool_name="memory_context",
+                confidence=0.7,
+                parameters={"action": "context", "query": message}
+            )
+
         # No clear routing - return fallback
         return RoutingResult(
             confidence=0.3,
@@ -203,6 +248,17 @@ class Executor:
                 return self._execute_blockers(action, parameters)
             elif tool_name == "calendar":
                 return self._execute_calendar(action, parameters)
+            # Memory tools
+            elif tool_name == "memory_search":
+                return self._execute_memory_search(action, parameters)
+            elif tool_name == "memory_context":
+                return self._execute_memory_context(action, parameters)
+            elif tool_name == "memory_whats_hot":
+                return self._execute_memory_whats_hot(action, parameters)
+            elif tool_name == "memory_whats_cold":
+                return self._execute_memory_whats_cold(action, parameters)
+            elif tool_name == "memory_add":
+                return self._execute_memory_add(action, parameters)
             else:
                 return ExecutionResult(
                     success=False,
@@ -430,10 +486,245 @@ class Executor:
         else:
             output = f"Unknown action: {action}"
             summary = f"Unknown action: {action}"
-        
+
         return ExecutionResult(
             success=True,
             output=output,
             tool_name="calendar",
             summary=summary
         )
+
+    # ========== Memory V2 Tool Execution ==========
+
+    def _get_memory_service(self):
+        """Lazy load memory service to avoid import overhead."""
+        if not hasattr(self, '_memory_service'):
+            try:
+                from Tools.memory_v2.service import get_memory_service
+                self._memory_service = get_memory_service()
+            except Exception as e:
+                self._memory_service = None
+        return self._memory_service
+
+    def _execute_memory_search(
+        self,
+        action: str,
+        parameters: Dict[str, Any]
+    ) -> ExecutionResult:
+        """Execute memory search operations."""
+        ms = self._get_memory_service()
+        if ms is None:
+            return ExecutionResult(
+                success=False,
+                output="Memory service unavailable",
+                tool_name="memory_search",
+                error="Could not connect to Memory V2"
+            )
+
+        query = parameters.get("query", "")
+        if not query:
+            return ExecutionResult(
+                success=False,
+                output="No search query provided",
+                tool_name="memory_search",
+                error="Missing query parameter"
+            )
+
+        try:
+            results = ms.search(query, limit=5)
+            if not results:
+                output = f"No memories found for: {query}"
+                summary = "No results"
+            else:
+                lines = [f"Found {len(results)} memories for '{query}':\n"]
+                for i, mem in enumerate(results, 1):
+                    content = mem.get("memory", mem.get("content", ""))[:100]
+                    heat = mem.get("heat", 0)
+                    heat_icon = "🔥" if heat > 0.6 else "•" if heat > 0.3 else "❄️"
+                    lines.append(f"{heat_icon} {i}. {content}...")
+                output = "\n".join(lines)
+                summary = f"Found {len(results)} memories"
+
+            return ExecutionResult(
+                success=True,
+                output=output,
+                tool_name="memory_search",
+                summary=summary
+            )
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                output=str(e),
+                tool_name="memory_search",
+                error=str(e)
+            )
+
+    def _execute_memory_context(
+        self,
+        action: str,
+        parameters: Dict[str, Any]
+    ) -> ExecutionResult:
+        """Get formatted memory context for prompt injection."""
+        ms = self._get_memory_service()
+        if ms is None:
+            return ExecutionResult(
+                success=False,
+                output="Memory service unavailable",
+                tool_name="memory_context",
+                error="Could not connect to Memory V2"
+            )
+
+        query = parameters.get("query", "")
+        try:
+            context = ms.get_context_for_query(query, limit=5)
+            if not context:
+                output = "No relevant context found."
+                summary = "No context"
+            else:
+                output = context
+                summary = "Context retrieved"
+
+            return ExecutionResult(
+                success=True,
+                output=output,
+                tool_name="memory_context",
+                summary=summary
+            )
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                output=str(e),
+                tool_name="memory_context",
+                error=str(e)
+            )
+
+    def _execute_memory_whats_hot(
+        self,
+        action: str,
+        parameters: Dict[str, Any]
+    ) -> ExecutionResult:
+        """Get highest-heat memories (top of mind)."""
+        ms = self._get_memory_service()
+        if ms is None:
+            return ExecutionResult(
+                success=False,
+                output="Memory service unavailable",
+                tool_name="memory_whats_hot",
+                error="Could not connect to Memory V2"
+            )
+
+        try:
+            results = ms.whats_hot(limit=5)
+            if not results:
+                output = "No hot memories found."
+                summary = "Nothing hot"
+            else:
+                lines = ["🔥 Top of Mind:\n"]
+                for i, mem in enumerate(results, 1):
+                    content = mem.get("memory", mem.get("content", ""))[:80]
+                    heat = mem.get("heat", 0)
+                    lines.append(f"{i}. [{heat:.2f}] {content}...")
+                output = "\n".join(lines)
+                summary = f"{len(results)} hot memories"
+
+            return ExecutionResult(
+                success=True,
+                output=output,
+                tool_name="memory_whats_hot",
+                summary=summary
+            )
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                output=str(e),
+                tool_name="memory_whats_hot",
+                error=str(e)
+            )
+
+    def _execute_memory_whats_cold(
+        self,
+        action: str,
+        parameters: Dict[str, Any]
+    ) -> ExecutionResult:
+        """Get lowest-heat memories (neglected items)."""
+        ms = self._get_memory_service()
+        if ms is None:
+            return ExecutionResult(
+                success=False,
+                output="Memory service unavailable",
+                tool_name="memory_whats_cold",
+                error="Could not connect to Memory V2"
+            )
+
+        try:
+            results = ms.whats_cold(threshold=0.3, limit=5, min_age_days=7)
+            if not results:
+                output = "No cold memories found - nothing neglected!"
+                summary = "Nothing cold"
+            else:
+                lines = ["❄️ Potentially Neglected:\n"]
+                for i, mem in enumerate(results, 1):
+                    content = mem.get("memory", mem.get("content", ""))[:80]
+                    heat = mem.get("heat", 0)
+                    lines.append(f"{i}. [{heat:.2f}] {content}...")
+                output = "\n".join(lines)
+                summary = f"{len(results)} cold memories"
+
+            return ExecutionResult(
+                success=True,
+                output=output,
+                tool_name="memory_whats_cold",
+                summary=summary
+            )
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                output=str(e),
+                tool_name="memory_whats_cold",
+                error=str(e)
+            )
+
+    def _execute_memory_add(
+        self,
+        action: str,
+        parameters: Dict[str, Any]
+    ) -> ExecutionResult:
+        """Add new content to memory."""
+        ms = self._get_memory_service()
+        if ms is None:
+            return ExecutionResult(
+                success=False,
+                output="Memory service unavailable",
+                tool_name="memory_add",
+                error="Could not connect to Memory V2"
+            )
+
+        content = parameters.get("content", "")
+        if not content:
+            return ExecutionResult(
+                success=False,
+                output="No content provided to store",
+                tool_name="memory_add",
+                error="Missing content parameter"
+            )
+
+        try:
+            # Extract metadata hints from content
+            metadata = {"source": "router_executor"}
+
+            result = ms.add(content, metadata=metadata)
+            mem_id = result.get("id", "unknown") if isinstance(result, dict) else "stored"
+
+            return ExecutionResult(
+                success=True,
+                output=f"Stored to memory (ID: {mem_id})",
+                tool_name="memory_add",
+                summary="Memory added"
+            )
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                output=str(e),
+                tool_name="memory_add",
+                error=str(e)
+            )

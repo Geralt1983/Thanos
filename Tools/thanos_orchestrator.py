@@ -803,10 +803,50 @@ You maintain a compact daily plan and a scoreboard.
                 for entry in recent_tool_summaries:
                     parts.append(f"{entry.get('tool_name')} id {entry.get('summary_id')} {entry.get('summary_text')}")
 
+            # Inject hot memories from Memory V2 (semantic context)
+            memory_context = self._get_memory_context_for_prompt()
+            if memory_context:
+                parts.append("\n## Memory Context (Top of Mind)")
+                parts.append(memory_context)
+
         prompt = "\n\n".join(parts)
         if len(prompt) > 6000:
             prompt = prompt[:6000]
         return prompt
+
+    def _get_memory_context_for_prompt(self, limit: int = 3) -> Optional[str]:
+        """Fetch hot memories for automatic context injection.
+
+        This replaces the deprecated ThanosInteractive's _get_memory_context
+        by providing passive retrieval during prompt building.
+
+        Args:
+            limit: Maximum memories to include (default 3 to save tokens)
+
+        Returns:
+            Formatted string of hot memories or None if unavailable
+        """
+        try:
+            from Tools.memory_v2.service import get_memory_service
+
+            ms = get_memory_service()
+            hot_memories = ms.whats_hot(limit=limit)
+
+            if not hot_memories:
+                return None
+
+            lines = []
+            for mem in hot_memories:
+                content = mem.get("memory", mem.get("content", ""))[:100]
+                heat = mem.get("heat", 0)
+                heat_icon = "🔥" if heat > 0.6 else "•"
+                lines.append(f"{heat_icon} {content}...")
+
+            return "\n".join(lines) if lines else None
+
+        except Exception:
+            # Memory service unavailable - fail silently
+            return None
 
     def _ensure_client(self):
         """Ensure API client is initialized."""
