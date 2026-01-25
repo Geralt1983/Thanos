@@ -136,6 +136,18 @@ class BrainDump:
     metadata: Optional[Dict[str, Any]] = None
 
 
+@dataclass
+class HRVBaseline:
+    """HRV baseline statistics."""
+    mean: float
+    std_dev: float
+    confidence: float
+    data_points: Optional[int] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    calculated_at: Optional[str] = None
+
+
 # =============================================================================
 # StateStore Implementation
 # =============================================================================
@@ -288,6 +300,18 @@ class StateStore:
                     metadata JSON,
                     FOREIGN KEY (promoted_to_task_id) REFERENCES tasks(id),
                     FOREIGN KEY (promoted_to_idea_id) REFERENCES ideas(id)
+                );
+
+                -- HRV baseline table
+                CREATE TABLE IF NOT EXISTS hrv_baseline (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    mean REAL NOT NULL,
+                    std_dev REAL NOT NULL,
+                    confidence REAL NOT NULL,
+                    data_points INTEGER,
+                    min_value REAL,
+                    max_value REAL,
+                    calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
                 -- Indexes
@@ -1255,6 +1279,63 @@ class StateStore:
             started_at=row['started_at'],
             ended_at=row['ended_at'],
             metadata=json.loads(row['metadata']) if row['metadata'] else None
+        )
+
+    # =========================================================================
+    # HRV BASELINE OPERATIONS
+    # =========================================================================
+
+    def update_hrv_baseline(
+        self,
+        mean: float,
+        std_dev: float,
+        confidence: float,
+        data_points: Optional[int] = None,
+        min_value: Optional[float] = None,
+        max_value: Optional[float] = None
+    ) -> None:
+        """Update HRV baseline statistics.
+
+        Args:
+            mean: Mean HRV value
+            std_dev: Standard deviation
+            confidence: Confidence score (0-1)
+            data_points: Number of data points used
+            min_value: Minimum HRV value in dataset
+            max_value: Maximum HRV value in dataset
+        """
+        now = self._now_iso()
+
+        with self._get_connection() as conn:
+            conn.execute('''
+                INSERT OR REPLACE INTO hrv_baseline
+                (id, mean, std_dev, confidence, data_points, min_value, max_value, calculated_at)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+            ''', (mean, std_dev, confidence, data_points, min_value, max_value, now))
+
+    def get_hrv_baseline(self) -> Optional[HRVBaseline]:
+        """Get current HRV baseline statistics.
+
+        Returns:
+            HRVBaseline object if baseline exists, None otherwise
+        """
+        with self._get_connection() as conn:
+            row = conn.execute('SELECT * FROM hrv_baseline WHERE id = 1').fetchone()
+
+            if row:
+                return self._row_to_hrv_baseline(row)
+        return None
+
+    def _row_to_hrv_baseline(self, row: sqlite3.Row) -> HRVBaseline:
+        """Convert database row to HRVBaseline object."""
+        return HRVBaseline(
+            mean=row['mean'],
+            std_dev=row['std_dev'],
+            confidence=row['confidence'],
+            data_points=row['data_points'],
+            min_value=row['min_value'],
+            max_value=row['max_value'],
+            calculated_at=row['calculated_at']
         )
 
     # =========================================================================
