@@ -27,12 +27,21 @@ fi
 # Get session context (reset already done by wrapper to avoid race condition)
 CONTEXT_OUTPUT=$(python3 "$THANOS_ROOT/Tools/time_tracker.py" --context 2>/dev/null || echo '{"status": "unavailable"}')
 
+# Load critical facts for pre-verified context
+LOCATION="King, NC"
+if [ -f "$THANOS_ROOT/State/critical_facts.json" ]; then
+    LOCATION=$(python3 -c "import json; print(json.load(open('$THANOS_ROOT/State/critical_facts.json'))['personal']['location'])" 2>/dev/null || echo "King, NC")
+fi
+
 # Output context for Claude (goes to system-reminder)
 cat << EOF
 ### DESTINY // $TIME_DISPLAY
 $TIME_MSG
 
 $CONTEXT_OUTPUT
+
+📍 **Pre-loaded Context:**
+- Location: $LOCATION
 
 📚 **Skills (read before operations):**
 - memory-v2: Search "MEMORY V2 SKILL" or read .claude/skills/memory-v2/skill.md
