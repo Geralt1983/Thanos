@@ -271,6 +271,119 @@ class MCPClient:
             logger.error(f"Error getting habits: {e}", exc_info=True)
             return None
 
+    async def get_correlations(self, days: int = 7) -> Optional[Dict[str, Any]]:
+        """
+        Get productivity correlations combining tasks, energy, and readiness data.
+
+        Correlates task completion with energy levels and Oura readiness scores
+        to identify patterns between physical state and productivity.
+
+        Args:
+            days: Number of days to analyze (default: 7)
+
+        Returns:
+            Dictionary with correlation data or None on failure
+        """
+        try:
+            # Fetch data from multiple sources in parallel
+            logger.info(f"Fetching correlation data for {days} days")
+
+            # Get completed tasks
+            tasks = await self.get_tasks(status="done")
+
+            # Get energy logs
+            energy_logs = await self.get_energy_logs(days=days)
+
+            # Get readiness data
+            readiness_data = await self.get_readiness(days=days)
+
+            # Handle partial failures gracefully
+            if tasks is None:
+                tasks = []
+            if energy_logs is None:
+                energy_logs = []
+            if readiness_data is None:
+                readiness_data = []
+
+            # Build correlation dataset
+            # Group by date and compute aggregates
+            from collections import defaultdict
+            from datetime import datetime
+
+            daily_data = defaultdict(lambda: {
+                "date": None,
+                "tasks_completed": 0,
+                "points_earned": 0,
+                "energy_level": None,
+                "readiness_score": None
+            })
+
+            # Process completed tasks
+            for task in tasks:
+                if task.get("completedAt"):
+                    # Extract date from timestamp
+                    completed_date = task["completedAt"][:10]  # YYYY-MM-DD
+                    daily_data[completed_date]["date"] = completed_date
+                    daily_data[completed_date]["tasks_completed"] += 1
+                    daily_data[completed_date]["points_earned"] += task.get("points", 0)
+
+            # Process energy logs
+            for log in energy_logs:
+                log_date = log.get("date", log.get("timestamp", ""))[:10]
+                if log_date:
+                    daily_data[log_date]["date"] = log_date
+                    # Map energy level to numeric value (high=3, medium=2, low=1)
+                    energy_map = {"high": 3, "medium": 2, "low": 1}
+                    daily_data[log_date]["energy_level"] = energy_map.get(
+                        log.get("level", "medium"),
+                        2
+                    )
+
+            # Process readiness data
+            for item in readiness_data:
+                ready_date = item.get("day", item.get("date", ""))[:10]
+                if ready_date:
+                    daily_data[ready_date]["date"] = ready_date
+                    daily_data[ready_date]["readiness_score"] = item.get("score", 0)
+
+            # Convert to sorted list
+            correlation_data = sorted(
+                [v for v in daily_data.values() if v["date"]],
+                key=lambda x: x["date"]
+            )
+
+            # Compute simple correlation coefficients if we have enough data
+            correlation_stats = {}
+            if len(correlation_data) >= 3:
+                # Energy vs Tasks
+                energy_task_pairs = [
+                    (d["energy_level"], d["tasks_completed"])
+                    for d in correlation_data
+                    if d["energy_level"] is not None
+                ]
+
+                # Readiness vs Points
+                readiness_points_pairs = [
+                    (d["readiness_score"], d["points_earned"])
+                    for d in correlation_data
+                    if d["readiness_score"] is not None
+                ]
+
+                correlation_stats = {
+                    "energy_task_correlation": len(energy_task_pairs),
+                    "readiness_points_correlation": len(readiness_points_pairs)
+                }
+
+            return {
+                "daily_data": correlation_data,
+                "stats": correlation_stats,
+                "days_analyzed": days
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting correlations: {e}", exc_info=True)
+            return None
+
     async def close(self):
         """
         Close MCP connections.

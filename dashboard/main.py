@@ -25,6 +25,7 @@ from dashboard.api import API_V1_PREFIX
 from dashboard.api.tasks import router as tasks_router
 from dashboard.api.energy import router as energy_router
 from dashboard.api.health import router as health_router
+from dashboard.api.correlations import router as correlations_router
 
 # Configure logging
 logging.basicConfig(
@@ -56,6 +57,7 @@ app.add_middleware(
 app.include_router(tasks_router, prefix=API_V1_PREFIX)
 app.include_router(energy_router, prefix=API_V1_PREFIX)
 app.include_router(health_router, prefix=API_V1_PREFIX)
+app.include_router(correlations_router, prefix=API_V1_PREFIX)
 
 
 @app.get("/")
