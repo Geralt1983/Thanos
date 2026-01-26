@@ -1,15 +1,15 @@
 {
   "active": true,
-  "spec": "049-memory-system-consolidation",
-  "state": "complete",
+  "spec": "051-memory-health-dashboard",
+  "state": "building",
   "subtasks": {
-    "completed": 21,
-    "total": 21,
-    "in_progress": 0,
+    "completed": 1,
+    "total": 4,
+    "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Documentation & Cleanup",
+    "current": "Implement Memory Health Dashboard",
     "id": null,
     "total": 4
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 22,
-    "started_at": "2026-01-25T19:46:45.988234"
+    "number": 3,
+    "started_at": "2026-01-25T22:02:15.150916"
   },
-  "last_update": "2026-01-25T21:26:20.313386"
+  "last_update": "2026-01-25T22:07:44.430474"
 }
