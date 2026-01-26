@@ -44,6 +44,10 @@ from pathlib import Path
 from typing import List, Dict, Optional
 import uuid
 import json
+import logging
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 
 # Maximum number of messages to keep in history (sliding window)
@@ -145,6 +149,66 @@ class SessionManager:
         self.session.total_output_tokens += tokens
         self._trim_history()
 
+    def _summarize_before_trim(self) -> Optional[str]:
+        """
+        Summarize messages that will be trimmed from history.
+
+        Called before _trim_history() removes old messages. Summarizes the
+        messages that are about to be discarded and stores the summary in
+        Memory V2 for later retrieval.
+
+        Returns:
+            Summary text if summarization was performed, None otherwise
+        """
+        if len(self.session.history) <= MAX_HISTORY:
+            return None
+
+        # Determine which messages will be trimmed
+        messages_to_remove = len(self.session.history) - MAX_HISTORY
+        messages_to_summarize = self.session.history[:messages_to_remove]
+
+        if not messages_to_summarize:
+            return None
+
+        # Convert to format expected by summarizer (list of dicts with role and content)
+        messages_dict = [
+            {"role": msg.role, "content": msg.content}
+            for msg in messages_to_summarize
+        ]
+
+        try:
+            from Tools.conversation_summarizer import ConversationSummarizer
+
+            summarizer = ConversationSummarizer()
+            result = summarizer.summarize_messages(messages_dict)
+
+            # Store summary using ConversationSummarizer.store_summary()
+            if result:
+                summary_text = result.summary if hasattr(result, 'summary') else str(result)
+
+                # Store via ConversationSummarizer's store_summary method
+                summarizer.store_summary(
+                    summary=result,
+                    session_id=self.session.id,
+                    metadata={
+                        "messages_count": len(messages_to_summarize),
+                        "agent": self.session.agent,
+                    }
+                )
+
+                logger.info(
+                    f"Summarized {len(messages_to_summarize)} messages before trim "
+                    f"(session={self.session.id})"
+                )
+
+                return summary_text
+
+        except Exception as e:
+            logger.warning(f"Failed to summarize messages before trim: {e}")
+            return None
+
+        return None
+
     def _trim_history(self) -> None:
         """
         Trim history to MAX_HISTORY messages using sliding window.
@@ -152,8 +216,14 @@ class SessionManager:
         Removes oldest messages (in pairs when possible) while maintaining
         cumulative token counts. This prevents memory growth in long sessions
         while preserving session statistics.
+
+        Before trimming, triggers summarization of messages that will be
+        removed to preserve context in Memory V2.
         """
         if len(self.session.history) > MAX_HISTORY:
+            # Summarize messages before trimming
+            self._summarize_before_trim()
+
             # Calculate how many messages to remove
             messages_to_remove = len(self.session.history) - MAX_HISTORY
 
