@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from dashboard.api import API_V1_PREFIX
 from dashboard.api.tasks import router as tasks_router
+from dashboard.api.energy import router as energy_router
 
 # Configure logging
 logging.basicConfig(
@@ -52,6 +53,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(tasks_router, prefix=API_V1_PREFIX)
+app.include_router(energy_router, prefix=API_V1_PREFIX)
 
 
 @app.get("/")
