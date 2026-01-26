@@ -26,6 +26,9 @@ from Tools.adapters.base import ToolResult
 logger = logging.getLogger(__name__)
 
 
+# MCP call timeout configuration (seconds)
+MCP_CALL_TIMEOUT_SECONDS = 5.0
+
 # Global MCP client cache (per-process)
 _mcp_client_cache: Optional[MCPBridge] = None
 _oura_client_cache: Optional[MCPBridge] = None
@@ -249,7 +252,7 @@ async def _get_energy_level_async() -> tuple[int, str]:
                 "oura__get_daily_readiness",
                 {"startDate": today, "endDate": today}
             ),
-            timeout=5.0
+            timeout=MCP_CALL_TIMEOUT_SECONDS
         )
 
         if result.success and result.data and len(result.data) > 0:
@@ -258,7 +261,7 @@ async def _get_energy_level_async() -> tuple[int, str]:
             logger.debug(f"Got Oura readiness: {score} -> {energy}")
             return (score, energy)
     except asyncio.TimeoutError:
-        logger.warning("Oura MCP call timed out after 5s")
+        logger.warning(f"Oura MCP call timed out after {MCP_CALL_TIMEOUT_SECONDS}s")
     except Exception as e:
         logger.warning(f"Failed to get Oura readiness: {e}")
 
@@ -272,7 +275,7 @@ async def _get_energy_level_async() -> tuple[int, str]:
                 "workos_get_energy",
                 {"limit": 1}
             ),
-            timeout=5.0
+            timeout=MCP_CALL_TIMEOUT_SECONDS
         )
 
         if result.success and result.data and len(result.data) > 0:
@@ -283,7 +286,7 @@ async def _get_energy_level_async() -> tuple[int, str]:
             logger.debug(f"Got WorkOS energy: {level} -> {score} -> {energy}")
             return (score, energy)
     except asyncio.TimeoutError:
-        logger.warning("WorkOS MCP call timed out after 5s")
+        logger.warning(f"WorkOS MCP call timed out after {MCP_CALL_TIMEOUT_SECONDS}s")
     except Exception as e:
         logger.warning(f"Failed to get WorkOS energy: {e}")
 
@@ -572,7 +575,7 @@ async def _execute_task_operation_async(
             # Call with 5s timeout
             result: ToolResult = await asyncio.wait_for(
                 mcp_client.call_tool("workos_create_task", args),
-                timeout=5.0
+                timeout=MCP_CALL_TIMEOUT_SECONDS
             )
 
             if result.success:
@@ -593,7 +596,7 @@ async def _execute_task_operation_async(
             # Call with 5s timeout
             result: ToolResult = await asyncio.wait_for(
                 mcp_client.call_tool("workos_complete_task", {"taskId": intent.task_id}),
-                timeout=5.0
+                timeout=MCP_CALL_TIMEOUT_SECONDS
             )
 
             if result.success:
@@ -601,7 +604,7 @@ async def _execute_task_operation_async(
                 try:
                     metrics_result: ToolResult = await asyncio.wait_for(
                         mcp_client.call_tool("workos_get_today_metrics"),
-                        timeout=5.0
+                        timeout=MCP_CALL_TIMEOUT_SECONDS
                     )
                     metrics = metrics_result.data if metrics_result.success else {}
                 except asyncio.TimeoutError:
@@ -625,7 +628,7 @@ async def _execute_task_operation_async(
             # Call with 5s timeout
             result: ToolResult = await asyncio.wait_for(
                 mcp_client.call_tool("workos_promote_task", {"taskId": intent.task_id}),
-                timeout=5.0
+                timeout=MCP_CALL_TIMEOUT_SECONDS
             )
 
             if result.success:
@@ -655,7 +658,7 @@ async def _execute_task_operation_async(
             # Call with 5s timeout
             result: ToolResult = await asyncio.wait_for(
                 mcp_client.call_tool("workos_update_task", args),
-                timeout=5.0
+                timeout=MCP_CALL_TIMEOUT_SECONDS
             )
 
             if result.success:
@@ -671,7 +674,7 @@ async def _execute_task_operation_async(
             # Call with 5s timeout
             result: ToolResult = await asyncio.wait_for(
                 mcp_client.call_tool("workos_delete_task", {"taskId": intent.task_id}),
-                timeout=5.0
+                timeout=MCP_CALL_TIMEOUT_SECONDS
             )
 
             if result.success:
@@ -691,7 +694,7 @@ async def _execute_task_operation_async(
             # Call with 5s timeout
             result: ToolResult = await asyncio.wait_for(
                 mcp_client.call_tool("workos_get_tasks", args),
-                timeout=5.0
+                timeout=MCP_CALL_TIMEOUT_SECONDS
             )
 
             if result.success:
