@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/053-web-visualization-dashboard/dashboard/main.py", line 21, in <module>
+    from fastapi import FastAPI
+ModuleNotFoundError: No module named 'fastapi'
