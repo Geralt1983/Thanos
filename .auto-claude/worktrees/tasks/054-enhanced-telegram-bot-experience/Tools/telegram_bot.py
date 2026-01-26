@@ -2414,7 +2414,20 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
                     response_parts.append("\n_Your voice message has been transcribed and processed._")
 
-                    await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
+                    # Add action buttons for voice transcription
+                    keyboard = [
+                        [
+                            ("📝 Save as Task", f"voice_savetask_{entry.id}"),
+                            ("💡 Save as Idea", f"voice_saveidea_{entry.id}")
+                        ]
+                    ]
+                    reply_markup = self._build_inline_keyboard(keyboard)
+
+                    await processing_msg.edit_text(
+                        "\n".join(response_parts),
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
                 else:
                     await processing_msg.edit_text("❌ Could not transcribe voice message")
 
@@ -2961,11 +2974,108 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 logger.error(f"Failed to log energy: {e}")
                 await query.edit_message_text(f"❌ Failed to log energy: {e}")
 
+        async def handle_voice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Handle voice transcription action button callbacks (Save as Task, Save as Idea)."""
+            query = update.callback_query
+            await query.answer()
+
+            # Parse callback data: "voice_action_entryid"
+            callback_data = query.data
+            parts = callback_data.split("_", 2)  # Split into ["voice", "action", "entryid"]
+
+            if len(parts) < 3:
+                await query.edit_message_text("⚠️ Invalid voice action.")
+                return
+
+            action = parts[1]
+            entry_id = parts[2]
+
+            # Find the entry
+            entry = None
+            for e in self.entries:
+                if e.id == entry_id:
+                    entry = e
+                    break
+
+            if not entry:
+                await query.edit_message_text("⚠️ Voice message entry not found.")
+                return
+
+            if action == "savetask":
+                # Create a task from the transcription
+                try:
+                    # Use the brain dump pipeline to create a task
+                    result = process_brain_dump_sync(
+                        content=entry.raw_content,
+                        content_type='voice',
+                        user_id=entry.user_id,
+                        force_classification='personal_task'  # Force as task
+                    )
+
+                    timestamp = datetime.now()
+                    response_text = (
+                        f"✅ *Task Created from Voice Message!*\n\n"
+                        f"📝 {entry.raw_content}\n\n"
+                        f"🕐 Time: {timestamp.strftime('%I:%M %p')}\n"
+                    )
+
+                    # Add routing details if available
+                    if result.get('routing_result'):
+                        routing = result['routing_result']
+                        if routing.get('tasks_created'):
+                            response_text += f"✓ Task created in system\n"
+                        if routing.get('workos_task_id'):
+                            response_text += f"✓ Synced to WorkOS (ID: {routing['workos_task_id']})\n"
+
+                    response_text += "\n_Use /tasks to view your task list._"
+
+                    await query.edit_message_text(response_text, parse_mode='Markdown')
+
+                except Exception as e:
+                    logger.error(f"Failed to create task from voice: {e}")
+                    await query.edit_message_text(f"❌ Failed to create task: {str(e)[:100]}")
+
+            elif action == "saveidea":
+                # Save as an idea
+                try:
+                    # Use the brain dump pipeline to create an idea
+                    result = process_brain_dump_sync(
+                        content=entry.raw_content,
+                        content_type='voice',
+                        user_id=entry.user_id,
+                        force_classification='idea'  # Force as idea
+                    )
+
+                    timestamp = datetime.now()
+                    response_text = (
+                        f"💡 *Idea Saved from Voice Message!*\n\n"
+                        f"✨ {entry.raw_content}\n\n"
+                        f"🕐 Time: {timestamp.strftime('%I:%M %p')}\n"
+                    )
+
+                    # Add routing details if available
+                    if result.get('routing_result'):
+                        routing = result['routing_result']
+                        if routing.get('idea_created'):
+                            response_text += f"✓ Idea saved in system\n"
+
+                    response_text += "\n_Your idea has been captured for future reference._"
+
+                    await query.edit_message_text(response_text, parse_mode='Markdown')
+
+                except Exception as e:
+                    logger.error(f"Failed to save idea from voice: {e}")
+                    await query.edit_message_text(f"❌ Failed to save idea: {str(e)[:100]}")
+
+            else:
+                await query.edit_message_text(f"⚠️ Unknown voice action: {action}")
+
         # Register callback handlers with unified routing system
         self._register_callback_handler("cal_", handle_calendar_callback)
         self._register_callback_handler("menu_", handle_menu_callback)
         self._register_callback_handler("task_", handle_task_callback)
         self._register_callback_handler("energy_", handle_energy_callback)
+        self._register_callback_handler("voice_", handle_voice_callback)
 
         # Register handlers
         self.application.add_handler(CommandHandler("start", start_command))
