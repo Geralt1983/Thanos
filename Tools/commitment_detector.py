@@ -40,6 +40,7 @@ Commitment Patterns Detected:
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 
 
@@ -52,6 +53,7 @@ class DetectedCommitment:
     action: Optional[str] = None
     person: Optional[str] = None
     deadline_phrase: Optional[str] = None
+    due_date: Optional[datetime] = None
     confidence: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -62,6 +64,7 @@ class DetectedCommitment:
             "action": self.action,
             "person": self.person,
             "deadline_phrase": self.deadline_phrase,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
             "confidence": self.confidence,
         }
 
@@ -193,12 +196,18 @@ class CommitmentDetector:
         # Extract deadline if present
         deadline_phrase = self._extract_deadline(text)
 
+        # Parse deadline phrase into actual date
+        due_date = None
+        if deadline_phrase:
+            due_date = self._parse_relative_time(deadline_phrase)
+
         return DetectedCommitment(
             raw_text=text,
             pattern_matched=best_pattern,
             action=action,
             person=person,
             deadline_phrase=deadline_phrase,
+            due_date=due_date,
             confidence=best_confidence,
         )
 
@@ -268,6 +277,151 @@ class CommitmentDetector:
             if match:
                 return match.group(0)
 
+        return None
+
+    def _parse_relative_time(self, deadline_phrase: str) -> Optional[datetime]:
+        """
+        Parse relative time phrases into absolute datetime objects.
+
+        Handles common relative time expressions like:
+        - "today", "tomorrow", "tonight"
+        - "this weekend", "this week", "this month"
+        - "next week", "next Monday"
+        - "Monday", "Tuesday", etc. (next occurrence)
+        - "in 3 days", "in a week"
+
+        Args:
+            deadline_phrase: The deadline phrase to parse
+
+        Returns:
+            Datetime object representing the deadline, or None if unparseable
+        """
+        if not deadline_phrase:
+            return None
+
+        now = datetime.now()
+        phrase_lower = deadline_phrase.lower().strip()
+
+        # Handle "today" and "tonight"
+        if phrase_lower in ["today", "tonight"]:
+            return now.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "tomorrow"
+        if phrase_lower == "tomorrow":
+            return (now + timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "this weekend"
+        if "this weekend" in phrase_lower:
+            # Set to next Saturday
+            days_until_saturday = (5 - now.weekday()) % 7
+            if days_until_saturday == 0 and now.hour >= 12:
+                days_until_saturday = 7
+            target = now + timedelta(days=days_until_saturday)
+            return target.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "this week"
+        if "this week" in phrase_lower:
+            # Set to end of week (Sunday)
+            days_until_sunday = (6 - now.weekday()) % 7
+            if days_until_sunday == 0 and now.hour >= 12:
+                days_until_sunday = 7
+            target = now + timedelta(days=days_until_sunday)
+            return target.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "this morning/afternoon/evening"
+        if "this morning" in phrase_lower:
+            return now.replace(hour=12, minute=0, second=0, microsecond=0)
+        if "this afternoon" in phrase_lower:
+            return now.replace(hour=17, minute=0, second=0, microsecond=0)
+        if "this evening" in phrase_lower:
+            return now.replace(hour=20, minute=0, second=0, microsecond=0)
+
+        # Handle "this month"
+        if "this month" in phrase_lower:
+            # Set to end of current month
+            if now.month == 12:
+                next_month = now.replace(year=now.year + 1, month=1, day=1)
+            else:
+                next_month = now.replace(month=now.month + 1, day=1)
+            last_day = next_month - timedelta(days=1)
+            return last_day.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "next week"
+        if "next week" in phrase_lower:
+            # Set to Sunday of next week
+            days_until_next_week = 7 + ((6 - now.weekday()) % 7)
+            target = now + timedelta(days=days_until_next_week)
+            return target.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "next month"
+        if "next month" in phrase_lower:
+            # Set to end of next month
+            if now.month == 12:
+                target_month = now.replace(year=now.year + 1, month=1, day=1)
+            else:
+                target_month = now.replace(month=now.month + 1, day=1)
+
+            # Get last day of that month
+            if target_month.month == 12:
+                month_after = target_month.replace(year=target_month.year + 1, month=1, day=1)
+            else:
+                month_after = target_month.replace(month=target_month.month + 1, day=1)
+            last_day = month_after - timedelta(days=1)
+            return last_day.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle specific days of the week
+        weekdays = {
+            "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+            "friday": 4, "saturday": 5, "sunday": 6
+        }
+
+        for day_name, day_num in weekdays.items():
+            if day_name in phrase_lower:
+                # Handle "next Monday"
+                if "next" in phrase_lower:
+                    days_ahead = day_num - now.weekday()
+                    if days_ahead <= 0:
+                        days_ahead += 7
+                    days_ahead += 7  # Force next week
+                else:
+                    # Just "Monday" - next occurrence
+                    days_ahead = day_num - now.weekday()
+                    if days_ahead <= 0:
+                        days_ahead += 7
+
+                target = now + timedelta(days=days_ahead)
+                return target.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "in X days/weeks/hours"
+        in_match = re.search(r"in\s+(\d+|an?|a\s+few|a\s+couple)\s+(hour|day|week)s?", phrase_lower)
+        if in_match:
+            quantity_str = in_match.group(1)
+            unit = in_match.group(2)
+
+            # Parse quantity
+            if quantity_str in ["a", "an"]:
+                quantity = 1
+            elif quantity_str == "a few":
+                quantity = 3
+            elif quantity_str == "a couple":
+                quantity = 2
+            else:
+                quantity = int(quantity_str)
+
+            # Add time
+            if unit == "hour":
+                return now + timedelta(hours=quantity)
+            elif unit == "day":
+                return (now + timedelta(days=quantity)).replace(hour=23, minute=59, second=59, microsecond=0)
+            elif unit == "week":
+                return (now + timedelta(weeks=quantity)).replace(hour=23, minute=59, second=59, microsecond=0)
+
+        # Handle "by [day/time]"
+        if phrase_lower.startswith("by "):
+            # Recursively parse the part after "by"
+            return self._parse_relative_time(phrase_lower[3:])
+
+        # If we can't parse it, return None
         return None
 
     def detect_batch(self, texts: List[str]) -> List[Optional[DetectedCommitment]]:
