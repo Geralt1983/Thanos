@@ -15,30 +15,21 @@ from typing import Callable, Optional
 
 from Tools.output_formatter import is_mobile, get_terminal_width
 
-
-# MemOS integration (optional - graceful degradation if unavailable)
+# Memory V2 Router (unified memory interface)
 try:
-    from Tools.memos import MemOS, get_memos, init_memos
-
-    MEMOS_AVAILABLE = True
-except ImportError:
-    MEMOS_AVAILABLE = False
-    MemOS = None
-
-# Memory commands integration
-try:
-    from commands.memory import (
-        MemoryCommands,
-        MemoryCapture,
-        ContextualMemory,
-        get_memory_commands,
-        get_memory_capture,
-        get_contextual_memory,
+    from Tools.memory_router import (
+        add_memory,
+        search_memory,
+        get_context,
+        get_stats as get_memory_stats,
+        whats_hot,
+        whats_cold,
     )
-    MEMORY_COMMANDS_AVAILABLE = True
+    MEMORY_ROUTER_AVAILABLE = True
 except ImportError:
-    MEMORY_COMMANDS_AVAILABLE = False
-    MemoryCommands = None
+    MEMORY_ROUTER_AVAILABLE = False
+    add_memory = None
+    search_memory = None
 
 
 # ANSI color codes (copied from thanos_interactive.py)
@@ -107,10 +98,6 @@ class CommandRouter:
         }
         self._default_model = None
 
-        # MemOS integration (lazy initialization)
-        self._memos: Optional[MemOS] = None
-        self._memos_initialized = False
-
         # Calendar adapter integration (lazy initialization)
         self._calendar_adapter = None
         self._calendar_initialized = False
@@ -119,10 +106,6 @@ class CommandRouter:
         self._oura_adapter = None
         self._oura_initialized = False
         self._oura_cache_file = self.thanos_dir / "State" / "OuraCache.json"
-
-        # Memory commands integration (lazy initialization)
-        self._memory_commands = None
-        self._memory_commands_initialized = False
 
         # Command registry: {command_name: (handler_function, description, arg_names)}
         self._commands: dict[str, tuple[Callable, str, list[str]]] = {}
@@ -144,52 +127,6 @@ class CommandRouter:
                     escaped = re.escape(trigger.lower())
                     patterns.append(re.compile(escaped, re.IGNORECASE))
                 self._trigger_patterns[agent_name] = patterns
-
-    def _get_memos(self) -> Optional["MemOS"]:
-        """Get MemOS instance, initializing if needed."""
-        if not MEMOS_AVAILABLE:
-            return None
-
-        if not self._memos_initialized:
-            try:
-                # Try to get existing instance
-                self._memos = get_memos()
-                self._memos_initialized = True
-            except Exception:
-                # Initialize new instance
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Can't use asyncio.run in running loop
-                        self._memos = None
-                    else:
-                        self._memos = loop.run_until_complete(init_memos())
-                        self._memos_initialized = True
-                except Exception:
-                    self._memos = None
-
-        return self._memos
-
-    def _run_async(self, coro):
-        """Run async coroutine from sync context."""
-        try:
-            # Python 3.10+ deprecates get_event_loop() when no loop is running
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                # No running loop - create and run one
-                return asyncio.run(coro)
-
-            # Loop is running - use thread pool to run in separate loop
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result(timeout=30)
-        except Exception as e:
-            # Log error but don't crash
-            import logging
-            logging.getLogger(__name__).debug(f"_run_async error: {e}")
-            return None
 
     def _get_calendar_adapter(self):
         """Get calendar adapter, initializing if needed."""
@@ -554,10 +491,10 @@ class CommandRouter:
   /save          - Save session to History/Sessions/
   /sessions      - List saved sessions
   /resume <id>   - Resume a saved session (/resume last for most recent)
-  /recall <q>    - Search memories (MemOS hybrid) or past sessions
-  /remember <c>  - Store a memory in MemOS knowledge graph
-  /memory        - Show memory system info (Neo4j, ChromaDB, sessions)
-  /mem <sub>     - Memory commands (search, today, week, struggles, priorities)
+  /recall <q>    - Search memories (Memory V2) or past sessions
+  /remember <c>  - Store a memory via Memory V2 router
+  /memory        - Show memory system info (Memory V2, sessions)
+  /mem <sub>     - Memory commands (search, hot, cold)
   /branch [name] - Create conversation branch from current point
   /branches      - List all branches of this session
   /switch <ref>  - Switch to a different branch (by name or id)
@@ -574,11 +511,9 @@ class CommandRouter:
   /quit          - Exit interactive mode
 
 {Colors.CYAN}Memory Commands:{Colors.RESET}
-  /mem search <q>  - Semantic search across all memories
-  /mem today       - Today's activity summary
-  /mem week        - This week's patterns and highlights
-  /mem struggles   - Recent struggles and blockers
-  /mem priorities  - Current priorities and values
+  /mem search <q>  - Semantic search across all memories (Memory V2)
+  /mem hot         - Show high-heat memories (current focus)
+  /mem cold        - Show low-heat memories (neglected items)
 
 {Colors.CYAN}Shortcuts:{Colors.RESET}
   /a = /agent, /s = /state, /c = /commitments
@@ -671,48 +606,17 @@ class CommandRouter:
             return CommandResult(success=False)
 
     def _cmd_remember(self, args: str) -> CommandResult:
-        """Store a memory in MemOS knowledge graph."""
+        """Store a memory using Memory V2 router."""
         if not args:
             print(f"{Colors.DIM}Usage: /remember <content to store>{Colors.RESET}")
-            print(
-                f"{Colors.DIM}Options: /remember decision: <text>  - "
-                f"Store as decision{Colors.RESET}"
-            )
-            print(
-                f"{Colors.DIM}         /remember pattern: <text>  - Store as pattern{Colors.RESET}"
-            )
-            print(
-                f"{Colors.DIM}         /remember <text>           - "
-                f"Store as observation{Colors.RESET}"
-            )
+            print(f"{Colors.DIM}Example: /remember Orlando client prefers morning meetings{Colors.RESET}")
             return CommandResult()
 
-        memos = self._get_memos()
-        if not memos:
-            print(
-                f"{Colors.DIM}MemOS not available. "
-                f"Check Neo4j/ChromaDB configuration.{Colors.RESET}"
-            )
+        if not MEMORY_ROUTER_AVAILABLE:
+            print(f"{Colors.DIM}Memory system not available.{Colors.RESET}")
             return CommandResult(success=False)
 
-        # Parse memory type from prefix
-        memory_type = "observation"
         content = args.strip()
-        domain = "general"
-
-        # Check for type prefixes
-        type_prefixes = {
-            "decision:": "decision",
-            "pattern:": "pattern",
-            "commitment:": "commitment",
-            "entity:": "entity",
-        }
-
-        for prefix, mtype in type_prefixes.items():
-            if content.lower().startswith(prefix):
-                memory_type = mtype
-                content = content[len(prefix) :].strip()
-                break
 
         # Detect domain from current agent
         agent_domain_map = {
@@ -730,42 +634,34 @@ class CommandRouter:
             if word.startswith("@") and len(word) > 1:
                 entities.append(word[1:])
 
-        # Store the memory
-        result = self._run_async(
-            memos.remember(
-                content=content,
-                memory_type=memory_type,
-                domain=domain,
-                entities=entities if entities else None,
-                metadata={
-                    "agent": self.current_agent,
-                    "session_id": self.session.session.id
-                    if hasattr(self.session, "session")
-                    else None,
-                },
-            )
-        )
+        # Build metadata
+        metadata = {
+            "source": "interactive",
+            "agent": self.current_agent,
+            "domain": domain,
+        }
+        if entities:
+            metadata["entities"] = entities
+        if hasattr(self.session, "session"):
+            metadata["session_id"] = self.session.session.id
 
-        if result and result.success:
-            print(f"\n{Colors.CYAN}Memory stored:{Colors.RESET}")
-            print(f"  Type: {memory_type}")
+        # Store via memory router (routes to Memory V2)
+        try:
+            result = add_memory(content, metadata)
+            print(f"\n{Colors.CYAN}Memory stored via Memory V2:{Colors.RESET}")
             print(f"  Domain: {domain}")
             if entities:
                 print(f"  Entities: {', '.join(entities)}")
-            if result.graph_results:
-                node_id = result.graph_results.get("node_id", "")
-                print(f"  Graph ID: {node_id[:8]}..." if node_id else "")
-            if result.vector_results:
-                print("  Vector stored: ✓")
+            if result.get("id"):
+                print(f"  ID: {result['id'][:8]}...")
             print()
             return CommandResult()
-        else:
-            error = result.error if result else "Unknown error"
-            print(f"{Colors.DIM}Failed to store memory: {error}{Colors.RESET}")
+        except Exception as e:
+            print(f"{Colors.DIM}Failed to store memory: {e}{Colors.RESET}")
             return CommandResult(success=False)
 
     def _cmd_recall(self, args: str) -> CommandResult:
-        """Search memories using MemOS hybrid search or past sessions."""
+        """Search memories using Memory V2 router or past sessions."""
         import json
 
         if not args:
@@ -774,58 +670,34 @@ class CommandRouter:
             print(f"{Colors.DIM}Flags: --sessions (search only sessions){Colors.RESET}")
             return CommandResult()
 
-        # Check for --sessions flag to skip MemOS
+        # Check for --sessions flag to skip memory search
         sessions_only = "--sessions" in args
         query = args.replace("--sessions", "").strip()
 
-        # Try MemOS first (hybrid search)
-        memos = self._get_memos() if not sessions_only else None
-        memos_results = []
+        # Search Memory V2 first (unless sessions-only)
+        memory_results = []
+        if not sessions_only and MEMORY_ROUTER_AVAILABLE:
+            try:
+                results = search_memory(query, limit=5)
+                for r in results:
+                    memory_results.append({
+                        "id": r.get("id", ""),
+                        "content": r.get("memory", r.get("content", ""))[:150],
+                        "score": r.get("effective_score", r.get("similarity", 0)),
+                        "metadata": r.get("metadata", {}),
+                    })
+            except Exception as e:
+                print(f"{Colors.DIM}Memory search error: {e}{Colors.RESET}")
 
-        if memos:
-            result = self._run_async(
-                memos.recall(query=query, limit=5, use_graph=True, use_vector=True)
-            )
-
-            if result and result.success:
-                # Combine vector and graph results
-                if result.vector_results:
-                    for item in result.vector_results[:3]:
-                        memos_results.append(
-                            {
-                                "source": "vector",
-                                "content": item.get("content", "")[:150],
-                                "type": item.get("memory_type", "memory"),
-                                "score": item.get("similarity", 0),
-                            }
-                        )
-
-                if result.graph_results:
-                    nodes = result.graph_results.get("nodes", [])
-                    for node in nodes[:3]:
-                        props = node.get("properties", {})
-                        memos_results.append(
-                            {
-                                "source": "graph",
-                                "content": props.get("content", props.get("description", ""))[:150],
-                                "type": node.get("labels", ["memory"])[0]
-                                if node.get("labels")
-                                else "memory",
-                                "id": node.get("id", "")[:8],
-                            }
-                        )
-
-        # Display MemOS results
-        if memos_results:
-            print(
-                f"\n{Colors.CYAN}MemOS Knowledge Graph "
-                f"({len(memos_results)} results):{Colors.RESET}\n"
-            )
-            for r in memos_results:
-                source_icon = "🔍" if r["source"] == "vector" else "🔗"
-                score_str = f" ({r.get('score', 0):.2f})" if r.get("score") else ""
-                print(f"  {source_icon} [{r['type']}]{score_str}")
+        # Display Memory V2 results
+        if memory_results:
+            print(f"\n{Colors.CYAN}Memory V2 ({len(memory_results)} results):{Colors.RESET}\n")
+            for r in memory_results:
+                score_str = f" ({r['score']:.2f})" if r.get("score") else ""
+                print(f"  🔍 {score_str}")
                 print(f"     {r['content']}...")
+                if r.get("metadata", {}).get("client"):
+                    print(f"     {Colors.DIM}Client: {r['metadata']['client']}{Colors.RESET}")
                 print()
 
         # Also search session history (fallback or additional)
@@ -869,7 +741,7 @@ class CommandRouter:
                 print(f"  {role_color}{m['role']}:{Colors.RESET} {m['preview']}...")
                 print()
 
-        if not memos_results and not session_matches:
+        if not memory_results and not session_matches:
             print(f"{Colors.DIM}No matches found for: {query}{Colors.RESET}")
             return CommandResult()
 
@@ -879,43 +751,36 @@ class CommandRouter:
         return CommandResult()
 
     def _cmd_memory(self, args: str) -> CommandResult:
-        """Display memory system information including MemOS (Neo4j + ChromaDB)."""
+        """Display memory system information (Memory V2)."""
         print(f"\n{Colors.CYAN}Memory Systems:{Colors.RESET}\n")
 
-        # MemOS Status (primary system)
-        print(f"  {Colors.BOLD}MemOS Hybrid Memory:{Colors.RESET}")
-        memos = self._get_memos()
-        if memos:
-            print("    ✓ MemOS initialized")
+        # Memory V2 Status (primary system)
+        print(f"  {Colors.BOLD}Memory V2 (Primary):{Colors.RESET}")
+        if MEMORY_ROUTER_AVAILABLE:
+            try:
+                stats = get_memory_stats()
+                print("    ✓ Memory V2 active")
+                print(f"    📊 Total memories: {stats.get('total_memories', 0)}")
+                print(f"    🔥 Hot memories (>0.7 heat): {stats.get('hot_count', 0)}")
+                print(f"    ❄️  Cold memories (<0.2 heat): {stats.get('cold_count', 0)}")
 
-            # Neo4j status
-            neo4j_url = os.environ.get("NEO4J_URL", "")
-            if neo4j_url:
-                # Mask URL for security
-                masked_url = neo4j_url.split("@")[-1] if "@" in neo4j_url else neo4j_url[:30]
-                print(f"    🔗 Neo4j Graph: {masked_url}")
-            else:
-                print("    🔗 Neo4j Graph: Not configured")
+                # Neon database
+                neon_url = os.environ.get("NEON_DATABASE_URL", "")
+                if neon_url:
+                    masked_url = neon_url.split("@")[-1] if "@" in neon_url else "configured"
+                    print(f"    🗄️  Neon Postgres: {masked_url}")
+                else:
+                    print("    🗄️  Neon Postgres: Not configured")
 
-            # ChromaDB status
-            chroma_path = os.environ.get("CHROMADB_PATH", "~/.chromadb")
-            print(f"    🔍 ChromaDB Vectors: {chroma_path}")
+                # mem0 integration
+                mem0_key = os.environ.get("MEM0_API_KEY", "")
+                print(f"    🧠 mem0: {'✓ configured' if mem0_key else '✗ not configured'}")
 
-            # Try to get stats
-            if hasattr(memos, "_neo4j") and memos._neo4j:
-                try:
-                    result = self._run_async(memos._neo4j.health_check())
-                    if result and result.success:
-                        print("    ✓ Neo4j connected")
-                except Exception:
-                    print("    ⚠ Neo4j connection issue")
+            except Exception as e:
+                print(f"    ⚠ Error loading stats: {e}")
         else:
-            if MEMOS_AVAILABLE:
-                print("    ⚠ MemOS available but not initialized")
-                print("    💡 MemOS will initialize on first /remember or /recall")
-            else:
-                print("    ✗ MemOS not available")
-                print("    💡 Install neo4j and chromadb packages")
+            print("    ✗ Memory V2 not available")
+            print("    💡 Check Tools/memory_router.py configuration")
 
         print()
 
@@ -928,37 +793,17 @@ class CommandRouter:
         else:
             print("  📝 Session History: Not initialized")
 
-        # Check for swarm memory
-        swarm_db = self.thanos_dir / ".swarm" / "memory.db"
-        if swarm_db.exists():
-            size_kb = swarm_db.stat().st_size / 1024
-            print(f"  🔮 Swarm Memory: {size_kb:.1f} KB")
-            print(f"     Location: {swarm_db}")
-        else:
-            print("  🔮 Swarm Memory: Not initialized")
-
-        # Check for hive-mind memory
-        hive_db = self.thanos_dir / ".hive-mind" / "memory.db"
-        if hive_db.exists():
-            size_kb = hive_db.stat().st_size / 1024
-            print(f"  🐝 Hive Mind Memory: {size_kb:.1f} KB")
-            print(f"     Location: {hive_db}")
-        else:
-            print("  🐝 Hive Mind Memory: Not initialized")
-
         # Check for claude-mem integration
         claude_mem = Path.home() / ".claude-mem"
         if claude_mem.exists():
-            print("  🧠 Claude-mem: Active")
+            print("  🧠 Claude-mem MCP: Active")
             print(f"     Location: {claude_mem}")
         else:
-            print("  🧠 Claude-mem: Not detected")
+            print("  🧠 Claude-mem MCP: Not detected")
 
         print(f"\n{Colors.DIM}Commands:{Colors.RESET}")
-        print(f"{Colors.DIM}  /remember <content> - Store memory in knowledge graph{Colors.RESET}")
-        print(
-            f"{Colors.DIM}  /recall <query>     - Search memories (hybrid search){Colors.RESET}\n"
-        )
+        print(f"{Colors.DIM}  /remember <content> - Store memory via Memory V2{Colors.RESET}")
+        print(f"{Colors.DIM}  /recall <query>     - Search memories (V2 + sessions){Colors.RESET}\n")
         return CommandResult()
 
     def _cmd_branch(self, args: str) -> CommandResult:
@@ -1642,35 +1487,17 @@ class CommandRouter:
         print()
 
     # ========================================================================
-    # Memory Commands
+    # Memory Commands (via Memory V2 Router)
     # ========================================================================
-
-    def _get_memory_commands(self):
-        """Get memory commands instance, initializing if needed."""
-        if not MEMORY_COMMANDS_AVAILABLE:
-            return None
-
-        if not self._memory_commands_initialized:
-            try:
-                self._memory_commands = get_memory_commands(self.thanos_dir)
-                self._memory_commands_initialized = True
-            except Exception as e:
-                print(f"{Colors.DIM}Memory commands init error: {e}{Colors.RESET}")
-                self._memory_commands = None
-                self._memory_commands_initialized = True
-
-        return self._memory_commands
 
     def _cmd_mem(self, args: str) -> CommandResult:
         """
-        Memory commands handler.
+        Memory commands handler (using Memory V2 router).
 
         Subcommands:
         - search <query>  : Semantic search across memories
-        - today           : Today's activity summary
-        - week            : This week's patterns
-        - struggles       : Recent struggles and blockers
-        - priorities      : Current priorities and values
+        - hot             : Show high-heat memories (current focus)
+        - cold            : Show low-heat memories (neglected items)
         """
         if not args:
             self._show_mem_help()
@@ -1680,21 +1507,16 @@ class CommandRouter:
         subcommand = parts[0].lower()
         subargs = parts[1] if len(parts) > 1 else ""
 
-        mem_cmds = self._get_memory_commands()
-        if not mem_cmds:
-            print(f"{Colors.DIM}Memory commands not available.{Colors.RESET}")
+        if not MEMORY_ROUTER_AVAILABLE:
+            print(f"{Colors.DIM}Memory system not available.{Colors.RESET}")
             return CommandResult(success=False)
 
         if subcommand == "search":
-            return self._mem_search(mem_cmds, subargs)
-        elif subcommand == "today":
-            return self._mem_today(mem_cmds)
-        elif subcommand == "week":
-            return self._mem_week(mem_cmds)
-        elif subcommand == "struggles":
-            return self._mem_struggles(mem_cmds, subargs)
-        elif subcommand == "priorities":
-            return self._mem_priorities(mem_cmds)
+            return self._mem_search(subargs)
+        elif subcommand == "hot":
+            return self._mem_hot()
+        elif subcommand == "cold":
+            return self._mem_cold()
         else:
             print(f"{Colors.DIM}Unknown memory subcommand: {subcommand}{Colors.RESET}")
             self._show_mem_help()
@@ -1703,190 +1525,113 @@ class CommandRouter:
     def _show_mem_help(self) -> None:
         """Show memory commands help."""
         print(f"""
-{Colors.CYAN}Memory Commands:{Colors.RESET}
+{Colors.CYAN}Memory Commands (V2):{Colors.RESET}
 
   /mem search <query>   Semantic search across all memories
-  /mem today            Today's activity summary (conversations, emotions)
-  /mem week             This week's patterns and highlights
-  /mem struggles [days] Recent struggles and blockers (default: 7 days)
-  /mem priorities       Current priorities, focus, and commitments
+  /mem hot              Show high-heat memories (current focus)
+  /mem cold             Show low-heat memories (neglected items)
 
 {Colors.DIM}Examples:{Colors.RESET}
-  /mem search API rate limiting
-  /mem struggles 14
-  /mem today
+  /mem search Orlando client meeting
+  /mem hot
+  /mem cold
+
+{Colors.DIM}Note: /recall <query> also searches memories{Colors.RESET}
 """)
 
-    def _mem_search(self, mem_cmds, query: str) -> CommandResult:
-        """Execute memory search."""
+    def _mem_search(self, query: str) -> CommandResult:
+        """Execute memory search via Memory V2."""
         if not query:
             print(f"{Colors.DIM}Usage: /mem search <query>{Colors.RESET}")
             return CommandResult(success=False)
 
         print(f"{Colors.DIM}Searching memories for: {query}{Colors.RESET}\n")
 
-        results = mem_cmds.search(query, limit=8)
+        try:
+            results = search_memory(query, limit=8)
 
-        if not results:
-            print(f"{Colors.DIM}No matching memories found.{Colors.RESET}")
-            return CommandResult()
+            if not results:
+                print(f"{Colors.DIM}No matching memories found.{Colors.RESET}")
+                return CommandResult()
 
-        print(f"{Colors.CYAN}Memory Search Results ({len(results)} found):{Colors.RESET}\n")
+            print(f"{Colors.CYAN}Memory Search Results ({len(results)} found):{Colors.RESET}\n")
 
-        for i, r in enumerate(results, 1):
-            # Source indicator
-            source_icon = {
-                "vector": "🔍",
-                "graph": "🔗",
-                "session": "💬"
-            }.get(r.source, "📝")
+            for r in results:
+                score = r.get("effective_score", r.get("similarity", 0))
+                relevance_bar = "█" * int(score * 5) + "░" * (5 - int(score * 5))
+                content = r.get("memory", r.get("content", ""))
 
-            relevance_bar = "█" * int(r.relevance * 5) + "░" * (5 - int(r.relevance * 5))
+                print(f"  🔍 {relevance_bar} ({score:.2f})")
+                print(f"     {content[:120]}{'...' if len(content) > 120 else ''}")
 
-            print(f"  {source_icon} [{r.memory_type}] {relevance_bar}")
-            print(f"     {r.content[:120]}{'...' if len(r.content) > 120 else ''}")
+                # Show metadata if available
+                metadata = r.get("metadata", {})
+                if metadata.get("client"):
+                    print(f"     {Colors.DIM}Client: {metadata['client']}{Colors.RESET}")
+                if metadata.get("source"):
+                    print(f"     {Colors.DIM}Source: {metadata['source']}{Colors.RESET}")
 
-            # Show metadata if available
-            if r.metadata.get("date"):
-                print(f"     {Colors.DIM}Date: {r.metadata['date']}{Colors.RESET}")
-            elif r.metadata.get("session_id"):
-                print(f"     {Colors.DIM}Session: {r.metadata['session_id']}{Colors.RESET}")
-
-            print()
-
-        return CommandResult()
-
-    def _mem_today(self, mem_cmds) -> CommandResult:
-        """Show today's activity summary."""
-        summary = mem_cmds.today()
-
-        print(f"\n{Colors.CYAN}Today's Activity:{Colors.RESET}\n")
-
-        print(f"  Conversations: {summary.conversations}")
-
-        if summary.emotional_markers:
-            print(f"\n  {Colors.BOLD}Emotional Markers:{Colors.RESET}")
-            for emotion, count in summary.emotional_markers.items():
-                if count > 0:
-                    emoji = {"frustration": "😤", "excitement": "🎉", "urgency": "⚡"}.get(emotion, "•")
-                    print(f"    {emoji} {emotion.title()}: {count} occurrences")
-
-        if summary.wins:
-            print(f"\n  {Colors.BOLD}Wins:{Colors.RESET}")
-            for win in summary.wins[:3]:
-                print(f"    ✅ {win}")
-
-        if summary.blockers_mentioned:
-            print(f"\n  {Colors.BOLD}Blockers Mentioned:{Colors.RESET}")
-            for blocker in summary.blockers_mentioned[:3]:
-                print(f"    🚧 {blocker}")
-
-        print()
-        return CommandResult()
-
-    def _mem_week(self, mem_cmds) -> CommandResult:
-        """Show this week's patterns and highlights."""
-        summary = mem_cmds.week()
-
-        print(f"\n{Colors.CYAN}This Week's Summary:{Colors.RESET}\n")
-
-        print(f"  Total Conversations: {summary.conversations}")
-
-        if summary.emotional_markers:
-            print(f"\n  {Colors.BOLD}Emotional Patterns:{Colors.RESET}")
-
-            total = sum(summary.emotional_markers.values())
-            if total > 0:
-                for emotion, count in summary.emotional_markers.items():
-                    if count > 0:
-                        pct = (count / total) * 100
-                        bar = "█" * int(pct / 10) + "░" * (10 - int(pct / 10))
-                        emoji = {"frustration": "😤", "excitement": "🎉", "urgency": "⚡"}.get(emotion, "•")
-                        print(f"    {emoji} {emotion.title():12} {bar} {count}")
-
-        if summary.wins:
-            print(f"\n  {Colors.BOLD}Highlights:{Colors.RESET}")
-            for win in summary.wins[:5]:
-                print(f"    ✅ {win}")
-
-        if summary.blockers_mentioned:
-            print(f"\n  {Colors.BOLD}Recurring Blockers:{Colors.RESET}")
-            for blocker in summary.blockers_mentioned[:5]:
-                print(f"    🚧 {blocker}")
-
-        print()
-        return CommandResult()
-
-    def _mem_struggles(self, mem_cmds, args: str) -> CommandResult:
-        """Show recent struggles and blockers."""
-        days = 7
-        if args:
-            try:
-                days = int(args)
-            except ValueError:
-                print(f"{Colors.DIM}Invalid days value, using default (7){Colors.RESET}")
-
-        struggles = mem_cmds.struggles(days=days)
-
-        print(f"\n{Colors.CYAN}Recent Struggles ({days} days):{Colors.RESET}\n")
-
-        if not struggles:
-            print(f"  {Colors.DIM}No struggles or blockers recorded.{Colors.RESET}")
-            print(f"  {Colors.DIM}(This is either great news or you're not sharing enough!){Colors.RESET}")
-        else:
-            # Group by category
-            by_category = {}
-            for s in struggles:
-                cat = s["category"]
-                if cat not in by_category:
-                    by_category[cat] = []
-                by_category[cat].append(s)
-
-            for category, items in by_category.items():
-                emoji = "🚧" if category == "blocker" else "😤"
-                print(f"  {Colors.BOLD}{emoji} {category.title()} ({len(items)}):{Colors.RESET}")
-
-                for item in items[:5]:
-                    print(f"    • [{item['date']}] {item['context'][:80]}...")
                 print()
 
-        print()
-        return CommandResult()
+            return CommandResult()
+        except Exception as e:
+            print(f"{Colors.DIM}Search error: {e}{Colors.RESET}")
+            return CommandResult(success=False)
 
-    def _mem_priorities(self, mem_cmds) -> CommandResult:
-        """Show current priorities and values."""
-        priorities = mem_cmds.priorities()
+    def _mem_hot(self) -> CommandResult:
+        """Show high-heat memories (current focus)."""
+        try:
+            results = whats_hot(limit=10)
 
-        print(f"\n{Colors.CYAN}Current Priorities:{Colors.RESET}\n")
+            if not results:
+                print(f"{Colors.DIM}No high-heat memories found.{Colors.RESET}")
+                return CommandResult()
 
-        if priorities["focus"]:
-            print(f"  {Colors.BOLD}Today's Focus:{Colors.RESET} {priorities['focus']}")
+            print(f"\n{Colors.CYAN}🔥 Hot Memories (Current Focus):{Colors.RESET}\n")
 
-        if priorities["top3"]:
-            print(f"\n  {Colors.BOLD}Top 3 for Today:{Colors.RESET}")
-            for i, item in enumerate(priorities["top3"], 1):
-                print(f"    {i}. {item}")
+            for r in results:
+                heat = r.get("heat", 0)
+                content = r.get("memory", r.get("content", ""))
+                heat_bar = "🔥" * int(heat * 5)
 
-        if priorities["week_theme"]:
-            print(f"\n  {Colors.BOLD}Week Theme:{Colors.RESET} {priorities['week_theme']}")
+                print(f"  {heat_bar} ({heat:.2f})")
+                print(f"     {content[:120]}{'...' if len(content) > 120 else ''}")
+                print()
 
-        if priorities["commitments"]:
-            print(f"\n  {Colors.BOLD}Active Commitments ({len(priorities['commitments'])}):{Colors.RESET}")
-            for item in priorities["commitments"][:5]:
-                print(f"    • {item}")
-            if len(priorities["commitments"]) > 5:
-                print(f"    {Colors.DIM}... and {len(priorities['commitments']) - 5} more{Colors.RESET}")
+            return CommandResult()
+        except Exception as e:
+            print(f"{Colors.DIM}Error fetching hot memories: {e}{Colors.RESET}")
+            return CommandResult(success=False)
 
-        if priorities["values"]:
-            print(f"\n  {Colors.BOLD}Core Values:{Colors.RESET}")
-            for value in priorities["values"][:5]:
-                print(f"    • {value}")
+    def _mem_cold(self) -> CommandResult:
+        """Show low-heat memories (neglected items)."""
+        try:
+            results = whats_cold(threshold=0.2, limit=10)
 
-        if not any([priorities["focus"], priorities["top3"], priorities["commitments"]]):
-            print(f"  {Colors.DIM}No priorities set. Update State/Today.md to track priorities.{Colors.RESET}")
+            if not results:
+                print(f"{Colors.DIM}No cold memories found (everything is active!).{Colors.RESET}")
+                return CommandResult()
 
-        print()
-        return CommandResult()
+            print(f"\n{Colors.CYAN}❄️  Cold Memories (Neglected Items):{Colors.RESET}\n")
+
+            for r in results:
+                heat = r.get("heat", 0)
+                content = r.get("memory", r.get("content", ""))
+
+                print(f"  ❄️  ({heat:.2f})")
+                print(f"     {content[:120]}{'...' if len(content) > 120 else ''}")
+
+                # Show when last accessed
+                metadata = r.get("metadata", {})
+                if metadata.get("last_accessed"):
+                    print(f"     {Colors.DIM}Last accessed: {metadata['last_accessed']}{Colors.RESET}")
+
+                print()
+
+            return CommandResult()
+        except Exception as e:
+            print(f"{Colors.DIM}Error fetching cold memories: {e}{Colors.RESET}")
+            return CommandResult(success=False)
 
     def _get_oura_data(self) -> Optional[dict]:
         """Get Oura health data (used by _detect_and_fetch_oura_context)."""
