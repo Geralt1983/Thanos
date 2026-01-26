@@ -12,12 +12,21 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 
+def get_topic_keywords() -> Dict[str, List[str]]:
+    """Define topic keywords for common domains"""
+    return {
+        "health": ["health", "doctor", "medical", "appointment", "checkup", "medication", "fitness", "exercise", "diet"],
+        "calendar": ["calendar", "schedule", "meeting", "appointment", "event", "tomorrow", "today", "next week"],
+        "commitments": ["commitment", "promise", "deadline", "due", "obligation", "responsibility", "task", "todo"]
+    }
+
+
 def load_entities() -> Dict[str, List[str]]:
     """Load entities from critical_facts.json"""
     facts_path = Path(__file__).parent.parent / "State" / "critical_facts.json"
 
     if not facts_path.exists():
-        return {"clients": [], "projects": []}
+        return {"clients": [], "projects": [], "topics": get_topic_keywords()}
 
     try:
         with open(facts_path, 'r') as f:
@@ -28,10 +37,11 @@ def load_entities() -> Dict[str, List[str]]:
 
         return {
             "clients": clients,
-            "projects": projects
+            "projects": projects,
+            "topics": get_topic_keywords()
         }
     except (json.JSONDecodeError, IOError):
-        return {"clients": [], "projects": []}
+        return {"clients": [], "projects": [], "topics": get_topic_keywords()}
 
 
 def extract_entities(text: str) -> List[Dict[str, Any]]:
@@ -88,6 +98,27 @@ def extract_entities(text: str) -> List[Dict[str, Any]]:
                     'end': match.end(),
                     'confidence': 1.0
                 })
+
+    # Detect topics
+    topics = entities.get("topics", {})
+    for domain, keywords in topics.items():
+        for keyword in keywords:
+            # Case-insensitive search with word boundaries
+            pattern = re.compile(r'\b' + re.escape(keyword.lower()) + r'\b')
+            for match in pattern.finditer(text_lower):
+                # Skip if already found as client or project (avoid duplicates)
+                already_found = any(
+                    r['start'] == match.start() and r['end'] == match.end()
+                    for r in results
+                )
+                if not already_found:
+                    results.append({
+                        'text': keyword,
+                        'type': 'topic',
+                        'start': match.start(),
+                        'end': match.end(),
+                        'confidence': 1.0
+                    })
 
     # Sort by position in text
     results.sort(key=lambda x: x['start'])
