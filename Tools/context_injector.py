@@ -376,8 +376,9 @@ def recent_commitments_context() -> str:
     """Load recent commitments from CommitmentData.json.
 
     Loads commitment data and returns formatted context for active
-    commitments and promises. Filters for relevant commitments to
-    surface in session context.
+    commitments and promises. Filters for pending/in_progress status
+    with activity in past 7 days (based on created_date or last
+    completion_history timestamp).
 
     Returns:
         Formatted commitments context string
@@ -397,12 +398,70 @@ def recent_commitments_context() -> str:
         if not commitments:
             return "## Recent Commitments\n<!-- No commitments found -->"
 
-        # For now, just load and format basic commitment info
-        # Filtering logic will be added in subtask-4-2
+        # Calculate 7 days ago threshold
+        seven_days_ago = datetime.now() - timedelta(days=7)
+
+        # Filter for pending/in_progress commitments with recent activity
+        recent_active = []
+        for commitment in commitments:
+            status = commitment.get('status', '')
+
+            # Filter 1: Only pending or in_progress
+            if status not in ['pending', 'in_progress']:
+                continue
+
+            # Filter 2: Check for activity in past 7 days
+            # Activity = created_date OR last completion_history entry
+            has_recent_activity = False
+            last_activity_date = None
+
+            # Check created_date
+            created_date = commitment.get('created_date')
+            if created_date:
+                try:
+                    created_dt = datetime.fromisoformat(created_date.replace('Z', '+00:00'))
+                    if created_dt >= seven_days_ago:
+                        has_recent_activity = True
+                        last_activity_date = created_dt
+                except Exception:
+                    pass
+
+            # Check completion_history for more recent activity
+            completion_history = commitment.get('completion_history', [])
+            if completion_history:
+                # Get the most recent completion record
+                try:
+                    last_record = completion_history[-1]
+                    last_timestamp = last_record.get('timestamp')
+                    if last_timestamp:
+                        last_dt = datetime.fromisoformat(last_timestamp.replace('Z', '+00:00'))
+                        if last_dt >= seven_days_ago:
+                            has_recent_activity = True
+                            # Use the most recent between created and last completion
+                            if last_activity_date is None or last_dt > last_activity_date:
+                                last_activity_date = last_dt
+                except Exception:
+                    pass
+
+            # Only include if there was recent activity
+            if has_recent_activity:
+                recent_active.append({
+                    'commitment': commitment,
+                    'last_activity': last_activity_date or datetime.now()
+                })
+
+        # Sort by most recent activity first
+        recent_active.sort(key=lambda x: x['last_activity'], reverse=True)
+
+        if not recent_active:
+            return "## Recent Commitments\n<!-- No recent active commitments found -->"
+
+        # Format output
         lines = ["## Recent Commitments", ""]
 
         # Show up to 5 commitments
-        for commitment in commitments[:5]:
+        for item in recent_active[:5]:
+            commitment = item['commitment']
             title = commitment.get('title', 'Untitled')
             status = commitment.get('status', 'unknown')
             commitment_type = commitment.get('type', 'unknown')
