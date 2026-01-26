@@ -67,16 +67,14 @@ def setup_workflow_imports():
 def mock_workos_client():
     """Create a mock WorkOS MCP client."""
     from Tools.adapters.mcp_bridge import MCPBridge
+    from Tools.adapters.base import ToolResult
 
     client = Mock(spec=MCPBridge)
     client.name = "workos"
     client.call_tool = AsyncMock()
 
-    # Default successful response
-    client.call_tool.return_value = {
-        "content": [{"type": "text", "text": '{"result": "success"}'}],
-        "isError": False
-    }
+    # Default successful response - ToolResult with success and data
+    client.call_tool.return_value = ToolResult.ok({"result": "success"})
 
     return client
 
@@ -85,16 +83,14 @@ def mock_workos_client():
 def mock_oura_client():
     """Create a mock Oura MCP client."""
     from Tools.adapters.mcp_bridge import MCPBridge
+    from Tools.adapters.base import ToolResult
 
     client = Mock(spec=MCPBridge)
     client.name = "oura"
     client.call_tool = AsyncMock()
 
-    # Default successful response
-    client.call_tool.return_value = {
-        "content": [{"type": "text", "text": '{"result": "success"}'}],
-        "isError": False
-    }
+    # Default successful response - ToolResult with success and data
+    client.call_tool.return_value = ToolResult.ok({"result": "success"})
 
     return client
 
@@ -244,8 +240,9 @@ def sample_tool_result():
     from Tools.adapters.base import ToolResult
 
     return ToolResult(
-        content='{"result": "success"}',
-        is_error=False,
+        success=True,
+        data={"result": "success"},
+        error=None,
         metadata={"tool_name": "test_tool", "server": "test-server"}
     )
 
@@ -256,8 +253,9 @@ def error_tool_result():
     from Tools.adapters.base import ToolResult
 
     return ToolResult(
-        content='{"error": "Operation failed"}',
-        is_error=True,
+        success=False,
+        data=None,
+        error="Operation failed",
         metadata={"tool_name": "test_tool", "server": "test-server"}
     )
 

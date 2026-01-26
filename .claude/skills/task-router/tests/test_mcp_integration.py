@@ -299,7 +299,9 @@ class TestTaskOperationExecution:
             "workos_create_task",
             {
                 "title": "Review Q4 planning document",
-                "valueTier": "checkbox"
+                "valueTier": "checkbox",
+                "drainType": "shallow",
+                "status": "active"
             }
         )
 

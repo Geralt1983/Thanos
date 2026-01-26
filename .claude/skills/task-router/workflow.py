@@ -29,6 +29,36 @@ logger = logging.getLogger(__name__)
 # MCP call timeout configuration (seconds)
 MCP_CALL_TIMEOUT_SECONDS = 5.0
 
+
+def _run_coro(coro):
+    """
+    Safely run a coroutine, detecting if we're already in an async context.
+
+    Args:
+        coro: Coroutine to run
+
+    Returns:
+        Result of the coroutine
+
+    Raises:
+        RuntimeError: If called from an async context (use async API instead)
+    """
+    try:
+        # Check if there's already a running event loop
+        asyncio.get_running_loop()
+        # If we get here, we're in an async context
+        raise RuntimeError(
+            "Cannot call synchronous wrapper from async context. "
+            "Use the async API (e.g., _get_energy_level_async) instead."
+        )
+    except RuntimeError as e:
+        if "no running event loop" in str(e).lower():
+            # No loop running, safe to use asyncio.run
+            return asyncio.run(coro)
+        else:
+            # Re-raise our custom error message
+            raise
+
 # Global MCP client cache (per-process)
 _mcp_client_cache: Optional[MCPBridge] = None
 _oura_client_cache: Optional[MCPBridge] = None
@@ -394,7 +424,7 @@ def get_energy_level() -> tuple[int, str]:
         Tries Oura readiness first, falls back to WorkOS energy.
         Always returns a value (defaults to medium if all sources fail).
     """
-    return asyncio.run(_get_energy_level_async())
+    return _run_coro(_get_energy_level_async())
 
 
 def map_readiness_to_energy(score: int) -> str:
@@ -678,7 +708,7 @@ async def _execute_task_operation_async(
                 # Get today's metrics to show progress
                 try:
                     metrics_result: ToolResult = await asyncio.wait_for(
-                        mcp_client.call_tool("workos_get_today_metrics"),
+                        mcp_client.call_tool("workos_get_today_metrics", {}),
                         timeout=MCP_CALL_TIMEOUT_SECONDS
                     )
                     metrics = metrics_result.data if metrics_result.success else {}
@@ -893,7 +923,7 @@ def execute_task_operation(
         }
 
     # Execute task operation asynchronously
-    execution_result = asyncio.run(_execute_task_operation_async(intent, client))
+    execution_result = _run_coro(_execute_task_operation_async(intent, client))
 
     # 5. Handle execution errors
     if not execution_result.get("success"):

@@ -24,6 +24,36 @@ logger = logging.getLogger(__name__)
 # MCP call timeout configuration (seconds)
 MCP_CALL_TIMEOUT_SECONDS = 5.0
 
+
+def _run_coro(coro):
+    """
+    Safely run a coroutine, detecting if we're already in an async context.
+
+    Args:
+        coro: Coroutine to run
+
+    Returns:
+        Result of the coroutine
+
+    Raises:
+        RuntimeError: If called from an async context (use async API instead)
+    """
+    try:
+        # Check if there's already a running event loop
+        asyncio.get_running_loop()
+        # If we get here, we're in an async context
+        raise RuntimeError(
+            "Cannot call synchronous wrapper from async context. "
+            "Use the async API (e.g., _get_health_snapshot_async) instead."
+        )
+    except RuntimeError as e:
+        if "no running event loop" in str(e).lower():
+            # No loop running, safe to use asyncio.run
+            return asyncio.run(coro)
+        else:
+            # Re-raise our custom error message
+            raise
+
 # Global MCP client cache (per-process)
 _oura_client_cache: Optional[MCPBridge] = None
 _workos_client_cache: Optional[MCPBridge] = None
@@ -315,7 +345,7 @@ def get_health_snapshot(mcp_client=None) -> Dict[str, Any]:
 
     # Fetch health data with MCP calls (async)
     try:
-        health_data = asyncio.run(_get_health_snapshot_async(client, today))
+        health_data = _run_coro(_get_health_snapshot_async(client, today))
         readiness_score = health_data["readiness"]
         sleep_score = health_data["sleep_score"]
         activity_data = health_data["activity"]
@@ -468,7 +498,7 @@ def get_energy_appropriate_tasks(energy_level: str, mcp_client=None) -> List[Dic
 
     # Fetch tasks via MCP (async)
     try:
-        tasks = asyncio.run(_get_energy_appropriate_tasks_async(client, energy_level, limit=5))
+        tasks = _run_coro(_get_energy_appropriate_tasks_async(client, energy_level, limit=5))
 
         if tasks:
             return tasks
