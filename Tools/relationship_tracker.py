@@ -83,6 +83,7 @@ class PersonMention:
             'last_mentioned_at': self.last_mentioned_at,
             'mention_count': self.mention_count,
             'importance_level': self.importance_level,
+            'importance': self.importance_level,  # Alias for convenience
             'first_mentioned_at': self.first_mentioned_at,
             'metadata': self.metadata,
             'created_at': self.created_at,
