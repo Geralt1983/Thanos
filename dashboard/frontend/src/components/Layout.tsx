@@ -6,47 +6,19 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: 'var(--color-bg-primary)',
-      padding: '0',
-    }}>
+    <div className="layout">
       {/* Header */}
-      <header style={{
-        backgroundColor: 'var(--color-bg-secondary)',
-        borderBottom: '1px solid var(--color-border)',
-        padding: 'var(--spacing-lg) var(--spacing-xl)',
-        boxShadow: 'var(--shadow-md)',
-      }}>
-        <div style={{
-          maxWidth: '1600px',
-          margin: '0 auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
+      <header className="layout-header">
+        <div className="layout-header-container">
           <div>
-            <h1 style={{
-              fontSize: '1.75rem',
-              fontWeight: '700',
-              color: 'var(--color-text-primary)',
-              margin: '0',
-              letterSpacing: '-0.025em',
-            }}>
+            <h1 className="layout-header-title">
               ⚡ Thanos Dashboard
             </h1>
-            <p style={{
-              fontSize: '0.875rem',
-              color: 'var(--color-text-muted)',
-              margin: '0.25rem 0 0 0',
-            }}>
+            <p className="layout-header-subtitle">
               The Executor's Command Center
             </p>
           </div>
-          <div style={{
-            fontSize: '0.875rem',
-            color: 'var(--color-text-secondary)',
-          }}>
+          <div className="layout-header-date">
             {new Date().toLocaleDateString('en-US', {
               weekday: 'short',
               month: 'short',
@@ -57,27 +29,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       {/* Main Content */}
-      <main style={{
-        maxWidth: '1600px',
-        margin: '0 auto',
-        padding: 'var(--spacing-xl)',
-      }}>
+      <main className="layout-main">
         {children}
       </main>
 
       {/* Footer */}
-      <footer style={{
-        backgroundColor: 'var(--color-bg-secondary)',
-        borderTop: '1px solid var(--color-border)',
-        padding: 'var(--spacing-lg) var(--spacing-xl)',
-        marginTop: 'auto',
-        textAlign: 'center',
-      }}>
-        <p style={{
-          fontSize: '0.875rem',
-          color: 'var(--color-text-muted)',
-          margin: '0',
-        }}>
+      <footer className="layout-footer">
+        <p className="layout-footer-text">
           "Dread it. Run from it. The work arrives all the same."
         </p>
       </footer>
