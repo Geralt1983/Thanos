@@ -58,6 +58,10 @@ export function getTaskTools(): ToolDefinition[] {
             type: "number",
             description: "Max tasks to return (default 50)",
           },
+          applyEnergyFilter: {
+            type: "boolean",
+            description: "Filter tasks based on current energy level - only show tasks with cognitive load matching current energy (default false)",
+          },
         },
         required: [],
       },
