@@ -137,10 +137,10 @@ def fetch_storage_metrics() -> Dict[str, Any]:
 
 def fetch_backup_status() -> Dict[str, Any]:
     """
-    Check for last backup timestamp.
+    Check for last backup timestamp and generate warnings.
 
     Returns:
-        Dictionary with last backup timestamp and age in days
+        Dictionary with last backup timestamp, age in days, and warnings
     """
     try:
         project_root = Path(__file__).parent.parent.parent
@@ -150,7 +150,8 @@ def fetch_backup_status() -> Dict[str, Any]:
             return {
                 "last_backup": None,
                 "age_days": None,
-                "warning": "No backups directory found"
+                "warning": "No backups directory found",
+                "severity": "critical"
             }
 
         # Find most recent backup file
@@ -160,7 +161,8 @@ def fetch_backup_status() -> Dict[str, Any]:
             return {
                 "last_backup": None,
                 "age_days": None,
-                "warning": "No backup files found"
+                "warning": "No backup files found",
+                "severity": "critical"
             }
 
         # Get the most recent backup
@@ -168,22 +170,115 @@ def fetch_backup_status() -> Dict[str, Any]:
         last_modified = datetime.fromtimestamp(most_recent.stat().st_mtime)
         age_days = (datetime.now() - last_modified).days
 
+        # Generate warning based on backup age
+        warning = None
+        severity = None
+
+        if age_days > 14:
+            warning = f"Backup is {age_days} days old - CRITICAL: run backup immediately"
+            severity = "critical"
+        elif age_days > 7:
+            warning = f"Backup is {age_days} days old - consider running a fresh backup soon"
+            severity = "warning"
+        elif age_days > 3:
+            warning = f"Backup is {age_days} days old - should refresh soon"
+            severity = "info"
+
         return {
             "last_backup": last_modified,
             "age_days": age_days,
             "backup_file": most_recent.name,
-            "warning": None
+            "warning": warning,
+            "severity": severity
         }
 
     except Exception as e:
         return {
             "last_backup": None,
             "age_days": None,
-            "warning": f"Error checking backups: {str(e)}"
+            "warning": f"Error checking backups: {str(e)}",
+            "severity": "error"
         }
 
 
-def format_memory_health_summary(stats: Dict[str, Any], storage: Dict[str, Any], backup: Dict[str, Any]) -> str:
+def check_retrieval_health() -> Dict[str, Any]:
+    """
+    Test memory retrieval functionality and performance.
+
+    Returns:
+        Dictionary with retrieval status, warnings, and performance metrics
+    """
+    import time
+
+    try:
+        with _get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Test 1: Basic query performance
+                start_time = time.time()
+                cur.execute("SELECT COUNT(*) as count FROM thanos_memories LIMIT 1")
+                query_time = time.time() - start_time
+
+                # Test 2: Sample memory retrieval
+                start_time = time.time()
+                cur.execute("""
+                    SELECT id, payload->>'content' as content
+                    FROM thanos_memories
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """)
+                result = cur.fetchone()
+                retrieval_time = time.time() - start_time
+
+                warnings = []
+                severity = None
+
+                # Performance checks
+                if query_time > 1.0:
+                    warnings.append(f"Slow query performance ({query_time:.2f}s) - database may need optimization")
+                    severity = "warning"
+
+                if retrieval_time > 2.0:
+                    warnings.append(f"Slow memory retrieval ({retrieval_time:.2f}s) - check database connection")
+                    severity = "warning" if severity != "critical" else severity
+
+                # Connection check
+                if not result and query_time < 1.0:
+                    # Database is responsive but empty (this is OK for new systems)
+                    warnings.append("Database is empty - this is normal for new installations")
+                    severity = "info"
+
+                return {
+                    "query_time": round(query_time, 3),
+                    "retrieval_time": round(retrieval_time, 3),
+                    "warnings": warnings,
+                    "severity": severity,
+                    "operational": True
+                }
+
+    except psycopg2.OperationalError as e:
+        return {
+            "query_time": None,
+            "retrieval_time": None,
+            "warnings": [f"Database connection failed: {str(e)}"],
+            "severity": "critical",
+            "operational": False
+        }
+    except Exception as e:
+        return {
+            "query_time": None,
+            "retrieval_time": None,
+            "warnings": [f"Retrieval test failed: {str(e)}"],
+            "severity": "error",
+            "operational": False
+        }
+
+
+def format_memory_health_summary(
+    stats: Dict[str, Any],
+    storage: Dict[str, Any],
+    backup: Dict[str, Any],
+    retrieval: Dict[str, Any]
+) -> str:
     """
     Format memory health data into a readable summary.
 
@@ -191,6 +286,7 @@ def format_memory_health_summary(stats: Dict[str, Any], storage: Dict[str, Any],
         stats: Memory statistics
         storage: Storage metrics
         backup: Backup status
+        retrieval: Retrieval health check results
 
     Returns:
         Formatted summary string
@@ -289,9 +385,10 @@ def format_memory_health_summary(stats: Dict[str, Any], storage: Dict[str, Any],
     # Backup Status Section
     output.append("\n" + format_header("Backup Status"))
 
-    if backup.get("warning"):
-        output.append(f"⚠️ {backup['warning']}")
-    elif backup.get("last_backup"):
+    backup_severity = backup.get("severity")
+    backup_warning = backup.get("warning")
+
+    if backup.get("last_backup"):
         last_backup = backup['last_backup']
         age_days = backup['age_days']
         backup_file = backup.get('backup_file', 'unknown')
@@ -307,17 +404,70 @@ def format_memory_health_summary(stats: Dict[str, Any], storage: Dict[str, Any],
             ]
             output.append(format_list(backup_items))
 
-        # Backup age warnings
-        if age_days > 7:
-            output.append("\n⚠️ Warning: Backup is more than 7 days old - consider running a fresh backup")
-        elif age_days > 3:
-            output.append("\n⚠️ Note: Backup is a few days old")
+        # Display warning with appropriate emoji based on severity
+        if backup_warning:
+            if backup_severity == "critical":
+                output.append(f"\n🔴 CRITICAL: {backup_warning}")
+            elif backup_severity == "warning":
+                output.append(f"\n⚠️ Warning: {backup_warning}")
+            elif backup_severity == "info":
+                output.append(f"\n💡 Note: {backup_warning}")
         else:
-            output.append("\n✅ Backup is recent")
+            output.append("\n✅ Backup is recent and healthy")
     else:
-        output.append("⚠️ No recent backups found")
+        # No backup found
+        if backup_warning:
+            if backup_severity == "critical":
+                output.append(f"🔴 CRITICAL: {backup_warning}")
+            else:
+                output.append(f"⚠️ {backup_warning}")
+        else:
+            output.append("⚠️ No recent backups found")
 
-    # Retrieval Quality Section (placeholder for future implementation)
+    # Retrieval Health Section
+    output.append("\n" + format_header("Retrieval Health"))
+
+    retrieval_operational = retrieval.get("operational", False)
+    retrieval_warnings = retrieval.get("warnings", [])
+    retrieval_severity = retrieval.get("severity")
+    query_time = retrieval.get("query_time")
+    retrieval_time = retrieval.get("retrieval_time")
+
+    if retrieval_operational:
+        if mobile:
+            if query_time is not None:
+                output.append(f"Query time: {query_time:.3f}s")
+            if retrieval_time is not None:
+                output.append(f"Retrieval time: {retrieval_time:.3f}s")
+        else:
+            perf_items = []
+            if query_time is not None:
+                perf_items.append(f"**Query Performance:** {query_time:.3f}s")
+            if retrieval_time is not None:
+                perf_items.append(f"**Retrieval Performance:** {retrieval_time:.3f}s")
+            if perf_items:
+                output.append(format_list(perf_items))
+
+        # Display retrieval warnings
+        if retrieval_warnings:
+            output.append("")
+            for warning in retrieval_warnings:
+                if retrieval_severity == "critical":
+                    output.append(f"🔴 CRITICAL: {warning}")
+                elif retrieval_severity == "warning":
+                    output.append(f"⚠️ {warning}")
+                elif retrieval_severity == "info":
+                    output.append(f"💡 {warning}")
+        else:
+            output.append("\n✅ Retrieval performance is healthy")
+    else:
+        # Retrieval failed
+        output.append("🔴 CRITICAL: Memory retrieval system is not operational")
+        if retrieval_warnings:
+            for warning in retrieval_warnings:
+                output.append(f"  - {warning}")
+
+    # System Health Section
     output.append("\n" + format_header("System Health"))
 
     health_checks = []
@@ -337,6 +487,12 @@ def format_memory_health_summary(stats: Dict[str, Any], storage: Dict[str, Any],
     # Pinned memories
     if pinned > 0:
         health_checks.append(f"✅ {pinned} critical memories pinned")
+
+    # Database connectivity (from retrieval check)
+    if retrieval_operational:
+        health_checks.append("✅ Database connection healthy")
+    else:
+        health_checks.append("🔴 Database connection issues detected")
 
     output.append(format_list(health_checks))
 
@@ -401,8 +557,11 @@ def execute() -> str:
     print("📦 Checking backup status...")
     backup = fetch_backup_status()
 
+    print("🔍 Testing memory retrieval...")
+    retrieval = check_retrieval_health()
+
     # Format the summary
-    summary = format_memory_health_summary(stats, storage, backup)
+    summary = format_memory_health_summary(stats, storage, backup, retrieval)
 
     print("-" * 50)
     print(summary)
