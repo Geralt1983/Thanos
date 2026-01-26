@@ -203,6 +203,10 @@ class TelegramBrainDumpBot:
         # Example: {"cal_": handle_calendar, "task_": handle_task_action}
         self.callback_handlers: Dict[str, callable] = {}
 
+        # Connection pool for asyncpg (WorkOS database)
+        self._db_pool = None
+        self._pool_lock = asyncio.Lock()
+
     @property
     def orchestrator(self):
         """Lazy-load ThanosOrchestrator for chat mode."""
@@ -225,6 +229,44 @@ class TelegramBrainDumpBot:
         current = self.chat_mode.get(user_id, False)
         self.chat_mode[user_id] = not current
         return not current
+
+    async def _get_db_pool(self):
+        """Get or create the asyncpg connection pool for WorkOS database."""
+        if not self.workos_enabled:
+            return None
+
+        async with self._pool_lock:
+            if self._db_pool is None:
+                try:
+                    import asyncpg
+                    import ssl
+
+                    db_url = WORKOS_DATABASE_URL.split('?')[0]
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+
+                    # Create connection pool with optimized settings
+                    self._db_pool = await asyncpg.create_pool(
+                        db_url,
+                        ssl=ssl_context,
+                        min_size=1,
+                        max_size=5,
+                        command_timeout=10
+                    )
+                    logger.info("Created asyncpg connection pool")
+                except Exception as e:
+                    logger.error(f"Failed to create connection pool: {e}")
+                    return None
+
+            return self._db_pool
+
+    async def _close_db_pool(self):
+        """Close the database connection pool."""
+        if self._db_pool:
+            await self._db_pool.close()
+            self._db_pool = None
+            logger.info("Closed asyncpg connection pool")
 
     def _create_button(self, text: str, callback_data: str):
         """
@@ -563,7 +605,7 @@ class TelegramBrainDumpBot:
 
     async def extract_pdf_text(self, pdf_path: str) -> tuple[Optional[str], Optional[str]]:
         """
-        Extract text from a PDF file.
+        Extract text from a PDF file using async I/O.
 
         Args:
             pdf_path: Path to the PDF file.
@@ -571,6 +613,11 @@ class TelegramBrainDumpBot:
         Returns:
             Tuple of (extracted_text, error_message) - one will be None.
         """
+        # Run blocking PDF extraction in thread pool to avoid blocking event loop
+        return await asyncio.to_thread(self._extract_pdf_text_sync, pdf_path)
+
+    def _extract_pdf_text_sync(self, pdf_path: str) -> tuple[Optional[str], Optional[str]]:
+        """Synchronous PDF text extraction (called via to_thread)."""
         # Try PyPDF2 first (most common)
         try:
             import PyPDF2
@@ -905,16 +952,11 @@ class TelegramBrainDumpBot:
             return "WorkOS not configured - can't fetch tasks.", []
 
         try:
-            import asyncpg
-            import ssl
+            pool = await self._get_db_pool()
+            if not pool:
+                return "Database connection not available.", []
 
-            db_url = WORKOS_DATABASE_URL.split('?')[0]
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-
-            conn = await asyncpg.connect(db_url, ssl=ssl_context)
-            try:
+            async with pool.acquire() as conn:
                 if status == 'active':
                     # Get both work and personal active/queued tasks
                     rows = await conn.fetch(
@@ -972,8 +1014,6 @@ class TelegramBrainDumpBot:
                     lines.append("No tasks found! 🎉")
 
                 return "\n".join(lines), tasks
-            finally:
-                await conn.close()
 
         except Exception as e:
             logger.error(f"Failed to fetch tasks: {e}")
@@ -985,16 +1025,11 @@ class TelegramBrainDumpBot:
             return "WorkOS not configured - can't fetch habits."
 
         try:
-            import asyncpg
-            import ssl
+            pool = await self._get_db_pool()
+            if not pool:
+                return "Database connection not available."
 
-            db_url = WORKOS_DATABASE_URL.split('?')[0]
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-
-            conn = await asyncpg.connect(db_url, ssl=ssl_context)
-            try:
+            async with pool.acquire() as conn:
                 rows = await conn.fetch(
                     """
                     SELECT id, name, emoji, current_streak, frequency, time_of_day
@@ -1021,8 +1056,6 @@ class TelegramBrainDumpBot:
                     lines.append(" ".join(habit_parts))
 
                 return "\n".join(lines)
-            finally:
-                await conn.close()
 
         except Exception as e:
             logger.error(f"Failed to fetch habits: {e}")
@@ -1059,34 +1092,29 @@ class TelegramBrainDumpBot:
         # WorkOS data if available
         if self.workos_enabled:
             try:
-                import asyncpg
-                import ssl
+                pool = await self._get_db_pool()
+                if pool:
+                    async with pool.acquire() as conn:
+                        # Parallelize queries for better performance
+                        active_count_task = conn.fetchval(
+                            "SELECT COUNT(*) FROM tasks WHERE status = 'active'"
+                        )
+                        today_points_task = conn.fetchval(
+                            """
+                            SELECT COALESCE(SUM(points_earned), 0)
+                            FROM task_completions
+                            WHERE DATE(completed_at) = CURRENT_DATE
+                            """
+                        )
 
-                db_url = WORKOS_DATABASE_URL.split('?')[0]
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
+                        # Wait for both queries to complete
+                        active_count, today_points = await asyncio.gather(
+                            active_count_task,
+                            today_points_task
+                        )
 
-                conn = await asyncpg.connect(db_url, ssl=ssl_context)
-                try:
-                    # Count active tasks
-                    active_count = await conn.fetchval(
-                        "SELECT COUNT(*) FROM tasks WHERE status = 'active'"
-                    )
-                    lines.append(f"✅ *Active tasks:* {active_count}")
-
-                    # Today's points
-                    today_points = await conn.fetchval(
-                        """
-                        SELECT COALESCE(SUM(points_earned), 0)
-                        FROM task_completions
-                        WHERE DATE(completed_at) = CURRENT_DATE
-                        """
-                    )
-                    lines.append(f"⭐ *Today's points:* {today_points or 0}")
-
-                finally:
-                    await conn.close()
+                        lines.append(f"✅ *Active tasks:* {active_count}")
+                        lines.append(f"⭐ *Today's points:* {today_points or 0}")
             except Exception as e:
                 logger.warning(f"Couldn't fetch WorkOS stats: {e}")
 
@@ -1094,6 +1122,94 @@ class TelegramBrainDumpBot:
 
     async def _get_health_response(self) -> str:
         """Get health status from Oura Ring cache."""
+        try:
+            import aiosqlite
+        except ImportError:
+            # Fallback to synchronous sqlite3 if aiosqlite not available
+            import sqlite3
+            return await self._get_health_response_sync()
+
+        oura_cache_dir = os.getenv('OURA_CACHE_DIR', os.path.join(os.path.expanduser('~'), '.oura-cache'))
+        oura_db_path = os.path.join(oura_cache_dir, 'oura-health.db')
+
+        if not os.path.exists(oura_db_path):
+            return "💪 *Health Status*\n\nOura data not available. Make sure oura-mcp has synced."
+
+        try:
+            async with aiosqlite.connect(oura_db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+
+                today = datetime.now().strftime('%Y-%m-%d')
+
+                # Fetch readiness and sleep in parallel
+                readiness_task = conn.execute('SELECT data FROM readiness_data WHERE day = ?', (today,))
+                sleep_task = conn.execute('SELECT data FROM sleep_data WHERE day = ?', (today,))
+
+                readiness_cursor = await readiness_task
+                readiness_row = await readiness_cursor.fetchone()
+
+                sleep_cursor = await sleep_task
+                sleep_row = await sleep_cursor.fetchone()
+
+                if not readiness_row and not sleep_row:
+                    return "💪 *Health Status*\n\nNo data for today yet. Check back later."
+
+                lines = ["💪 *Health Status*", ""]
+
+                # Parse readiness
+                if readiness_row:
+                    import json
+                    readiness = json.loads(readiness_row['data'])
+                    score = readiness.get('score')
+                    contributors = readiness.get('contributors', {})
+
+                    # Determine energy level
+                    if score is not None:
+                        if score >= 85:
+                            energy = "🟢 HIGH"
+                            rec = "Great day for deep work!"
+                        elif score >= 70:
+                            energy = "🟡 MEDIUM"
+                            rec = "Good for standard tasks"
+                        else:
+                            energy = "🔴 LOW"
+                            rec = "Take it easy, more breaks"
+                        lines.append(f"⚡ *Energy:* {energy}")
+                        lines.append(f"📊 *Readiness:* {score}/100")
+
+                        # Add contributors
+                        hrv = contributors.get('hrv_balance')
+                        rhr = contributors.get('resting_heart_rate')
+                        temp = contributors.get('body_temperature')
+
+                        if hrv is not None or rhr is not None or temp is not None:
+                            lines.append("")
+                        if hrv is not None:
+                            lines.append(f"  💓 HRV Balance: {hrv}")
+                        if rhr is not None:
+                            lines.append(f"  ❤️ RHR Score: {rhr}")
+                        if temp is not None:
+                            lines.append(f"  🌡️ Body Temp: {temp}")
+
+                        lines.append("")
+                        lines.append(f"💡 _{rec}_")
+
+                # Parse sleep
+                if sleep_row:
+                    import json
+                    sleep = json.loads(sleep_row['data'])
+                    sleep_score = sleep.get('score')
+                    if sleep_score is not None:
+                        lines.insert(3, f"😴 *Sleep:* {sleep_score}/100")
+
+                return "\n".join(lines)
+
+        except Exception as e:
+            logger.error(f"Failed to fetch Oura data: {e}")
+            return f"💪 *Health Status*\n\nError fetching data: {e}"
+
+    async def _get_health_response_sync(self) -> str:
+        """Synchronous fallback for health response (when aiosqlite not available)."""
         import sqlite3
 
         oura_cache_dir = os.getenv('OURA_CACHE_DIR', os.path.join(os.path.expanduser('~'), '.oura-cache'))
@@ -1190,17 +1306,11 @@ class TelegramBrainDumpBot:
             return None
 
         try:
-            import asyncpg
-            import ssl
+            pool = await self._get_db_pool()
+            if not pool:
+                return None
 
-            # Parse database URL and configure SSL for Neon
-            db_url = WORKOS_DATABASE_URL.split('?')[0]  # Remove query params
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-
-            conn = await asyncpg.connect(db_url, ssl=ssl_context)
-            try:
+            async with pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
                     INSERT INTO brain_dump (content, category, context, processed, created_at)
@@ -1215,8 +1325,6 @@ class TelegramBrainDumpBot:
                 workos_id = row['id']
                 logger.info(f"Synced brain dump to WorkOS #{workos_id}: {entry.id} (context: {entry.parsed_context})")
                 return workos_id
-            finally:
-                await conn.close()
 
         except ImportError:
             logger.warning("asyncpg not installed - WorkOS sync disabled. Install with: pip install asyncpg")
@@ -1238,16 +1346,11 @@ class TelegramBrainDumpBot:
             The task ID if successful, None otherwise.
         """
         try:
-            import asyncpg
-            import ssl
+            pool = await self._get_db_pool()
+            if not pool:
+                return None
 
-            db_url = WORKOS_DATABASE_URL.split('?')[0]
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE
-
-            conn = await asyncpg.connect(db_url, ssl=ssl_context)
-            try:
+            async with pool.acquire() as conn:
                 # Create the task
                 task_title = entry.parsed_action or entry.raw_content[:100]
                 task_row = await conn.fetchrow(
@@ -1274,8 +1377,6 @@ class TelegramBrainDumpBot:
                 )
 
                 return task_id
-            finally:
-                await conn.close()
 
         except Exception as e:
             logger.error(f"Failed to convert to task: {e}")
@@ -3141,6 +3242,8 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             await self.application.updater.stop()
             await self.application.stop()
             await self.application.shutdown()
+            # Close database connection pool
+            await self._close_db_pool()
 
     def stop(self):
         """Stop the bot."""
