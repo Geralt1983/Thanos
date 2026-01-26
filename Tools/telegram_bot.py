@@ -1741,6 +1741,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 "• 📕 PDF documents\n\n"
                 "I'll capture it, parse it, and add it to your brain dump queue.\n\n"
                 "*Commands:*\n"
+                "/menu - Quick action buttons\n"
                 "/status - Quick status overview\n"
                 "/health - Oura Ring health metrics\n"
                 "/tasks - View active tasks\n"
@@ -2461,12 +2462,76 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             else:
                 await update.message.reply_text(response, parse_mode='Markdown')
 
+        async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Display main quick action menu with inline buttons."""
+            if not is_allowed(update.effective_user.id):
+                await update.message.reply_text("⛔ You are not authorized to use this bot.")
+                return
+
+            # Create quick action buttons
+            keyboard = self._build_inline_keyboard([
+                [("🧠 Brain Dump", "menu_braindump")],
+                [("⚡ Log Energy", "menu_energy")],
+                [("📋 View Tasks", "menu_tasks")]
+            ])
+
+            await update.message.reply_text(
+                "🎯 *Quick Actions*\n\n"
+                "Choose an action below:",
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+
+        async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Handle menu quick action button callbacks."""
+            query = update.callback_query
+            await query.answer()
+
+            action = query.data.split("_", 1)[1] if "_" in query.data else ""
+
+            if action == "braindump":
+                # Prompt user to send a brain dump
+                await query.edit_message_text(
+                    "🧠 *Brain Dump Mode*\n\n"
+                    "Just send me your thoughts as:\n"
+                    "• 📝 Text message\n"
+                    "• 🎤 Voice message\n"
+                    "• 📸 Photo with caption\n\n"
+                    "I'll capture and process it for you.\n\n"
+                    "_Send /menu to return to quick actions._",
+                    parse_mode='Markdown'
+                )
+
+            elif action == "energy":
+                # Show energy level selection (placeholder for now)
+                await query.edit_message_text(
+                    "⚡ *Log Energy*\n\n"
+                    "Energy logging will be available soon.\n"
+                    "This will let you quickly log your current energy level.\n\n"
+                    "_Send /menu to return to quick actions._",
+                    parse_mode='Markdown'
+                )
+
+            elif action == "tasks":
+                # Show tasks
+                await query.edit_message_text(
+                    "📋 *Loading tasks...*",
+                    parse_mode='Markdown'
+                )
+                response = await self._get_tasks_response('active')
+                await query.edit_message_text(
+                    response,
+                    parse_mode='Markdown'
+                )
+
         # Register callback handlers with unified routing system
         self._register_callback_handler("cal_", handle_calendar_callback)
+        self._register_callback_handler("menu_", handle_menu_callback)
 
         # Register handlers
         self.application.add_handler(CommandHandler("start", start_command))
         self.application.add_handler(CommandHandler("status", status_command))
+        self.application.add_handler(CommandHandler("menu", menu_command))
         self.application.add_handler(CommandHandler("tasks", tasks_command))
         self.application.add_handler(CommandHandler("habits", habits_command))
         self.application.add_handler(CommandHandler("dumps", dumps_command))
