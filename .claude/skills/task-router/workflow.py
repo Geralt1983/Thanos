@@ -41,6 +41,9 @@ def _get_mcp_client() -> MCPBridge:
     Returns:
         MCPBridge: Initialized MCP client for WorkOS server
 
+    Raises:
+        RuntimeError: If MCP client cannot be initialized with actionable error message
+
     Note:
         Creates a new client on first call, then reuses the cached instance.
         MCPBridge uses session-per-call pattern, so no persistent connection.
@@ -53,21 +56,57 @@ def _get_mcp_client() -> MCPBridge:
     # Find local WorkOS MCP server
     workos_server = PROJECT_ROOT / "mcp-servers" / "workos-mcp" / "src" / "index.ts"
 
-    # Create WorkOS MCP configuration using bun (has built-in TypeScript support)
-    config = MCPServerConfig(
-        name="workos",
-        transport=StdioConfig(
-            command="bun",
-            args=["run", str(workos_server)],
-            env={}
-        ),
-        description="WorkOS personal assistant MCP server"
-    )
+    if not workos_server.exists():
+        raise RuntimeError(
+            f"❌ WorkOS MCP server not found at: {workos_server}\n\n"
+            f"Troubleshooting:\n"
+            f"  1. Check if the MCP server is installed:\n"
+            f"     ls -la {workos_server.parent}\n"
+            f"  2. Verify project structure is intact\n"
+            f"  3. Reinstall dependencies if needed:\n"
+            f"     cd {workos_server.parent} && bun install"
+        )
 
-    _mcp_client_cache = MCPBridge(config)
-    logger.debug(f"MCPBridge initialized for WorkOS (local: {workos_server})")
+    try:
+        # Create WorkOS MCP configuration using bun (has built-in TypeScript support)
+        config = MCPServerConfig(
+            name="workos",
+            transport=StdioConfig(
+                command="bun",
+                args=["run", str(workos_server)],
+                env={}
+            ),
+            description="WorkOS personal assistant MCP server"
+        )
 
-    return _mcp_client_cache
+        _mcp_client_cache = MCPBridge(config)
+        logger.debug(f"MCPBridge initialized for WorkOS (local: {workos_server})")
+
+        return _mcp_client_cache
+
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            f"❌ 'bun' command not found. The MCP server requires Bun to run.\n\n"
+            f"Troubleshooting:\n"
+            f"  1. Install Bun:\n"
+            f"     curl -fsSL https://bun.sh/install | bash\n"
+            f"  2. Restart your terminal after installation\n"
+            f"  3. Verify installation: bun --version\n\n"
+            f"Original error: {e}"
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            f"❌ Failed to initialize WorkOS MCP client.\n\n"
+            f"Troubleshooting:\n"
+            f"  1. Check if server file exists:\n"
+            f"     ls -la {workos_server}\n"
+            f"  2. Verify dependencies installed:\n"
+            f"     cd {workos_server.parent} && bun install\n"
+            f"  3. Test server manually:\n"
+            f"     bun run {workos_server}\n"
+            f"  4. Check logs in: {PROJECT_ROOT}/logs/\n\n"
+            f"Original error: {e}"
+        ) from e
 
 
 def _get_oura_client() -> MCPBridge:
@@ -76,6 +115,9 @@ def _get_oura_client() -> MCPBridge:
 
     Returns:
         MCPBridge: Initialized MCP client for Oura server
+
+    Raises:
+        RuntimeError: If MCP client cannot be initialized with actionable error message
 
     Note:
         Creates a new client on first call, then reuses the cached instance.
@@ -89,21 +131,59 @@ def _get_oura_client() -> MCPBridge:
     # Find local Oura MCP server
     oura_server = PROJECT_ROOT / "mcp-servers" / "oura-mcp" / "src" / "index.ts"
 
-    # Create Oura MCP configuration using bun (has built-in TypeScript support)
-    config = MCPServerConfig(
-        name="oura",
-        transport=StdioConfig(
-            command="bun",
-            args=["run", str(oura_server)],
-            env={}
-        ),
-        description="Oura health tracking MCP server"
-    )
+    if not oura_server.exists():
+        raise RuntimeError(
+            f"❌ Oura MCP server not found at: {oura_server}\n\n"
+            f"Troubleshooting:\n"
+            f"  1. Check if the MCP server is installed:\n"
+            f"     ls -la {oura_server.parent}\n"
+            f"  2. Verify project structure is intact\n"
+            f"  3. Reinstall dependencies if needed:\n"
+            f"     cd {oura_server.parent} && bun install"
+        )
 
-    _oura_client_cache = MCPBridge(config)
-    logger.debug(f"MCPBridge initialized for Oura (local: {oura_server})")
+    try:
+        # Create Oura MCP configuration using bun (has built-in TypeScript support)
+        config = MCPServerConfig(
+            name="oura",
+            transport=StdioConfig(
+                command="bun",
+                args=["run", str(oura_server)],
+                env={}
+            ),
+            description="Oura health tracking MCP server"
+        )
 
-    return _oura_client_cache
+        _oura_client_cache = MCPBridge(config)
+        logger.debug(f"MCPBridge initialized for Oura (local: {oura_server})")
+
+        return _oura_client_cache
+
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            f"❌ 'bun' command not found. The MCP server requires Bun to run.\n\n"
+            f"Troubleshooting:\n"
+            f"  1. Install Bun:\n"
+            f"     curl -fsSL https://bun.sh/install | bash\n"
+            f"  2. Restart your terminal after installation\n"
+            f"  3. Verify installation: bun --version\n\n"
+            f"Original error: {e}"
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            f"❌ Failed to initialize Oura MCP client.\n\n"
+            f"Troubleshooting:\n"
+            f"  1. Check if server file exists:\n"
+            f"     ls -la {oura_server}\n"
+            f"  2. Verify dependencies installed:\n"
+            f"     cd {oura_server.parent} && bun install\n"
+            f"  3. Test server manually:\n"
+            f"     bun run {oura_server}\n"
+            f"  4. Check if OURA_API_KEY is set:\n"
+            f"     echo $OURA_API_KEY\n"
+            f"  5. Check logs in: {PROJECT_ROOT}/logs/\n\n"
+            f"Original error: {e}"
+        ) from e
 
 
 class TaskIntent:
@@ -261,9 +341,20 @@ async def _get_energy_level_async() -> tuple[int, str]:
             logger.debug(f"Got Oura readiness: {score} -> {energy}")
             return (score, energy)
     except asyncio.TimeoutError:
-        logger.warning(f"Oura MCP call timed out after {MCP_CALL_TIMEOUT_SECONDS}s")
+        logger.warning(
+            f"⏱️ Oura MCP call timed out after {MCP_CALL_TIMEOUT_SECONDS}s. "
+            f"The MCP server may be slow or unresponsive. Using fallback value."
+        )
+    except ConnectionRefusedError as e:
+        logger.warning(
+            f"❌ Cannot connect to Oura MCP server. "
+            f"Check if the server is running: bun run {PROJECT_ROOT}/mcp-servers/oura-mcp/src/index.ts"
+        )
     except Exception as e:
-        logger.warning(f"Failed to get Oura readiness: {e}")
+        logger.warning(
+            f"⚠️ Failed to get Oura readiness: {e}. "
+            f"Using fallback value. Check server health."
+        )
 
     # Fallback to WorkOS energy log
     try:
@@ -286,9 +377,20 @@ async def _get_energy_level_async() -> tuple[int, str]:
             logger.debug(f"Got WorkOS energy: {level} -> {score} -> {energy}")
             return (score, energy)
     except asyncio.TimeoutError:
-        logger.warning(f"WorkOS MCP call timed out after {MCP_CALL_TIMEOUT_SECONDS}s")
+        logger.warning(
+            f"⏱️ WorkOS MCP call timed out after {MCP_CALL_TIMEOUT_SECONDS}s. "
+            f"The MCP server may be slow or unresponsive. Using fallback value."
+        )
+    except ConnectionRefusedError as e:
+        logger.warning(
+            f"❌ Cannot connect to WorkOS MCP server. "
+            f"Check if the server is running: bun run {PROJECT_ROOT}/mcp-servers/workos-mcp/src/index.ts"
+        )
     except Exception as e:
-        logger.warning(f"Failed to get WorkOS energy: {e}")
+        logger.warning(
+            f"⚠️ Failed to get WorkOS energy: {e}. "
+            f"Using fallback value. Check server health."
+        )
 
     # Final fallback - assume medium energy
     logger.info("Using fallback energy level: medium (75)")
@@ -707,11 +809,51 @@ async def _execute_task_operation_async(
             return {"success": False, "error": f"Unknown action: {intent.action}"}
 
     except asyncio.TimeoutError:
-        logger.error(f"MCP call timed out for action: {intent.action}")
-        return {"success": False, "error": "Operation timed out"}
+        logger.error(
+            f"⏱️ MCP call timed out after {MCP_CALL_TIMEOUT_SECONDS}s for action: {intent.action}"
+        )
+        return {
+            "success": False,
+            "error": (
+                f"Operation timed out after {MCP_CALL_TIMEOUT_SECONDS}s. "
+                f"The MCP server may be overloaded or unresponsive.\n"
+                f"Try again or check server health."
+            )
+        }
+    except ConnectionRefusedError as e:
+        logger.error(f"❌ Cannot connect to WorkOS MCP server: {e}")
+        return {
+            "success": False,
+            "error": (
+                f"Cannot connect to WorkOS MCP server.\n"
+                f"Check if server is running: bun run {PROJECT_ROOT}/mcp-servers/workos-mcp/src/index.ts"
+            )
+        }
     except Exception as e:
-        logger.error(f"Unexpected error executing task operation: {e}")
-        return {"success": False, "error": str(e)}
+        logger.error(f"⚠️ Unexpected error executing task operation: {e}")
+        error_msg = str(e)
+        if "tool not found" in error_msg.lower():
+            return {
+                "success": False,
+                "error": (
+                    f"Tool not found: {error_msg}\n"
+                    f"The MCP server may not support this operation. "
+                    f"Check server implementation or API version."
+                )
+            }
+        elif "invalid" in error_msg.lower() or "missing" in error_msg.lower():
+            return {
+                "success": False,
+                "error": (
+                    f"Invalid parameters: {error_msg}\n"
+                    f"Check the data format and required fields."
+                )
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"Unexpected error: {error_msg}\nCheck server logs for details."
+            }
 
 
 def execute_task_operation(
