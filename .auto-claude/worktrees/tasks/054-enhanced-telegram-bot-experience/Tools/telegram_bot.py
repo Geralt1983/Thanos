@@ -1821,9 +1821,12 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             # Build response message
             response_parts = []
 
+            # Add success header
+            response_parts.append("✅ *Captured Successfully!*\n")
+
             # Use acknowledgment from pipeline if available
             if entry.acknowledgment:
-                response_parts.append(entry.acknowledgment)
+                response_parts.append(f"💬 {entry.acknowledgment}\n")
 
             # Add classification info
             emoji = {
@@ -1842,30 +1845,37 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             }.get(entry.classification or entry.parsed_category, '📝')
 
             classification_display = entry.classification or entry.parsed_category or 'captured'
-            response_parts.append(f"{emoji} {classification_display.replace('_', ' ').title()}")
+            response_parts.append(f"{emoji} *Type:* {classification_display.replace('_', ' ').title()}")
+
+            # Add timestamp
+            timestamp = datetime.now()
+            response_parts.append(f"🕐 *Time:* {timestamp.strftime('%I:%M %p')}")
 
             # Add routing result info
             if entry.routing_result:
                 destinations = []
                 if entry.routing_result.get('tasks_created'):
-                    destinations.append("task created")
+                    destinations.append("✓ Task created")
                 if entry.routing_result.get('workos_task_id'):
-                    destinations.append("synced to WorkOS")
+                    destinations.append("✓ Synced to WorkOS")
                 if entry.routing_result.get('idea_created'):
-                    destinations.append("idea saved")
+                    destinations.append("✓ Idea saved")
                 if entry.routing_result.get('commitment_created'):
-                    destinations.append("commitment tracked")
+                    destinations.append("✓ Commitment tracked")
                 if entry.routing_result.get('note_created'):
-                    destinations.append("note saved")
+                    destinations.append("✓ Note saved")
 
                 if destinations:
-                    response_parts.append(f"✓ {', '.join(destinations)}")
+                    response_parts.append("\n*Actions taken:*")
+                    response_parts.extend(destinations)
 
             # Add review notice if needed (check if entry has this attribute)
             if hasattr(entry, 'needs_review') and entry.needs_review:
-                response_parts.append("\n⚠️ Needs review - please check later")
+                response_parts.append("\n⚠️ *Needs review* - please check later")
 
-            await update.message.reply_text("\n".join(response_parts))
+            response_parts.append("\n_Your brain dump has been processed and stored._")
+
+            await update.message.reply_text("\n".join(response_parts), parse_mode='Markdown')
 
         async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             """Handle document/file uploads (text files, PDFs, etc.)"""
@@ -2022,17 +2032,18 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 )
 
                 # Build response
-                response_parts = [f"📄 *{file_name}*\n"]
+                response_parts = [f"✅ *Document Captured Successfully!*\n"]
+                response_parts.append(f"📄 *File:* {file_name}")
 
                 # Preview of content
                 preview = content[:200].replace('*', '').replace('_', '')
                 if len(content) > 200:
                     preview += "..."
-                response_parts.append(f"```\n{preview}\n```\n")
+                response_parts.append(f"\n*Preview:*\n```\n{preview}\n```\n")
 
                 # Acknowledgment
                 if entry.acknowledgment:
-                    response_parts.append(entry.acknowledgment)
+                    response_parts.append(f"💬 {entry.acknowledgment}\n")
 
                 # Classification
                 emoji = {
@@ -2043,26 +2054,33 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 }.get(entry.classification or entry.parsed_category, '📝')
 
                 classification_display = (entry.classification or entry.parsed_category or 'captured').replace('_', ' ').title()
-                response_parts.append(f"{emoji} {classification_display}")
+                response_parts.append(f"{emoji} *Type:* {classification_display}")
+
+                # Add timestamp
+                timestamp = datetime.now()
+                response_parts.append(f"🕐 *Time:* {timestamp.strftime('%I:%M %p')}")
 
                 # Routing info
                 if entry.routing_result:
                     destinations = []
                     if entry.routing_result.get('tasks_created'):
-                        destinations.append("task created")
+                        destinations.append("✓ Task created")
                     if entry.routing_result.get('workos_task_id'):
-                        destinations.append("synced to WorkOS")
+                        destinations.append("✓ Synced to WorkOS")
                     if entry.routing_result.get('idea_created'):
-                        destinations.append("idea saved")
+                        destinations.append("✓ Idea saved")
                     if entry.routing_result.get('commitment_created'):
-                        destinations.append("commitment tracked")
+                        destinations.append("✓ Commitment tracked")
                     if entry.routing_result.get('note_created'):
-                        destinations.append("note saved")
+                        destinations.append("✓ Note saved")
                     if destinations:
-                        response_parts.append(f"✓ {', '.join(destinations)}")
+                        response_parts.append("\n*Actions taken:*")
+                        response_parts.extend(destinations)
 
                 if entry.needs_review:
-                    response_parts.append("\n⚠️ Needs review")
+                    response_parts.append("\n⚠️ *Needs review*")
+
+                response_parts.append("\n_Your document has been processed and stored._")
 
                 await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
 
@@ -2166,28 +2184,31 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     'unknown': '🖼️'
                 }.get(photo_type, '🖼️')
 
-                response_parts = [f"{type_emoji} *Photo captured*"]
-                response_parts.append(f"Type: {photo_type.title()}")
-                response_parts.append(f"Size: {photo.width}x{photo.height}")
+                response_parts = [f"✅ *Photo Captured Successfully!*\n"]
+                response_parts.append(f"{type_emoji} *Type:* {photo_type.title()}")
+                response_parts.append(f"📐 *Size:* {photo.width}x{photo.height}")
+                response_parts.append(f"🕐 *Time:* {timestamp.strftime('%I:%M %p')}")
+                response_parts.append(f"💾 *File:* `{filename}`")
 
                 if caption:
-                    response_parts.append(f"\n📝 _{caption}_")
+                    response_parts.append(f"\n📝 *Caption:* _{caption}_")
 
                 if entry and entry.acknowledgment:
-                    response_parts.append(f"\n{entry.acknowledgment}")
+                    response_parts.append(f"\n💬 {entry.acknowledgment}")
 
                 if entry and entry.routing_result:
                     destinations = []
                     if entry.routing_result.get('tasks_created'):
-                        destinations.append("task created")
+                        destinations.append("✓ Task created")
                     if entry.routing_result.get('workos_task_id'):
-                        destinations.append("synced to WorkOS")
+                        destinations.append("✓ Synced to WorkOS")
                     if entry.routing_result.get('idea_created'):
-                        destinations.append("idea saved")
+                        destinations.append("✓ Idea saved")
                     if destinations:
-                        response_parts.append(f"✓ {', '.join(destinations)}")
+                        response_parts.append("\n*Actions taken:*")
+                        response_parts.extend(destinations)
 
-                response_parts.append(f"\n💾 Saved: `{filename}`")
+                response_parts.append("\n_Your photo has been saved and processed._")
 
                 await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
 
@@ -2332,11 +2353,12 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     )
 
                     # Build response message
-                    response_parts = [f"🎤 *Transcription:*\n_{transcription}_\n"]
+                    response_parts = [f"✅ *Voice Message Captured Successfully!*\n"]
+                    response_parts.append(f"🎤 *Transcription:*\n_{transcription}_\n")
 
                     # Use acknowledgment from pipeline if available
                     if entry.acknowledgment:
-                        response_parts.append(entry.acknowledgment)
+                        response_parts.append(f"💬 {entry.acknowledgment}\n")
 
                     # Add classification info
                     emoji = {
@@ -2357,33 +2379,40 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     classification_display = (
                         entry.classification or entry.parsed_category or 'captured'
                     ).replace('_', ' ').title()
-                    response_parts.append(f"{emoji} {classification_display}")
+                    response_parts.append(f"{emoji} *Type:* {classification_display}")
+
+                    # Add timestamp
+                    timestamp = datetime.now()
+                    response_parts.append(f"🕐 *Time:* {timestamp.strftime('%I:%M %p')}")
 
                     # Add routing result info
                     if entry.routing_result:
                         destinations = []
                         if entry.routing_result.get('tasks_created'):
-                            destinations.append("task created")
+                            destinations.append("✓ Task created")
                         if entry.routing_result.get('workos_task_id'):
-                            destinations.append("synced to WorkOS")
+                            destinations.append("✓ Synced to WorkOS")
                         if entry.routing_result.get('idea_created'):
-                            destinations.append("idea saved")
+                            destinations.append("✓ Idea saved")
                         if entry.routing_result.get('commitment_created'):
-                            destinations.append("commitment tracked")
+                            destinations.append("✓ Commitment tracked")
                         if entry.routing_result.get('note_created'):
-                            destinations.append("note saved")
+                            destinations.append("✓ Note saved")
 
                         if destinations:
-                            response_parts.append(f"✓ {', '.join(destinations)}")
+                            response_parts.append("\n*Actions taken:*")
+                            response_parts.extend(destinations)
 
                     # Add memory extraction info
                     if memories_stored:
                         memory_types = [m['memory_type'].replace('_', ' ') for m in memories_stored]
-                        response_parts.append(f"🧠 Memory stored: {', '.join(memory_types)}")
+                        response_parts.append(f"\n🧠 *Memory stored:* {', '.join(memory_types)}")
 
                     # Add review notice if needed
                     if entry.needs_review:
-                        response_parts.append("\n⚠️ Needs review - please check later")
+                        response_parts.append("\n⚠️ *Needs review* - please check later")
+
+                    response_parts.append("\n_Your voice message has been transcribed and processed._")
 
                     await processing_msg.edit_text("\n".join(response_parts), parse_mode='Markdown')
                 else:
@@ -2601,20 +2630,36 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                             int(task_id)
                         )
 
-                        # Get task title for confirmation
+                        # Get task details for confirmation
                         row = await conn.fetchrow(
-                            "SELECT title FROM tasks WHERE id = $1",
+                            "SELECT title, priority FROM tasks WHERE id = $1",
                             int(task_id)
                         )
 
+                        timestamp = datetime.now()
                         if row:
+                            priority_emoji = {
+                                'critical': '🔴',
+                                'high': '🟠',
+                                'medium': '🟡',
+                                'low': '🟢'
+                            }.get(row['priority'], '⚪')
+
                             await query.edit_message_text(
-                                f"✅ *Task Completed!*\n\n{row['title']}\n\n"
-                                "_Use /tasks to view remaining tasks._",
+                                f"✅ *Task Completed Successfully!*\n\n"
+                                f"📋 {row['title']}\n"
+                                f"{priority_emoji} Priority: {(row['priority'] or 'normal').title()}\n"
+                                f"🕐 Completed: {timestamp.strftime('%I:%M %p')}\n"
+                                f"💾 Status updated in WorkOS\n\n"
+                                f"_Great work! Use /tasks to view remaining tasks._",
                                 parse_mode='Markdown'
                             )
                         else:
-                            await query.edit_message_text("✅ Task marked as completed!")
+                            await query.edit_message_text(
+                                f"✅ *Task Completed!*\n\n"
+                                f"🕐 {timestamp.strftime('%I:%M %p')}\n\n"
+                                f"_Task has been marked as completed._"
+                            )
 
                     finally:
                         await conn.close()
@@ -2650,20 +2695,37 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                             int(task_id)
                         )
 
-                        # Get task title for confirmation
+                        # Get task details for confirmation
                         row = await conn.fetchrow(
-                            "SELECT title FROM tasks WHERE id = $1",
+                            "SELECT title, priority FROM tasks WHERE id = $1",
                             int(task_id)
                         )
 
+                        timestamp = datetime.now()
                         if row:
+                            priority_emoji = {
+                                'critical': '🔴',
+                                'high': '🟠',
+                                'medium': '🟡',
+                                'low': '🟢'
+                            }.get(row['priority'], '⚪')
+
                             await query.edit_message_text(
-                                f"⏸ *Task Postponed*\n\n{row['title']}\n\n"
-                                "_Task moved to queued status. Use /tasks to view._",
+                                f"⏸ ✅ *Task Postponed Successfully!*\n\n"
+                                f"📋 {row['title']}\n"
+                                f"{priority_emoji} Priority: {(row['priority'] or 'normal').title()}\n"
+                                f"📊 Status: Queued\n"
+                                f"🕐 Updated: {timestamp.strftime('%I:%M %p')}\n"
+                                f"💾 Saved to WorkOS\n\n"
+                                f"_Task moved to backlog. It won't show in today's list. Use /tasks to view all tasks._",
                                 parse_mode='Markdown'
                             )
                         else:
-                            await query.edit_message_text("⏸ Task postponed!")
+                            await query.edit_message_text(
+                                f"⏸ *Task Postponed!*\n\n"
+                                f"🕐 {timestamp.strftime('%I:%M %p')}\n\n"
+                                f"_Task moved to queued status._"
+                            )
 
                     finally:
                         await conn.close()
@@ -2689,9 +2751,9 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
                     conn = await asyncpg.connect(db_url, ssl=ssl_context)
                     try:
-                        # Get task title before deleting
+                        # Get task details before deleting
                         row = await conn.fetchrow(
-                            "SELECT title FROM tasks WHERE id = $1",
+                            "SELECT title, priority FROM tasks WHERE id = $1",
                             int(task_id)
                         )
 
@@ -2701,14 +2763,30 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                             int(task_id)
                         )
 
+                        timestamp = datetime.now()
                         if row:
+                            priority_emoji = {
+                                'critical': '🔴',
+                                'high': '🟠',
+                                'medium': '🟡',
+                                'low': '🟢'
+                            }.get(row['priority'], '⚪')
+
                             await query.edit_message_text(
-                                f"🗑 *Task Deleted*\n\n{row['title']}\n\n"
-                                "_Use /tasks to view remaining tasks._",
+                                f"🗑 ✅ *Task Deleted Successfully!*\n\n"
+                                f"📋 {row['title']}\n"
+                                f"{priority_emoji} Priority: {(row['priority'] or 'normal').title()}\n"
+                                f"🕐 Deleted: {timestamp.strftime('%I:%M %p')}\n"
+                                f"💾 Removed from WorkOS\n\n"
+                                f"_Task permanently removed. Use /tasks to view remaining tasks._",
                                 parse_mode='Markdown'
                             )
                         else:
-                            await query.edit_message_text("🗑 Task deleted!")
+                            await query.edit_message_text(
+                                f"🗑 *Task Deleted!*\n\n"
+                                f"🕐 {timestamp.strftime('%I:%M %p')}\n\n"
+                                f"_Task has been permanently removed._"
+                            )
 
                     finally:
                         await conn.close()
@@ -2846,23 +2924,31 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                         'telegram'
                     )
 
-                    # Determine emoji based on energy level
+                    # Determine emoji and description based on energy level
                     if energy_level >= 8:
                         emoji = "🔥"
+                        description = "High energy"
                     elif energy_level >= 6:
                         emoji = "⚡"
+                        description = "Good energy"
                     elif energy_level >= 4:
                         emoji = "😐"
+                        description = "Moderate energy"
                     elif energy_level >= 2:
                         emoji = "😴"
+                        description = "Low energy"
                     else:
                         emoji = "💤"
+                        description = "Very low energy"
 
+                    timestamp = datetime.now()
                     await query.edit_message_text(
-                        f"{emoji} *Energy Logged*\n\n"
-                        f"Level: {energy_level}/10\n"
-                        f"Time: {datetime.now().strftime('%I:%M %p')}\n\n"
-                        f"_Send /menu to return to quick actions._",
+                        f"✅ {emoji} *Energy Logged Successfully!*\n\n"
+                        f"📊 Level: *{energy_level}/10* ({description})\n"
+                        f"🕐 Time: {timestamp.strftime('%I:%M %p')}\n"
+                        f"📅 Date: {timestamp.strftime('%b %d, %Y')}\n"
+                        f"💾 Saved to WorkOS\n\n"
+                        f"_Your energy level has been recorded. Send /menu to return to quick actions._",
                         parse_mode='Markdown'
                     )
 
