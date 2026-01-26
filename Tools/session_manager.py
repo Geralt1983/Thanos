@@ -246,7 +246,7 @@ class SessionManager:
         """
         return len(content) // 4 + 1  # +1 to avoid zero for short strings
 
-    def get_messages_for_api(self, max_tokens: int = MAX_CONTEXT_TOKENS) -> List[Dict[str, str]]:
+    def get_messages_for_api(self, max_tokens: int = MAX_CONTEXT_TOKENS, inject_memory: bool = True) -> List[Dict[str, str]]:
         """
         Convert conversation history to API format with token-based windowing.
 
@@ -258,15 +258,21 @@ class SessionManager:
         - Always includes at least the last user message
         - Preserves user/assistant pairs together when possible
         - Estimates tokens using ~4 chars per token
+        - Injects relevant memories from previous conversations when available
 
         Args:
             max_tokens: Maximum tokens to include (default: MAX_CONTEXT_TOKENS)
+            inject_memory: Whether to inject relevant context from memory (default: True)
 
         Returns:
             List of message dicts with 'role' and 'content' keys
         """
         if not self.session.history:
             return []
+
+        # Reserve tokens for memory injection if enabled
+        memory_budget = 500  # Reserve 500 tokens for injected context
+        message_budget = max_tokens - memory_budget if inject_memory else max_tokens
 
         # Work backwards from most recent messages
         messages_to_include = []
@@ -283,7 +289,7 @@ class SessionManager:
                 continue
 
             # Check if adding this message would exceed limit
-            if total_tokens + msg_tokens > max_tokens:
+            if total_tokens + msg_tokens > message_budget:
                 # If we're breaking a pair, try to include the assistant response
                 # to maintain coherence (user question + assistant answer)
                 if messages_to_include and messages_to_include[0]["role"] == "assistant":
@@ -294,6 +300,53 @@ class SessionManager:
 
             messages_to_include.insert(0, {"role": msg.role, "content": msg.content})
             total_tokens += msg_tokens
+
+        # Inject relevant context from memory if enabled and we have messages
+        if inject_memory and messages_to_include:
+            try:
+                from Tools.context_optimizer import ContextOptimizer
+
+                # Initialize optimizer (lightweight - caches internally)
+                optimizer = ContextOptimizer(
+                    max_results=3,
+                    relevance_threshold=0.3,
+                    max_tokens=memory_budget
+                )
+
+                # Get the last user message as the query
+                last_user_msg = None
+                for msg in reversed(messages_to_include):
+                    if msg["role"] == "user":
+                        last_user_msg = msg["content"]
+                        break
+
+                if last_user_msg:
+                    # Retrieve relevant context
+                    context = optimizer.retrieve_relevant_context(
+                        current_prompt=last_user_msg,
+                        session_id=self.session.id,
+                        max_tokens=memory_budget
+                    )
+
+                    # Inject formatted context if we got results
+                    if context.get("formatted_context"):
+                        formatted_context = context["formatted_context"]
+
+                        # Inject as a system message at the beginning
+                        system_message = {
+                            "role": "system",
+                            "content": formatted_context
+                        }
+                        messages_to_include.insert(0, system_message)
+
+                        logger.info(
+                            f"Injected {context.get('count', 0)} memories "
+                            f"({context.get('token_count', 0)} tokens) into conversation context"
+                        )
+
+            except Exception as e:
+                # Memory injection is optional - don't fail if it errors
+                logger.warning(f"Failed to inject memory context: {e}")
 
         return messages_to_include
 
