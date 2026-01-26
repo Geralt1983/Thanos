@@ -38,7 +38,10 @@ class TestPriorityScore:
 class TestYesterdaySession:
     @patch('Tools.context_injector.Path')
     def test_get_yesterday_session_not_found(self, mock_path):
-        mock_path.return_value.exists.return_value = False
+        # Configure chained path operations for sessions_dir.exists()
+        mock_sessions_dir = Mock()
+        mock_sessions_dir.exists.return_value = False
+        mock_path.return_value.parent.parent.__truediv__.return_value = mock_sessions_dir
         result = get_yesterday_session()
         assert result is None
 

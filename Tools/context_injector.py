@@ -84,7 +84,8 @@ def _calculate_priority_score(created_at: Optional[datetime] = None, heat: float
             try:
                 created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
             except Exception:
-                recency_score = 0.5  # Default for unparseable dates
+                # Early exit for unparseable dates - don't continue processing
+                return 0.5 + (max(0.0, min(1.0, heat)) * 2.0)
 
         now = datetime.now()
         # Handle timezone-aware vs naive datetimes
@@ -421,8 +422,21 @@ def relationship_context() -> str:
 
         # If we didn't find any with domain filter, fall back to broader search
         if not personal_memories:
-            # Try searching for common relationship terms
-            relationship_queries = ["Ashley", "Sullivan", "family", "wife", "son"]
+            # Load relationship keywords from config (avoid hardcoded PII)
+            try:
+                facts_file = Path(__file__).parent.parent / "State" / "critical_facts.json"
+                if facts_file.exists():
+                    with open(facts_file, 'r', encoding='utf-8') as f:
+                        facts = json.load(f)
+                        relationship_queries = facts.get("personal", {}).get("relationship_keywords", [])
+                        if not relationship_queries:
+                            # Fallback to safe default if not configured
+                            relationship_queries = ["family", "personal"]
+                else:
+                    relationship_queries = ["family", "personal"]
+            except Exception:
+                relationship_queries = ["family", "personal"]
+
             for query in relationship_queries:
                 query_results = ms.search(query, limit=3)
                 for mem in query_results:

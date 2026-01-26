@@ -15,8 +15,13 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add repo root to path
+repo_root = Path(__file__).resolve()
+while repo_root.parent != repo_root:
+    if (repo_root / "Tools").exists():
+        break
+    repo_root = repo_root.parent
+sys.path.insert(0, str(repo_root))
 
 from Tools.context_injector import (
     build_session_context,
@@ -245,32 +250,43 @@ def test_acceptance_criteria():
     print(f"Pass Rate: {len(results['passed'])}/{total_tests} ({pass_rate:.1f}%)")
     print()
 
-    # Display full context output
+    # Display full context output (redacted by default to avoid PII in CI logs)
     print("=" * 80)
     print("FULL CONTEXT OUTPUT")
     print("=" * 80)
     print()
     try:
         context = build_session_context()
-        print(context)
-        print()
-        print(f"Total length: {len(context)} characters (~{_estimate_tokens(context)} tokens)")
+        # Only print full context if DEBUG_PRINT_CONTEXT env var is set
+        import os
+        if os.getenv("DEBUG_PRINT_CONTEXT"):
+            print(context)
+            print()
+            print(f"Total length: {len(context)} characters (~{_estimate_tokens(context)} tokens)")
+        else:
+            print("<!-- Context redacted to prevent PII in CI logs -->")
+            print(f"Total length: {len(context)} characters (~{_estimate_tokens(context)} tokens)")
+            print("(Set DEBUG_PRINT_CONTEXT=1 to view full context)")
     except Exception as e:
         print(f"Failed to generate context: {e}")
 
     print()
     print("=" * 80)
 
-    # Return exit code based on failures
+    # Raise assertion errors for pytest (return codes are ignored)
     if results['failed']:
         print("RESULT: FAILED ❌")
-        return 1
+        failed_count = len(results['failed'])
+        failed_items = '\n  '.join(results['failed'])
+        raise AssertionError(f"{failed_count} test(s) failed:\n  {failed_items}")
     elif results['warnings']:
         print("RESULT: PASSED WITH WARNINGS ⚠️")
-        return 0
+        warning_count = len(results['warnings'])
+        warning_items = '\n  '.join(results['warnings'])
+        raise AssertionError(f"Tests passed but with {warning_count} warning(s):\n  {warning_items}")
     else:
         print("RESULT: ALL TESTS PASSED ✓")
-        return 0
+        # Test passes - no assertion needed
 
 
 if __name__ == "__main__":
