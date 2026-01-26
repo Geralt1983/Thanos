@@ -97,7 +97,6 @@ from Tools.context_manager import ContextManager
 from Tools.prompt_formatter import PromptFormatter
 from Tools.session_manager import SessionManager
 from Tools.state_reader import StateReader
-from Tools.memos import get_memos
 
 # Voice synthesis import
 try:
@@ -115,32 +114,8 @@ except ImportError:
 # MCP Bridge imports for tool execution
 from Tools.adapters.mcp_bridge import MCPBridge
 
-# Memory capture and context injection - try Memory V2 first
-try:
-    from Tools.memory_v2.service import get_memory_service, MemoryService
-    MEMORY_V2_AVAILABLE = True
-except ImportError:
-    MEMORY_V2_AVAILABLE = False
-    MemoryService = None
-
-# Fallback to legacy memory commands
-try:
-    import sys
-    # Ensure project root is on path for commands module
-    project_root = Path(__file__).parent.parent
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-    from commands.memory import (
-        MemoryCapture,
-        ContextualMemory,
-        get_memory_capture,
-        get_contextual_memory,
-    )
-    MEMORY_CAPTURE_AVAILABLE = True
-except ImportError:
-    MEMORY_CAPTURE_AVAILABLE = False
-    MemoryCapture = None
-    ContextualMemory = None
+# Unified memory routing (routes to Memory V2 by default)
+from Tools.memory_router import add_memory, search_memory, get_context
 
 logger = logging.getLogger(__name__)
 
@@ -223,11 +198,6 @@ class ThanosInteractive:
         self.mcp_tools: List[Dict[str, Any]] = []
         self._init_mcp_bridges()
 
-        # Initialize memory capture and context injection
-        self._memory_capture: Optional[MemoryCapture] = None
-        self._contextual_memory: Optional[ContextualMemory] = None
-        self._init_memory_systems()
-
         # Voice synthesis configuration
         # Check config for voice settings (default: enabled if available)
         voice_config = config.get("voice", {}) if 'config' in locals() else {}
@@ -295,32 +265,6 @@ class ThanosInteractive:
         except Exception as e:
             logger.warning(f"Failed to initialize MCP bridges: {e}")
 
-    def _init_memory_systems(self) -> None:
-        """Initialize memory capture and contextual memory injection."""
-        # Try Memory V2 first (primary)
-        self._memory_v2_service = None
-        if MEMORY_V2_AVAILABLE:
-            try:
-                self._memory_v2_service = get_memory_service()
-                logger.info("Memory V2 service initialized")
-            except Exception as e:
-                logger.warning(f"Memory V2 init failed: {e}")
-                self._memory_v2_service = None
-
-        # Fall back to legacy memory capture
-        if not MEMORY_CAPTURE_AVAILABLE:
-            logger.debug("Legacy memory capture not available")
-            return
-
-        try:
-            self._memory_capture = get_memory_capture(self.thanos_dir)
-            self._contextual_memory = get_contextual_memory(self.thanos_dir)
-            logger.info("Legacy memory capture and context injection initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize memory systems: {e}")
-            self._memory_capture = None
-            self._contextual_memory = None
-
     def _capture_conversation_turn(
         self,
         user_message: str,
@@ -335,52 +279,35 @@ class ThanosInteractive:
         - Task completions and blockers
         - Key topics discussed
 
-        Uses Memory V2 (primary) with fallback to legacy MemoryCapture.
+        Uses unified memory router (Memory V2 by default).
 
         Args:
             user_message: User's input
             assistant_response: Assistant's response
             tool_calls: List of tool names that were invoked
         """
-        # Try Memory V2 first (primary)
-        if self._memory_v2_service:
-            try:
-                # Only capture significant turns (blockers, completions, emotional)
-                combined = f"{user_message} {assistant_response}".lower()
-                is_significant = any(marker in combined for marker in [
-                    "stuck", "blocked", "can't", "frustrated", "done", "completed",
-                    "fixed", "solved", "success", "failed", "error", "help"
-                ])
-
-                if is_significant:
-                    content = f"[{self.command_router.current_agent}] {user_message[:200]}"
-                    if len(assistant_response) > 50:
-                        content += f"\n→ {assistant_response[:150]}..."
-
-                    self._memory_v2_service.add(content, metadata={
-                        "source": "conversation",
-                        "type": "observation",
-                        "agent": self.command_router.current_agent,
-                        "session_id": self.session_manager.session.id,
-                        "tool_calls": tool_calls or [],
-                    })
-            except Exception as e:
-                logger.debug(f"Memory V2 capture error (non-fatal): {e}")
-
-        # Fallback to legacy capture
-        if not self._memory_capture:
-            return
-
         try:
-            self._memory_capture.capture_turn(
-                user_message=user_message,
-                assistant_response=assistant_response,
-                agent=self.command_router.current_agent,
-                tool_calls=tool_calls,
-                session_id=self.session_manager.session.id
-            )
+            # Only capture significant turns (blockers, completions, emotional)
+            combined = f"{user_message} {assistant_response}".lower()
+            is_significant = any(marker in combined for marker in [
+                "stuck", "blocked", "can't", "frustrated", "done", "completed",
+                "fixed", "solved", "success", "failed", "error", "help"
+            ])
+
+            if is_significant:
+                content = f"[{self.command_router.current_agent}] {user_message[:200]}"
+                if len(assistant_response) > 50:
+                    content += f"\n→ {assistant_response[:150]}..."
+
+                add_memory(content, metadata={
+                    "source": "conversation",
+                    "type": "observation",
+                    "agent": self.command_router.current_agent,
+                    "session_id": self.session_manager.session.id,
+                    "tool_calls": tool_calls or [],
+                })
         except Exception as e:
-            logger.debug(f"Legacy memory capture error (non-fatal): {e}")
+            logger.debug(f"Memory capture error (non-fatal): {e}")
 
     def _get_memory_context(self, user_message: str) -> Optional[str]:
         """
@@ -389,7 +316,7 @@ class ThanosInteractive:
         Queries relevant memories based on current message and
         returns context string to prepend to system prompt.
 
-        Uses Memory V2 (primary) with fallback to legacy ContextualMemory.
+        Uses unified memory router (Memory V2 by default).
 
         Args:
             user_message: Current user message
@@ -397,34 +324,17 @@ class ThanosInteractive:
         Returns:
             Context string or None if no relevant context
         """
-        # Try Memory V2 first (primary)
-        if self._memory_v2_service:
-            try:
-                context = self._memory_v2_service.get_context_for_query(
-                    query=user_message,
-                    limit=5
-                )
-                if context and context != "No relevant memories found.":
-                    return context
-            except Exception as e:
-                logger.debug(f"Memory V2 context error (non-fatal): {e}")
-
-        # Fallback to legacy contextual memory
-        if not self._contextual_memory:
-            return None
-
         try:
-            return self._contextual_memory.get_context_injection(
-                user_message=user_message,
-                current_agent=self.command_router.current_agent,
-                session_history=[
-                    {"role": m.role, "content": m.content}
-                    for m in self.session_manager.session.history[-10:]
-                ]
+            context = get_context(
+                query=user_message,
+                limit=5
             )
+            if context and context != "No relevant memories found.":
+                return context
         except Exception as e:
-            logger.debug(f"Legacy memory context error (non-fatal): {e}")
-            return None
+            logger.debug(f"Memory context error (non-fatal): {e}")
+
+        return None
 
     async def _refresh_mcp_tools(self) -> None:
         """Refresh and cache tools from all MCP bridges."""
@@ -1271,51 +1181,28 @@ class ThanosInteractive:
                 logger.warning(f"Error closing MCP bridge '{name}': {e}")
 
     async def _ingest_session(self, filepath: Path) -> None:
-        """Ingest saved session into Memory V2 (primary) or MemOS (fallback)."""
-        content = filepath.read_text(encoding='utf-8')
-
-        # Try Memory V2 first (primary)
-        if self._memory_v2_service:
-            try:
-                # Parse session JSON to extract key conversation points
-                import json
-                session_data = json.loads(content)
-
-                # Create a summary of the session
-                history = session_data.get("history", [])
-                if history:
-                    # Extract key exchanges (first 3 user-assistant pairs)
-                    summary_parts = []
-                    user_msgs = [m for m in history if m.get("role") == "user"]
-                    for msg in user_msgs[:3]:
-                        summary_parts.append(msg.get("content", "")[:100])
-
-                    session_summary = f"Session {session_data.get('id', 'unknown')}: " + " | ".join(summary_parts)
-
-                    self._memory_v2_service.add(session_summary, metadata={
-                        "source": "session_import",
-                        "type": "session_log",
-                        "session_id": session_data.get("id"),
-                        "agent": session_data.get("agent", "default"),
-                        "message_count": len(history),
-                    })
-                    return
-            except Exception as e:
-                logger.debug(f"Memory V2 session ingest failed: {e}")
-
-        # Fallback to MemOS
+        """Ingest saved session into memory via unified router."""
         try:
-            from Tools.memos import get_memos
-            memos = get_memos()
-            await memos.remember(
-                content=content[:5000],  # Limit content size
-                memory_type="observation",
-                domain="personal",
-                metadata={
+            content = filepath.read_text(encoding='utf-8')
+            session_data = json.loads(content)
+
+            # Create a summary of the session
+            history = session_data.get("history", [])
+            if history:
+                # Extract key exchanges (first 3 user-assistant pairs)
+                summary_parts = []
+                user_msgs = [m for m in history if m.get("role") == "user"]
+                for msg in user_msgs[:3]:
+                    summary_parts.append(msg.get("content", "")[:100])
+
+                session_summary = f"Session {session_data.get('id', 'unknown')}: " + " | ".join(summary_parts)
+
+                add_memory(session_summary, metadata={
                     "source": "session_import",
-                    "filename": filepath.name,
-                    "type": "session_log"
-                }
-            )
+                    "type": "session_log",
+                    "session_id": session_data.get("id"),
+                    "agent": session_data.get("agent", "default"),
+                    "message_count": len(history),
+                })
         except Exception as e:
-            logger.debug(f"MemOS session ingest failed: {e}")
+            logger.debug(f"Session ingest failed: {e}")

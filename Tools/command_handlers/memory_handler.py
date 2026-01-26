@@ -2,9 +2,8 @@
 """
 MemoryHandler - Handles memory commands in Thanos Interactive Mode.
 
-This module manages memory storage and retrieval using Memory V2 (primary)
-with fallback to MemOS (legacy). Memory V2 uses cloud-first architecture
-with heat decay for ADHD-friendly memory surfacing.
+This module manages memory storage and retrieval using the memory_router,
+which automatically handles backend selection and fallbacks.
 
 Commands:
     /remember <content>     - Store a memory
@@ -18,19 +17,15 @@ Dependencies:
     - BaseHandler: Provides shared utilities and dependency injection
     - CommandResult: Standard result format for command execution
     - Colors: ANSI color codes for formatted output
-    - Memory V2: Cloud-first memory with heat decay (primary)
-    - MemOS: Legacy hybrid memory system (fallback)
+    - memory_router: Unified memory routing layer (Memory V2 primary, fallbacks available)
 
 Architecture:
-    Memory V2 (Primary):
-    - mem0: Automatic fact extraction and deduplication
-    - OpenAI: Embeddings (text-embedding-3-small, 1536 dimensions)
-    - Neon pgvector: Vector storage (serverless PostgreSQL)
-    - Heat decay: Recent/accessed memories surface naturally
-
-    MemOS (Fallback):
-    - Neo4j graph database: Stores structured knowledge
-    - ChromaDB vector store: Enables semantic similarity search
+    All memory operations are routed through Tools.memory_router:
+    - add_memory(): Store content (automatically uses Memory V2 with fallbacks)
+    - search_memory(): Semantic search with heat-based ranking
+    - whats_hot(): ADHD helper - what's top of mind
+    - whats_cold(): ADHD helper - what's neglected
+    - get_stats(): System statistics
 
     Memory metadata:
     - source: Where the memory came from (manual, brain_dump, etc.)
@@ -52,8 +47,8 @@ Example:
     result = handler.handle_memory("")
 
 See Also:
-    - Tools.memory_v2: Cloud-first memory with heat decay
-    - Tools.memos: Legacy MemOS hybrid memory system
+    - Tools.memory_router: Unified memory routing layer
+    - Tools.memory_v2: Cloud-first memory with heat decay (primary backend)
     - Tools.command_handlers.base: Base handler infrastructure
 """
 
@@ -65,9 +60,14 @@ from Tools.command_handlers.base import (
     BaseHandler,
     CommandResult,
     Colors,
-    MEMOS_AVAILABLE,
-    MEMORY_V2_AVAILABLE,
 )
+
+# Import memory router for all memory operations
+try:
+    from Tools import memory_router
+    MEMORY_ROUTER_AVAILABLE = True
+except ImportError:
+    MEMORY_ROUTER_AVAILABLE = False
 
 
 class MemoryHandler(BaseHandler):
@@ -75,16 +75,15 @@ class MemoryHandler(BaseHandler):
     Handler for memory integration commands.
 
     Provides functionality for:
-    - Storing memories with automatic fact extraction (Memory V2)
-    - Searching memories with heat-based ranking (recent/accessed surface first)
+    - Storing memories via memory_router (automatic backend selection)
+    - Searching memories with heat-based ranking
     - ADHD helpers: what's hot, what's cold
     - Displaying memory system status and configuration
-    - Fallback to MemOS if Memory V2 is unavailable
 
-    Priority:
-    1. Memory V2 (cloud-first with heat decay)
-    2. MemOS (legacy Neo4j + ChromaDB)
-    3. Session history (last resort)
+    All operations use memory_router which handles:
+    - Backend selection (Memory V2 primary, automatic fallbacks)
+    - Error handling and graceful degradation
+    - Heat-based ranking for ADHD-friendly surfacing
     """
 
     def __init__(
@@ -120,8 +119,8 @@ class MemoryHandler(BaseHandler):
         """
         Handle /remember command - Store a memory.
 
-        Uses Memory V2 (cloud-first with heat decay) as primary storage,
-        with fallback to MemOS if unavailable.
+        Uses memory_router which automatically handles backend selection
+        and fallbacks (Memory V2 primary, MemOS fallback).
 
         Supports type prefixes for categorization:
         - decision: Important decisions and their rationale
@@ -139,6 +138,10 @@ class MemoryHandler(BaseHandler):
         Returns:
             CommandResult with action and success status
         """
+        if not MEMORY_ROUTER_AVAILABLE:
+            print(f"{Colors.RED}Memory router not available. Check installation.{Colors.RESET}")
+            return CommandResult(success=False)
+
         if not args:
             print(f"{Colors.DIM}Usage: /remember <content to store>{Colors.RESET}")
             print(
@@ -201,89 +204,33 @@ class MemoryHandler(BaseHandler):
             # Also store as tags for heat boosting and filtering
             metadata["tags"] = entities
 
-        # Try Memory V2 first (primary)
-        memory_v2 = self._get_memory_v2()
-        if memory_v2:
-            try:
-                result = memory_v2.add(content, metadata=metadata)
+        # Store via memory router (handles backend selection automatically)
+        try:
+            result = memory_router.add_memory(content, metadata=metadata)
 
-                if result:
-                    print(f"\n{Colors.GREEN}Memory stored (V2):{Colors.RESET}")
-                    print(f"  Type: {memory_type}")
-                    if client:
-                        print(f"  Client: {client}")
-                    if entities:
-                        print(f"  Entities: {', '.join(entities)}")
-                    print("  Heat: 1.0 (fresh)")
-                    print()
-                    return CommandResult()
-            except Exception as e:
-                # Log but continue to fallback
-                print(f"{Colors.YELLOW}Memory V2 failed, trying MemOS...{Colors.RESET}")
-
-        # Fallback to MemOS
-        memos = self._get_memos()
-        if memos:
-            # Detect domain from current agent
-            agent_domain_map = {
-                "ops": "work",
-                "strategy": "work",
-                "coach": "personal",
-                "health": "health",
-            }
-            domain = agent_domain_map.get(current_agent, "general")
-
-            result = self._run_async(
-                memos.remember(
-                    content=content,
-                    memory_type=memory_type,
-                    domain=domain,
-                    entities=entities if entities else None,
-                    metadata={
-                        "agent": current_agent,
-                        "session_id": self.session.session.id
-                        if hasattr(self.session, "session")
-                        else None,
-                    },
-                )
-            )
-
-            if result and result.success:
-                print(f"\n{Colors.GREEN}Memory stored (MemOS):{Colors.RESET}")
+            if result:
+                print(f"\n{Colors.GREEN}Memory stored:{Colors.RESET}")
                 print(f"  Type: {memory_type}")
-                print(f"  Domain: {domain}")
+                if client:
+                    print(f"  Client: {client}")
                 if entities:
                     print(f"  Entities: {', '.join(entities)}")
-                if result.graph_results:
-                    node_id = result.graph_results.get("node_id", "")
-                    print(f"  Graph ID: {node_id[:8]}..." if node_id else "")
-                if result.vector_results:
-                    print("  Vector stored: ✓")
+                print("  Heat: 1.0 (fresh)")
                 print()
                 return CommandResult()
             else:
-                error = result.error if result else "Unknown error"
-                print(f"{Colors.RED}Failed to store memory: {error}{Colors.RESET}")
+                print(f"{Colors.RED}Failed to store memory{Colors.RESET}")
                 return CommandResult(success=False)
-
-        # No memory system available
-        print(
-            f"{Colors.RED}No memory system available. "
-            f"Check Memory V2 or MemOS configuration.{Colors.RESET}"
-        )
-        return CommandResult(success=False)
+        except Exception as e:
+            print(f"{Colors.RED}Error storing memory: {e}{Colors.RESET}")
+            return CommandResult(success=False)
 
     def handle_recall(self, args: str) -> CommandResult:
         """
         Handle /recall command - Search memories using semantic search.
 
-        Uses Memory V2 (with heat-based ranking) as primary search,
-        with fallback to MemOS hybrid search. Also searches session history.
-
-        Results include:
-        - Memory V2: Heat-ranked semantic search (similarity * heat * importance)
-        - MemOS (fallback): Vector + graph hybrid search
-        - Session history: Past conversations matching the query
+        Uses memory_router which handles backend selection and fallbacks.
+        Also searches session history for past conversations.
 
         Flags:
             --sessions: Search only session history, skip memory systems
@@ -296,6 +243,10 @@ class MemoryHandler(BaseHandler):
         Returns:
             CommandResult with action and success status
         """
+        if not MEMORY_ROUTER_AVAILABLE:
+            print(f"{Colors.RED}Memory router not available. Check installation.{Colors.RESET}")
+            return CommandResult(success=False)
+
         if not args:
             print(f"{Colors.DIM}Usage: /recall <search query>{Colors.RESET}")
             print(f"{Colors.DIM}Example: /recall Memphis client{Colors.RESET}")
@@ -312,10 +263,9 @@ class MemoryHandler(BaseHandler):
         query = args.replace("--sessions", "").replace("--hot", "").replace("--cold", "").strip()
 
         # Handle special ADHD helper commands
-        memory_v2 = self._get_memory_v2()
-        if memory_v2:
-            if show_hot:
-                hot_memories = memory_v2.whats_hot(10)
+        if show_hot:
+            try:
+                hot_memories = memory_router.whats_hot(10)
                 print(f"\n{Colors.CYAN}What's Hot (Top of Mind):{Colors.RESET}\n")
                 if hot_memories:
                     for mem in hot_memories:
@@ -326,9 +276,13 @@ class MemoryHandler(BaseHandler):
                     print(f"  {Colors.DIM}No hot memories found{Colors.RESET}")
                 print()
                 return CommandResult()
+            except Exception as e:
+                print(f"{Colors.RED}Error fetching hot memories: {e}{Colors.RESET}")
+                return CommandResult(success=False)
 
-            if show_cold:
-                cold_memories = memory_v2.whats_cold(threshold=0.3, limit=10)
+        if show_cold:
+            try:
+                cold_memories = memory_router.whats_cold(threshold=0.3, limit=10)
                 print(f"\n{Colors.CYAN}What's Cold (Neglected):{Colors.RESET}\n")
                 if cold_memories:
                     for mem in cold_memories:
@@ -339,18 +293,21 @@ class MemoryHandler(BaseHandler):
                     print(f"  {Colors.DIM}No cold memories found{Colors.RESET}")
                 print()
                 return CommandResult()
+            except Exception as e:
+                print(f"{Colors.RED}Error fetching cold memories: {e}{Colors.RESET}")
+                return CommandResult(success=False)
 
         memory_results = []
 
-        # Try Memory V2 first (unless sessions_only)
-        if memory_v2 and not sessions_only and query:
+        # Search via memory router (unless sessions_only)
+        if not sessions_only and query:
             try:
-                results = memory_v2.search(query, limit=5)
+                results = memory_router.search_memory(query, limit=5)
                 for mem in results:
                     heat = mem.get("heat", 1.0)
                     heat_icon = "🔥" if heat > 0.7 else "•" if heat > 0.3 else "❄️"
                     memory_results.append({
-                        "source": "v2",
+                        "source": "router",
                         "content": mem.get("memory", mem.get("content", ""))[:150],
                         "score": mem.get("effective_score", mem.get("score", 0)),
                         "heat": heat,
@@ -358,53 +315,17 @@ class MemoryHandler(BaseHandler):
                         "client": mem.get("client"),
                     })
             except Exception as e:
-                print(f"{Colors.YELLOW}Memory V2 search failed, trying MemOS...{Colors.RESET}")
-
-        # Fallback to MemOS if no Memory V2 results
-        if not memory_results and not sessions_only:
-            memos = self._get_memos()
-            if memos:
-                result = self._run_async(
-                    memos.recall(query=query, limit=5, use_graph=True, use_vector=True)
-                )
-
-                if result and result.success:
-                    if result.vector_results:
-                        for item in result.vector_results[:3]:
-                            memory_results.append({
-                                "source": "memos_vector",
-                                "content": item.get("content", "")[:150],
-                                "type": item.get("memory_type", "memory"),
-                                "score": item.get("similarity", 0),
-                            })
-
-                    if result.graph_results:
-                        nodes = result.graph_results.get("nodes", [])
-                        for node in nodes[:3]:
-                            props = node.get("properties", {})
-                            memory_results.append({
-                                "source": "memos_graph",
-                                "content": props.get("content", props.get("description", ""))[:150],
-                                "type": node.get("labels", ["memory"])[0] if node.get("labels") else "memory",
-                            })
+                print(f"{Colors.YELLOW}Memory search error: {e}{Colors.RESET}")
 
         # Display memory results
         if memory_results:
-            source_label = "Memory V2" if memory_results[0].get("source") == "v2" else "MemOS"
-            print(f"\n{Colors.CYAN}{source_label} Results ({len(memory_results)}):{Colors.RESET}\n")
+            print(f"\n{Colors.CYAN}Memory Results ({len(memory_results)}):{Colors.RESET}\n")
             for r in memory_results:
-                if r.get("source") == "v2":
-                    heat_icon = r.get("heat_icon", "•")
-                    score = r.get("score", 0)
-                    client_str = f" #{r['client']}" if r.get("client") else ""
-                    print(f"  {heat_icon} ({score:.2f}){client_str}")
-                    print(f"     {r['content']}...")
-                else:
-                    source_icon = "🔍" if r["source"] == "memos_vector" else "🔗"
-                    score_str = f" ({r.get('score', 0):.2f})" if r.get("score") else ""
-                    type_str = f"[{r.get('type', 'memory')}]"
-                    print(f"  {source_icon} {type_str}{score_str}")
-                    print(f"     {r['content']}...")
+                heat_icon = r.get("heat_icon", "•")
+                score = r.get("score", 0)
+                client_str = f" #{r['client']}" if r.get("client") else ""
+                print(f"  {heat_icon} ({score:.2f}){client_str}")
+                print(f"     {r['content']}...")
                 print()
 
         # Also search session history
@@ -458,8 +379,7 @@ class MemoryHandler(BaseHandler):
         Handle /memory command - Display memory system information.
 
         Shows comprehensive status of all memory systems available to Thanos:
-        - Memory V2: Cloud-first memory with heat decay (primary)
-        - MemOS (Neo4j + ChromaDB): Legacy hybrid memory system
+        - Memory Router: Unified memory routing layer
         - Session History: Saved conversation sessions
         - Swarm Memory: Multi-agent coordination memory
         - Hive Mind Memory: Collective intelligence memory
@@ -473,74 +393,37 @@ class MemoryHandler(BaseHandler):
         Returns:
             CommandResult with action and success status
         """
+        if not MEMORY_ROUTER_AVAILABLE:
+            print(f"{Colors.RED}Memory router not available. Check installation.{Colors.RESET}")
+            return CommandResult(success=False)
+
         print(f"\n{Colors.CYAN}Memory Systems:{Colors.RESET}\n")
 
-        # Memory V2 Status (primary system)
-        print(f"  {Colors.BOLD}Memory V2 (Primary):{Colors.RESET}")
-        memory_v2 = self._get_memory_v2()
-        if memory_v2:
-            print("    ✓ Memory V2 initialized")
-            try:
-                stats = memory_v2.stats()
-                total = stats.get("total", 0)
-                hot_count = stats.get("hot_count", 0)
-                cold_count = stats.get("cold_count", 0)
-                avg_heat = stats.get("avg_heat", 0)
+        # Memory Router Status
+        print(f"  {Colors.BOLD}Memory Router (Unified Layer):{Colors.RESET}")
+        try:
+            stats = memory_router.get_stats()
+            print("    ✓ Memory router initialized")
 
-                print(f"    📊 Total memories: {total}")
-                print(f"    🔥 Hot memories: {hot_count}")
-                print(f"    ❄️  Cold memories: {cold_count}")
-                print(f"    🌡️  Average heat: {avg_heat:.2f}")
+            total = stats.get("total", 0)
+            hot_count = stats.get("hot_count", 0)
+            cold_count = stats.get("cold_count", 0)
+            avg_heat = stats.get("avg_heat", 0)
 
-                unique_clients = stats.get("unique_clients", 0)
-                unique_projects = stats.get("unique_projects", 0)
-                if unique_clients or unique_projects:
-                    print(f"    📁 Clients: {unique_clients}, Projects: {unique_projects}")
+            print(f"    📊 Total memories: {total}")
+            print(f"    🔥 Hot memories: {hot_count}")
+            print(f"    ❄️  Cold memories: {cold_count}")
+            print(f"    🌡️  Average heat: {avg_heat:.2f}")
 
-                print("    🔗 Backend: OpenAI embeddings + Neon pgvector")
-            except Exception as e:
-                print(f"    {Colors.YELLOW}⚠ Could not fetch stats: {e}{Colors.RESET}")
-        else:
-            if MEMORY_V2_AVAILABLE:
-                print(f"    {Colors.YELLOW}⚠ Memory V2 available but not initialized{Colors.RESET}")
-                print(f"    {Colors.YELLOW}💡 Check THANOS_MEMORY_DATABASE_URL and OPENAI_API_KEY in .env{Colors.RESET}")
-            else:
-                print("    ✗ Memory V2 not available")
-                print(f"    {Colors.YELLOW}💡 Install mem0ai and psycopg2 packages{Colors.RESET}")
+            unique_clients = stats.get("unique_clients", 0)
+            unique_projects = stats.get("unique_projects", 0)
+            if unique_clients or unique_projects:
+                print(f"    📁 Clients: {unique_clients}, Projects: {unique_projects}")
 
-        print()
-
-        # MemOS Status (fallback system)
-        print(f"  {Colors.BOLD}MemOS (Fallback):{Colors.RESET}")
-        memos = self._get_memos()
-        if memos:
-            print("    ✓ MemOS initialized")
-
-            # Neo4j status
-            neo4j_url = os.environ.get("NEO4J_URL", "")
-            if neo4j_url:
-                masked_url = neo4j_url.split("@")[-1] if "@" in neo4j_url else neo4j_url[:30]
-                print(f"    🔗 Neo4j Graph: {masked_url}")
-            else:
-                print("    🔗 Neo4j Graph: Not configured")
-
-            # ChromaDB status
-            chroma_path = os.environ.get("CHROMADB_PATH", "~/.chromadb")
-            print(f"    🔍 ChromaDB Vectors: {chroma_path}")
-
-            # Try to get stats
-            if hasattr(memos, "_neo4j") and memos._neo4j:
-                try:
-                    result = self._run_async(memos._neo4j.health_check())
-                    if result and result.success:
-                        print("    ✓ Neo4j connected")
-                except Exception:
-                    print(f"    {Colors.YELLOW}⚠ Neo4j connection issue{Colors.RESET}")
-        else:
-            if MEMOS_AVAILABLE:
-                print(f"    {Colors.YELLOW}⚠ MemOS available but not initialized{Colors.RESET}")
-            else:
-                print("    ✗ MemOS not available (dependencies missing)")
+            print("    🔗 Backend: Memory V2 (mem0 + Neon + heat)")
+        except Exception as e:
+            print(f"    {Colors.YELLOW}⚠ Could not fetch stats: {e}{Colors.RESET}")
+            print(f"    {Colors.YELLOW}💡 Check THANOS_MEMORY_DATABASE_URL and OPENAI_API_KEY in .env{Colors.RESET}")
 
         print()
 

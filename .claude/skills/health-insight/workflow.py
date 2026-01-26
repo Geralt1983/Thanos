@@ -4,12 +4,323 @@ HealthInsight Skill - Health data interpretation with energy-aware suggestions
 """
 
 import sys
+import asyncio
+import logging
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# MCP client imports
+from Tools.adapters.mcp_bridge import MCPBridge
+from Tools.adapters.mcp_config import MCPServerConfig, StdioConfig
+from Tools.adapters.base import ToolResult
+
+logger = logging.getLogger(__name__)
+
+
+# MCP call timeout configuration (seconds)
+MCP_CALL_TIMEOUT_SECONDS = 5.0
+
+
+def _run_coro(coro):
+    """
+    Safely run a coroutine, detecting if we're already in an async context.
+
+    Args:
+        coro: Coroutine to run
+
+    Returns:
+        Result of the coroutine
+
+    Raises:
+        RuntimeError: If called from an async context (use async API instead)
+    """
+    try:
+        # Check if there's already a running event loop
+        asyncio.get_running_loop()
+        # If we get here, we're in an async context
+        raise RuntimeError(
+            "Cannot call synchronous wrapper from async context. "
+            "Use the async API (e.g., _get_health_snapshot_async) instead."
+        )
+    except RuntimeError as e:
+        if "no running event loop" in str(e).lower():
+            # No loop running, safe to use asyncio.run
+            return asyncio.run(coro)
+        else:
+            # Re-raise our custom error message
+            raise
+
+# Global MCP client cache (per-process)
+_oura_client_cache: Optional[MCPBridge] = None
+_workos_client_cache: Optional[MCPBridge] = None
+
+
+def _get_oura_client() -> Optional[MCPBridge]:
+    """
+    Get or create MCP client for Oura operations.
+
+    Returns:
+        MCPBridge: Initialized MCP client for Oura server, or None if unavailable
+
+    Note:
+        Creates a new client on first call, then reuses the cached instance.
+        MCPBridge uses session-per-call pattern, so no persistent connection.
+        Returns None on initialization failure to enable graceful degradation.
+    """
+    global _oura_client_cache
+
+    if _oura_client_cache is not None:
+        return _oura_client_cache
+
+    # Find local Oura MCP server
+    oura_server = PROJECT_ROOT / "mcp-servers" / "oura-mcp" / "src" / "index.ts"
+
+    if not oura_server.exists():
+        logger.warning(
+            f"⚠️ Oura MCP server not found at: {oura_server}\n"
+            f"Workflow will continue with placeholder data. "
+            f"To restore MCP functionality, ensure server is installed."
+        )
+        return None
+
+    try:
+        # Create Oura MCP configuration using bun (has built-in TypeScript support)
+        config = MCPServerConfig(
+            name="oura",
+            transport=StdioConfig(
+                command="bun",
+                args=["run", str(oura_server)],
+                env={}
+            ),
+            description="Oura health tracking MCP server"
+        )
+
+        _oura_client_cache = MCPBridge(config)
+        logger.debug(f"MCPBridge initialized for Oura (local: {oura_server})")
+
+        return _oura_client_cache
+
+    except FileNotFoundError as e:
+        logger.warning(
+            f"⚠️ 'bun' command not found. Workflow will continue with placeholder data.\n"
+            f"To restore MCP functionality: curl -fsSL https://bun.sh/install | bash"
+        )
+        return None
+    except Exception as e:
+        logger.warning(
+            f"⚠️ Failed to initialize Oura MCP client: {e}\n"
+            f"Workflow will continue with placeholder data. "
+            f"Check OURA_API_KEY and server health."
+        )
+        return None
+
+
+def _get_workos_client() -> Optional[MCPBridge]:
+    """
+    Get or create MCP client for WorkOS operations.
+
+    Returns:
+        MCPBridge: Initialized MCP client for WorkOS server, or None if unavailable
+
+    Note:
+        Creates a new client on first call, then reuses the cached instance.
+        MCPBridge uses session-per-call pattern, so no persistent connection.
+        Returns None on initialization failure to enable graceful degradation.
+    """
+    global _workos_client_cache
+
+    if _workos_client_cache is not None:
+        return _workos_client_cache
+
+    # Find local WorkOS MCP server
+    workos_server = PROJECT_ROOT / "mcp-servers" / "workos-mcp" / "src" / "index.ts"
+
+    if not workos_server.exists():
+        logger.warning(
+            f"⚠️ WorkOS MCP server not found at: {workos_server}\n"
+            f"Workflow will continue with placeholder data. "
+            f"To restore MCP functionality, ensure server is installed."
+        )
+        return None
+
+    try:
+        # Create WorkOS MCP configuration using bun (has built-in TypeScript support)
+        config = MCPServerConfig(
+            name="workos",
+            transport=StdioConfig(
+                command="bun",
+                args=["run", str(workos_server)],
+                env={}
+            ),
+            description="WorkOS personal assistant MCP server"
+        )
+
+        _workos_client_cache = MCPBridge(config)
+        logger.debug(f"MCPBridge initialized for WorkOS (local: {workos_server})")
+
+        return _workos_client_cache
+
+    except FileNotFoundError as e:
+        logger.warning(
+            f"⚠️ 'bun' command not found. Workflow will continue with placeholder data.\n"
+            f"To restore MCP functionality: curl -fsSL https://bun.sh/install | bash"
+        )
+        return None
+    except Exception as e:
+        logger.warning(
+            f"⚠️ Failed to initialize WorkOS MCP client: {e}\n"
+            f"Workflow will continue with placeholder data. "
+            f"Check server health or logs for details."
+        )
+        return None
+
+
+async def _get_health_snapshot_async(client: Optional[MCPBridge], today: str) -> Dict[str, Any]:
+    """
+    Async helper to fetch Oura data with timeout handling.
+
+    Args:
+        client: MCPBridge instance for Oura server, or None if unavailable
+        today: Date string in YYYY-MM-DD format
+
+    Returns:
+        Dict with readiness, sleep_score, activity, stress data
+        Falls back to placeholder values on error or when client is None
+    """
+    # Default fallback values
+    readiness_score = 75
+    sleep_score = 82
+    activity_data = {"steps": 8500, "active_calories": 450}
+    stress_data = {"stress_high": 2}
+
+    # Skip MCP calls if client unavailable
+    if client is None:
+        logger.info("Oura MCP client unavailable, using placeholder health data")
+        return {
+            "readiness": readiness_score,
+            "sleep_score": sleep_score,
+            "activity": activity_data,
+            "stress": stress_data
+        }
+
+    timeout_seconds = MCP_CALL_TIMEOUT_SECONDS
+
+    # Try to get readiness score
+    try:
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("oura__get_daily_readiness", {
+                "startDate": today,
+                "endDate": today
+            }),
+            timeout=timeout_seconds
+        )
+        if result and result.success and result.data:
+            # Extract readiness score from Oura data
+            data = result.data
+            if isinstance(data, list) and len(data) > 0:
+                readiness_score = data[0].get("score", readiness_score)
+            elif isinstance(data, dict):
+                readiness_score = data.get("score", readiness_score)
+            logger.debug(f"Oura readiness score: {readiness_score}")
+    except asyncio.TimeoutError:
+        logger.warning(
+            f"⏱️ Oura readiness call timed out after {timeout_seconds}s. "
+            f"The MCP server may be slow or unresponsive. Using fallback value."
+        )
+    except ConnectionRefusedError as e:
+        logger.warning(
+            f"❌ Cannot connect to Oura MCP server. "
+            f"Check if the server is running: bun run {PROJECT_ROOT}/mcp-servers/oura-mcp/src/index.ts"
+        )
+    except Exception as e:
+        logger.error(
+            f"⚠️ Failed to get Oura readiness: {e}. "
+            f"Using fallback value. Verify OURA_API_KEY is set and server is healthy."
+        )
+
+    # Try to get sleep score
+    try:
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("oura__get_daily_sleep", {
+                "startDate": today,
+                "endDate": today
+            }),
+            timeout=timeout_seconds
+        )
+        if result and result.success and result.data:
+            # Extract sleep score from Oura data
+            data = result.data
+            if isinstance(data, list) and len(data) > 0:
+                sleep_score = data[0].get("score", sleep_score)
+            elif isinstance(data, dict):
+                sleep_score = data.get("score", sleep_score)
+            logger.debug(f"Oura sleep score: {sleep_score}")
+    except asyncio.TimeoutError:
+        logger.warning(
+            f"⏱️ Oura sleep call timed out after {timeout_seconds}s. "
+            f"The MCP server may be slow or unresponsive. Using fallback value."
+        )
+    except ConnectionRefusedError as e:
+        logger.warning(
+            f"❌ Cannot connect to Oura MCP server. "
+            f"Check if the server is running: bun run {PROJECT_ROOT}/mcp-servers/oura-mcp/src/index.ts"
+        )
+    except Exception as e:
+        logger.error(
+            f"⚠️ Failed to get Oura sleep: {e}. "
+            f"Using fallback value. Check server health and API key."
+        )
+
+    # Try to get activity data
+    try:
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("oura__get_daily_activity", {
+                "startDate": today,
+                "endDate": today
+            }),
+            timeout=timeout_seconds
+        )
+        if result and result.success and result.data:
+            # Extract activity metrics from Oura data
+            data = result.data
+            if isinstance(data, list) and len(data) > 0:
+                activity_item = data[0]
+                activity_data = {
+                    "steps": activity_item.get("steps", activity_data["steps"]),
+                    "active_calories": activity_item.get("active_calories", activity_data["active_calories"])
+                }
+            elif isinstance(data, dict):
+                activity_data = {
+                    "steps": data.get("steps", activity_data["steps"]),
+                    "active_calories": data.get("active_calories", activity_data["active_calories"])
+                }
+            logger.debug(f"Oura activity: {activity_data}")
+    except asyncio.TimeoutError:
+        logger.warning(
+            f"⏱️ Oura activity call timed out after {timeout_seconds}s. "
+            f"The MCP server may be slow or unresponsive. Using fallback value."
+        )
+    except ConnectionRefusedError as e:
+        logger.warning(
+            f"❌ Cannot connect to Oura MCP server. "
+            f"Check if the server is running: bun run {PROJECT_ROOT}/mcp-servers/oura-mcp/src/index.ts"
+        )
+    except Exception as e:
+        logger.error(
+            f"⚠️ Failed to get Oura activity: {e}. "
+            f"Using fallback value. Check server health and API key."
+        )
+
+    return {
+        "readiness": readiness_score,
+        "sleep_score": sleep_score,
+        "activity": activity_data,
+        "stress": stress_data  # Stress data would come from a separate Oura endpoint if available
+    }
 
 
 def get_health_snapshot(mcp_client=None) -> Dict[str, Any]:
@@ -29,16 +340,25 @@ def get_health_snapshot(mcp_client=None) -> Dict[str, Any]:
     """
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # TODO: Call MCP tools when client is integrated
-    # readiness = mcp_client.call('oura__get_daily_readiness', {...})
-    # sleep = mcp_client.call('oura__get_daily_sleep', {...})
-    # activity = mcp_client.call('oura__get_daily_activity', {...})
+    # Get or create MCP client
+    client = mcp_client if mcp_client else _get_oura_client()
 
-    # Placeholder data
-    readiness_score = 75
-    sleep_score = 82
-    activity_data = {"steps": 8500, "active_calories": 450}
-    stress_data = {"stress_high": 2}
+    # Fetch health data with MCP calls (async)
+    try:
+        health_data = _run_coro(_get_health_snapshot_async(client, today))
+        readiness_score = health_data["readiness"]
+        sleep_score = health_data["sleep_score"]
+        activity_data = health_data["activity"]
+        stress_data = health_data["stress"]
+        logger.info(f"Health snapshot retrieved: readiness={readiness_score}, sleep={sleep_score}")
+    except Exception as e:
+        logger.error(f"Failed to fetch health snapshot: {e}")
+        # Fallback to placeholder data
+        readiness_score = 75
+        sleep_score = 82
+        activity_data = {"steps": 8500, "active_calories": 450}
+        stress_data = {"stress_high": 2}
+        logger.warning("Using fallback health data")
 
     # Map to energy level
     energy_level = map_readiness_to_energy(readiness_score)
@@ -82,6 +402,86 @@ def get_energy_message(energy_level: str, score: int) -> str:
         return "The stones require charging. Rest is strategic."
 
 
+async def _get_energy_appropriate_tasks_async(
+    client: Optional[MCPBridge],
+    energy_level: str,
+    limit: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Async helper to fetch energy-appropriate tasks from WorkOS.
+
+    Args:
+        client: MCPBridge instance for WorkOS server, or None if unavailable
+        energy_level: low|medium|high
+        limit: Maximum tasks to return
+
+    Returns:
+        List of task dictionaries filtered by energy-appropriate drain types
+        Returns empty list if client is None or on error
+    """
+    # Return empty if client unavailable
+    if client is None:
+        logger.info("WorkOS MCP client unavailable, skipping task fetch")
+        return []
+
+    # Map energy level to drain types
+    # low → admin (low cognitive load)
+    # medium → shallow (moderate cognitive load)
+    # high → deep (high cognitive load)
+    drain_type_map = {
+        "low": "admin",
+        "medium": "shallow",
+        "high": "deep"
+    }
+
+    target_drain_type = drain_type_map.get(energy_level, "shallow")
+    timeout_seconds = MCP_CALL_TIMEOUT_SECONDS
+
+    try:
+        # Get active tasks from WorkOS
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("workos_get_tasks", {
+                "status": "active",
+                "limit": limit * 3  # Fetch extra to allow filtering
+            }),
+            timeout=timeout_seconds
+        )
+
+        if result and result.success and result.data:
+            tasks = result.data if isinstance(result.data, list) else []
+
+            # Filter tasks by appropriate drain type
+            filtered_tasks = [
+                task for task in tasks
+                if task.get("drainType") == target_drain_type
+            ]
+
+            # Limit results
+            filtered_tasks = filtered_tasks[:limit]
+
+            logger.debug(f"Found {len(filtered_tasks)} {target_drain_type} tasks for {energy_level} energy")
+            return filtered_tasks
+
+    except asyncio.TimeoutError:
+        logger.warning(
+            f"⏱️ WorkOS get_tasks timed out after {timeout_seconds}s. "
+            f"The MCP server may be slow or unresponsive. Using fallback suggestions."
+        )
+    except ConnectionRefusedError as e:
+        logger.warning(
+            f"❌ Cannot connect to WorkOS MCP server. "
+            f"Check if the server is running: bun run {PROJECT_ROOT}/mcp-servers/workos-mcp/src/index.ts"
+        )
+    except Exception as e:
+        logger.error(
+            f"⚠️ Failed to get WorkOS tasks: {e}. "
+            f"Using fallback suggestions. Check server health."
+        )
+
+    # Fallback to empty list
+    return []
+
+
 def get_energy_appropriate_tasks(energy_level: str, mcp_client=None) -> List[Dict[str, Any]]:
     """
     Fetch energy-appropriate tasks from WorkOS.
@@ -93,27 +493,37 @@ def get_energy_appropriate_tasks(energy_level: str, mcp_client=None) -> List[Dic
     Returns:
         List of task dictionaries
     """
-    # TODO: Call workos_get_energy_aware_tasks when MCP is integrated
-    # tasks = mcp_client.call('workos_get_energy_aware_tasks', {
-    #     'energy_level': energy_level,
-    #     'limit': 5
-    # })
+    # Get or create WorkOS MCP client
+    client = mcp_client if mcp_client else _get_workos_client()
 
-    # Placeholder
+    # Fetch tasks via MCP (async)
+    try:
+        tasks = _run_coro(_get_energy_appropriate_tasks_async(client, energy_level, limit=5))
+
+        if tasks:
+            return tasks
+
+        # If no tasks found for exact drain type, provide fallback suggestions
+        logger.info(f"No {energy_level}-energy tasks found, using fallback suggestions")
+
+    except Exception as e:
+        logger.error(f"Failed to fetch energy-appropriate tasks: {e}")
+
+    # Fallback suggestions if MCP call fails or no tasks match
     if energy_level == "low":
         return [
-            {"title": "Review completed tasks", "points": 1, "valueTier": "checkbox"},
-            {"title": "Brain dump loose thoughts", "points": 1, "valueTier": "checkbox"},
+            {"title": "Review completed tasks", "points": 1, "valueTier": "checkbox", "drainType": "admin"},
+            {"title": "Brain dump loose thoughts", "points": 1, "valueTier": "checkbox", "drainType": "admin"},
         ]
     elif energy_level == "medium":
         return [
-            {"title": "Review Memphis client work", "points": 2, "valueTier": "progress"},
-            {"title": "Plan Raleigh deliverables", "points": 2, "valueTier": "progress"},
+            {"title": "Review client work", "points": 2, "valueTier": "progress", "drainType": "shallow"},
+            {"title": "Plan deliverables", "points": 2, "valueTier": "progress", "drainType": "shallow"},
         ]
     else:
         return [
-            {"title": "Design new architecture", "points": 7, "valueTier": "milestone"},
-            {"title": "Implement core feature", "points": 4, "valueTier": "deliverable"},
+            {"title": "Design new architecture", "points": 7, "valueTier": "milestone", "drainType": "deep"},
+            {"title": "Implement core feature", "points": 4, "valueTier": "deliverable", "drainType": "deep"},
         ]
 
 

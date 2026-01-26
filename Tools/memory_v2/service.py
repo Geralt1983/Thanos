@@ -24,6 +24,20 @@ from psycopg2.extras import RealDictCursor
 
 from .config import NEON_DATABASE_URL, MEM0_CONFIG, DEFAULT_USER_ID, OPENAI_API_KEY, validate_config
 
+# Initialize logger early so it's available for import error handling
+logger = logging.getLogger(__name__)
+
+# Try to import relationship store, but allow graceful degradation
+try:
+    from ..relationships import RelationshipStore, RelationType, get_relationship_store
+    RELATIONSHIPS_AVAILABLE = True
+except ImportError:
+    RELATIONSHIPS_AVAILABLE = False
+    RelationshipStore = None
+    RelationType = None
+    get_relationship_store = None
+    logger.warning("Relationship store not available")
+
 # Query embedding cache - avoids repeated OpenAI API calls
 @lru_cache(maxsize=256)
 def _cached_query_embedding(query: str) -> Tuple[float, ...]:
@@ -37,8 +51,6 @@ def _cached_query_embedding(query: str) -> Tuple[float, ...]:
     return tuple(response.data[0].embedding)
 
 from .heat import HeatService, get_heat_service
-
-logger = logging.getLogger(__name__)
 
 # Try to import mem0, but allow graceful degradation
 try:
@@ -82,6 +94,15 @@ class MemoryService:
             except Exception as e:
                 logger.warning(f"Could not initialize mem0: {e}")
 
+        # Initialize relationship store if available
+        self.relationships = None
+        if RELATIONSHIPS_AVAILABLE:
+            try:
+                self.relationships = get_relationship_store()
+                logger.info("Relationship store initialized successfully")
+            except Exception as e:
+                logger.warning(f"Could not initialize relationship store: {e}")
+
     def _ensure_skill_reminder(self):
         """Show skill reminder on first use per session."""
         if not MemoryService._skill_reminded:
@@ -109,13 +130,17 @@ class MemoryService:
 
         Args:
             content: The content to remember
-            metadata: Optional metadata (source, client, project, tags)
+            metadata: Optional metadata (source, client, project, tags, relationships)
+                     relationships format: [{'type': 'relates_to', 'target': 'mem_123'}]
 
         Returns:
             Result of memory addition
         """
         self._ensure_skill_reminder()
         metadata = metadata or {}
+
+        # Extract relationships from metadata (don't pass to mem0)
+        relationships = metadata.pop("relationships", None)
 
         if self.memory:
             # Use mem0 for fact extraction and storage
@@ -125,12 +150,15 @@ class MemoryService:
                 metadata=metadata
             )
 
-            # Store extended metadata with heat
+            # Store extended metadata with heat and relationships
             if result and "results" in result:
                 for mem_result in result["results"]:
                     memory_id = mem_result.get("id")
                     if memory_id:
                         self._store_metadata(memory_id, metadata)
+                        # Store relationships if provided
+                        if relationships:
+                            self._store_relationships(memory_id, relationships)
 
             # Boost related entities
             if metadata.get("client"):
@@ -142,6 +170,9 @@ class MemoryService:
         else:
             # Fallback: Generate embedding manually via OpenAI
             logger.warning("mem0 unavailable, using direct OpenAI embedding")
+            # Re-add relationships to metadata for fallback path
+            if relationships:
+                metadata["relationships"] = relationships
             return self._direct_add_with_embedding(content, metadata)
 
     def _direct_add_with_embedding(self, content: str, metadata: dict) -> Dict[str, Any]:
@@ -154,6 +185,9 @@ class MemoryService:
             raise ValueError("Cannot store memory: mem0 unavailable and OPENAI_API_KEY not set")
 
         memory_id = str(uuid.uuid4())
+
+        # Extract relationships from metadata (don't store in payload)
+        relationships = metadata.pop("relationships", None)
 
         # Generate embedding via OpenAI
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
@@ -197,6 +231,10 @@ class MemoryService:
                     "payload": psycopg2.extras.Json(payload)
                 })
 
+        # Store relationships if provided
+        if relationships:
+            self._store_relationships(memory_id, relationships)
+
         logger.info(f"Stored memory with direct embedding: {memory_id}")
         return {"id": memory_id, "content": content, "embedding_dims": len(embedding)}
 
@@ -212,7 +250,8 @@ class MemoryService:
 
         Args:
             content: Document content to store
-            metadata: Document metadata (source, filename, type, etc.)
+            metadata: Document metadata (source, filename, type, relationships, etc.)
+                     relationships format: [{'type': 'relates_to', 'target': 'mem_123'}]
 
         Returns:
             Result with memory_id
@@ -239,6 +278,51 @@ class MemoryService:
         # Metadata is stored in payload by mem0, no separate table needed
         pass
 
+    def _store_relationships(self, memory_id: str, relationships: List[Dict[str, Any]]) -> None:
+        """
+        Store relationships for a memory.
+
+        Args:
+            memory_id: The source memory ID
+            relationships: List of relationship dicts with 'type' and 'target' keys
+                          Example: [{'type': 'relates_to', 'target': 'mem_123'}]
+        """
+        if not self.relationships or not relationships:
+            return
+
+        for rel in relationships:
+            rel_type_str = rel.get("type")
+            target_id = rel.get("target")
+
+            if not rel_type_str or not target_id:
+                logger.warning(f"Skipping invalid relationship: {rel}")
+                continue
+
+            # Convert string type to RelationType enum
+            try:
+                # Handle both snake_case and UPPER_CASE
+                rel_type_key = rel_type_str.upper()
+                rel_type = RelationType[rel_type_key]
+            except (KeyError, AttributeError):
+                logger.warning(f"Unknown relationship type: {rel_type_str}, defaulting to RELATED_TO")
+                rel_type = RelationType.RELATED_TO
+
+            # Store the relationship
+            try:
+                strength = rel.get("strength", 1.0)
+                metadata = {k: v for k, v in rel.items() if k not in ["type", "target", "strength"]}
+
+                self.relationships.link_memories(
+                    source_id=memory_id,
+                    target_id=target_id,
+                    rel_type=rel_type,
+                    strength=strength,
+                    metadata=metadata if metadata else None
+                )
+                logger.info(f"Stored relationship: {memory_id} -> {rel_type.value} -> {target_id}")
+            except Exception as e:
+                logger.error(f"Failed to store relationship: {e}")
+
     def search(
         self,
         query: str,
@@ -247,6 +331,7 @@ class MemoryService:
         project: str = None,
         domain: str = None,
         source: str = None,
+        entities: List[str] = None,
         filters: dict = None
     ) -> List[Dict[str, Any]]:
         """
@@ -265,6 +350,7 @@ class MemoryService:
             project: Filter to specific project (e.g., "ScottCare", "VersaCare")
             domain: Filter to domain ("work" or "personal")
             source: Filter by source ("telegram", "hey_pocket", "manual")
+            entities: Filter by entities (e.g., ["Ashley", "Sullivan"])
             filters: Optional legacy filters dict (client, source, memory_type)
 
         Returns:
@@ -275,6 +361,7 @@ class MemoryService:
             ms.search("API integration", client="Orlando")  # Within client context
             ms.search("authentication", project="VersaCare")  # Within project
             ms.search("family", domain="personal")  # Personal memories only
+            ms.search("meeting", entities=["Ashley"])  # Memories involving Ashley
         """
         # Skill reminder on first use
         self._ensure_skill_reminder()
@@ -289,6 +376,8 @@ class MemoryService:
             search_filters["domain"] = domain
         if source:
             search_filters["source"] = source
+        if entities:
+            search_filters["entities"] = entities
 
         # Always use direct search with cached embeddings for speed
         # mem0.search() calls OpenAI per-query without caching
@@ -327,6 +416,11 @@ class MemoryService:
         if filters.get("memory_type"):
             where_clauses.append("payload->>'type' = %(filter_type)s")
             params["filter_type"] = filters["memory_type"]
+        if filters.get("entities"):
+            # Check if any of the specified entities are in the entities array
+            # Using ?| operator to check if any array element matches
+            where_clauses.append("payload->'entities' ?| %(filter_entities)s")
+            params["filter_entities"] = filters["entities"]
 
         where_sql = " AND ".join(where_clauses)
 
@@ -344,6 +438,7 @@ class MemoryService:
                         payload->>'project' as project,
                         payload->>'domain' as domain,
                         payload->>'source' as source,
+                        payload->'entities' as entities,
                         (vector <=> %(embedding)s::vector) as score
                     FROM thanos_memories
                     WHERE {where_sql}

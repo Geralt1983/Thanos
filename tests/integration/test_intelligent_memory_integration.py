@@ -2,10 +2,13 @@
 """
 Integration Tests for Intelligent Memory System.
 
+Updated for Memory System Consolidation (Task 049).
+Tests the complete flow using the unified memory_router API.
+
 Tests the complete flow from conversation input through:
-- Memory capture
+- Memory capture via memory_router
 - Classification and routing
-- Storage (SQLite relationships + ChromaDB vectors)
+- Storage (Memory V2 + RelationshipStore)
 - Retrieval via memory commands
 - Contextual injection during conversation
 
@@ -92,28 +95,37 @@ def memory_handler(mock_orchestrator, mock_session_manager, mock_context_manager
 
 
 @pytest.fixture
-def mock_memos():
-    """Create a mock MemOS instance."""
-    memos = AsyncMock()
+def mock_memory_router():
+    """Create a mock memory_router with Memory V2 backend."""
+    with patch("Tools.memory_router._get_v2_service") as mock_get_v2:
+        # Mock Memory V2 service
+        mock_service = Mock()
 
-    # Mock remember result
-    remember_result = Mock()
-    remember_result.success = True
-    remember_result.graph_results = [{"node_id": "node_123"}]
-    remember_result.vector_results = [{"id": "vec_123"}]
-    memos.remember = AsyncMock(return_value=remember_result)
+        # Mock add method
+        mock_service.add = Mock(return_value={
+            "id": "mem_123",
+            "success": True,
+            "message": "Memory stored successfully"
+        })
 
-    # Mock recall result
-    recall_result = Mock()
-    recall_result.success = True
-    recall_result.vector_results = [
-        {"content": "Previous observation about client", "memory_type": "observation", "similarity": 0.85},
-        {"content": "Pattern: client scope changes", "memory_type": "pattern", "similarity": 0.72},
-    ]
-    recall_result.graph_results = {"nodes": []}
-    memos.recall = AsyncMock(return_value=recall_result)
+        # Mock search method
+        mock_service.search = Mock(return_value=[
+            {
+                "id": "mem_456",
+                "memory": "Previous observation about client",
+                "metadata": {"memory_type": "observation", "domain": "work"},
+                "effective_score": 0.85
+            },
+            {
+                "id": "mem_789",
+                "memory": "Pattern: client scope changes",
+                "metadata": {"memory_type": "pattern", "domain": "work"},
+                "effective_score": 0.72
+            }
+        ])
 
-    return memos
+        mock_get_v2.return_value = mock_service
+        yield mock_service
 
 
 @pytest.fixture
@@ -135,10 +147,9 @@ def relationship_store(tmp_path):
 class TestFullCaptureFlow:
     """End-to-end tests for conversation -> memory storage flow."""
 
-    @pytest.mark.asyncio
-    async def test_struggle_capture_to_storage(self, mock_memos, relationship_store):
+    def test_struggle_capture_to_storage(self, mock_memory_router, relationship_store):
         """Test: Frustrated conversation -> stored as observation with struggle tag."""
-        from Tools.memos import MemoryResult
+        from Tools.memory_router import add_memory
 
         text = "I'm really frustrated with this client, they keep changing requirements"
 
@@ -150,85 +161,89 @@ class TestFullCaptureFlow:
             "tags": ["struggle", "requirements"],
         }
 
-        # 2. Store in MemOS
-        result = await mock_memos.remember(
+        # 2. Store via memory_router (routes to Memory V2)
+        result = add_memory(
             content=text,
-            memory_type="observation",
-            domain="work",
-            entities=["client"],
-            metadata={"emotion": "frustration", "tags": ["struggle"]},
+            metadata={
+                "memory_type": "observation",
+                "domain": "work",
+                "entities": ["client"],
+                "emotion": "frustration",
+                "tags": ["struggle", "requirements"]
+            }
         )
 
-        assert result.success
-        mock_memos.remember.assert_called_once()
-        call_args = mock_memos.remember.call_args
-        assert call_args.kwargs["memory_type"] == "observation"
-        assert "frustration" in str(call_args.kwargs["metadata"])
+        assert result["success"] is True
+        mock_memory_router.add.assert_called_once()
+        call_args = mock_memory_router.add.call_args
+        assert "frustration" in str(call_args[0][1])  # metadata
 
-    @pytest.mark.asyncio
-    async def test_priority_capture_to_storage(self, mock_memos):
+    def test_priority_capture_to_storage(self, mock_memory_router):
         """Test: Priority statement -> stored with priority metadata."""
+        from Tools.memory_router import add_memory
+
         text = "My main focus today needs to be the Memphis project"
 
-        result = await mock_memos.remember(
+        result = add_memory(
             content=text,
-            memory_type="observation",
-            domain="work",
-            entities=["Memphis"],
             metadata={
+                "memory_type": "observation",
+                "domain": "work",
+                "entities": ["Memphis"],
                 "priority": "high",
                 "time_context": "today",
-                "focus_type": "main",
-            },
+                "focus_type": "main"
+            }
         )
 
-        assert result.success
-        call_args = mock_memos.remember.call_args
-        assert call_args.kwargs["metadata"]["priority"] == "high"
-        assert "Memphis" in call_args.kwargs["entities"]
+        assert result["success"] is True
+        call_args = mock_memory_router.add.call_args
+        assert call_args[0][1]["priority"] == "high"
+        assert "Memphis" in call_args[0][1]["entities"]
 
-    @pytest.mark.asyncio
-    async def test_activity_capture_to_storage(self, mock_memos):
+    def test_activity_capture_to_storage(self, mock_memory_router):
         """Test: Completed activity -> stored with completion metadata."""
+        from Tools.memory_router import add_memory
+
         text = "I just finished the Sherlock post for Orlando"
 
-        result = await mock_memos.remember(
+        result = add_memory(
             content=text,
-            memory_type="observation",
-            domain="work",
-            entities=["Sherlock", "Orlando"],
             metadata={
+                "memory_type": "observation",
+                "domain": "work",
+                "entities": ["Sherlock", "Orlando"],
                 "activity_type": "content",
                 "status": "completed",
-                "client": "Orlando",
-            },
+                "client": "Orlando"
+            }
         )
 
-        assert result.success
-        call_args = mock_memos.remember.call_args
-        assert call_args.kwargs["metadata"]["status"] == "completed"
+        assert result["success"] is True
+        call_args = mock_memory_router.add.call_args
+        assert call_args[0][1]["status"] == "completed"
 
-    @pytest.mark.asyncio
-    async def test_commitment_capture_creates_relationship(self, mock_memos, relationship_store):
+    def test_commitment_capture_creates_relationship(self, mock_memory_router, relationship_store):
         """Test: Commitment creates relationship to person entity."""
+        from Tools.memory_router import add_memory
         from Tools.relationships import RelationType
 
         text = "I told Sarah I would review her PR by Friday"
 
-        # Store the commitment
-        result = await mock_memos.remember(
+        # Store the commitment via memory_router
+        result = add_memory(
             content=text,
-            memory_type="commitment",
-            domain="work",
-            entities=["Sarah"],
             metadata={
+                "memory_type": "commitment",
+                "domain": "work",
+                "entities": ["Sarah"],
                 "to_whom": "Sarah",
                 "deadline": "Friday",
-                "action": "review PR",
-            },
+                "action": "review PR"
+            }
         )
 
-        assert result.success
+        assert result["success"] is True
 
         # Create relationship to person entity
         rel = relationship_store.link_memories(
@@ -250,71 +265,38 @@ class TestFullCaptureFlow:
 class TestMemoryCommands:
     """Tests for memory-related commands."""
 
-    def test_handle_remember_basic(self, memory_handler, mock_memos):
-        """Test /remember command stores memory."""
-        with patch.object(memory_handler, '_get_memos', return_value=mock_memos):
-            with patch.object(memory_handler, '_run_async') as mock_run:
-                mock_result = Mock()
-                mock_result.success = True
-                mock_result.graph_results = {"node_id": "test_123"}
-                mock_result.vector_results = True
-                mock_run.return_value = mock_result
+    def test_handle_remember_basic(self, memory_handler, mock_memory_router):
+        """Test /remember command stores memory via memory_router."""
+        with patch('builtins.print'):
+            result = memory_handler.handle_remember("Test memory content")
 
-                with patch('builtins.print'):
-                    result = memory_handler.handle_remember("Test memory content")
+            # Memory handler should use memory_router which calls add
+            assert mock_memory_router.add.called
 
-                    assert mock_run.called
-
-    def test_handle_remember_with_type_prefix(self, memory_handler, mock_memos):
+    def test_handle_remember_with_type_prefix(self, memory_handler, mock_memory_router):
         """Test /remember with type prefix (decision:, pattern:)."""
-        with patch.object(memory_handler, '_get_memos', return_value=mock_memos):
-            with patch.object(memory_handler, '_run_async') as mock_run:
-                mock_result = Mock()
-                mock_result.success = True
-                mock_result.graph_results = {}
-                mock_result.vector_results = True
-                mock_run.return_value = mock_result
+        with patch('builtins.print'):
+            memory_handler.handle_remember("decision: Use React for frontend")
 
-                with patch('builtins.print'):
-                    memory_handler.handle_remember("decision: Use React for frontend")
+            # Verify memory_router.add was called
+            assert mock_memory_router.add.called
 
-                    # Verify _run_async was called (which calls memos.remember)
-                    assert mock_run.called
-
-    def test_handle_remember_extracts_entities(self, memory_handler, mock_memos):
+    def test_handle_remember_extracts_entities(self, memory_handler, mock_memory_router):
         """Test /remember extracts @-mentioned entities."""
-        with patch.object(memory_handler, '_get_memos', return_value=mock_memos):
-            with patch.object(memory_handler, '_run_async') as mock_run:
-                mock_result = Mock()
-                mock_result.success = True
-                mock_result.graph_results = {}
-                mock_result.vector_results = True
-                mock_run.return_value = mock_result
+        with patch('builtins.print'):
+            memory_handler.handle_remember(
+                "Meeting with @Memphis about @Sherlock project"
+            )
+            assert mock_memory_router.add.called
 
-                with patch('builtins.print'):
-                    memory_handler.handle_remember(
-                        "Meeting with @Memphis about @Sherlock project"
-                    )
-                    assert mock_run.called
+    def test_handle_recall_basic(self, memory_handler, mock_memory_router):
+        """Test /recall command searches memories via memory_router."""
+        with patch('builtins.print') as mock_print:
+            memory_handler.handle_recall("client meetings")
 
-    def test_handle_recall_basic(self, memory_handler, mock_memos):
-        """Test /recall command searches memories."""
-        with patch.object(memory_handler, '_get_memos', return_value=mock_memos):
-            with patch.object(memory_handler, '_run_async') as mock_run:
-                mock_result = Mock()
-                mock_result.success = True
-                mock_result.vector_results = [
-                    {"content": "Test result", "memory_type": "observation", "similarity": 0.8}
-                ]
-                mock_result.graph_results = {"nodes": []}
-                mock_run.return_value = mock_result
-
-                with patch('builtins.print') as mock_print:
-                    memory_handler.handle_recall("client meetings")
-
-                    assert mock_run.called
-                    # Should print results
-                    assert mock_print.called
+            # Should call search and print results
+            assert mock_memory_router.search.called
+            assert mock_print.called
 
     def test_handle_recall_sessions_only(self, memory_handler, temp_thanos_dir):
         """Test /recall --sessions searches only session history."""
@@ -346,23 +328,19 @@ class TestMemoryCommands:
             printed_output = " ".join(str(call) for call in mock_print.call_args_list)
             assert "Memory" in printed_output or "MemOS" in printed_output
 
-    def test_handle_recall_no_results(self, memory_handler, mock_memos, temp_thanos_dir):
+    def test_handle_recall_no_results(self, memory_handler, temp_thanos_dir):
         """Test /recall with no matching results."""
-        with patch.object(memory_handler, '_get_memos', return_value=mock_memos):
-            with patch.object(memory_handler, '_run_async') as mock_run:
-                # Return empty results
-                mock_result = Mock()
-                mock_result.success = True
-                mock_result.vector_results = []
-                mock_result.graph_results = {"nodes": []}
-                mock_run.return_value = mock_result
+        with patch("Tools.memory_router._get_v2_service") as mock_get_v2:
+            # Mock empty search results
+            mock_service = Mock()
+            mock_service.search = Mock(return_value=[])
+            mock_get_v2.return_value = mock_service
 
-                with patch('builtins.print') as mock_print:
-                    memory_handler.handle_recall("nonexistent query xyz123")
+            with patch('builtins.print') as mock_print:
+                memory_handler.handle_recall("nonexistent query xyz123")
 
-                    # Should indicate no results found
-                    printed_output = " ".join(str(call) for call in mock_print.call_args_list)
-                    assert "No matches" in printed_output or mock_print.called
+                # Should indicate no results found
+                assert mock_print.called
 
 
 # =============================================================================
@@ -373,79 +351,77 @@ class TestMemoryCommands:
 class TestContextualInjection:
     """Tests for memory retrieval during conversations."""
 
-    @pytest.mark.asyncio
-    async def test_inject_relevant_context(self, mock_memos):
+    def test_inject_relevant_context(self, mock_memory_router):
         """Test retrieving relevant memories for conversation context."""
+        from Tools.memory_router import search_memory
+
         # Simulate user asking about a client
         user_message = "What's the status of the Memphis project?"
 
-        # Query memories related to Memphis
-        result = await mock_memos.recall(
+        # Query memories related to Memphis via memory_router
+        results = search_memory(
             query="Memphis project status",
-            memory_types=["observation", "commitment", "decision"],
-            domain="work",
             limit=5,
+            filters={"domain": "work"}
         )
 
-        assert result.success
-        mock_memos.recall.assert_called_once()
+        assert len(results) > 0
+        mock_memory_router.search.assert_called_once()
 
-        # Verify recall was called with appropriate parameters
-        call_args = mock_memos.recall.call_args
-        assert "Memphis" in call_args.kwargs["query"]
+        # Verify search was called with appropriate parameters
+        call_args = mock_memory_router.search.call_args
+        assert "Memphis" in call_args[0][0]  # query
 
-    @pytest.mark.asyncio
-    async def test_inject_entity_context(self, mock_memos):
-        """Test injecting entity-specific context."""
+    def test_inject_entity_context(self, mock_memory_router):
+        """Test injecting entity-specific context via entity filtering."""
+        from Tools.memory_router import search_memory
+
         # User mentions a client name
         entity_name = "Memphis"
 
-        # Retrieve entity context
-        # In real implementation, this would call get_entity_context
-        mock_memos.get_entity_context = AsyncMock(return_value=Mock(
-            success=True,
-            graph_results=[{
-                "entity": "Memphis",
-                "commitments": ["Complete integration by Q1"],
-                "recent_interactions": ["Call on Jan 15"],
-            }],
-        ))
+        # Retrieve entity context using entity filters
+        results = search_memory(
+            query=entity_name,
+            limit=10,
+            filters={"entities": [entity_name]}
+        )
 
-        result = await mock_memos.get_entity_context(entity_name)
-        assert result.success
+        assert results is not None
+        mock_memory_router.search.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_inject_pattern_context(self, mock_memos):
+    def test_inject_pattern_context(self, mock_memory_router):
         """Test injecting relevant patterns based on conversation topic."""
+        from Tools.memory_router import search_memory
+
         # User mentions something that should trigger pattern recall
         topic = "client feedback"
 
-        result = await mock_memos.recall(
+        results = search_memory(
             query=f"patterns related to {topic}",
-            memory_types=["pattern"],
             limit=3,
+            filters={"memory_type": "pattern"}
         )
 
-        assert result.success
+        assert results is not None
 
-    def test_contextual_injection_respects_domain(self, mock_memos):
+    def test_contextual_injection_respects_domain(self):
         """Test that context injection respects domain boundaries."""
         # When in work context, should prioritize work memories
         # When in personal context, should prioritize personal memories
 
         work_query_params = {
             "query": "deadlines",
-            "domain": "work",
+            "filters": {"domain": "work"},
         }
 
         personal_query_params = {
             "query": "deadlines",
-            "domain": "personal",
+            "filters": {"domain": "personal"},
         }
 
         # Both should be valid queries but with different domain filters
-        assert work_query_params["domain"] == "work"
-        assert personal_query_params["domain"] == "personal"
+        assert work_query_params["filters"]["domain"] == "work"
+        assert personal_query_params["filters"]["domain"] == "personal"
 
 
 # =============================================================================
@@ -699,10 +675,10 @@ class TestSessionHistoryIntegration:
         assert len(matches) >= 1
         assert any("Memphis" in m["content"] for m in matches)
 
-    def test_session_memory_integration(self, temp_thanos_dir, mock_memos):
-        """Test integrating session history with MemOS memories."""
+    def test_session_memory_integration(self, temp_thanos_dir, mock_memory_router):
+        """Test integrating session history with Memory V2 via memory_router."""
         # Session history provides conversation context
-        # MemOS provides semantic search
+        # Memory V2 (via memory_router) provides semantic search
 
         # Create session with relevant content
         session = {
@@ -715,7 +691,7 @@ class TestSessionHistoryIntegration:
         session_file = temp_thanos_dir / "History" / "Sessions" / "test_session.json"
         session_file.write_text(json.dumps(session))
 
-        # MemOS would have the semantic understanding
+        # Memory V2 would have the semantic understanding
         # Session history provides exact conversation records
 
         # Both sources should be searchable
@@ -731,8 +707,8 @@ class TestSessionHistoryIntegration:
 class TestErrorHandlingIntegration:
     """Tests for graceful error handling in integrated scenarios."""
 
-    def test_memos_unavailable_fallback(self, memory_handler, temp_thanos_dir):
-        """Test fallback when MemOS is unavailable."""
+    def test_memory_v2_unavailable_fallback(self, memory_handler, temp_thanos_dir):
+        """Test fallback when Memory V2 is unavailable."""
         # Create session file as fallback data
         session = {
             "id": "fallback_session",
@@ -744,27 +720,34 @@ class TestErrorHandlingIntegration:
         session_file = temp_thanos_dir / "History" / "Sessions" / "fallback.json"
         session_file.write_text(json.dumps(session))
 
-        # Mock MemOS as unavailable
-        with patch.object(memory_handler, '_get_memos', return_value=None):
+        # Mock Memory V2 as unavailable
+        with patch("Tools.memory_router._get_v2_service", side_effect=Exception("Memory V2 unavailable")):
             with patch('builtins.print') as mock_print:
-                memory_handler.handle_recall("fallback search term")
+                # Should attempt memory search and potentially fall back to session search
+                try:
+                    memory_handler.handle_recall("fallback search term")
+                except Exception:
+                    pass  # Expected if memory system is down
 
-                # Should still work via session search
-                printed = " ".join(str(c) for c in mock_print.call_args_list)
-                # Either finds session match or indicates MemOS unavailable
-                assert mock_print.called
+                # Verify that either memory search was attempted or fallback occurred
+                # The handler should print something (status message or search results)
+                assert mock_print.called, "Handler should have printed status or results during fallback"
 
-    def test_chromadb_error_graceful(self, mock_memos):
-        """Test graceful handling of ChromaDB errors."""
-        # Mock recall to raise error
-        mock_memos.recall = AsyncMock(side_effect=Exception("ChromaDB connection failed"))
+    def test_memory_v2_error_graceful(self):
+        """Test graceful handling of Memory V2 errors."""
+        from Tools.memory_router import search_memory
 
-        # Should not crash - error should be caught
-        with pytest.raises(Exception) as exc_info:
-            import asyncio
-            asyncio.run(mock_memos.recall("test query"))
+        # Mock search to raise error
+        with patch("Tools.memory_router._get_v2_service") as mock_get_v2:
+            mock_service = Mock()
+            mock_service.search = Mock(side_effect=Exception("Database connection failed"))
+            mock_get_v2.return_value = mock_service
 
-        assert "ChromaDB" in str(exc_info.value)
+            # Should raise exception for error handling
+            with pytest.raises(Exception) as exc_info:
+                search_memory("test query")
+
+            assert "Database connection" in str(exc_info.value) or "failed" in str(exc_info.value)
 
     def test_relationship_store_error_recovery(self, tmp_path):
         """Test relationship store handles errors gracefully."""

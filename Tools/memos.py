@@ -1,6 +1,9 @@
 """
 MemOS - Memory Operating System for Thanos
 
+⚠️ DEPRECATED: MemOS is deprecated. Use memory_router or Memory V2 directly.
+See migration guide: .claude/skills/memory-v2/skill.md
+
 Unified memory interface combining:
 - Neo4j AuraDB: Knowledge graph for relationships (commitments → decisions → outcomes)
 - ChromaDB: Vector store for semantic search
@@ -16,6 +19,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 from typing import Any, Optional
+import warnings
 
 # Load environment variables BEFORE any initialization
 try:
@@ -118,6 +122,9 @@ class MemOS:
     """
     Memory Operating System - Unified memory interface for Thanos.
 
+    ⚠️ DEPRECATED: MemOS is deprecated. Use memory_router or Memory V2 directly.
+    See migration guide: .claude/skills/memory-v2/skill.md
+
     Combines Neo4j (graph) and ChromaDB (vector) for hybrid memory:
     - Remember: Store to both graph (structured) and vector (semantic)
     - Recall: Query both and merge results intelligently
@@ -136,6 +143,9 @@ class MemOS:
         """
         Initialize MemOS with both storage backends.
 
+        ⚠️ DEPRECATED: MemOS is deprecated. Use memory_router or Memory V2 directly.
+        See migration guide: .claude/skills/memory-v2/skill.md
+
         Args:
             neo4j_uri: Neo4j connection URI (defaults to NEO4J_URL env var)
             neo4j_username: Neo4j username
@@ -143,6 +153,12 @@ class MemOS:
             chroma_path: Path for ChromaDB persistence
             openai_api_key: OpenAI API key for embeddings
         """
+        warnings.warn(
+            "MemOS is deprecated. Use memory_router or Memory V2 directly. "
+            "See migration guide: .claude/skills/memory-v2/skill.md",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self._neo4j: Optional[Neo4jAdapter] = None
         self._chroma: Optional[ChromaClient] = None
         self._openai_client = None
@@ -908,7 +924,18 @@ _memos_instance: Optional[MemOS] = None
 
 
 def get_memos() -> MemOS:
-    """Get or create the MemOS singleton instance."""
+    """
+    Get or create the MemOS singleton instance.
+
+    ⚠️ DEPRECATED: MemOS is deprecated. Use memory_router or Memory V2 directly.
+    See migration guide: .claude/skills/memory-v2/skill.md
+    """
+    warnings.warn(
+        "MemOS is deprecated. Use memory_router or Memory V2 directly. "
+        "See migration guide: .claude/skills/memory-v2/skill.md",
+        DeprecationWarning,
+        stacklevel=2
+    )
     global _memos_instance
     if _memos_instance is None:
         _memos_instance = MemOS()
