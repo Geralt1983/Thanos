@@ -205,13 +205,48 @@ def build_relationship_context() -> str:
 def build_emotional_context() -> str:
     """Build emotional continuity from yesterday's session.
 
+    Extracts emotional markers (frustration, excitement, urgency) from
+    yesterday's session memory_snapshot and formats them as context.
+
     Returns:
-        Formatted emotional context string
+        Formatted emotional context string with yesterday's emotional state
     """
     try:
-        # TODO: Load yesterday's emotional markers from memory
-        # For now, return placeholder
-        return "## Emotional Continuity\n<!-- Emotional tracking pending -->"
+        # Load yesterday's session data
+        yesterday = get_yesterday_session()
+
+        if not yesterday:
+            return "## Emotional Continuity\n<!-- No session data from yesterday -->"
+
+        # Extract emotional markers from memory_snapshot
+        markers = yesterday.get("memory_snapshot", {}).get("emotional_markers", {})
+
+        if not markers:
+            return "## Emotional Continuity\n<!-- No emotional markers recorded yesterday -->"
+
+        # Extract individual marker counts
+        frustration = markers.get("frustration", 0)
+        excitement = markers.get("excitement", 0)
+        urgency = markers.get("urgency", 0)
+
+        # Build contextual summary based on detected emotions
+        parts = ["## Emotional Continuity", ""]
+
+        # Create concise emotional state summary (max 2-3 sentences)
+        states = []
+        if frustration > 0:
+            states.append(f"frustration detected ({frustration}x)")
+        if excitement > 0:
+            states.append(f"excitement noted ({excitement}x)")
+        if urgency > 0:
+            states.append(f"urgency sensed ({urgency}x)")
+
+        if states:
+            parts.append(f"Yesterday: {', '.join(states)}.")
+        else:
+            parts.append("Yesterday: neutral emotional state.")
+
+        return "\n".join(parts)
     except Exception as e:
         return f"<!-- Emotional context failed: {e} -->"
 
