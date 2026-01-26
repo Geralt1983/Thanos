@@ -541,6 +541,176 @@ def _estimate_points(value_tier: str) -> int:
     return point_map.get(value_tier, 1)
 
 
+async def _execute_task_operation_async(
+    intent: TaskIntent, mcp_client: MCPBridge
+) -> Dict[str, Any]:
+    """
+    Execute task operation via MCP (async implementation).
+
+    Args:
+        intent: Parsed task intent
+        mcp_client: MCP client instance
+
+    Returns:
+        Execution result dict
+    """
+    try:
+        if intent.action == "create":
+            # Build arguments for create_task
+            args = {"title": intent.title}
+
+            if intent.value_tier:
+                args["valueTier"] = intent.value_tier
+            if intent.drain_type:
+                args["drainType"] = intent.drain_type
+            if intent.status:
+                args["status"] = intent.status
+            if intent.description:
+                args["description"] = intent.description
+            # Note: client_id lookup could be added here if needed
+
+            # Call with 5s timeout
+            result: ToolResult = await asyncio.wait_for(
+                mcp_client.call_tool("workos_create_task", args),
+                timeout=5.0
+            )
+
+            if result.success:
+                task = result.data
+                return {
+                    "success": True,
+                    "task": task,
+                    "points": _estimate_points(intent.value_tier)
+                }
+            else:
+                logger.error(f"Failed to create task: {result.error}")
+                return {"success": False, "error": result.error}
+
+        elif intent.action == "complete":
+            if not intent.task_id:
+                return {"success": False, "error": "Task ID required for complete action"}
+
+            # Call with 5s timeout
+            result: ToolResult = await asyncio.wait_for(
+                mcp_client.call_tool("workos_complete_task", {"taskId": intent.task_id}),
+                timeout=5.0
+            )
+
+            if result.success:
+                # Get today's metrics to show progress
+                try:
+                    metrics_result: ToolResult = await asyncio.wait_for(
+                        mcp_client.call_tool("workos_get_today_metrics"),
+                        timeout=5.0
+                    )
+                    metrics = metrics_result.data if metrics_result.success else {}
+                except asyncio.TimeoutError:
+                    logger.warning("Metrics fetch timed out, using defaults")
+                    metrics = {}
+
+                return {
+                    "success": True,
+                    "points": _estimate_points(intent.value_tier),
+                    "progress": metrics.get("pointsToday", 0),
+                    "target": metrics.get("dailyGoal", 18)
+                }
+            else:
+                logger.error(f"Failed to complete task: {result.error}")
+                return {"success": False, "error": result.error}
+
+        elif intent.action == "promote":
+            if not intent.task_id:
+                return {"success": False, "error": "Task ID required for promote action"}
+
+            # Call with 5s timeout
+            result: ToolResult = await asyncio.wait_for(
+                mcp_client.call_tool("workos_promote_task", {"taskId": intent.task_id}),
+                timeout=5.0
+            )
+
+            if result.success:
+                return {"success": True}
+            else:
+                logger.error(f"Failed to promote task: {result.error}")
+                return {"success": False, "error": result.error}
+
+        elif intent.action == "update":
+            if not intent.task_id:
+                return {"success": False, "error": "Task ID required for update action"}
+
+            # Build arguments for update_task
+            args = {"taskId": intent.task_id}
+
+            if intent.title:
+                args["title"] = intent.title
+            if intent.description:
+                args["description"] = intent.description
+            if intent.status:
+                args["status"] = intent.status
+            if intent.value_tier:
+                args["valueTier"] = intent.value_tier
+            if intent.drain_type:
+                args["drainType"] = intent.drain_type
+
+            # Call with 5s timeout
+            result: ToolResult = await asyncio.wait_for(
+                mcp_client.call_tool("workos_update_task", args),
+                timeout=5.0
+            )
+
+            if result.success:
+                return {"success": True}
+            else:
+                logger.error(f"Failed to update task: {result.error}")
+                return {"success": False, "error": result.error}
+
+        elif intent.action == "delete":
+            if not intent.task_id:
+                return {"success": False, "error": "Task ID required for delete action"}
+
+            # Call with 5s timeout
+            result: ToolResult = await asyncio.wait_for(
+                mcp_client.call_tool("workos_delete_task", {"taskId": intent.task_id}),
+                timeout=5.0
+            )
+
+            if result.success:
+                return {"success": True}
+            else:
+                logger.error(f"Failed to delete task: {result.error}")
+                return {"success": False, "error": result.error}
+
+        elif intent.action == "query":
+            # Build arguments for get_tasks
+            args = {}
+
+            if intent.status:
+                args["status"] = intent.status
+            # Could add client_id filter here if needed
+
+            # Call with 5s timeout
+            result: ToolResult = await asyncio.wait_for(
+                mcp_client.call_tool("workos_get_tasks", args),
+                timeout=5.0
+            )
+
+            if result.success:
+                return {"success": True, "tasks": result.data}
+            else:
+                logger.error(f"Failed to query tasks: {result.error}")
+                return {"success": False, "error": result.error}
+
+        else:
+            return {"success": False, "error": f"Unknown action: {intent.action}"}
+
+    except asyncio.TimeoutError:
+        logger.error(f"MCP call timed out for action: {intent.action}")
+        return {"success": False, "error": "Operation timed out"}
+    except Exception as e:
+        logger.error(f"Unexpected error executing task operation: {e}")
+        return {"success": False, "error": str(e)}
+
+
 def execute_task_operation(
     user_input: str, mcp_client=None
 ) -> Dict[str, Any]:
@@ -585,17 +755,25 @@ def execute_task_operation(
             "updated_focus": [],
         }
 
-    # 4. Execute via MCP (placeholder for now)
-    # In production, this would call the appropriate MCP tool:
-    # if intent.action == 'create':
-    #     mcp_client.call('workos_create_task', {...})
-    # elif intent.action == 'complete':
-    #     mcp_client.call('workos_complete_task', {...})
-    # etc.
+    # 4. Execute via MCP
+    # Use provided client for testing, or create one for production
+    client = mcp_client if mcp_client is not None else _get_mcp_client()
 
-    execution_result = {"success": True, "points": 2, "progress": 15, "target": 18}
+    # Execute task operation asynchronously
+    execution_result = asyncio.run(_execute_task_operation_async(intent, client))
 
-    # 5. Check for priority shift
+    # 5. Handle execution errors
+    if not execution_result.get("success"):
+        error_msg = execution_result.get("error", "Unknown error")
+        return {
+            "success": False,
+            "action": intent.action,
+            "response": f"Failed to {intent.action} task: {error_msg}",
+            "priority_shift": False,
+            "updated_focus": [],
+        }
+
+    # 6. Check for priority shift
     priority_shift = detect_priority_shift(user_input)
     updated_focus = []
 
@@ -605,7 +783,7 @@ def execute_task_operation(
             update_current_focus(new_priorities)
             updated_focus = new_priorities
 
-    # 6. Format response
+    # 7. Format response
     response = format_thanos_response(intent, execution_result, energy_score)
 
     return {
