@@ -91,17 +91,55 @@ def build_energy_context() -> str:
         return f"<!-- Energy context failed: {e} -->"
 
 
-def build_hot_memory_context() -> str:
+def build_hot_memory_context(limit: int = 10) -> str:
     """Load hot memories from memory service.
+
+    Args:
+        limit: Maximum number of hot memories to load (default: 10)
 
     Returns:
         Formatted hot memory context string
     """
     try:
+        # Try to use the dedicated hot_memory_loader first
         from Tools.hot_memory_loader import load_hot_memories
-        return load_hot_memories(limit=10)
+        result = load_hot_memories(limit=limit)
+
+        # If empty or error comment, return header with placeholder
+        if not result or result.startswith("<!--"):
+            return "## Hot Memory Context\n<!-- No hot memories available -->"
+
+        return result
+    except ImportError:
+        # If hot_memory_loader not available, implement inline
+        try:
+            from Tools.memory_v2.service import MemoryService
+            ms = MemoryService()
+
+            # Get top memories by heat
+            hot = ms.whats_hot(limit=limit)
+
+            if not hot:
+                return "## Hot Memory Context\n<!-- No hot memories available -->"
+
+            lines = ["## Hot Memory Context", ""]
+            for mem in hot[:limit]:
+                heat_indicator = "🔥" if mem.get('heat', 0) > 0.8 else "•" if mem.get('heat', 0) > 0.5 else "❄️"
+                memory_text = mem.get('memory', '')[:150]
+                client = mem.get('client')
+
+                line = f"{heat_indicator} {memory_text}"
+                if client:
+                    line += f" [{client}]"
+                lines.append(line)
+
+            return "\n".join(lines)
+        except Exception as e:
+            # Return header with error note
+            return "## Hot Memory Context\n<!-- Memory service unavailable -->"
     except Exception as e:
-        return f"<!-- Hot memory context failed: {e} -->"
+        # Return header with error note for any other errors
+        return "## Hot Memory Context\n<!-- Memory service unavailable -->"
 
 
 def build_relationship_context() -> str:
