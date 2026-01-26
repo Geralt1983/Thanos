@@ -255,6 +255,123 @@ def active_projects_context() -> str:
         return "## Active Projects Context\n<!-- Memory service error -->"
 
 
+def relationship_context() -> str:
+    """Search Memory V2 for personal domain entries from past 7 days.
+
+    Searches for memories with domain='personal' to surface recent
+    relationship mentions, family interactions, and personal commitments.
+
+    Returns:
+        Formatted relationship context string
+    """
+    try:
+        from Tools.memory_v2.service import MemoryService
+        ms = MemoryService()
+
+        # Calculate date 7 days ago
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        seven_days_ago_str = seven_days_ago.strftime("%Y-%m-%d")
+
+        # Search for personal domain memories
+        # Note: Memory V2 search doesn't support date filtering directly,
+        # so we'll search broadly and filter results by date
+        results = ms.search("domain:personal", limit=20)
+
+        # Filter results to only include entries from past 7 days
+        recent_memories = []
+        for mem in results:
+            # Check if memory has a timestamp we can use
+            created_at = mem.get('created_at') or mem.get('timestamp')
+            if created_at:
+                try:
+                    # Parse the timestamp (handle ISO format)
+                    if isinstance(created_at, str):
+                        mem_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    else:
+                        mem_date = created_at
+
+                    # Check if within past 7 days
+                    if mem_date >= seven_days_ago:
+                        recent_memories.append(mem)
+                except Exception:
+                    # If date parsing fails, include it anyway
+                    recent_memories.append(mem)
+            else:
+                # No timestamp - include it anyway
+                recent_memories.append(mem)
+
+        # Also check metadata for domain='personal'
+        personal_memories = [m for m in recent_memories if m.get('domain') == 'personal']
+
+        # If we didn't find any with domain filter, fall back to broader search
+        if not personal_memories:
+            # Try searching for common relationship terms
+            relationship_queries = ["Ashley", "Sullivan", "family", "wife", "son"]
+            for query in relationship_queries:
+                query_results = ms.search(query, limit=3)
+                for mem in query_results:
+                    if mem.get('effective_score', 0) > 0.3:
+                        # Check date constraint
+                        created_at = mem.get('created_at') or mem.get('timestamp')
+                        if created_at:
+                            try:
+                                if isinstance(created_at, str):
+                                    mem_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                else:
+                                    mem_date = created_at
+                                if mem_date >= seven_days_ago:
+                                    personal_memories.append(mem)
+                            except Exception:
+                                personal_memories.append(mem)
+                        else:
+                            personal_memories.append(mem)
+
+        # Remove duplicates (by memory id)
+        seen_ids = set()
+        unique_memories = []
+        for mem in personal_memories:
+            mem_id = mem.get('id')
+            if mem_id and mem_id not in seen_ids:
+                seen_ids.add(mem_id)
+                unique_memories.append(mem)
+            elif not mem_id:
+                unique_memories.append(mem)
+
+        # Format output
+        if not unique_memories:
+            return "## Relationship Context\n<!-- No personal memories found in past 7 days -->"
+
+        lines = ["## Relationship Context (Past 7 Days)", ""]
+
+        for mem in unique_memories[:5]:  # Limit to 5 most relevant
+            memory_text = mem.get('memory', '')[:120]
+            heat = mem.get('heat', 0)
+            heat_indicator = "🔥" if heat > 0.8 else "•" if heat > 0.5 else "❄️"
+
+            # Add date if available
+            created_at = mem.get('created_at') or mem.get('timestamp')
+            date_str = ""
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        mem_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    else:
+                        mem_date = created_at
+                    date_str = f" ({mem_date.strftime('%b %d')})"
+                except Exception:
+                    pass
+
+            lines.append(f"{heat_indicator} {memory_text}{date_str}")
+
+        return "\n".join(lines)
+
+    except ImportError:
+        return "## Relationship Context\n<!-- Memory V2 service unavailable -->"
+    except Exception as e:
+        # Silent error handling - don't break session startup
+        return "## Relationship Context\n<!-- Memory service error -->"
+
+
 def build_relationship_context() -> str:
     """Build relationship context from recent memory.
 
@@ -262,9 +379,8 @@ def build_relationship_context() -> str:
         Formatted relationship context string
     """
     try:
-        # TODO: Query memory for recent family/relationship mentions
-        # For now, return placeholder
-        return "## Relationship Context\n<!-- Relationship tracking pending -->"
+        # Use the new relationship_context() function
+        return relationship_context()
     except Exception as e:
         return f"<!-- Relationship context failed: {e} -->"
 
