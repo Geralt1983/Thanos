@@ -290,6 +290,7 @@ class SetupWizard:
         print("     Setup: Add OURA_PERSONAL_ACCESS_TOKEN to .env")
         print()
         print_info("These are optional. Core features work without them.")
+        print_info("For detailed setup instructions, see: docs/SETUP_GUIDE.md")
         print()
 
     def _offer_tutorial(self) -> None:
@@ -362,6 +363,7 @@ class SetupWizard:
         print("     $ thanos --help")
         print()
         print_info("For advanced setup and integrations, see: docs/SETUP_GUIDE.md")
+        print_info("To re-run this setup wizard: python3 Tools/setup_wizard.py")
         print()
         print("="*70)
 
