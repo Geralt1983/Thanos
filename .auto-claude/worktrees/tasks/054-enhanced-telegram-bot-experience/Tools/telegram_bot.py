@@ -2620,6 +2620,100 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     logger.error(f"Failed to complete task: {e}")
                     await query.edit_message_text(f"❌ Failed to complete task: {e}")
 
+            elif action == "postpone":
+                # Postpone task (move to queued status)
+                if not self.workos_enabled:
+                    await query.edit_message_text("❌ WorkOS not configured - can't postpone tasks.")
+                    return
+
+                try:
+                    import asyncpg
+                    import ssl
+
+                    db_url = WORKOS_DATABASE_URL.split('?')[0]
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+
+                    conn = await asyncpg.connect(db_url, ssl=ssl_context)
+                    try:
+                        # Update task status to queued
+                        await conn.execute(
+                            """
+                            UPDATE tasks
+                            SET status = 'queued'
+                            WHERE id = $1
+                            """,
+                            int(task_id)
+                        )
+
+                        # Get task title for confirmation
+                        row = await conn.fetchrow(
+                            "SELECT title FROM tasks WHERE id = $1",
+                            int(task_id)
+                        )
+
+                        if row:
+                            await query.edit_message_text(
+                                f"⏸ *Task Postponed*\n\n{row['title']}\n\n"
+                                "_Task moved to queued status. Use /tasks to view._",
+                                parse_mode='Markdown'
+                            )
+                        else:
+                            await query.edit_message_text("⏸ Task postponed!")
+
+                    finally:
+                        await conn.close()
+
+                except Exception as e:
+                    logger.error(f"Failed to postpone task: {e}")
+                    await query.edit_message_text(f"❌ Failed to postpone task: {e}")
+
+            elif action == "delete":
+                # Delete task
+                if not self.workos_enabled:
+                    await query.edit_message_text("❌ WorkOS not configured - can't delete tasks.")
+                    return
+
+                try:
+                    import asyncpg
+                    import ssl
+
+                    db_url = WORKOS_DATABASE_URL.split('?')[0]
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+
+                    conn = await asyncpg.connect(db_url, ssl=ssl_context)
+                    try:
+                        # Get task title before deleting
+                        row = await conn.fetchrow(
+                            "SELECT title FROM tasks WHERE id = $1",
+                            int(task_id)
+                        )
+
+                        # Delete task
+                        await conn.execute(
+                            "DELETE FROM tasks WHERE id = $1",
+                            int(task_id)
+                        )
+
+                        if row:
+                            await query.edit_message_text(
+                                f"🗑 *Task Deleted*\n\n{row['title']}\n\n"
+                                "_Use /tasks to view remaining tasks._",
+                                parse_mode='Markdown'
+                            )
+                        else:
+                            await query.edit_message_text("🗑 Task deleted!")
+
+                    finally:
+                        await conn.close()
+
+                except Exception as e:
+                    logger.error(f"Failed to delete task: {e}")
+                    await query.edit_message_text(f"❌ Failed to delete task: {e}")
+
             elif action == "details":
                 # Show task details
                 if not self.workos_enabled:
@@ -2672,12 +2766,12 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
                             details.append(f"\n_Created: {row['created_at'].strftime('%Y-%m-%d')}_")
 
-                            # Add complete button if task is not already completed
+                            # Add action buttons if task is not already completed
                             if row['status'] != 'completed':
-                                keyboard = self._build_inline_keyboard([[
-                                    ("✅ Complete", f"task_complete_{task_id}"),
-                                    ("« Back", "menu_tasks")
-                                ]])
+                                keyboard = self._build_inline_keyboard([
+                                    [("✅ Complete", f"task_complete_{task_id}"), ("⏸ Postpone", f"task_postpone_{task_id}")],
+                                    [("🗑 Delete", f"task_delete_{task_id}"), ("« Back", "menu_tasks")]
+                                ])
                                 await query.edit_message_text(
                                     "\n".join(details),
                                     reply_markup=keyboard,
