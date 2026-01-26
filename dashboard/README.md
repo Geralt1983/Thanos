@@ -249,18 +249,59 @@ Serve the `dist/` directory with any static file server (nginx, Apache, Caddy, e
 
 ## Testing
 
-### Backend Testing
+### Running Tests
 
 ```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests
+python -m pytest tests/ -v
+
+# Run with coverage
+python -m pytest tests/ -v --cov=dashboard --cov-report=html
+
+# Open coverage report
+open htmlcov/index.html
+```
+
+### Test Structure
+
+```
+tests/
+├── __init__.py
+├── conftest.py           # Test fixtures and configuration
+├── test_main.py          # Tests for main.py (health check, root)
+├── test_tasks.py         # Tests for /api/tasks endpoints
+├── test_energy.py        # Tests for /api/energy endpoint
+├── test_health.py        # Tests for /api/health endpoints
+├── test_correlations.py  # Tests for /api/correlations endpoint
+├── test_mcp_client.py    # Tests for MCP client
+└── integration/
+    ├── __init__.py
+    ├── test_correlations_integration.py
+    └── test_mcp_communication.py
+```
+
+### Running Integration Tests
+
+Integration tests require MCP servers to be running:
+
+```bash
+# Terminal 1: Start WorkOS MCP
+cd ../../mcp-servers/workos-mcp
+npm run build && npm start
+
+# Terminal 2: Start Oura MCP
+cd ../../mcp-servers/oura-mcp
+npm run build && npm start
+
+# Terminal 3: Run integration tests
 cd dashboard
-
-# Syntax verification
-python3 -m py_compile main.py config.py mcp_client.py api/*.py
-
-# Manual API testing
-curl http://localhost:8001/health
-curl http://localhost:8001/api/tasks
-curl http://localhost:8001/api/energy?days=7
+python -m pytest tests/integration/ -v
 ```
 
 ### Frontend Testing
