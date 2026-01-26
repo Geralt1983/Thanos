@@ -19,6 +19,7 @@ import logging
 from typing import Dict, Any
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -36,6 +37,16 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Configure CORS to allow frontend access
+# Allow all origins in development - tighten for production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/")
 async def root() -> Dict[str, Any]:
@@ -50,6 +61,20 @@ async def root() -> Dict[str, Any]:
         "version": "0.1.0",
         "status": "operational",
         "docs": "/docs"
+    }
+
+
+@app.get("/health")
+async def health_check() -> Dict[str, str]:
+    """
+    Health check endpoint for monitoring and load balancers.
+
+    Returns:
+        Dictionary containing health status
+    """
+    return {
+        "status": "healthy",
+        "service": "thanos-dashboard-api"
     }
 
 
