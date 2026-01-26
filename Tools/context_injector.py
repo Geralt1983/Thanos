@@ -464,6 +464,7 @@ def build_session_context() -> str:
     - Temporal context (current time, time-of-day awareness)
     - Energy level (from Oura or WorkOS)
     - Hot memories (high-heat items from Memory V2)
+    - Active projects and clients (from critical_facts + Memory V2)
     - Relationship status (recent family/friend mentions)
     - Emotional continuity (yesterday's markers)
 
@@ -476,6 +477,7 @@ def build_session_context() -> str:
     parts.append(build_temporal_context())
     parts.append(build_energy_context())
     parts.append(build_hot_memory_context())
+    parts.append(active_projects_context())
     parts.append(build_relationship_context())
     parts.append(build_emotional_context())
 
