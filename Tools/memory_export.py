@@ -239,6 +239,108 @@ class MemoryExporter:
                 "error": str(e)
             }
 
+    def _generate_mermaid_graph(self, relationships: List[Dict[str, Any]]) -> str:
+        """
+        Generate Mermaid graph diagram from relationships.
+
+        Creates a visual graph showing memory relationships with:
+        - Shortened memory IDs as nodes
+        - Relationship types and strengths on edges
+        - Different arrow styles for different relationship types
+
+        Args:
+            relationships: List of relationship dictionaries
+
+        Returns:
+            Mermaid graph syntax as string
+        """
+        if not relationships:
+            return "*No relationships to visualize*\n"
+
+        lines = []
+        lines.append("```mermaid\n")
+        lines.append("graph TD\n")
+
+        # Limit to top relationships by strength to avoid huge graphs
+        # Sort by strength and take top 100
+        sorted_rels = sorted(
+            relationships,
+            key=lambda r: r.get("strength", 0),
+            reverse=True
+        )[:100]
+
+        # Build node ID mapping (shortened IDs for readability)
+        node_ids = {}
+        node_counter = 1
+
+        for rel in sorted_rels:
+            source = rel.get("source_id", "")
+            target = rel.get("target_id", "")
+
+            if source not in node_ids:
+                node_ids[source] = f"M{node_counter}"
+                node_counter += 1
+            if target not in node_ids:
+                node_ids[target] = f"M{node_counter}"
+                node_counter += 1
+
+        # Define arrow styles for different relationship types
+        arrow_styles = {
+            "caused": "-->",
+            "prevented": "-.-x",
+            "enabled": "-.->",
+            "preceded": "-->",
+            "followed": "-->",
+            "concurrent": "<-->",
+            "related_to": "---",
+            "contradicts": "-.x",
+            "supports": "==>",
+            "elaborates": "-.->",
+            "belongs_to": "-->",
+            "impacts": "==>",
+            "learned_from": "==>",
+            "applied_to": "-->",
+            "invalidated_by": "-.x"
+        }
+
+        # Render nodes with labels (shortened memory ID)
+        for memory_id, short_id in node_ids.items():
+            label = memory_id[:8]
+            lines.append(f"    {short_id}[\"{label}...\"]\n")
+
+        # Render edges with relationship types and strengths
+        for rel in sorted_rels:
+            source = rel.get("source_id", "")
+            target = rel.get("target_id", "")
+            rel_type = rel.get("rel_type", "unknown")
+            strength = rel.get("strength", 1.0)
+
+            source_id = node_ids.get(source)
+            target_id = node_ids.get(target)
+
+            if not source_id or not target_id:
+                continue
+
+            # Get arrow style for this relationship type
+            arrow = arrow_styles.get(rel_type, "-->")
+
+            # Format relationship label with type and strength
+            rel_label = f"{rel_type} ({strength:.2f})"
+
+            lines.append(f"    {source_id} {arrow}|{rel_label}| {target_id}\n")
+
+        lines.append("```\n")
+
+        # Add legend
+        if sorted_rels:
+            lines.append("\n**Graph Legend:**\n")
+            lines.append("- Nodes: Memory IDs (shortened)\n")
+            lines.append("- Edges: Relationship type and strength\n")
+            if len(relationships) > 100:
+                lines.append(f"- *Showing top 100 of {len(relationships)} relationships by strength*\n")
+
+        return "".join(lines)
+
     def _generate_markdown(
         self,
         memories: List[Dict[str, Any]],
@@ -252,7 +354,7 @@ class MemoryExporter:
         - Export metadata in header
         - Memories grouped by client/project
         - Heat indicators (🔥 hot, • normal, ❄️ cold)
-        - Relationships section
+        - Relationships section with Mermaid graph diagrams
 
         Args:
             memories: List of memory dictionaries
@@ -315,6 +417,11 @@ class MemoryExporter:
             lines.append("\n---\n\n")
             lines.append("## Relationships\n\n")
             lines.append(f"**Total Relationships:** {relationships_data['count']}\n\n")
+
+            # Add Mermaid graph diagram
+            lines.append("### Relationship Graph\n\n")
+            lines.append(self._generate_mermaid_graph(relationships_data["relationships"]))
+            lines.append("\n")
 
             # Group by relationship type
             by_type = {}
