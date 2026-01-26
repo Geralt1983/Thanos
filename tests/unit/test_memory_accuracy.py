@@ -217,7 +217,7 @@ class TestMemoryRouterIntegration:
             mock_add.return_value = {"id": "mem_123", "success": True}
 
             with patch('builtins.print'):
-                handler.handle_remember("Important meeting notes", domain="work")
+                handler.handle_remember("Important meeting notes")
 
                 # Verify memory_router.add_memory was called
                 mock_add.assert_called_once()

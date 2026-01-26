@@ -97,7 +97,6 @@ from Tools.context_manager import ContextManager
 from Tools.prompt_formatter import PromptFormatter
 from Tools.session_manager import SessionManager
 from Tools.state_reader import StateReader
-from Tools.memos import get_memos
 
 # Voice synthesis import
 try:
