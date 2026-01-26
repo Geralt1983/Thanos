@@ -98,6 +98,107 @@ def _get_workos_client() -> MCPBridge:
     return _workos_client_cache
 
 
+async def _get_health_snapshot_async(client: MCPBridge, today: str) -> Dict[str, Any]:
+    """
+    Async helper to fetch Oura data with timeout handling.
+
+    Args:
+        client: MCPBridge instance for Oura server
+        today: Date string in YYYY-MM-DD format
+
+    Returns:
+        Dict with readiness, sleep_score, activity, stress data
+        Falls back to placeholder values on error
+    """
+    # Default fallback values
+    readiness_score = 75
+    sleep_score = 82
+    activity_data = {"steps": 8500, "active_calories": 450}
+    stress_data = {"stress_high": 2}
+
+    timeout_seconds = 5.0
+
+    # Try to get readiness score
+    try:
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("oura__get_daily_readiness", {
+                "startDate": today,
+                "endDate": today
+            }),
+            timeout=timeout_seconds
+        )
+        if result and result.success and result.data:
+            # Extract readiness score from Oura data
+            data = result.data
+            if isinstance(data, list) and len(data) > 0:
+                readiness_score = data[0].get("score", readiness_score)
+            elif isinstance(data, dict):
+                readiness_score = data.get("score", readiness_score)
+            logger.debug(f"Oura readiness score: {readiness_score}")
+    except asyncio.TimeoutError:
+        logger.warning(f"Oura readiness call timed out after {timeout_seconds}s, using fallback")
+    except Exception as e:
+        logger.error(f"Failed to get Oura readiness: {e}")
+
+    # Try to get sleep score
+    try:
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("oura__get_daily_sleep", {
+                "startDate": today,
+                "endDate": today
+            }),
+            timeout=timeout_seconds
+        )
+        if result and result.success and result.data:
+            # Extract sleep score from Oura data
+            data = result.data
+            if isinstance(data, list) and len(data) > 0:
+                sleep_score = data[0].get("score", sleep_score)
+            elif isinstance(data, dict):
+                sleep_score = data.get("score", sleep_score)
+            logger.debug(f"Oura sleep score: {sleep_score}")
+    except asyncio.TimeoutError:
+        logger.warning(f"Oura sleep call timed out after {timeout_seconds}s, using fallback")
+    except Exception as e:
+        logger.error(f"Failed to get Oura sleep: {e}")
+
+    # Try to get activity data
+    try:
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("oura__get_daily_activity", {
+                "startDate": today,
+                "endDate": today
+            }),
+            timeout=timeout_seconds
+        )
+        if result and result.success and result.data:
+            # Extract activity metrics from Oura data
+            data = result.data
+            if isinstance(data, list) and len(data) > 0:
+                activity_item = data[0]
+                activity_data = {
+                    "steps": activity_item.get("steps", activity_data["steps"]),
+                    "active_calories": activity_item.get("active_calories", activity_data["active_calories"])
+                }
+            elif isinstance(data, dict):
+                activity_data = {
+                    "steps": data.get("steps", activity_data["steps"]),
+                    "active_calories": data.get("active_calories", activity_data["active_calories"])
+                }
+            logger.debug(f"Oura activity: {activity_data}")
+    except asyncio.TimeoutError:
+        logger.warning(f"Oura activity call timed out after {timeout_seconds}s, using fallback")
+    except Exception as e:
+        logger.error(f"Failed to get Oura activity: {e}")
+
+    return {
+        "readiness": readiness_score,
+        "sleep_score": sleep_score,
+        "activity": activity_data,
+        "stress": stress_data  # Stress data would come from a separate Oura endpoint if available
+    }
+
+
 def get_health_snapshot(mcp_client=None) -> Dict[str, Any]:
     """
     Fetch Oura data and calculate health snapshot.
@@ -115,16 +216,25 @@ def get_health_snapshot(mcp_client=None) -> Dict[str, Any]:
     """
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # TODO: Call MCP tools when client is integrated
-    # readiness = mcp_client.call('oura__get_daily_readiness', {...})
-    # sleep = mcp_client.call('oura__get_daily_sleep', {...})
-    # activity = mcp_client.call('oura__get_daily_activity', {...})
+    # Get or create MCP client
+    client = mcp_client if mcp_client else _get_oura_client()
 
-    # Placeholder data
-    readiness_score = 75
-    sleep_score = 82
-    activity_data = {"steps": 8500, "active_calories": 450}
-    stress_data = {"stress_high": 2}
+    # Fetch health data with MCP calls (async)
+    try:
+        health_data = asyncio.run(_get_health_snapshot_async(client, today))
+        readiness_score = health_data["readiness"]
+        sleep_score = health_data["sleep_score"]
+        activity_data = health_data["activity"]
+        stress_data = health_data["stress"]
+        logger.info(f"Health snapshot retrieved: readiness={readiness_score}, sleep={sleep_score}")
+    except Exception as e:
+        logger.error(f"Failed to fetch health snapshot: {e}")
+        # Fallback to placeholder data
+        readiness_score = 75
+        sleep_score = 82
+        activity_data = {"steps": 8500, "active_calories": 450}
+        stress_data = {"stress_high": 2}
+        logger.warning("Using fallback health data")
 
     # Map to energy level
     energy_level = map_readiness_to_energy(readiness_score)
