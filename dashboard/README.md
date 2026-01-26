@@ -62,7 +62,23 @@ Without these configured, the dashboard will show error states but still functio
 
 ## Quick Start
 
-### Option 1: Start Everything (Recommended)
+### Option 1: Quick Start (Single Command)
+
+```bash
+# From the dashboard directory
+cd dashboard
+./start.sh
+```
+
+Or from the parent directory:
+
+```bash
+./dashboard/start.sh
+```
+
+This starts the backend server in the background. The server will be accessible at `http://localhost:8001`.
+
+### Option 2: Start Everything (Recommended for Development)
 
 ```bash
 cd dashboard
@@ -76,7 +92,7 @@ This will:
 
 Then open `http://localhost:3000` in your browser.
 
-### Option 2: Start Manually
+### Option 3: Start Manually
 
 #### Terminal 1: Backend
 
@@ -96,7 +112,7 @@ cd dashboard
 
 Frontend will start on `http://localhost:3000`
 
-### Option 3: Manual Setup
+### Option 4: Manual Setup
 
 #### Backend Setup
 
