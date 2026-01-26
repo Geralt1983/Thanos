@@ -33,8 +33,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Conditional imports with graceful fallbacks
 try:
     import chromadb
-    from chromadb import Client as ChromaClient
-    from chromadb.config import Settings
     CHROMA_AVAILABLE = True
 except ImportError:
     CHROMA_AVAILABLE = False
@@ -193,12 +191,8 @@ class MemOSMigrator:
                 return
 
             try:
-                self.chroma_client = ChromaClient(
-                    Settings(
-                        persist_directory=str(chroma_path),
-                        anonymized_telemetry=False
-                    )
-                )
+                # Use PersistentClient for ChromaDB 1.4+
+                self.chroma_client = chromadb.PersistentClient(path=str(chroma_path))
                 print(f"✓ Connected to ChromaDB at {chroma_path}")
             except Exception as e:
                 print(f"❌ Failed to connect to ChromaDB: {e}")
