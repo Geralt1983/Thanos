@@ -787,6 +787,14 @@ class CommandRouter:
         sessions_only = "--sessions" in args
         query = args.replace("--sessions", "").strip()
 
+        # Validate query is not empty
+        if not query:
+            print(f"{Colors.DIM}Usage: /recall <search query>{Colors.RESET}")
+            print(f"{Colors.DIM}Example: /recall Memphis client{Colors.RESET}")
+            print(f"{Colors.DIM}Example: /recall what we discussed about API design{Colors.RESET}")
+            print(f"{Colors.DIM}Flags: --sessions (search only sessions){Colors.RESET}")
+            return CommandResult(success=False)
+
         # Try Memory V2 first (conversation summaries with heat-based ranking)
         memory_v2_results = []
         if MEMORY_V2_AVAILABLE and not sessions_only:

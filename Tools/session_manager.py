@@ -188,9 +188,9 @@ class SessionManager:
 
                 # Store via ConversationSummarizer's store_summary method
                 summarizer.store_summary(
-                    summary=result,
+                    summary=summary_text,
                     session_id=self.session.id,
-                    metadata={
+                    additional_metadata={
                         "messages_count": len(messages_to_summarize),
                         "agent": self.session.agent,
                     }
@@ -271,8 +271,13 @@ class SessionManager:
             return []
 
         # Reserve tokens for memory injection if enabled
-        memory_budget = 500  # Reserve 500 tokens for injected context
-        message_budget = max_tokens - memory_budget if inject_memory else max_tokens
+        # Ensure memory budget doesn't exceed max_tokens
+        if inject_memory:
+            memory_budget = min(500, max_tokens)
+            message_budget = max(max_tokens - memory_budget, 0)
+        else:
+            memory_budget = 0
+            message_budget = max_tokens
 
         # Work backwards from most recent messages
         messages_to_include = []

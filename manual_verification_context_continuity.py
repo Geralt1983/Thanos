@@ -49,7 +49,7 @@ def test_long_conversation_handling():
 
     try:
         session = SessionManager()
-        session_id = session.session_id
+        session_id = session.session.id
 
         # Simulate a long conversation with meaningful content
         topics = [
@@ -77,7 +77,7 @@ def test_long_conversation_handling():
         print(f"Added {message_count} messages")
 
         # Check if history was managed
-        history_len = len(session.history)
+        history_len = len(session.session.history)
         print(f"Current history length: {history_len}")
 
         # Verify session still has messages
@@ -247,7 +247,7 @@ def test_memory_injection():
         ]
 
         summary = summarizer.summarize_messages(early_messages, max_length=150)
-        session_id = session.session_id
+        session_id = session.session.id
         summarizer.store_summary(
             summary=summary,
             session_id=session_id,

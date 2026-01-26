@@ -106,6 +106,32 @@ class ContextManager:
         # Fallback: rough estimation (1 token ≈ 4 characters)
         return len(text) // 4
 
+    def compute_message_tokens(self, msg: Dict) -> int:
+        """
+        Compute total tokens for a single message including all overhead.
+
+        This accounts for:
+        - Content tokens: main message content
+        - Role tokens: "user", "assistant", etc.
+        - Message framing: estimated ~10 tokens for JSON structure overhead
+
+        Args:
+            msg: Message dictionary with 'content' and 'role' keys
+
+        Returns:
+            Total token count for the message including overhead
+        """
+        # Count content tokens
+        content_tokens = self.count_tokens(msg.get("content", ""))
+
+        # Count role tokens
+        role_tokens = self.count_tokens(msg.get("role", ""))
+
+        # Estimate message framing overhead (~10 tokens for JSON structure)
+        framing_overhead = 10
+
+        return content_tokens + role_tokens + framing_overhead
+
     def get_usage_report(self, history: List[Dict], system_prompt: str) -> Dict:
         """
         Get context window usage report with accurate token counting.
@@ -117,7 +143,7 @@ class ContextManager:
         Returns:
             Dictionary with usage information including:
                 - system_tokens: Tokens used by system prompt
-                - history_tokens: Tokens used by conversation history
+                - history_tokens: Tokens used by conversation history (includes role and framing overhead)
                 - messages_in_context: Number of messages in history
                 - total_used: Total tokens used
                 - available: Maximum tokens available
@@ -126,7 +152,8 @@ class ContextManager:
         """
         # Count tokens accurately using tiktoken
         system_tokens = self.count_tokens(system_prompt)
-        history_tokens = sum(self.count_tokens(msg.get("content", "")) for msg in history)
+        # Use compute_message_tokens to include role and framing overhead
+        history_tokens = sum(self.compute_message_tokens(msg) for msg in history)
         total_used = system_tokens + history_tokens
 
         usage_percent = (total_used / self.max_tokens) * 100 if self.max_tokens > 0 else 0
@@ -156,9 +183,10 @@ class ContextManager:
         Returns:
             True if summarization should be triggered, False otherwise
         """
-        # Calculate current usage
+        # Calculate current usage with accurate token counting
         system_tokens = self.count_tokens(system_prompt) if system_prompt else 0
-        history_tokens = sum(self.count_tokens(msg.get("content", "")) for msg in history)
+        # Use compute_message_tokens to include role and framing overhead
+        history_tokens = sum(self.compute_message_tokens(msg) for msg in history)
         total_used = system_tokens + history_tokens
 
         usage_ratio = total_used / self.max_tokens if self.max_tokens > 0 else 0

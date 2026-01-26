@@ -224,9 +224,9 @@ class ContextOptimizer:
             raise RuntimeError("Memory V2 not available - cannot retrieve context")
 
         # Use defaults if not specified
-        max_results = max_results or self.default_max_results
-        relevance_threshold = relevance_threshold or self.default_relevance_threshold
-        max_tokens = max_tokens or self.default_max_tokens
+        max_results = self.default_max_results if max_results is None else max_results
+        relevance_threshold = self.default_relevance_threshold if relevance_threshold is None else relevance_threshold
+        max_tokens = self.default_max_tokens if max_tokens is None else max_tokens
 
         start_time = datetime.now()
 
@@ -357,7 +357,7 @@ class ContextOptimizer:
         if not memories:
             return ""
 
-        max_tokens = max_tokens or self.default_max_tokens
+        max_tokens = self.default_max_tokens if max_tokens is None else max_tokens
 
         # Build header
         header = "Previously discussed"
