@@ -11,3 +11,207 @@
 | #2081 | 11:23 PM | 🔵 | Daily Summary Handler Combines Energy Context with Task Metrics for Morning Briefing | ~562 |
 | #2079 | " | 🔵 | WorkOS Task Domain Routes 13 Task Management Tools Including Energy-Aware Features | ~480 |
 </claude-mem-context>
+
+# WorkOS Task Tools - Energy-Aware Filtering
+
+## Overview
+
+The WorkOS task domain supports **energy-aware task filtering** that respects a user's current physical and cognitive state based on Oura readiness scores. This prevents task overload on low-energy days and surfaces appropriate work based on available capacity.
+
+## Energy Filtering with `workos_get_tasks`
+
+### Parameter: `applyEnergyFilter`
+
+The `workos_get_tasks` tool accepts an optional boolean parameter `applyEnergyFilter` (default: `false`) that enables strict energy-based filtering:
+
+```typescript
+workos_get_tasks({
+  status: "active",
+  applyEnergyFilter: true
+})
+```
+
+### How Energy Filtering Works
+
+When `applyEnergyFilter: true`, tasks are filtered based on **readiness thresholds** and **cognitive load** tags:
+
+| Readiness Score | Energy Level | Allowed Tasks | Filtering Behavior |
+|-----------------|--------------|---------------|-------------------|
+| **< 60** | Low | Low cognitive load only | **Recovery mode** - filters out medium and high cognitive tasks to protect wellbeing |
+| **60-75** | Medium | Low + Medium cognitive load | **Moderate capacity** - filters out high cognitive tasks to prevent overwhelm |
+| **> 75** | High | All tasks (low, medium, high) | **Full power** - no filtering, all tasks available |
+
+### Cognitive Load Tags
+
+Tasks should be tagged with `cognitiveLoad` field:
+- **`low`** - Admin tasks, simple checkboxes, routine work
+- **`medium`** - Standard work, moderate complexity
+- **`high`** - Deep work, complex problem-solving, strategic planning
+
+Tasks without a `cognitiveLoad` field default to `"medium"`.
+
+### Response Format
+
+When energy filtering is applied, the response includes both filtered tasks and metadata:
+
+```json
+{
+  "tasks": [
+    {
+      "id": 123,
+      "title": "Review emails",
+      "cognitiveLoad": "low",
+      "status": "active",
+      ...
+    }
+  ],
+  "filterMetadata": {
+    "applied": true,
+    "readinessScore": 58,
+    "energyLevel": "low",
+    "filteredCount": 8,
+    "totalCount": 15,
+    "explanation": "Readiness 58/100: Filtering to low cognitive load tasks only to protect energy (Filtered: 5 medium, 3 high. Recovery mode active - prioritizing wellbeing over productivity.)"
+  }
+}
+```
+
+### Filter Metadata Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `applied` | boolean | Whether energy filtering was applied |
+| `readinessScore` | number | Current Oura readiness score (0-100) |
+| `energyLevel` | string | Derived energy level: "low", "medium", or "high" |
+| `filteredCount` | number | Count of tasks filtered out |
+| `totalCount` | number | Total tasks before filtering |
+| `explanation` | string | Human-readable explanation of filtering decision |
+
+## Usage Examples
+
+### Example 1: Low Energy Day (Readiness 55)
+
+```typescript
+// Request
+workos_get_tasks({
+  status: "active",
+  applyEnergyFilter: true
+})
+
+// Response
+{
+  "tasks": [
+    { "id": 1, "title": "File expense report", "cognitiveLoad": "low" },
+    { "id": 2, "title": "Respond to simple emails", "cognitiveLoad": "low" }
+  ],
+  "filterMetadata": {
+    "readinessScore": 55,
+    "energyLevel": "low",
+    "filteredCount": 12,
+    "totalCount": 14,
+    "explanation": "Readiness 55/100: Filtering to low cognitive load tasks only to protect energy (Filtered: 8 medium, 4 high. Recovery mode active - prioritizing wellbeing over productivity.)"
+  }
+}
+```
+
+**Interpretation:** Only 2 low-cognitive tasks shown out of 14 total. System filtered out 8 medium and 4 high cognitive tasks to protect energy on a low day.
+
+### Example 2: Moderate Energy Day (Readiness 70)
+
+```typescript
+// Request
+workos_get_tasks({
+  status: "active",
+  applyEnergyFilter: true
+})
+
+// Response
+{
+  "tasks": [
+    { "id": 1, "title": "File expense report", "cognitiveLoad": "low" },
+    { "id": 3, "title": "Code review for PR #42", "cognitiveLoad": "medium" },
+    { "id": 4, "title": "Update documentation", "cognitiveLoad": "medium" }
+  ],
+  "filterMetadata": {
+    "readinessScore": 70,
+    "energyLevel": "medium",
+    "filteredCount": 4,
+    "totalCount": 7,
+    "explanation": "Readiness 70/100: Allowing low and medium cognitive load tasks (Filtered: 4 high. Moderate energy - protecting capacity by avoiding high-intensity work.)"
+  }
+}
+```
+
+**Interpretation:** 3 tasks shown (low + medium). 4 high-cognitive tasks filtered out to avoid overwhelm.
+
+### Example 3: High Energy Day (Readiness 85)
+
+```typescript
+// Request
+workos_get_tasks({
+  status: "active",
+  applyEnergyFilter: true
+})
+
+// Response
+{
+  "tasks": [
+    { "id": 1, "title": "File expense report", "cognitiveLoad": "low" },
+    { "id": 3, "title": "Code review for PR #42", "cognitiveLoad": "medium" },
+    { "id": 5, "title": "Architect new microservice", "cognitiveLoad": "high" },
+    { "id": 6, "title": "Strategic planning session", "cognitiveLoad": "high" }
+  ],
+  "filterMetadata": {
+    "readinessScore": 85,
+    "energyLevel": "high",
+    "filteredCount": 0,
+    "totalCount": 4,
+    "explanation": "Readiness 85/100: Full energy - all tasks available"
+  }
+}
+```
+
+**Interpretation:** All 4 tasks shown. No filtering on high-energy days - full capacity available.
+
+## When to Use Energy Filtering
+
+### ✅ Use Energy Filtering When:
+- **Morning brief/daily planning** - Show only appropriate tasks for the day's energy
+- **User asks "what should I work on?"** - Respect current capacity
+- **Low energy confirmed** - User mentions fatigue, overwhelm, or poor sleep
+- **Adaptive scheduling** - Building context-aware task suggestions
+
+### ❌ Don't Use Energy Filtering When:
+- **User explicitly requests all tasks** - Override when user wants full visibility
+- **Searching for specific task** - Don't hide tasks user is looking for
+- **Status updates/reviews** - Completeness matters more than filtering
+- **Client-specific queries** - Show all tasks for a client regardless of energy
+
+## Energy Data Sources
+
+Readiness scores are derived in priority order:
+1. **Manual energy logs** - User explicitly logs energy level (highest priority)
+2. **Oura readiness score** - Today's readiness from Oura ring
+3. **Historical Oura data** - Recent readiness scores
+4. **Default** - Falls back to `"medium"` if no data available
+
+When no readiness score is available, filtering returns all tasks with explanation: `"No energy data available - showing all tasks"`.
+
+## Integration with Other Tools
+
+Energy filtering complements other WorkOS features:
+
+- **`workos_get_energy_aware_tasks`** - Returns tasks **ranked** by energy match (different from filtering)
+- **`workos_adjust_daily_goal`** - Adjusts point targets based on energy
+- **`workos_daily_summary`** - Includes energy context in morning brief
+
+Use `applyEnergyFilter` for **strict gating** (hide inappropriate tasks).
+Use `workos_get_energy_aware_tasks` for **intelligent prioritization** (rank all tasks).
+
+## Best Practices
+
+1. **Enable filtering for daily planning workflows** - Helps users avoid overwhelm
+2. **Show filter explanation to user** - Transparency builds trust in the system
+3. **Allow manual override** - Respect when users want to push through low energy
+4. **Tag tasks with cognitive load** - Filtering quality depends on accurate task metadata
+5. **Combine with goal adjustment** - Lower point targets on low-energy days to match filtered task list
