@@ -1,7 +1,7 @@
 # Energy-Aware Routing Workflow
 
 ## Purpose
-Filter and prioritize tasks based on current energy level, ensuring cognitive load matches available capacity.
+**Strictly filter** and prioritize tasks based on current energy level, ensuring cognitive load matches available capacity. This is a **hard gate** - tasks that exceed your current energy capacity are filtered out entirely, not just deprioritized.
 
 ## Trigger Conditions
 - User asks "What should I work on?"
@@ -29,13 +29,13 @@ def route_next_task(query: str) -> Task:
     readiness = HealthInsight.get_readiness()
     current_time = now()
 
-    # 2. Determine complexity budget
-    if readiness < 40:
+    # 2. Determine complexity budget (STRICT FILTERING)
+    if readiness < 60:
         max_complexity = "low"
-        max_duration = 15  # minutes
-    elif readiness < 60:
+        max_duration = 30  # minutes
+    elif readiness <= 75:
         max_complexity = "medium"
-        max_duration = 45
+        max_duration = 60
     else:
         max_complexity = "high"
         max_duration = 120
@@ -63,6 +63,42 @@ def route_next_task(query: str) -> Task:
     return ranked[0] if ranked else None
 ```
 
+## MCP Tool Integration
+
+The `workos_get_tasks` MCP tool now supports automatic energy-based filtering:
+
+```typescript
+// Basic usage - filtering enabled
+const result = await workos_get_tasks({
+    status: "active",
+    applyEnergyFilter: true
+});
+
+// Returns:
+{
+    tasks: [...],  // Only energy-appropriate tasks
+    filterMetadata: {
+        applied: true,
+        readinessScore: 65,
+        energyLevel: "moderate",
+        totalCount: 15,
+        filteredCount: 12,  // Tasks after filtering
+        excludedCount: 3,   // Tasks filtered out
+        explanation: "Readiness 65/100: Filtered out 3 high cognitive tasks..."
+    }
+}
+```
+
+### Readiness Thresholds (v2.0)
+
+| Readiness Score | Energy Level | Allowed Cognitive Load |
+|-----------------|--------------|------------------------|
+| < 60 | low | low only |
+| 60-75 | moderate | low, medium |
+| > 75 | high | low, medium, high |
+
+**Note:** Thresholds updated in spec 046 from previous values (<40, <60, etc.).
+
 ## Execution Steps
 
 ### Step 1: Determine Current Energy
@@ -87,9 +123,16 @@ async def get_current_energy():
     return await prompt_user_energy()
 
 def energy_level_from_readiness(score):
-    if score < 40:
+    """
+    Map Oura readiness score to energy level.
+    Updated thresholds as of v2.0 (spec 046):
+    - < 60: low (recovery mode)
+    - 60-75: moderate (standard capacity)
+    - > 75: high (full power)
+    """
+    if score < 60:
         return "low"
-    elif score < 60:
+    elif score <= 75:
         return "moderate"
     else:
         return "high"
@@ -98,13 +141,23 @@ def energy_level_from_readiness(score):
 ### Step 2: Fetch and Filter Tasks
 ```python
 async def get_filtered_tasks(energy_level):
-    # Get all non-completed tasks
+    # OPTION 1: Use MCP tool with built-in filtering (RECOMMENDED)
+    result = await workos_get_tasks(
+        status="active",
+        applyEnergyFilter=True  # Uses current Oura readiness automatically
+    )
+
+    # Result includes filterMetadata with explanation
+    filtered_tasks = result.tasks
+    filter_info = result.filterMetadata
+
+    # OPTION 2: Manual filtering for custom logic
     all_tasks = await workos_get_tasks(status="active")
     queued_tasks = await workos_get_tasks(status="queued")
 
     combined = all_tasks + queued_tasks
 
-    # Apply energy filter
+    # Apply energy filter (strict)
     filtered = filter_by_energy(combined, energy_level)
 
     # Sort by priority
@@ -113,6 +166,10 @@ async def get_filtered_tasks(energy_level):
     return prioritized
 
 def filter_by_energy(tasks, energy_level):
+    """
+    STRICT filtering based on energy level.
+    Tasks that don't match are EXCLUDED, not just deprioritized.
+    """
     filters = {
         "low": {
             "cognitive_load": ["low"],
@@ -130,11 +187,44 @@ def filter_by_energy(tasks, energy_level):
 
     allowed = filters[energy_level]
 
-    return [
-        t for t in tasks
-        if t.cognitive_load in allowed["cognitive_load"]
-        and t.drain_type in allowed["drain_type"]
-    ]
+    allowed_tasks = []
+    filtered_out_tasks = []
+
+    for task in tasks:
+        # Default to "medium" if cognitive_load not set
+        cognitive_load = task.cognitive_load or "medium"
+        drain_type = task.drain_type or "shallow"
+
+        if (cognitive_load in allowed["cognitive_load"] and
+            drain_type in allowed["drain_type"]):
+            allowed_tasks.append(task)
+        else:
+            filtered_out_tasks.append(task)
+
+    return {
+        "allowed": allowed_tasks,
+        "filtered_out": filtered_out_tasks,
+        "explanation": generate_filter_explanation(
+            energy_level,
+            len(allowed_tasks),
+            len(filtered_out_tasks)
+        )
+    }
+
+def generate_filter_explanation(energy_level, allowed_count, filtered_count):
+    """
+    Generate human-readable explanation of why tasks were filtered.
+    """
+    if filtered_count == 0:
+        return f"All {allowed_count} tasks match your {energy_level} energy level."
+
+    explanations = {
+        "low": f"Filtered out {filtered_count} medium/high cognitive tasks to protect your energy. Showing {allowed_count} low-cognitive tasks only.",
+        "moderate": f"Filtered out {filtered_count} high cognitive tasks. Showing {allowed_count} low/medium cognitive tasks.",
+        "high": f"Full energy: All {allowed_count} tasks available (no filtering applied)."
+    }
+
+    return explanations.get(energy_level, f"{allowed_count} tasks available.")
 ```
 
 ### Step 3: Prioritization
@@ -328,27 +418,39 @@ If user says "I feel fine" or "I can handle it":
 User: "What should I work on?"
 
 Energy Detection:
-- Oura readiness: 78
-- Level: high
+- Oura readiness: 82
+- Level: high (> 75)
 
-Filtered Tasks: 12 tasks (all cognitive levels)
+MCP Call:
+workos_get_tasks(status="active", applyEnergyFilter=true)
+
+Filter Result:
+- Allowed: 12 tasks (all cognitive levels)
+- Filtered out: 0 tasks
+- Explanation: "Readiness 82/100: Full energy - all 12 tasks available (no filtering applied)."
 
 Response:
 ## What to Work On
 
-**Energy: High**
+**Energy: High** (Readiness: 82/100) ⚡
+
+🔥 **Full Power Mode**
+All cognitive levels available. Perfect time for deep work.
 
 ### Recommended
 **Memphis API architecture review**
 - Client: Memphis (not touched today)
 - Points: 6 (deliverable)
-- Why: High-value task, optimal for your energy, client needs attention
+- Cognitive: High
+- Why: High-value deep work, optimal for your energy, client needs attention
 
 ### Alternatives
-1. Orlando dashboard fix (4 pts)
-2. Raleigh proposal draft (6 pts)
-3. Auth module deep dive (4 pts)
-4. Code review backlog (2 pts)
+1. Orlando dashboard fix (4 pts, medium)
+2. Raleigh proposal draft (6 pts, high)
+3. Auth module deep dive (4 pts, high)
+4. Code review backlog (2 pts, low)
+
+Showing all 12 tasks - no energy filtering applied.
 
 ### Quick Actions
 - Start "Memphis API architecture review"
@@ -360,16 +462,24 @@ Response:
 User: "What should I work on?"
 
 Energy Detection:
-- Oura readiness: 35
-- Level: low
+- Oura readiness: 52
+- Level: low (< 60)
 
-Filtered Tasks: 4 tasks (low cognitive only)
-Hidden: 8 tasks
+MCP Call:
+workos_get_tasks(status="active", applyEnergyFilter=true)
+
+Filter Result:
+- Allowed: 4 tasks (low cognitive only)
+- Filtered out: 8 tasks (medium/high cognitive)
+- Explanation: "Readiness 52/100: Filtered out 8 medium/high cognitive tasks to protect your energy. Showing 4 low-cognitive tasks only."
 
 Response:
 ## What to Work On
 
-**Energy: Low**
+**Energy: Low** (Readiness: 52/100)
+
+⚠️ **Recovery Mode Active**
+Filtered out 8 medium/high cognitive tasks to protect your energy.
 
 ### Recommended
 **Email follow-ups**
@@ -381,12 +491,12 @@ Response:
 2. File organization (2 pts)
 3. Slack catch-up (2 pts)
 
-*8 tasks hidden - Hiding medium/high cognitive tasks due to low energy*
+*Showing 4 low-cognitive tasks. 8 tasks hidden until energy improves.*
 
 ### Quick Actions
 - Start "Email follow-ups"
-- See hidden tasks
-- Override energy level
+- See hidden tasks (override required)
+- Log energy override if you're feeling better
 ```
 
 ### Override Request
@@ -406,3 +516,50 @@ Now showing medium cognitive tasks too:
 
 Want me to show high cognitive tasks as well?
 ```
+
+## When to Apply Energy Filtering
+
+### Always Use Filtering (Default)
+- User asks "What should I work on?"
+- Morning briefing / daily planning
+- After completing a task (suggesting next task)
+- When user seems overwhelmed or mentions low energy
+
+### Show All Tasks (Override)
+- User explicitly requests to see all tasks
+- User mentions feeling better than metrics suggest
+- Planning/review sessions (not execution)
+- User says "show me everything" or "I can handle it"
+
+### MCP Call Patterns
+
+```python
+# Standard task suggestion (USE FILTERING)
+tasks = await workos_get_tasks(status="active", applyEnergyFilter=True)
+
+# User override or planning session (NO FILTERING)
+all_tasks = await workos_get_tasks(status="active", applyEnergyFilter=False)
+
+# Check what was filtered
+if tasks.filterMetadata.excludedCount > 0:
+    print(f"Note: {tasks.filterMetadata.explanation}")
+    print("Say 'show hidden tasks' to see what was filtered out.")
+```
+
+## Filter Explanation Examples
+
+The system generates contextual explanations for why tasks were filtered:
+
+**Low Energy (< 60):**
+> "Readiness 52/100: Filtered out 8 medium/high cognitive tasks to protect your energy. Showing 4 low-cognitive tasks only."
+
+**Moderate Energy (60-75):**
+> "Readiness 68/100: Filtered out 3 high cognitive tasks. Showing 9 low/medium cognitive tasks."
+
+**High Energy (> 75):**
+> "Readiness 82/100: Full energy - all 12 tasks available (no filtering applied)."
+
+**Detailed Breakdown (when multiple categories filtered):**
+> "Readiness 55/100: Filtering to low-cognitive tasks only.
+> - Excluded: 5 high cognitive tasks, 3 medium cognitive tasks
+> - Available: 4 low cognitive tasks"

@@ -135,10 +135,16 @@
     "initdb",
     "ipython",
     "jupyter",
+    "ld",
+    "make",
+    "meson",
+    "ninja",
+    "nm",
     "node",
     "notebook",
     "npm",
     "npx",
+    "objdump",
     "pdb",
     "pg_ctl",
     "pg_dump",
@@ -165,7 +171,9 @@
     "languages": [
       "python",
       "javascript",
-      "typescript"
+      "typescript",
+      "c",
+      "cpp"
     ],
     "package_managers": [
       "pip"

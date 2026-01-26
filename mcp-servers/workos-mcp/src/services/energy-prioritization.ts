@@ -41,6 +41,15 @@ export interface GoalAdjustment {
   sleepScore: number | null;
 }
 
+/**
+ * Task filtering result with energy-based gating
+ */
+export interface TaskFilterResult {
+  allowedTasks: Task[];
+  filteredOutTasks: Task[];
+  filterReason: string;
+}
+
 // =============================================================================
 // ENERGY CONTEXT RETRIEVAL
 // =============================================================================
@@ -126,17 +135,163 @@ export async function getEnergyContext(
 
 /**
  * Map Oura readiness score (0-100) to energy level
- * - High: readiness >= 85
- * - Medium: readiness 70-84
- * - Low: readiness < 70
+ * - High: readiness > 75
+ * - Medium: readiness 60-75
+ * - Low: readiness < 60
  *
  * @param readiness - Oura readiness score (0-100)
  * @returns EnergyLevel (high, medium, or low)
  */
 export function mapReadinessToEnergyLevel(readiness: number): EnergyLevel {
-  if (readiness >= 85) return "high";
-  if (readiness >= 70) return "medium";
+  if (readiness > 75) return "high";
+  if (readiness >= 60) return "medium";
   return "low";
+}
+
+// =============================================================================
+// TASK FILTERING
+// =============================================================================
+
+/**
+ * Generate detailed explanation for why tasks were filtered
+ * Provides breakdown of filtered tasks by cognitive load
+ *
+ * @param filteredTasks - Array of tasks that were filtered out
+ * @param readinessScore - Oura readiness score that triggered filtering
+ * @returns Detailed explanation string
+ */
+function generateFilterExplanation(
+  filteredTasks: Task[],
+  readinessScore: number
+): string {
+  if (filteredTasks.length === 0) {
+    return "";
+  }
+
+  // Count tasks by cognitive load
+  const loadCounts: Record<CognitiveLoad, number> = {
+    low: 0,
+    medium: 0,
+    high: 0,
+  };
+
+  for (const task of filteredTasks) {
+    const load = (task.cognitiveLoad || "medium") as CognitiveLoad;
+    loadCounts[load]++;
+  }
+
+  // Build breakdown string
+  const breakdown: string[] = [];
+  if (loadCounts.high > 0) {
+    breakdown.push(
+      `${loadCounts.high} high cognitive load task${loadCounts.high === 1 ? "" : "s"}`
+    );
+  }
+  if (loadCounts.medium > 0) {
+    breakdown.push(
+      `${loadCounts.medium} medium cognitive load task${loadCounts.medium === 1 ? "" : "s"}`
+    );
+  }
+  if (loadCounts.low > 0) {
+    breakdown.push(
+      `${loadCounts.low} low cognitive load task${loadCounts.low === 1 ? "" : "s"}`
+    );
+  }
+
+  // Generate explanation based on readiness threshold
+  let explanation = ` (Filtered: ${breakdown.join(", ")}.`;
+
+  if (readinessScore < 60) {
+    explanation += " Recovery mode active - prioritizing wellbeing over productivity.)";
+  } else if (readinessScore <= 75) {
+    explanation += " Moderate energy - protecting capacity by avoiding high-intensity work.)";
+  } else {
+    explanation += ")";
+  }
+
+  return explanation;
+}
+
+/**
+ * Filter tasks based on readiness score using strict energy gates
+ *
+ * This implements hard filtering thresholds to protect wellbeing on low-energy days:
+ * - Readiness < 60: Only allow low cognitive load tasks (recovery mode)
+ * - Readiness 60-75: Allow low + medium cognitive load tasks (moderate capacity)
+ * - Readiness > 75: Allow all tasks including high cognitive load (full power)
+ *
+ * Tasks without cognitive_load metadata default to "medium" and are treated accordingly.
+ *
+ * @param tasks - Array of tasks to filter
+ * @param readinessScore - Oura readiness score (0-100), or null to skip filtering
+ * @returns TaskFilterResult with allowedTasks, filteredOutTasks, and explanation
+ *
+ * @example
+ * ```typescript
+ * const result = filterTasksByEnergy(tasks, 55);
+ * // Returns only low cognitive load tasks
+ * // result.filterReason: "Readiness 55/100: Filtering to low cognitive load tasks only to protect energy"
+ * ```
+ */
+export function filterTasksByEnergy(
+  tasks: Task[],
+  readinessScore: number | null
+): TaskFilterResult {
+  // If no readiness score, return all tasks unfiltered
+  if (readinessScore === null) {
+    return {
+      allowedTasks: tasks,
+      filteredOutTasks: [],
+      filterReason: "No energy data available - showing all tasks",
+    };
+  }
+
+  const allowedTasks: Task[] = [];
+  const filteredOutTasks: Task[] = [];
+
+  // Determine which cognitive loads are allowed based on readiness
+  let allowedLoads: CognitiveLoad[];
+  let filterReason: string;
+
+  if (readinessScore < 60) {
+    // Recovery mode: only low cognitive load
+    allowedLoads = ["low"];
+    filterReason = `Readiness ${readinessScore}/100: Filtering to low cognitive load tasks only to protect energy`;
+  } else if (readinessScore <= 75) {
+    // Moderate capacity: low + medium cognitive load
+    allowedLoads = ["low", "medium"];
+    filterReason = `Readiness ${readinessScore}/100: Allowing low and medium cognitive load tasks`;
+  } else {
+    // Full power: all cognitive loads allowed
+    allowedLoads = ["low", "medium", "high"];
+    filterReason = `Readiness ${readinessScore}/100: Full energy - all tasks available`;
+  }
+
+  // Filter tasks based on cognitive load
+  for (const task of tasks) {
+    const cognitiveLoad = (task.cognitiveLoad || "medium") as CognitiveLoad;
+
+    if (allowedLoads.includes(cognitiveLoad)) {
+      allowedTasks.push(task);
+    } else {
+      filteredOutTasks.push(task);
+    }
+  }
+
+  // Enhance filter reason with detailed explanation if tasks were filtered
+  if (filteredOutTasks.length > 0) {
+    const detailedExplanation = generateFilterExplanation(
+      filteredOutTasks,
+      readinessScore
+    );
+    filterReason = `${filterReason}${detailedExplanation}`;
+  }
+
+  return {
+    allowedTasks,
+    filteredOutTasks,
+    filterReason,
+  };
 }
 
 // =============================================================================
