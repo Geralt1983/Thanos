@@ -111,6 +111,7 @@ if str(THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(THANOS_DIR))
 
 from Tools.thanos_orchestrator import ThanosOrchestrator  # noqa: E402
+from Tools.first_run_detector import FirstRunDetector  # noqa: E402
 
 
 # ========================================================================
@@ -300,10 +301,49 @@ def main():
         print_usage()
         return
 
+    # ====================================================================
+    # First-Run Detection - Check if setup wizard needs to run
+    # ====================================================================
+    detector = FirstRunDetector()
+    if detector.is_first_run():
+        print("\n" + "="*70)
+        print("  Welcome to Thanos!")
+        print("="*70)
+        print("\nLooks like this is your first time running Thanos.")
+        print("Let's get you set up in under 5 minutes...\n")
+
+        try:
+            # Import wizard only when needed to avoid dependency issues
+            from Tools.setup_wizard import SetupWizard
+
+            wizard = SetupWizard()
+            success = wizard.run()
+
+            if not success:
+                print("\n" + "="*70)
+                print("  Setup Incomplete")
+                print("="*70)
+                print("\nSetup was not completed. You can run it again anytime:")
+                print("  python3 Tools/setup_wizard.py")
+                print()
+                sys.exit(1)
+
+            # Setup successful - exit and let user run thanos normally
+            print("\nSetup complete! Run 'thanos' again to start using it.")
+            sys.exit(0)
+
+        except KeyboardInterrupt:
+            print("\n\nSetup interrupted. Run 'python3 Tools/setup_wizard.py' to continue.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"\nError during setup: {e}")
+            print("Please try running setup manually: python3 Tools/setup_wizard.py")
+            sys.exit(1)
+
     # Initialize orchestrator
     from Tools.server_manager import ServerManager
     ServerManager.ensure_chroma_running()
-    
+
     orchestrator = ThanosOrchestrator(str(THANOS_DIR))
 
     # ====================================================================
