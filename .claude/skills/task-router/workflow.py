@@ -8,6 +8,8 @@ Handles task operations with energy-aware gating and priority tracking.
 import os
 import sys
 import re
+import asyncio
+import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -16,8 +18,52 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# MCP client for tool calls (will be imported when MCP integration is ready)
-# For now, we'll structure the code to call MCP tools via the standard interface
+# MCP client imports
+from Tools.adapters.mcp_bridge import MCPBridge
+from Tools.adapters.mcp_config import MCPServerConfig, StdioConfig
+from Tools.adapters.base import ToolResult
+
+logger = logging.getLogger(__name__)
+
+
+# Global MCP client cache (per-process)
+_mcp_client_cache: Optional[MCPBridge] = None
+
+
+def _get_mcp_client() -> MCPBridge:
+    """
+    Get or create MCP client for WorkOS operations.
+
+    Returns:
+        MCPBridge: Initialized MCP client for WorkOS server
+
+    Note:
+        Creates a new client on first call, then reuses the cached instance.
+        MCPBridge uses session-per-call pattern, so no persistent connection.
+    """
+    global _mcp_client_cache
+
+    if _mcp_client_cache is not None:
+        return _mcp_client_cache
+
+    # Find local WorkOS MCP server
+    workos_server = PROJECT_ROOT / "mcp-servers" / "workos-mcp" / "src" / "index.ts"
+
+    # Create WorkOS MCP configuration using bun (has built-in TypeScript support)
+    config = MCPServerConfig(
+        name="workos",
+        transport=StdioConfig(
+            command="bun",
+            args=["run", str(workos_server)],
+            env={}
+        ),
+        description="WorkOS personal assistant MCP server"
+    )
+
+    _mcp_client_cache = MCPBridge(config)
+    logger.debug(f"MCPBridge initialized for WorkOS (local: {workos_server})")
+
+    return _mcp_client_cache
 
 
 class TaskIntent:
