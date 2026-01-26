@@ -1,40 +1,73 @@
-import { useState } from 'react'
+import Layout from './components/Layout';
+import './styles/index.css';
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
-    }}>
-      <h1>Thanos Dashboard</h1>
-      <p>The Executor awaits...</p>
-      <div style={{ marginTop: '2rem' }}>
-        <button
-          onClick={() => setCount((count) => count + 1)}
-          style={{
-            padding: '0.5rem 1rem',
-            fontSize: '1rem',
-            cursor: 'pointer',
-            backgroundColor: '#646cff',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px'
-          }}
-        >
-          count is {count}
-        </button>
+    <Layout>
+      {/* Dashboard Grid */}
+      <div className="grid grid-cols-4 gap-lg">
+        {/* Placeholder Widgets - will be replaced with actual components */}
+
+        {/* Tasks Widget */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Today's Tasks</h3>
+          </div>
+          <div className="card-content">
+            <p className="text-muted">Tasks widget will appear here</p>
+          </div>
+        </div>
+
+        {/* Energy Widget */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Energy Levels</h3>
+          </div>
+          <div className="card-content">
+            <p className="text-muted">Energy chart will appear here</p>
+          </div>
+        </div>
+
+        {/* Health Widget */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Health Metrics</h3>
+          </div>
+          <div className="card-content">
+            <p className="text-muted">Health metrics will appear here</p>
+          </div>
+        </div>
+
+        {/* Correlation Widget */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Correlations</h3>
+          </div>
+          <div className="card-content">
+            <p className="text-muted">Correlation chart will appear here</p>
+          </div>
+        </div>
       </div>
-      <p style={{ marginTop: '1rem', color: '#888' }}>
-        React + Vite + TypeScript
-      </p>
-    </div>
-  )
+
+      {/* Status Section */}
+      <div className="grid grid-cols-1 gap-md" style={{ marginTop: 'var(--spacing-xl)' }}>
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">System Status</h3>
+          </div>
+          <div className="card-content">
+            <p className="text-secondary">
+              ✓ Dashboard layout initialized
+              <br />
+              ✓ Grid system functional
+              <br />
+              ✓ Responsive design ready
+            </p>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
 }
 
-export default App
+export default App;
