@@ -278,6 +278,69 @@ def get_energy_message(energy_level: str, score: int) -> str:
         return "The stones require charging. Rest is strategic."
 
 
+async def _get_energy_appropriate_tasks_async(
+    client: MCPBridge,
+    energy_level: str,
+    limit: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Async helper to fetch energy-appropriate tasks from WorkOS.
+
+    Args:
+        client: MCPBridge instance for WorkOS server
+        energy_level: low|medium|high
+        limit: Maximum tasks to return
+
+    Returns:
+        List of task dictionaries filtered by energy-appropriate drain types
+    """
+    # Map energy level to drain types
+    # low → admin (low cognitive load)
+    # medium → shallow (moderate cognitive load)
+    # high → deep (high cognitive load)
+    drain_type_map = {
+        "low": "admin",
+        "medium": "shallow",
+        "high": "deep"
+    }
+
+    target_drain_type = drain_type_map.get(energy_level, "shallow")
+    timeout_seconds = 5.0
+
+    try:
+        # Get active tasks from WorkOS
+        result: ToolResult = await asyncio.wait_for(
+            client.call_tool("workos_get_tasks", {
+                "status": "active",
+                "limit": limit * 3  # Fetch extra to allow filtering
+            }),
+            timeout=timeout_seconds
+        )
+
+        if result and result.success and result.data:
+            tasks = result.data if isinstance(result.data, list) else []
+
+            # Filter tasks by appropriate drain type
+            filtered_tasks = [
+                task for task in tasks
+                if task.get("drainType") == target_drain_type
+            ]
+
+            # Limit results
+            filtered_tasks = filtered_tasks[:limit]
+
+            logger.debug(f"Found {len(filtered_tasks)} {target_drain_type} tasks for {energy_level} energy")
+            return filtered_tasks
+
+    except asyncio.TimeoutError:
+        logger.warning(f"WorkOS get_tasks timed out after {timeout_seconds}s")
+    except Exception as e:
+        logger.error(f"Failed to get WorkOS tasks: {e}")
+
+    # Fallback to empty list
+    return []
+
+
 def get_energy_appropriate_tasks(energy_level: str, mcp_client=None) -> List[Dict[str, Any]]:
     """
     Fetch energy-appropriate tasks from WorkOS.
@@ -289,27 +352,37 @@ def get_energy_appropriate_tasks(energy_level: str, mcp_client=None) -> List[Dic
     Returns:
         List of task dictionaries
     """
-    # TODO: Call workos_get_energy_aware_tasks when MCP is integrated
-    # tasks = mcp_client.call('workos_get_energy_aware_tasks', {
-    #     'energy_level': energy_level,
-    #     'limit': 5
-    # })
+    # Get or create WorkOS MCP client
+    client = mcp_client if mcp_client else _get_workos_client()
 
-    # Placeholder
+    # Fetch tasks via MCP (async)
+    try:
+        tasks = asyncio.run(_get_energy_appropriate_tasks_async(client, energy_level, limit=5))
+
+        if tasks:
+            return tasks
+
+        # If no tasks found for exact drain type, provide fallback suggestions
+        logger.info(f"No {energy_level}-energy tasks found, using fallback suggestions")
+
+    except Exception as e:
+        logger.error(f"Failed to fetch energy-appropriate tasks: {e}")
+
+    # Fallback suggestions if MCP call fails or no tasks match
     if energy_level == "low":
         return [
-            {"title": "Review completed tasks", "points": 1, "valueTier": "checkbox"},
-            {"title": "Brain dump loose thoughts", "points": 1, "valueTier": "checkbox"},
+            {"title": "Review completed tasks", "points": 1, "valueTier": "checkbox", "drainType": "admin"},
+            {"title": "Brain dump loose thoughts", "points": 1, "valueTier": "checkbox", "drainType": "admin"},
         ]
     elif energy_level == "medium":
         return [
-            {"title": "Review Memphis client work", "points": 2, "valueTier": "progress"},
-            {"title": "Plan Raleigh deliverables", "points": 2, "valueTier": "progress"},
+            {"title": "Review client work", "points": 2, "valueTier": "progress", "drainType": "shallow"},
+            {"title": "Plan deliverables", "points": 2, "valueTier": "progress", "drainType": "shallow"},
         ]
     else:
         return [
-            {"title": "Design new architecture", "points": 7, "valueTier": "milestone"},
-            {"title": "Implement core feature", "points": 4, "valueTier": "deliverable"},
+            {"title": "Design new architecture", "points": 7, "valueTier": "milestone", "drainType": "deep"},
+            {"title": "Implement core feature", "points": 4, "valueTier": "deliverable", "drainType": "deep"},
         ]
 
 
