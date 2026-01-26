@@ -4,12 +4,98 @@ HealthInsight Skill - Health data interpretation with energy-aware suggestions
 """
 
 import sys
+import asyncio
+import logging
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# MCP client imports
+from Tools.adapters.mcp_bridge import MCPBridge
+from Tools.adapters.mcp_config import MCPServerConfig, StdioConfig
+from Tools.adapters.base import ToolResult
+
+logger = logging.getLogger(__name__)
+
+
+# Global MCP client cache (per-process)
+_oura_client_cache: Optional[MCPBridge] = None
+_workos_client_cache: Optional[MCPBridge] = None
+
+
+def _get_oura_client() -> MCPBridge:
+    """
+    Get or create MCP client for Oura operations.
+
+    Returns:
+        MCPBridge: Initialized MCP client for Oura server
+
+    Note:
+        Creates a new client on first call, then reuses the cached instance.
+        MCPBridge uses session-per-call pattern, so no persistent connection.
+    """
+    global _oura_client_cache
+
+    if _oura_client_cache is not None:
+        return _oura_client_cache
+
+    # Find local Oura MCP server
+    oura_server = PROJECT_ROOT / "mcp-servers" / "oura-mcp" / "src" / "index.ts"
+
+    # Create Oura MCP configuration using bun (has built-in TypeScript support)
+    config = MCPServerConfig(
+        name="oura",
+        transport=StdioConfig(
+            command="bun",
+            args=["run", str(oura_server)],
+            env={}
+        ),
+        description="Oura health tracking MCP server"
+    )
+
+    _oura_client_cache = MCPBridge(config)
+    logger.debug(f"MCPBridge initialized for Oura (local: {oura_server})")
+
+    return _oura_client_cache
+
+
+def _get_workos_client() -> MCPBridge:
+    """
+    Get or create MCP client for WorkOS operations.
+
+    Returns:
+        MCPBridge: Initialized MCP client for WorkOS server
+
+    Note:
+        Creates a new client on first call, then reuses the cached instance.
+        MCPBridge uses session-per-call pattern, so no persistent connection.
+    """
+    global _workos_client_cache
+
+    if _workos_client_cache is not None:
+        return _workos_client_cache
+
+    # Find local WorkOS MCP server
+    workos_server = PROJECT_ROOT / "mcp-servers" / "workos-mcp" / "src" / "index.ts"
+
+    # Create WorkOS MCP configuration using bun (has built-in TypeScript support)
+    config = MCPServerConfig(
+        name="workos",
+        transport=StdioConfig(
+            command="bun",
+            args=["run", str(workos_server)],
+            env={}
+        ),
+        description="WorkOS personal assistant MCP server"
+    )
+
+    _workos_client_cache = MCPBridge(config)
+    logger.debug(f"MCPBridge initialized for WorkOS (local: {workos_server})")
+
+    return _workos_client_cache
 
 
 def get_health_snapshot(mcp_client=None) -> Dict[str, Any]:
