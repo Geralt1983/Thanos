@@ -324,8 +324,8 @@ class TestSynchronousWrappers:
 
     def test_get_health_snapshot_wrapper(self):
         """Test synchronous get_health_snapshot wrapper."""
-        # Mock the async function
-        with patch('workflow._get_health_snapshot_async') as mock_async:
+        # Mock the async function with AsyncMock to return coroutine
+        with patch('workflow._get_health_snapshot_async', new=AsyncMock()) as mock_async:
             mock_async.return_value = {
                 "readiness": 80,
                 "sleep_score": 85,
