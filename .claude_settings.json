@@ -11,14 +11,14 @@
       "Edit(./**)",
       "Glob(./**)",
       "Grep(./**)",
-      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/**)",
-      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/**)",
-      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/**)",
-      "Glob(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/**)",
-      "Grep(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/**)",
-      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/.auto-claude/specs/051-memory-health-dashboard/**)",
-      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/.auto-claude/specs/051-memory-health-dashboard/**)",
-      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/051-memory-health-dashboard/.auto-claude/specs/051-memory-health-dashboard/**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/**)",
+      "Glob(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/**)",
+      "Grep(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/**)",
+      "Read(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/.auto-claude/specs/052-commitment-tracking-with-proactive-reminders/**)",
+      "Write(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/.auto-claude/specs/052-commitment-tracking-with-proactive-reminders/**)",
+      "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders/.auto-claude/specs/052-commitment-tracking-with-proactive-reminders/**)",
       "Read(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
       "Write(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
       "Edit(/Users/jeremy/Projects/Thanos/.auto-claude/**)",
@@ -28,7 +28,12 @@
       "WebFetch(*)",
       "WebSearch(*)",
       "mcp__context7__resolve-library-id(*)",
-      "mcp__context7__get-library-docs(*)"
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
     ]
   }
 }
