@@ -188,6 +188,73 @@ def build_hot_memory_context(limit: int = 10) -> str:
         return "## Hot Memory Context\n<!-- Memory service unavailable -->"
 
 
+def active_projects_context() -> str:
+    """Load active projects context from Memory V2.
+
+    Searches memory for client/project mentions from critical_facts.json.
+
+    Returns:
+        Formatted active projects context string
+    """
+    try:
+        # Load client names from critical_facts.json
+        facts_file = Path(__file__).parent.parent / "State" / "critical_facts.json"
+        if not facts_file.exists():
+            return "## Active Projects Context\n<!-- critical_facts.json not found -->"
+
+        with open(facts_file, 'r', encoding='utf-8') as f:
+            facts = json.load(f)
+
+        # Get active clients and primary projects
+        active_clients = facts.get("work", {}).get("active_clients", [])
+        primary_projects = facts.get("work", {}).get("primary_projects", [])
+
+        if not active_clients and not primary_projects:
+            return "## Active Projects Context\n<!-- No active clients or projects in critical_facts -->"
+
+        # Search Memory V2 for client/project mentions
+        from Tools.memory_v2.service import MemoryService
+        ms = MemoryService()
+
+        # Collect memories for each client/project
+        project_memories = {}
+        all_entities = list(active_clients) + list(primary_projects)
+
+        for entity in all_entities:
+            results = ms.search(entity, limit=3)
+            # Only include high-quality results (effective_score > 0.3)
+            relevant = [r for r in results if r.get('effective_score', 0) > 0.3]
+            if relevant:
+                project_memories[entity] = relevant
+
+        # Format output
+        if not project_memories:
+            return "## Active Projects Context\n<!-- No recent memory found for active clients/projects -->"
+
+        lines = ["## Active Projects Context", ""]
+        for entity, memories in project_memories.items():
+            # Determine if this is a client or project
+            entity_type = "Client" if entity in active_clients else "Project"
+            lines.append(f"**{entity}** ({entity_type}):")
+
+            for mem in memories[:2]:  # Limit to 2 memories per entity
+                memory_text = mem.get('memory', '')[:120]  # Truncate to 120 chars
+                heat = mem.get('heat', 0)
+                heat_indicator = "🔥" if heat > 0.8 else "•" if heat > 0.5 else "❄️"
+                lines.append(f"  {heat_indicator} {memory_text}")
+
+            lines.append("")  # Blank line between entities
+
+        return "\n".join(lines).rstrip()
+
+    except ImportError:
+        # Memory V2 not available
+        return "## Active Projects Context\n<!-- Memory V2 service unavailable -->"
+    except Exception as e:
+        # Silent error handling - don't break session startup
+        return "## Active Projects Context\n<!-- Memory service error -->"
+
+
 def build_relationship_context() -> str:
     """Build relationship context from recent memory.
 
