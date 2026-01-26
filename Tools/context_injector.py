@@ -232,19 +232,42 @@ def build_emotional_context() -> str:
         # Build contextual summary based on detected emotions
         parts = ["## Emotional Continuity", ""]
 
-        # Create concise emotional state summary (max 2-3 sentences)
-        states = []
-        if frustration > 0:
-            states.append(f"frustration detected ({frustration}x)")
-        if excitement > 0:
-            states.append(f"excitement noted ({excitement}x)")
-        if urgency > 0:
-            states.append(f"urgency sensed ({urgency}x)")
+        # Format concise emotional state summary (max 2-3 sentences)
+        # Determine dominant emotional tone
+        dominant_emotion = None
+        max_count = 0
 
-        if states:
+        if frustration > max_count:
+            dominant_emotion = "frustration"
+            max_count = frustration
+        if excitement > max_count:
+            dominant_emotion = "excitement"
+            max_count = excitement
+        if urgency > max_count:
+            dominant_emotion = "urgency"
+            max_count = urgency
+
+        # Generate concise, contextual summary
+        if dominant_emotion == "frustration" and frustration >= 3:
+            parts.append("The stones sensed resistance yesterday. Frustration marked the path.")
+            if urgency > 0:
+                parts.append("Urgency compounds the pressure.")
+        elif dominant_emotion == "excitement" and excitement >= 2:
+            parts.append("Yesterday's energy carried momentum. The balance shifts toward possibility.")
+        elif dominant_emotion == "urgency" and urgency >= 2:
+            parts.append("Urgency drove yesterday's choices. The clock commands attention.")
+        elif frustration > 0 or excitement > 0 or urgency > 0:
+            # Mixed state - list concisely
+            states = []
+            if frustration > 0:
+                states.append(f"frustration ({frustration}x)")
+            if excitement > 0:
+                states.append(f"excitement ({excitement}x)")
+            if urgency > 0:
+                states.append(f"urgency ({urgency}x)")
             parts.append(f"Yesterday: {', '.join(states)}.")
         else:
-            parts.append("Yesterday: neutral emotional state.")
+            parts.append("Yesterday: steady state, neutral ground.")
 
         return "\n".join(parts)
     except Exception as e:
