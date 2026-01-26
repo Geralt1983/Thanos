@@ -108,3 +108,8 @@ tests/clean_*.py
 
 # MCP server local data
 mcp-servers/aiswarm/
+
+# Auto Claude generated files
+.worktrees/
+.security-key
+logs/security/
