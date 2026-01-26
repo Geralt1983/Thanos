@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated_at": "2026-01-11T18:40:57.703965",
+  "updated_at": "2026-01-26T11:54:44.174566",
   "commitments": [
     {
       "id": "example-commitment-001",
@@ -28,6 +28,7 @@
         "last_reminded": null
       },
       "notes": "This is an example commitment to demonstrate the data structure. Real commitments will be added by the commitment tracker.",
+      "person": null,
       "domain": "health",
       "priority": 1,
       "tags": [
@@ -59,6 +60,7 @@
         "last_reminded": null
       },
       "notes": "Testing the new commitment_add command",
+      "person": null,
       "domain": "work",
       "priority": 2,
       "tags": [
@@ -93,6 +95,7 @@
         "last_reminded": null
       },
       "notes": "",
+      "person": null,
       "domain": "health",
       "priority": 1,
       "tags": [
@@ -121,6 +124,7 @@
         "last_reminded": null
       },
       "notes": "",
+      "person": null,
       "domain": "learning",
       "priority": 1,
       "tags": [
@@ -128,6 +132,86 @@
         "advanced",
         "programming"
       ],
+      "metadata": {}
+    },
+    {
+      "id": "49f6895e-7dcb-4fa8-b13e-5692dca8fc91",
+      "title": "Call Mom",
+      "type": "task",
+      "status": "pending",
+      "created_date": "2026-01-26T11:54:44.172583",
+      "due_date": "2026-01-27T11:54:44.172487",
+      "recurrence_pattern": "none",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": "2026-01-27T11:54:44.172487",
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "",
+      "person": null,
+      "domain": "personal",
+      "priority": 1,
+      "tags": [],
+      "metadata": {
+        "person": "Mom"
+      }
+    },
+    {
+      "id": "a13d57c1-bc7e-46c2-a139-6779b3e76012",
+      "title": "Submit project proposal",
+      "type": "task",
+      "status": "pending",
+      "created_date": "2026-01-26T11:54:44.173709",
+      "due_date": "2026-01-29T11:54:44.172503",
+      "recurrence_pattern": "none",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": "2026-01-29T11:54:44.172503",
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "",
+      "person": null,
+      "domain": "work",
+      "priority": 2,
+      "tags": [],
+      "metadata": {}
+    },
+    {
+      "id": "bb8694cd-0126-4b01-a8f4-313a4df0857c",
+      "title": "Schedule dentist appointment",
+      "type": "task",
+      "status": "pending",
+      "created_date": "2026-01-26T11:54:44.174539",
+      "due_date": "2026-02-02T11:54:44.172506",
+      "recurrence_pattern": "none",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": "2026-02-02T11:54:44.172506",
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "",
+      "person": null,
+      "domain": "personal",
+      "priority": 3,
+      "tags": [],
       "metadata": {}
     }
   ]
