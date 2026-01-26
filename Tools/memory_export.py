@@ -25,6 +25,7 @@ Model: Direct data export (no LLM required)
 
 import argparse
 import csv
+import hashlib
 import json
 import logging
 import sys
@@ -509,6 +510,23 @@ class MemoryExporter:
 
         return "".join(lines)
 
+    def _calculate_checksum(self, file_path: Path) -> str:
+        """
+        Calculate SHA-256 checksum of a file.
+
+        Args:
+            file_path: Path to file to checksum
+
+        Returns:
+            Hexadecimal SHA-256 checksum string
+        """
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            # Read file in chunks to handle large files efficiently
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
     def export_all(
         self,
         output_path: str,
@@ -558,6 +576,7 @@ class MemoryExporter:
             "output_path": str(output_dir),
             "format": format,
             "files": [],
+            "checksums": {},
             **export_metadata
         }
 
@@ -572,8 +591,11 @@ class MemoryExporter:
                     "relationships": relationships_data["relationships"]
                 }, f, indent=2, default=str)
 
+            # Calculate checksum for the file
+            checksum = self._calculate_checksum(combined_file)
             result["files"].append(str(combined_file))
-            logger.info(f"Wrote combined export to {combined_file}")
+            result["checksums"][str(combined_file)] = checksum
+            logger.info(f"Wrote combined export to {combined_file} (checksum: {checksum})")
 
         elif format == "csv":
             # Write memories CSV (flattened payload)
@@ -601,8 +623,11 @@ class MemoryExporter:
                             "importance": payload.get("importance", "")
                         })
 
+                # Calculate checksum for memories CSV
+                checksum = self._calculate_checksum(memories_file)
                 result["files"].append(str(memories_file))
-                logger.info(f"Wrote memories CSV to {memories_file}")
+                result["checksums"][str(memories_file)] = checksum
+                logger.info(f"Wrote memories CSV to {memories_file} (checksum: {checksum})")
 
             # Write relationships CSV
             relationships_file = output_dir / "relationships.csv"
@@ -624,14 +649,21 @@ class MemoryExporter:
                             "updated_at": rel["updated_at"]
                         })
 
+                # Calculate checksum for relationships CSV
+                checksum = self._calculate_checksum(relationships_file)
                 result["files"].append(str(relationships_file))
-                logger.info(f"Wrote relationships CSV to {relationships_file}")
+                result["checksums"][str(relationships_file)] = checksum
+                logger.info(f"Wrote relationships CSV to {relationships_file} (checksum: {checksum})")
 
             # Write metadata JSON
             metadata_file = output_dir / "export_metadata.json"
             with open(metadata_file, "w") as f:
                 json.dump(export_metadata, f, indent=2)
+
+            # Calculate checksum for metadata JSON
+            checksum = self._calculate_checksum(metadata_file)
             result["files"].append(str(metadata_file))
+            result["checksums"][str(metadata_file)] = checksum
 
         elif format == "markdown":
             # Write markdown file
@@ -641,11 +673,22 @@ class MemoryExporter:
             with open(markdown_file, "w") as f:
                 f.write(markdown_content)
 
+            # Calculate checksum for markdown file
+            checksum = self._calculate_checksum(markdown_file)
             result["files"].append(str(markdown_file))
-            logger.info(f"Wrote markdown export to {markdown_file}")
+            result["checksums"][str(markdown_file)] = checksum
+            logger.info(f"Wrote markdown export to {markdown_file} (checksum: {checksum})")
 
         else:
             raise ValueError(f"Unsupported format: {format}. Use 'json', 'csv', or 'markdown'")
+
+        # Generate a combined checksum of all file checksums for verification
+        if result["checksums"]:
+            combined_hash = hashlib.sha256()
+            for file_path in sorted(result["checksums"].keys()):
+                combined_hash.update(result["checksums"][file_path].encode('utf-8'))
+            result["checksum"] = combined_hash.hexdigest()
+            logger.info(f"Combined checksum: {result['checksum']}")
 
         logger.info(f"Export complete: {len(memories)} memories, {relationships_data['count']} relationships")
         return result
@@ -694,7 +737,10 @@ def main():
         print(f"  Relationships: {result['relationship_count']}")
         print(f"  Files: {len(result['files'])}")
         for f in result['files']:
-            print(f"    - {f}")
+            checksum = result['checksums'].get(f, "N/A")[:16]
+            print(f"    - {f} (checksum: {checksum}...)")
+        if 'checksum' in result:
+            print(f"  Combined checksum: {result['checksum']}")
 
     except Exception as e:
         logger.error(f"Export failed: {e}", exc_info=True)
