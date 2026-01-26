@@ -42,7 +42,7 @@ inbox/
 # Memory data (local only)
 .memory/
 .memory-v2/
-memory/
+/memory/
 
 # Claude Flow runtime
 .claude-flow@alpha/
