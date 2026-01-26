@@ -223,7 +223,7 @@ def check_retrieval_health() -> Dict[str, Any]:
                 cur.execute("""
                     SELECT id, payload->>'content' as content
                     FROM thanos_memories
-                    ORDER BY created_at DESC
+                    ORDER BY (payload->>'created_at')::timestamp DESC
                     LIMIT 1
                 """)
                 result = cur.fetchone()
