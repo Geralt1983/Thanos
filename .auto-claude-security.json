@@ -128,32 +128,17 @@
     "zsh"
   ],
   "stack_commands": [
-    "ar",
-    "clang",
-    "clang++",
-    "cmake",
     "createdb",
     "createuser",
-    "dotnet",
     "dropdb",
     "dropuser",
-    "g++",
-    "gcc",
     "initdb",
     "ipython",
     "jupyter",
-    "ld",
-    "make",
-    "meson",
-    "msbuild",
-    "ninja",
-    "nm",
     "node",
     "notebook",
     "npm",
     "npx",
-    "nuget",
-    "objdump",
     "pdb",
     "pg_ctl",
     "pg_dump",
@@ -170,23 +155,17 @@
     "python",
     "python3",
     "ruff",
-    "strip",
     "ts-node",
     "tsc",
     "tsx"
   ],
-  "script_commands": [
-    "./start_daemon.sh"
-  ],
+  "script_commands": [],
   "custom_commands": [],
   "detected_stack": {
     "languages": [
       "python",
       "javascript",
-      "typescript",
-      "csharp",
-      "c",
-      "cpp"
+      "typescript"
     ],
     "package_managers": [
       "pip"
@@ -208,12 +187,9 @@
     "make_targets": [],
     "poetry_scripts": [],
     "cargo_aliases": [],
-    "shell_scripts": [
-      "start_daemon.sh"
-    ]
+    "shell_scripts": []
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos",
-  "created_at": "2026-01-25T08:15:49.023922",
-  "project_hash": "423fd35af864deff9b5dae88dc03e1b5",
-  "inherited_from": "/Users/jeremy/Projects/Thanos"
+  "project_dir": "${PROJECT_ROOT}",
+  "created_at": "2026-01-26T07:31:08.975291",
+  "project_hash": "622512a706ea9a89bf0619f8f6fdc50c"
 }

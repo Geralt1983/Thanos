@@ -215,7 +215,7 @@ def check_retrieval_health() -> Dict[str, Any]:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # Test 1: Basic query performance
                 start_time = time.time()
-                cur.execute("SELECT COUNT(*) as count FROM thanos_memories LIMIT 1")
+                cur.execute("SELECT 1 FROM thanos_memories LIMIT 1")
                 query_time = time.time() - start_time
 
                 # Test 2: Sample memory retrieval
@@ -524,7 +524,7 @@ def save_to_history(summary: str):
 def _get_connection():
     """Get database connection with context manager."""
     if not NEON_DATABASE_URL:
-        raise ValueError("THANOS_MEMORY_DATABASE_URL not configured")
+        raise ValueError("NEON_DATABASE_URL not configured")
 
     conn = psycopg2.connect(NEON_DATABASE_URL)
     try:
