@@ -10,9 +10,12 @@ Returns signals in format: {type, priority, message, person, commitment_id}
 
 import asyncio
 import sys
+import json
+import hashlib
 from pathlib import Path
-from typing import List, Dict, Any
-from datetime import datetime
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
+from dataclasses import dataclass, field, asdict
 
 # Setup path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,6 +23,152 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from Tools.alert_checkers.commitment_reminder_checker import CommitmentReminderChecker
 from Tools.alert_checkers.relationship_decay_checker import RelationshipDecayChecker
 from Tools.journal import EventType
+
+
+@dataclass
+class SignalState:
+    """Persistent state for signal acknowledgments."""
+    acknowledged_signals: Dict[str, str] = field(default_factory=dict)  # signal_id -> timestamp
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SignalState':
+        return cls(**data)
+
+
+class SignalManager:
+    """
+    Manages signal persistence to avoid repeat notifications.
+
+    Features:
+    - Track acknowledged signals with timestamps
+    - Auto-cleanup of old acknowledgments (24h window)
+    - Persistent state across sessions
+    """
+
+    def __init__(self, state_file: str = "State/signal_state.json", ack_window_hours: int = 24):
+        """
+        Initialize the signal manager.
+
+        Args:
+            state_file: Path to state file (relative to project root)
+            ack_window_hours: How long to remember acknowledgments (default 24h)
+        """
+        self.state_file = Path(__file__).parent.parent / state_file
+        self.ack_window = timedelta(hours=ack_window_hours)
+        self.state = SignalState()
+        self._load_state()
+
+    def _load_state(self):
+        """Load persistent state from file."""
+        try:
+            if self.state_file.exists():
+                with open(self.state_file) as f:
+                    data = json.load(f)
+                    self.state = SignalState.from_dict(data)
+        except Exception as e:
+            # Start with empty state if load fails
+            self.state = SignalState()
+
+    def _save_state(self):
+        """Save state to file."""
+        try:
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.state_file, 'w') as f:
+                json.dump(self.state.to_dict(), f, indent=2)
+        except Exception as e:
+            # Log but don't crash
+            print(f"⚠️  Could not save signal state: {e}", file=sys.stderr)
+
+    def _clean_old_acknowledgments(self):
+        """Remove acknowledgments older than the window."""
+        now = datetime.now()
+        cutoff = now - self.ack_window
+        cutoff_str = cutoff.isoformat()
+
+        expired = [
+            sig_id for sig_id, timestamp in self.state.acknowledged_signals.items()
+            if timestamp < cutoff_str
+        ]
+
+        for sig_id in expired:
+            del self.state.acknowledged_signals[sig_id]
+
+        if expired:
+            self._save_state()
+
+    def generate_signal_id(self, signal: Dict[str, Any]) -> str:
+        """
+        Generate a unique ID for a signal based on its key attributes.
+
+        Args:
+            signal: Signal dictionary
+
+        Returns:
+            Unique signal ID string
+        """
+        signal_type = signal.get('type', '')
+
+        # For commitment reminders, use commitment_id
+        if signal_type == 'CommitmentReminderCell' and 'commitment_id' in signal:
+            return f"commitment-{signal['commitment_id']}"
+
+        # For relationship decay, use person
+        elif signal_type == 'RelationshipCell' and 'person' in signal:
+            return f"relationship-{signal['person']}"
+
+        # For generic signals, hash the message
+        else:
+            message_hash = hashlib.md5(signal.get('message', '').encode()).hexdigest()[:8]
+            return f"{signal_type.lower()}-{message_hash}"
+
+    def is_acknowledged(self, signal_id: str) -> bool:
+        """
+        Check if a signal has been acknowledged.
+
+        Args:
+            signal_id: Signal ID to check
+
+        Returns:
+            True if signal is acknowledged and within window
+        """
+        return signal_id in self.state.acknowledged_signals
+
+    def mark_acknowledged(self, signal_id: str):
+        """
+        Mark a signal as acknowledged.
+
+        Args:
+            signal_id: Signal ID to acknowledge
+        """
+        self.state.acknowledged_signals[signal_id] = datetime.now().isoformat()
+        self._save_state()
+
+    def filter_acknowledged(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out acknowledged signals.
+
+        Args:
+            signals: List of signal dictionaries
+
+        Returns:
+            List with acknowledged signals removed
+        """
+        # Clean old acknowledgments first
+        self._clean_old_acknowledgments()
+
+        # Filter out acknowledged signals
+        filtered = []
+        for signal in signals:
+            sig_id = self.generate_signal_id(signal)
+            if not self.is_acknowledged(sig_id):
+                # Add signal_id to the signal for later reference
+                signal['signal_id'] = sig_id
+                filtered.append(signal)
+
+        return filtered
 
 
 def format_signal(alert) -> Dict[str, Any]:
@@ -78,9 +227,10 @@ def format_signal(alert) -> Dict[str, Any]:
 async def get_signals() -> List[Dict[str, Any]]:
     """
     Fetch signals from Sentinel and Honeycomb systems.
+    Filters out acknowledged signals to avoid repeat notifications.
 
     Returns:
-        List of signal dictionaries
+        List of signal dictionaries (unacknowledged only)
     """
     signals = []
 
@@ -103,7 +253,11 @@ async def get_signals() -> List[Dict[str, Any]]:
         ]
 
         # Format as signals
-        signals = [format_signal(alert) for alert in high_priority_alerts]
+        all_signals = [format_signal(alert) for alert in high_priority_alerts]
+
+        # Filter out acknowledged signals
+        signal_manager = SignalManager()
+        signals = signal_manager.filter_acknowledged(all_signals)
 
     except Exception as e:
         # Log error but don't crash - return empty signals
