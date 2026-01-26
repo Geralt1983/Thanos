@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-01-26",
+  "preferences": {
+    "context_verbosity": "normal"
+  },
+  "meta": {
+    "purpose": "User preferences and settings for personalized experience",
+    "context_verbosity_options": [
+      "minimal",
+      "normal",
+      "detailed"
+    ],
+    "context_verbosity_description": {
+      "minimal": "Show only highest priority context (2 items, 400 tokens)",
+      "normal": "Balanced context surfacing (5 items, 800 tokens)",
+      "detailed": "Comprehensive context loading (10 items, 1500 tokens)"
+    }
+  }
+}
