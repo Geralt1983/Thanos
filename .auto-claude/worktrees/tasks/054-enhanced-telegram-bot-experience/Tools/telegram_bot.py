@@ -956,6 +956,8 @@ class TelegramBrainDumpBot:
                     for task in work_tasks[:7]:
                         status_emoji = {'active': '🔥', 'queued': '⏳'}.get(task['status'], '📝')
                         lines.append(f"  {status_emoji} {task['title'][:45]}")
+                    if len(work_tasks) > 7:
+                        lines.append(f"  _...and {len(work_tasks) - 7} more_")
                     lines.append("")
 
                 if personal_tasks:
@@ -963,6 +965,8 @@ class TelegramBrainDumpBot:
                     for task in personal_tasks[:7]:
                         status_emoji = {'active': '🔥', 'queued': '⏳'}.get(task['status'], '📝')
                         lines.append(f"  {status_emoji} {task['title'][:45]}")
+                    if len(personal_tasks) > 7:
+                        lines.append(f"  _...and {len(personal_tasks) - 7} more_")
 
                 if not work_tasks and not personal_tasks:
                     lines.append("No tasks found! 🎉")
@@ -1007,9 +1011,14 @@ class TelegramBrainDumpBot:
                 lines = ["🎯 *Your Habits*", ""]
                 for row in rows:
                     emoji = row['emoji'] or '✨'
-                    streak = f"🔥{row['current_streak']}" if row['current_streak'] > 0 else ""
+                    streak = f"*{row['current_streak']}* 🔥" if row['current_streak'] > 0 else ""
                     time_badge = {'morning': '🌅', 'evening': '🌙', 'anytime': '⏰'}.get(row['time_of_day'], '')
-                    lines.append(f"{emoji} {row['name']} {streak} {time_badge}")
+                    habit_parts = [f"  {emoji} {row['name']}"]
+                    if streak:
+                        habit_parts.append(f"({streak})")
+                    if time_badge:
+                        habit_parts.append(time_badge)
+                    lines.append(" ".join(habit_parts))
 
                 return "\n".join(lines)
             finally:
@@ -1032,7 +1041,7 @@ class TelegramBrainDumpBot:
                 'commitment': '🤝', 'personal_task': '🏠', 'work_task': '💼'
             }.get(entry.classification or entry.parsed_category, '📝')
             preview = entry.raw_content[:40] + '...' if len(entry.raw_content) > 40 else entry.raw_content
-            lines.append(f"{emoji} {preview}")
+            lines.append(f"  {emoji} _{preview}_")
 
         if len(unprocessed) > 10:
             lines.append(f"\n_...and {len(unprocessed) - 10} more_")
@@ -1045,7 +1054,7 @@ class TelegramBrainDumpBot:
 
         # Local brain dumps
         unprocessed = self.get_unprocessed()
-        lines.append(f"🧠 Brain dumps: {len(unprocessed)} pending")
+        lines.append(f"🧠 *Brain dumps:* {len(unprocessed)} pending")
 
         # WorkOS data if available
         if self.workos_enabled:
@@ -1064,7 +1073,7 @@ class TelegramBrainDumpBot:
                     active_count = await conn.fetchval(
                         "SELECT COUNT(*) FROM tasks WHERE status = 'active'"
                     )
-                    lines.append(f"✅ Active tasks: {active_count}")
+                    lines.append(f"✅ *Active tasks:* {active_count}")
 
                     # Today's points
                     today_points = await conn.fetchval(
@@ -1074,7 +1083,7 @@ class TelegramBrainDumpBot:
                         WHERE DATE(completed_at) = CURRENT_DATE
                         """
                     )
-                    lines.append(f"⭐ Today's points: {today_points or 0}")
+                    lines.append(f"⭐ *Today's points:* {today_points or 0}")
 
                 finally:
                     await conn.close()
@@ -1133,23 +1142,25 @@ class TelegramBrainDumpBot:
                     else:
                         energy = "🔴 LOW"
                         rec = "Take it easy, more breaks"
-                    lines.append(f"*Energy:* {energy}")
-                    lines.append(f"*Readiness:* {score}/100")
+                    lines.append(f"⚡ *Energy:* {energy}")
+                    lines.append(f"📊 *Readiness:* {score}/100")
 
                     # Add contributors
                     hrv = contributors.get('hrv_balance')
                     rhr = contributors.get('resting_heart_rate')
                     temp = contributors.get('body_temperature')
 
+                    if hrv is not None or rhr is not None or temp is not None:
+                        lines.append("")
                     if hrv is not None:
-                        lines.append(f"💓 HRV Balance: {hrv}")
+                        lines.append(f"  💓 HRV Balance: {hrv}")
                     if rhr is not None:
-                        lines.append(f"❤️ RHR Score: {rhr}")
+                        lines.append(f"  ❤️ RHR Score: {rhr}")
                     if temp is not None:
-                        lines.append(f"🌡️ Body Temp: {temp}")
+                        lines.append(f"  🌡️ Body Temp: {temp}")
 
                     lines.append("")
-                    lines.append(f"📝 _{rec}_")
+                    lines.append(f"💡 _{rec}_")
 
             # Parse sleep
             if sleep_row:
@@ -1751,17 +1762,18 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 "• 📸 Photos (with text)\n"
                 "• 📕 PDF documents\n\n"
                 "I'll capture it, parse it, and add it to your brain dump queue.\n\n"
-                "*Commands:*\n"
-                "/menu - Quick action buttons\n"
-                "/status - Quick status overview\n"
-                "/health - Oura Ring health metrics\n"
-                "/tasks - View active tasks\n"
-                "/habits - View habits\n"
-                "/dumps - View pending brain dumps\n"
-                "/chat - Toggle chat mode (AI conversation)\n"
-                "/ask <question> - One-shot AI query\n\n"
-                "*Natural Language:*\n"
-                "Ask \"what tasks do I have?\" or \"show my habits\"",
+                "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "📋 *Commands:*\n"
+                "  /menu - Quick action buttons\n"
+                "  /status - Quick status overview\n"
+                "  /health - Oura Ring health metrics\n"
+                "  /tasks - View active tasks\n"
+                "  /habits - View habits\n"
+                "  /dumps - View pending brain dumps\n"
+                "  /chat - Toggle chat mode (AI conversation)\n"
+                "  /ask <question> - One-shot AI query\n\n"
+                "💬 *Natural Language:*\n"
+                "  Ask \"what tasks do I have?\" or \"show my habits\"",
                 parse_mode='Markdown'
             )
 
@@ -1807,8 +1819,10 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             if should_filter:
                 logger.info(f"Filtered content ({filter_reason}): {text[:50]}")
                 await update.message.reply_text(
-                    f"🔇 Message filtered ({filter_reason})\n\n"
-                    "Send a complete thought or use /status to check pending items."
+                    f"🔇 *Message Filtered*\n\n"
+                    f"_Reason: {filter_reason}_\n\n"
+                    "Send a complete thought or use /status to check pending items.",
+                    parse_mode='Markdown'
                 )
                 return
 
@@ -1826,7 +1840,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
             # Use acknowledgment from pipeline if available
             if entry.acknowledgment:
-                response_parts.append(f"💬 {entry.acknowledgment}\n")
+                response_parts.append(f"💬 _{entry.acknowledgment}_\n")
 
             # Add classification info
             emoji = {
@@ -1855,18 +1869,18 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             if entry.routing_result:
                 destinations = []
                 if entry.routing_result.get('tasks_created'):
-                    destinations.append("✓ Task created")
+                    destinations.append("  ✓ Task created")
                 if entry.routing_result.get('workos_task_id'):
-                    destinations.append("✓ Synced to WorkOS")
+                    destinations.append("  ✓ Synced to WorkOS")
                 if entry.routing_result.get('idea_created'):
-                    destinations.append("✓ Idea saved")
+                    destinations.append("  ✓ Idea saved")
                 if entry.routing_result.get('commitment_created'):
-                    destinations.append("✓ Commitment tracked")
+                    destinations.append("  ✓ Commitment tracked")
                 if entry.routing_result.get('note_created'):
-                    destinations.append("✓ Note saved")
+                    destinations.append("  ✓ Note saved")
 
                 if destinations:
-                    response_parts.append("\n*Actions taken:*")
+                    response_parts.append("\n📌 *Actions taken:*")
                     response_parts.extend(destinations)
 
             # Add review notice if needed (check if entry has this attribute)
@@ -1903,11 +1917,13 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
             if not is_text_file and not is_pdf:
                 await update.message.reply_text(
-                    f"📄 Received: {file_name}\n\n"
+                    f"📄 *Received:* {file_name}\n\n"
+                    "⚠️ *Unsupported file type*\n\n"
                     "Supported formats:\n"
-                    "• Text files (.txt, .md)\n"
-                    "• PDF documents (.pdf)\n\n"
-                    "For other files, please copy and paste the content."
+                    "  • Text files (.txt, .md)\n"
+                    "  • PDF documents (.pdf)\n\n"
+                    "_For other files, please copy and paste the content._",
+                    parse_mode='Markdown'
                 )
                 return
 
@@ -1962,7 +1978,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     response_parts = [f"📕 *{file_name}*\n"]
 
                     # Stats
-                    response_parts.append(f"📊 {page_count} pages | {word_count:,} words\n")
+                    response_parts.append(f"📊 *Stats:* {page_count} pages | {word_count:,} words\n")
 
                     # Preview of content
                     preview_text = content.replace("--- Page 1 ---\n", "").strip()[:300]
@@ -1973,7 +1989,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
                     # Memory status
                     if memory_result["status"] == "success":
-                        response_parts.append("✅ Ingested to memory")
+                        response_parts.append("✅ *Ingested to memory*")
 
                         # Show detected metadata
                         detected = memory_result.get("metadata", {})
@@ -1992,10 +2008,10 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                             meta_parts.append(f"Domain: {detected['domain']}")
 
                         if meta_parts:
-                            response_parts.append(f"🏷️ _{' | '.join(meta_parts)}_")
+                            response_parts.append(f"\n🏷️ _{' | '.join(meta_parts)}_")
 
                         if caption:
-                            response_parts.append(f"📝 Context: _{caption}_")
+                            response_parts.append(f"\n📝 *Context:* _{caption}_")
                     elif memory_result["status"] == "skipped":
                         response_parts.append("⚠️ Memory not available - content displayed only")
                     else:
@@ -2156,9 +2172,9 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                         json.dump(metadata, f, indent=2)
 
                     await processing_msg.edit_text(
-                        f"📅 *Calendar photo saved*\n\n"
-                        f"📷 `{filename}`\n\n"
-                        f"_Events will be extracted when you chat with Claude._",
+                        f"📅 *Calendar Photo Saved*\n\n"
+                        f"📷 *File:* `{filename}`\n\n"
+                        f"💡 _Events will be extracted when you chat with Claude._",
                         parse_mode='Markdown'
                     )
                     return
@@ -2194,18 +2210,18 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     response_parts.append(f"\n📝 *Caption:* _{caption}_")
 
                 if entry and entry.acknowledgment:
-                    response_parts.append(f"\n💬 {entry.acknowledgment}")
+                    response_parts.append(f"\n💬 _{entry.acknowledgment}_")
 
                 if entry and entry.routing_result:
                     destinations = []
                     if entry.routing_result.get('tasks_created'):
-                        destinations.append("✓ Task created")
+                        destinations.append("  ✓ Task created")
                     if entry.routing_result.get('workos_task_id'):
-                        destinations.append("✓ Synced to WorkOS")
+                        destinations.append("  ✓ Synced to WorkOS")
                     if entry.routing_result.get('idea_created'):
-                        destinations.append("✓ Idea saved")
+                        destinations.append("  ✓ Idea saved")
                     if destinations:
-                        response_parts.append("\n*Actions taken:*")
+                        response_parts.append("\n📌 *Actions taken:*")
                         response_parts.extend(destinations)
 
                 response_parts.append("\n_Your photo has been saved and processed._")
@@ -2490,17 +2506,17 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
             if new_state:
                 await update.message.reply_text(
-                    "💬 *Chat mode enabled*\n\n"
-                    "All your messages will now get AI responses.\n"
-                    "Use /chat again to return to brain dump mode.\n\n"
-                    "_Tip: Use /ask <question> for one-off questions without enabling chat mode._",
+                    "💬 *Chat Mode Enabled*\n\n"
+                    "All your messages will now get AI responses.\n\n"
+                    "🔄 Use /chat again to return to brain dump mode.\n\n"
+                    "_💡 Tip: Use /ask <question> for one-off questions without enabling chat mode._",
                     parse_mode='Markdown'
                 )
             else:
                 await update.message.reply_text(
-                    "📝 *Brain dump mode restored*\n\n"
-                    "Messages will be captured as thoughts/tasks.\n"
-                    "Use /chat to enable conversational mode.",
+                    "📝 *Brain Dump Mode Restored*\n\n"
+                    "Messages will be captured as thoughts/tasks.\n\n"
+                    "💬 Use /chat to enable conversational mode.",
                     parse_mode='Markdown'
                 )
 
@@ -2550,7 +2566,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
             await update.message.reply_text(
                 "🎯 *Quick Actions*\n\n"
-                "Choose an action below:",
+                "Choose an action below to get started:",
                 reply_markup=keyboard,
                 parse_mode='Markdown'
             )
@@ -2582,8 +2598,8 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
                 await query.edit_message_text(
                     "⚡ *Log Energy Level*\n\n"
-                    "Select your current energy level:\n"
-                    "1 = Exhausted, 10 = Peak Energy",
+                    "Select your current energy level:\n\n"
+                    "_1 = Exhausted | 10 = Peak Energy_",
                     reply_markup=keyboard,
                     parse_mode='Markdown'
                 )
@@ -2957,10 +2973,11 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     timestamp = datetime.now()
                     await query.edit_message_text(
                         f"✅ {emoji} *Energy Logged Successfully!*\n\n"
-                        f"📊 Level: *{energy_level}/10* ({description})\n"
-                        f"🕐 Time: {timestamp.strftime('%I:%M %p')}\n"
-                        f"📅 Date: {timestamp.strftime('%b %d, %Y')}\n"
-                        f"💾 Saved to WorkOS\n\n"
+                        f"📊 *Level:* {energy_level}/10 _{description}_\n"
+                        f"🕐 *Time:* {timestamp.strftime('%I:%M %p')}\n"
+                        f"📅 *Date:* {timestamp.strftime('%b %d, %Y')}\n\n"
+                        f"📌 *Actions taken:*\n"
+                        f"  ✓ Saved to WorkOS\n\n"
                         f"_Your energy level has been recorded. Send /menu to return to quick actions._",
                         parse_mode='Markdown'
                     )
@@ -3015,17 +3032,20 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     timestamp = datetime.now()
                     response_text = (
                         f"✅ *Task Created from Voice Message!*\n\n"
-                        f"📝 {entry.raw_content}\n\n"
-                        f"🕐 Time: {timestamp.strftime('%I:%M %p')}\n"
+                        f"📝 _{entry.raw_content}_\n\n"
+                        f"🕐 *Time:* {timestamp.strftime('%I:%M %p')}\n"
                     )
 
                     # Add routing details if available
                     if result.get('routing_result'):
                         routing = result['routing_result']
+                        destinations = []
                         if routing.get('tasks_created'):
-                            response_text += f"✓ Task created in system\n"
+                            destinations.append("  ✓ Task created in system")
                         if routing.get('workos_task_id'):
-                            response_text += f"✓ Synced to WorkOS (ID: {routing['workos_task_id']})\n"
+                            destinations.append(f"  ✓ Synced to WorkOS (ID: {routing['workos_task_id']})")
+                        if destinations:
+                            response_text += f"\n📌 *Actions taken:*\n" + "\n".join(destinations) + "\n"
 
                     response_text += "\n_Use /tasks to view your task list._"
 
@@ -3049,15 +3069,15 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                     timestamp = datetime.now()
                     response_text = (
                         f"💡 *Idea Saved from Voice Message!*\n\n"
-                        f"✨ {entry.raw_content}\n\n"
-                        f"🕐 Time: {timestamp.strftime('%I:%M %p')}\n"
+                        f"✨ _{entry.raw_content}_\n\n"
+                        f"🕐 *Time:* {timestamp.strftime('%I:%M %p')}\n"
                     )
 
                     # Add routing details if available
                     if result.get('routing_result'):
                         routing = result['routing_result']
                         if routing.get('idea_created'):
-                            response_text += f"✓ Idea saved in system\n"
+                            response_text += f"\n📌 *Actions taken:*\n  ✓ Idea saved in system\n"
 
                     response_text += "\n_Your idea has been captured for future reference._"
 
