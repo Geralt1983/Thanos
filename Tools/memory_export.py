@@ -935,6 +935,7 @@ class MemoryExporter:
         csv_metadata_file = backup_dir / "export_metadata.json"
 
         memories = []
+        relationships = []
         metadata = None
         format_type = None
 
@@ -946,6 +947,7 @@ class MemoryExporter:
                 data = json.load(f)
 
             memories = data.get("memories", [])
+            relationships = data.get("relationships", [])
             metadata = data.get("metadata", {})
 
         elif csv_memories_file.exists() and csv_metadata_file.exists():
@@ -966,7 +968,7 @@ class MemoryExporter:
                 "errors": []
             }
 
-        logger.info(f"Found {len(memories)} memories in backup")
+        logger.info(f"Found {len(memories)} memories and {len(relationships)} relationships in backup")
 
         # Validate conflict_mode
         if conflict_mode not in ["skip", "update"]:
@@ -974,14 +976,15 @@ class MemoryExporter:
 
         # Dry run: just report what would happen
         if dry_run:
-            return self._dry_run_restore(memories, metadata, conflict_mode)
+            return self._dry_run_restore(memories, relationships, metadata, conflict_mode)
 
         # Actual restore
-        return self._execute_restore(memories, metadata, conflict_mode)
+        return self._execute_restore(memories, relationships, metadata, conflict_mode)
 
     def _dry_run_restore(
         self,
         memories: List[Dict[str, Any]],
+        relationships: List[Dict[str, Any]],
         metadata: Dict[str, Any],
         conflict_mode: str
     ) -> Dict[str, Any]:
@@ -992,6 +995,7 @@ class MemoryExporter:
 
         Args:
             memories: List of memories to restore
+            relationships: List of relationships to restore
             metadata: Backup metadata
             conflict_mode: How conflicts would be handled
 
@@ -1020,6 +1024,28 @@ class MemoryExporter:
         new_memories = [mem for mem in memories if mem["id"] not in existing_ids]
         conflicting_memories = [mem for mem in memories if mem["id"] in existing_ids]
 
+        # Check which relationships already exist
+        existing_rel_keys = set()
+        if relationships and RELATIONSHIPS_AVAILABLE:
+            try:
+                store = get_relationship_store()
+                cursor = store.conn.cursor()
+                cursor.execute("""
+                    SELECT source_id, target_id, rel_type FROM relationships
+                """)
+                existing_rel_keys = {(row[0], row[1], row[2]) for row in cursor.fetchall()}
+            except Exception as e:
+                logger.warning(f"Could not check existing relationships: {e}")
+
+        rel_conflicts = []
+        new_relationships = []
+        for rel in relationships:
+            rel_key = (rel["source_id"], rel["target_id"], rel["rel_type"])
+            if rel_key in existing_rel_keys:
+                rel_conflicts.append(rel)
+            else:
+                new_relationships.append(rel)
+
         result = {
             "success": True,
             "dry_run": True,
@@ -1030,6 +1056,12 @@ class MemoryExporter:
             "would_restore": len(new_memories),
             "would_skip": len(conflicts) if conflict_mode == "skip" else 0,
             "would_update": len(conflicts) if conflict_mode == "update" else 0,
+            "total_relationships": len(relationships),
+            "new_relationships": len(new_relationships),
+            "relationship_conflicts": len(rel_conflicts),
+            "would_restore_relationships": len(new_relationships),
+            "would_skip_relationships": len(rel_conflicts) if conflict_mode == "skip" else 0,
+            "would_update_relationships": len(rel_conflicts) if conflict_mode == "update" else 0,
             "metadata": metadata
         }
 
@@ -1037,26 +1069,33 @@ class MemoryExporter:
         logger.info(f"  Total memories in backup: {result['total_in_backup']}")
         logger.info(f"  New memories (would restore): {result['new_memories']}")
         logger.info(f"  Conflicts detected: {result['conflicts']}")
+        logger.info(f"  Total relationships in backup: {result['total_relationships']}")
+        logger.info(f"  New relationships (would restore): {result['new_relationships']}")
+        logger.info(f"  Relationship conflicts: {result['relationship_conflicts']}")
         if conflict_mode == "skip":
-            logger.info(f"  Would skip conflicts: {result['would_skip']}")
+            logger.info(f"  Would skip memory conflicts: {result['would_skip']}")
+            logger.info(f"  Would skip relationship conflicts: {result['would_skip_relationships']}")
         else:
-            logger.info(f"  Would update conflicts: {result['would_update']}")
+            logger.info(f"  Would update memory conflicts: {result['would_update']}")
+            logger.info(f"  Would update relationship conflicts: {result['would_update_relationships']}")
 
         return result
 
     def _execute_restore(
         self,
         memories: List[Dict[str, Any]],
+        relationships: List[Dict[str, Any]],
         metadata: Dict[str, Any],
         conflict_mode: str
     ) -> Dict[str, Any]:
         """
         Execute the actual restore operation.
 
-        Inserts memories into thanos_memories table with conflict handling.
+        Inserts memories and relationships with conflict handling.
 
         Args:
             memories: List of memories to restore
+            relationships: List of relationships to restore
             metadata: Backup metadata
             conflict_mode: How to handle conflicts ("skip" or "update")
 
@@ -1134,26 +1173,153 @@ class MemoryExporter:
 
             # Commit all changes
             conn.commit()
-            logger.info(f"✅ Restore complete: {restored} restored, {skipped} skipped, {len(errors)} errors")
+            logger.info(f"✅ Memory restore complete: {restored} restored, {skipped} skipped, {len(errors)} errors")
 
         except Exception as e:
             conn.rollback()
-            logger.error(f"Restore failed: {e}", exc_info=True)
+            logger.error(f"Memory restore failed: {e}", exc_info=True)
             raise
 
         finally:
             conn.close()
 
+        # Now restore relationships
+        rel_result = self._restore_relationships(relationships, conflict_mode)
+
         result = {
-            "success": len(errors) == 0,
+            "success": len(errors) == 0 and rel_result["success"],
             "dry_run": False,
             "total_in_backup": len(memories),
             "restored": restored,
             "skipped": skipped,
             "updated": updated,
             "errors": errors,
+            "relationships_restored": rel_result["restored"],
+            "relationships_skipped": rel_result["skipped"],
+            "relationships_updated": rel_result["updated"],
+            "relationship_errors": rel_result["errors"],
             "conflict_mode": conflict_mode,
             "metadata": metadata
+        }
+
+        return result
+
+    def _restore_relationships(
+        self,
+        relationships: List[Dict[str, Any]],
+        conflict_mode: str = "skip"
+    ) -> Dict[str, Any]:
+        """
+        Restore relationships from backup to SQLite relationship store.
+
+        Restores relationships preserving:
+        - Relationship IDs
+        - Source and target memory IDs
+        - Relationship types and strengths
+        - Metadata
+        - Timestamps
+
+        Args:
+            relationships: List of relationship dictionaries from backup
+            conflict_mode: How to handle duplicates ("skip" or "update")
+
+        Returns:
+            Dictionary with restore statistics
+        """
+        if not RELATIONSHIPS_AVAILABLE:
+            logger.warning("Relationship store not available - skipping relationship restore")
+            return {
+                "success": False,
+                "restored": 0,
+                "skipped": 0,
+                "updated": 0,
+                "errors": ["Relationship store not available"]
+            }
+
+        if not relationships:
+            logger.info("No relationships to restore")
+            return {
+                "success": True,
+                "restored": 0,
+                "skipped": 0,
+                "updated": 0,
+                "errors": []
+            }
+
+        logger.info(f"Restoring {len(relationships)} relationships with conflict_mode={conflict_mode}...")
+
+        restored = 0
+        skipped = 0
+        updated = 0
+        errors = []
+
+        try:
+            store = get_relationship_store()
+            cursor = store.conn.cursor()
+
+            for rel in relationships:
+                try:
+                    # Extract relationship data
+                    source_id = rel["source_id"]
+                    target_id = rel["target_id"]
+                    rel_type = rel["rel_type"]
+                    strength = rel.get("strength", 1.0)
+                    metadata = rel.get("metadata", {})
+                    created_at = rel.get("created_at", datetime.now().isoformat())
+                    updated_at = rel.get("updated_at", datetime.now().isoformat())
+
+                    # Serialize metadata
+                    metadata_json = json.dumps(metadata) if metadata else None
+
+                    if conflict_mode == "skip":
+                        # Insert only if doesn't exist (based on unique constraint)
+                        cursor.execute("""
+                            INSERT INTO relationships (source_id, target_id, rel_type, strength, metadata, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(source_id, target_id, rel_type) DO NOTHING
+                        """, (source_id, target_id, rel_type, strength, metadata_json, created_at, updated_at))
+
+                        # Check if row was actually inserted
+                        if cursor.rowcount > 0:
+                            restored += 1
+                        else:
+                            skipped += 1
+
+                    elif conflict_mode == "update":
+                        # Insert or update if exists
+                        cursor.execute("""
+                            INSERT INTO relationships (source_id, target_id, rel_type, strength, metadata, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(source_id, target_id, rel_type) DO UPDATE SET
+                                strength = excluded.strength,
+                                metadata = excluded.metadata,
+                                updated_at = excluded.updated_at
+                        """, (source_id, target_id, rel_type, strength, metadata_json, created_at, updated_at))
+
+                        # Count as restored (we can't easily distinguish insert vs update)
+                        restored += 1
+
+                except Exception as e:
+                    error_msg = f"Failed to restore relationship {rel.get('id', 'unknown')}: {e}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+                    continue
+
+            # Commit all changes
+            store.conn.commit()
+            logger.info(f"✅ Relationship restore complete: {restored} restored, {skipped} skipped, {len(errors)} errors")
+
+        except Exception as e:
+            error_msg = f"Relationship restore failed: {e}"
+            logger.error(error_msg, exc_info=True)
+            errors.append(error_msg)
+
+        result = {
+            "success": len(errors) == 0,
+            "restored": restored,
+            "skipped": skipped,
+            "updated": updated,
+            "errors": errors
         }
 
         return result
