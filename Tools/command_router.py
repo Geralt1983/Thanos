@@ -40,6 +40,14 @@ except ImportError:
     MEMORY_COMMANDS_AVAILABLE = False
     MemoryCommands = None
 
+# Memory V2 integration (cloud-first with heat decay)
+try:
+    from Tools.memory_v2.service import MemoryService, get_memory_service
+    MEMORY_V2_AVAILABLE = True
+except ImportError:
+    MEMORY_V2_AVAILABLE = False
+    MemoryService = None
+
 
 # ANSI color codes (copied from thanos_interactive.py)
 class Colors:
@@ -765,112 +773,162 @@ class CommandRouter:
             return CommandResult(success=False)
 
     def _cmd_recall(self, args: str) -> CommandResult:
-        """Search memories using MemOS hybrid search or past sessions."""
+        """Search memories using Memory V2, MemOS, or past sessions."""
         import json
 
         if not args:
             print(f"{Colors.DIM}Usage: /recall <search query>{Colors.RESET}")
             print(f"{Colors.DIM}Example: /recall Memphis client{Colors.RESET}")
+            print(f"{Colors.DIM}Example: /recall what we discussed about API design{Colors.RESET}")
             print(f"{Colors.DIM}Flags: --sessions (search only sessions){Colors.RESET}")
             return CommandResult()
 
-        # Check for --sessions flag to skip MemOS
+        # Check for --sessions flag
         sessions_only = "--sessions" in args
         query = args.replace("--sessions", "").strip()
 
-        # Try MemOS first (hybrid search)
-        memos = self._get_memos() if not sessions_only else None
+        # Validate query is not empty
+        if not query:
+            print(f"{Colors.DIM}Usage: /recall <search query>{Colors.RESET}")
+            print(f"{Colors.DIM}Example: /recall Memphis client{Colors.RESET}")
+            print(f"{Colors.DIM}Example: /recall what we discussed about API design{Colors.RESET}")
+            print(f"{Colors.DIM}Flags: --sessions (search only sessions){Colors.RESET}")
+            return CommandResult(success=False)
+
+        # Try Memory V2 first (conversation summaries with heat-based ranking)
+        memory_v2_results = []
+        if MEMORY_V2_AVAILABLE and not sessions_only:
+            try:
+                ms = get_memory_service()
+                # Search conversation_summary domain for past conversations
+                results = ms.search(
+                    query,
+                    limit=5,
+                    filters={"domain": "conversation_summary"}
+                )
+
+                if results:
+                    memory_v2_results = results
+                    print(
+                        f"\n{Colors.CYAN}Conversation Memory "
+                        f"({len(results)} results):{Colors.RESET}\n"
+                    )
+                    for r in results:
+                        score = r.get("effective_score", 0)
+                        heat = r.get("heat", 0)
+                        content = r.get("memory", "")[:150]
+                        metadata = r.get("metadata", {})
+                        session_id = metadata.get("session_id", "unknown")[:8]
+
+                        # Show score and heat indicators
+                        score_icon = "🔥" if heat > 50 else "💭"
+                        score_str = f" (score: {score:.2f}, heat: {heat:.0f})"
+
+                        print(f"  {score_icon} [{session_id}]{score_str}")
+                        print(f"     {content}...")
+                        print()
+
+            except Exception as e:
+                # Silently fall back if Memory V2 fails
+                pass
+
+        # Try MemOS (hybrid knowledge graph search)
         memos_results = []
+        if not sessions_only and not memory_v2_results:
+            memos = self._get_memos()
+            if memos:
+                result = self._run_async(
+                    memos.recall(query=query, limit=5, use_graph=True, use_vector=True)
+                )
 
-        if memos:
-            result = self._run_async(
-                memos.recall(query=query, limit=5, use_graph=True, use_vector=True)
-            )
-
-            if result and result.success:
-                # Combine vector and graph results
-                if result.vector_results:
-                    for item in result.vector_results[:3]:
-                        memos_results.append(
-                            {
-                                "source": "vector",
-                                "content": item.get("content", "")[:150],
-                                "type": item.get("memory_type", "memory"),
-                                "score": item.get("similarity", 0),
-                            }
-                        )
-
-                if result.graph_results:
-                    nodes = result.graph_results.get("nodes", [])
-                    for node in nodes[:3]:
-                        props = node.get("properties", {})
-                        memos_results.append(
-                            {
-                                "source": "graph",
-                                "content": props.get("content", props.get("description", ""))[:150],
-                                "type": node.get("labels", ["memory"])[0]
-                                if node.get("labels")
-                                else "memory",
-                                "id": node.get("id", "")[:8],
-                            }
-                        )
-
-        # Display MemOS results
-        if memos_results:
-            print(
-                f"\n{Colors.CYAN}MemOS Knowledge Graph "
-                f"({len(memos_results)} results):{Colors.RESET}\n"
-            )
-            for r in memos_results:
-                source_icon = "🔍" if r["source"] == "vector" else "🔗"
-                score_str = f" ({r.get('score', 0):.2f})" if r.get("score") else ""
-                print(f"  {source_icon} [{r['type']}]{score_str}")
-                print(f"     {r['content']}...")
-                print()
-
-        # Also search session history (fallback or additional)
-        history_dir = self.thanos_dir / "History" / "Sessions"
-        session_matches = []
-
-        if history_dir.exists():
-            json_files = sorted(
-                history_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True
-            )[:30]  # Limit to last 30 sessions
-
-            for json_file in json_files:
-                try:
-                    data = json.loads(json_file.read_text())
-                    for msg in data.get("history", []):
-                        content = msg.get("content", "").lower()
-                        if query.lower() in content:
-                            session_matches.append(
+                if result and result.success:
+                    # Combine vector and graph results
+                    if result.vector_results:
+                        for item in result.vector_results[:3]:
+                            memos_results.append(
                                 {
-                                    "session": data.get("id", json_file.stem),
-                                    "date": data.get("started_at", "")[:16].replace("T", " "),
-                                    "role": msg.get("role", "unknown"),
-                                    "preview": msg.get("content", "")[:100],
+                                    "source": "vector",
+                                    "content": item.get("content", "")[:150],
+                                    "type": item.get("memory_type", "memory"),
+                                    "score": item.get("similarity", 0),
                                 }
                             )
-                            if len(session_matches) >= 5:
-                                break
-                except (json.JSONDecodeError, KeyError):
-                    continue
-                if len(session_matches) >= 5:
-                    break
 
-        # Display session results
-        if session_matches:
-            print(
-                f"\n{Colors.CYAN}Session History ({len(session_matches)} matches):{Colors.RESET}\n"
-            )
-            for m in session_matches:
-                role_color = Colors.PURPLE if m["role"] == "user" else Colors.CYAN
-                print(f"  {Colors.DIM}{m['date']}{Colors.RESET} ({m['session']})")
-                print(f"  {role_color}{m['role']}:{Colors.RESET} {m['preview']}...")
-                print()
+                    if result.graph_results:
+                        nodes = result.graph_results.get("nodes", [])
+                        for node in nodes[:3]:
+                            props = node.get("properties", {})
+                            memos_results.append(
+                                {
+                                    "source": "graph",
+                                    "content": props.get("content", props.get("description", ""))[:150],
+                                    "type": node.get("labels", ["memory"])[0]
+                                    if node.get("labels")
+                                    else "memory",
+                                    "id": node.get("id", "")[:8],
+                                }
+                            )
 
-        if not memos_results and not session_matches:
+            # Display MemOS results
+            if memos_results:
+                print(
+                    f"\n{Colors.CYAN}MemOS Knowledge Graph "
+                    f"({len(memos_results)} results):{Colors.RESET}\n"
+                )
+                for r in memos_results:
+                    source_icon = "🔍" if r["source"] == "vector" else "🔗"
+                    score_str = f" ({r.get('score', 0):.2f})" if r.get("score") else ""
+                    print(f"  {source_icon} [{r['type']}]{score_str}")
+                    print(f"     {r['content']}...")
+                    print()
+
+        # Search session history (fallback or additional)
+        session_matches = []
+        if not memory_v2_results and not memos_results:
+            history_dir = self.thanos_dir / "History" / "Sessions"
+
+            if history_dir.exists():
+                json_files = sorted(
+                    history_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True
+                )[:30]  # Limit to last 30 sessions
+
+                for json_file in json_files:
+                    try:
+                        data = json.loads(json_file.read_text())
+                        for msg in data.get("history", []):
+                            content = msg.get("content", "").lower()
+                            if query.lower() in content:
+                                session_matches.append(
+                                    {
+                                        "session": data.get("id", json_file.stem),
+                                        "date": data.get("started_at", "")[:16].replace("T", " "),
+                                        "role": msg.get("role", "unknown"),
+                                        "preview": msg.get("content", "")[:100],
+                                    }
+                                )
+                                if len(session_matches) >= 5:
+                                    break
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+                    if len(session_matches) >= 5:
+                        break
+
+            # Display session results
+            if session_matches:
+                print(
+                    f"\n{Colors.CYAN}Session History ({len(session_matches)} matches):{Colors.RESET}\n"
+                )
+                for m in session_matches:
+                    role_color = Colors.PURPLE if m["role"] == "user" else Colors.CYAN
+                    print(f"  {Colors.DIM}{m['date']}{Colors.RESET} ({m['session']})")
+                    print(f"  {role_color}{m['role']}:{Colors.RESET} {m['preview']}...")
+                    print()
+
+        # Check if any results found
+        if not memory_v2_results and not memos_results and not session_matches:
             print(f"{Colors.DIM}No matches found for: {query}{Colors.RESET}")
+            if MEMORY_V2_AVAILABLE:
+                print(f"{Colors.DIM}Tip: Conversations are summarized and stored automatically{Colors.RESET}")
             return CommandResult()
 
         if session_matches:
