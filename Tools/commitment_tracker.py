@@ -109,6 +109,7 @@ class Commitment:
     completion_history: List[CompletionRecord] = field(default_factory=list)
     follow_up_schedule: FollowUpSchedule = field(default_factory=FollowUpSchedule)
     notes: str = ""
+    person: Optional[str] = None  # Person this commitment is to (e.g., 'Mom', 'Ashley')
     domain: str = "general"  # work, personal, health, learning
     priority: int = 3  # 1 (highest) to 5 (lowest)
     tags: List[str] = field(default_factory=list)
