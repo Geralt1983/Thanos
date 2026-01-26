@@ -1,6 +1,7 @@
 import Layout from './components/Layout';
 import TasksWidget from './components/TasksWidget';
 import EnergyChart from './components/EnergyChart';
+import HealthMetrics from './components/HealthMetrics';
 import './styles/index.css';
 
 function App() {
@@ -15,14 +16,7 @@ function App() {
         <EnergyChart refreshInterval={60000} />
 
         {/* Health Widget */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Health Metrics</h3>
-          </div>
-          <div className="card-content">
-            <p className="text-muted">Health metrics will appear here</p>
-          </div>
-        </div>
+        <HealthMetrics refreshInterval={60000} />
 
         {/* Correlation Widget */}
         <div className="card">
