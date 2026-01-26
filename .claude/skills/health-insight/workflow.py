@@ -21,6 +21,9 @@ from Tools.adapters.base import ToolResult
 logger = logging.getLogger(__name__)
 
 
+# MCP call timeout configuration (seconds)
+MCP_CALL_TIMEOUT_SECONDS = 5.0
+
 # Global MCP client cache (per-process)
 _oura_client_cache: Optional[MCPBridge] = None
 _workos_client_cache: Optional[MCPBridge] = None
@@ -116,7 +119,7 @@ async def _get_health_snapshot_async(client: MCPBridge, today: str) -> Dict[str,
     activity_data = {"steps": 8500, "active_calories": 450}
     stress_data = {"stress_high": 2}
 
-    timeout_seconds = 5.0
+    timeout_seconds = MCP_CALL_TIMEOUT_SECONDS
 
     # Try to get readiness score
     try:
@@ -305,7 +308,7 @@ async def _get_energy_appropriate_tasks_async(
     }
 
     target_drain_type = drain_type_map.get(energy_level, "shallow")
-    timeout_seconds = 5.0
+    timeout_seconds = MCP_CALL_TIMEOUT_SECONDS
 
     try:
         # Get active tasks from WorkOS
