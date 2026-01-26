@@ -169,6 +169,55 @@ SYSTEM_COMMANDS = {
 }
 
 # ========================================================================
+# Error Message Helpers
+# ========================================================================
+
+
+def print_error(text: str) -> None:
+    """Print an error message."""
+    print(f"✗ {text}")
+
+
+def print_info(text: str) -> None:
+    """Print an info message."""
+    print(f"ℹ️  {text}")
+
+
+def print_header(text: str) -> None:
+    """Print a formatted section header."""
+    print(f"\n{'='*70}")
+    print(f"  {text}")
+    print(f"{'='*70}\n")
+
+
+def validate_api_keys() -> bool:
+    """
+    Validate that required API keys are present.
+
+    Returns:
+        True if all required keys are present, False otherwise.
+    """
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+
+    if not anthropic_key:
+        print_header("Missing API Key")
+        print_error("ANTHROPIC_API_KEY not found in environment")
+        print()
+        print_info("Thanos requires an Anthropic API key to function.")
+        print_info("You can get one at: https://console.anthropic.com/")
+        print()
+        print_info("To fix this, run the setup wizard:")
+        print_info("  python3 Tools/setup_wizard.py")
+        print()
+        print_info("Or manually add it to your .env file:")
+        print_info("  ANTHROPIC_API_KEY=your-api-key-here")
+        print()
+        return False
+
+    return True
+
+
+# ========================================================================
 # Natural Language Detection
 # ========================================================================
 
@@ -339,6 +388,12 @@ def main():
             print(f"\nError during setup: {e}")
             print("Please try running setup manually: python3 Tools/setup_wizard.py")
             sys.exit(1)
+
+    # ====================================================================
+    # API Key Validation - Check required keys are present
+    # ====================================================================
+    if not validate_api_keys():
+        sys.exit(1)
 
     # Initialize orchestrator
     from Tools.server_manager import ServerManager
