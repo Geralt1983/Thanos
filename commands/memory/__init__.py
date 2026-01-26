@@ -7,7 +7,7 @@ Commands for memory export, backup, and restore:
 - restore : Restore from backup
 """
 
-from . import export
+from . import export, backup, restore
 
 
-__all__ = ["export"]
+__all__ = ["export", "backup", "restore"]
