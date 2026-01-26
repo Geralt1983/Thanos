@@ -21,6 +21,9 @@ from typing import Dict, Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from dashboard.api import API_V1_PREFIX
+from dashboard.api.tasks import router as tasks_router
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +49,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routers
+app.include_router(tasks_router, prefix=API_V1_PREFIX)
 
 
 @app.get("/")
