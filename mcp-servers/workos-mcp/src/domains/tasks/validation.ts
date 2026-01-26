@@ -39,12 +39,14 @@ import {
  * @property clientId - Optional client ID filter (positive integer)
  * @property clientName - Optional client name filter (case-insensitive lookup)
  * @property limit - Optional result limit (1-100, default handled by handler)
+ * @property applyEnergyFilter - Optional boolean to enable energy-based task filtering (default: false)
  */
 export const GetTasksSchema = z.object({
   status: taskStatusSchema.optional(),
   clientId: clientIdSchema.optional(),
   clientName: clientNameSchema.optional(),
   limit: queryLimitSchema.optional(),
+  applyEnergyFilter: z.boolean().optional(),
 });
 
 /**
