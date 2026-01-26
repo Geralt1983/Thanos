@@ -220,3 +220,103 @@ def get_context_summary(entities: List[Dict[str, Any]]) -> str:
         parts.append(f"Topics: {topics}")
 
     return " | ".join(parts)
+
+
+def get_heat_indicator(heat: float) -> str:
+    """
+    Get heat indicator emoji based on heat score.
+
+    Args:
+        heat: Heat score (0.0 to 1.0)
+
+    Returns:
+        Heat indicator emoji
+    """
+    if heat > 0.8:
+        return "🔥"
+    elif heat > 0.5:
+        return "•"
+    else:
+        return "❄️"
+
+
+def estimate_tokens(text: str) -> int:
+    """
+    Estimate token count for a text string.
+    Uses rough heuristic: 1 token ≈ 4 characters.
+
+    Args:
+        text: Text to estimate tokens for
+
+    Returns:
+        Estimated token count
+    """
+    return len(text) // 4
+
+
+def format_context(context: List[Dict[str, Any]], max_tokens: int = 800) -> str:
+    """
+    Format context items with heat indicators and token budget management.
+
+    Args:
+        context: List of context items with 'memory' and 'heat' fields
+        max_tokens: Maximum tokens to include in formatted output (default 800)
+
+    Returns:
+        Formatted context string with heat indicators
+    """
+    if not context:
+        return ""
+
+    # MAX_CONTEXT_TOKENS constant
+    MAX_CONTEXT_TOKENS = max_tokens
+
+    formatted_lines = []
+    current_tokens = 0
+
+    # Header
+    header = "## Proactive Context\n\n"
+    current_tokens += estimate_tokens(header)
+    formatted_lines.append(header)
+
+    # Format each context item with heat indicator
+    for item in context:
+        heat = item.get('heat', 0.5)
+        memory = item.get('memory', '')
+        entity = item.get('entity', '')
+        entity_type = item.get('entity_type', '')
+
+        # Get heat indicator
+        indicator = get_heat_indicator(heat)
+
+        # Format line
+        if entity:
+            line = f"{indicator} **{entity}** ({entity_type}): {memory}\n"
+        else:
+            line = f"{indicator} {memory}\n"
+
+        # Check token budget
+        line_tokens = estimate_tokens(line)
+
+        if current_tokens + line_tokens > MAX_CONTEXT_TOKENS:
+            # Budget exceeded - truncate
+            remaining_tokens = MAX_CONTEXT_TOKENS - current_tokens
+            if remaining_tokens > 20:  # Only add if we have reasonable space
+                # Truncate memory to fit
+                chars_available = remaining_tokens * 4 - len(f"{indicator} **{entity}** ({entity_type}): ...\n")
+                if chars_available > 10:
+                    truncated_memory = memory[:chars_available] + "..."
+                    if entity:
+                        line = f"{indicator} **{entity}** ({entity_type}): {truncated_memory}\n"
+                    else:
+                        line = f"{indicator} {truncated_memory}\n"
+                    formatted_lines.append(line)
+
+            # Add budget exceeded notice
+            formatted_lines.append("\n*[Context truncated due to token budget]*\n")
+            break
+
+        formatted_lines.append(line)
+        current_tokens += line_tokens
+
+    return ''.join(formatted_lines)
