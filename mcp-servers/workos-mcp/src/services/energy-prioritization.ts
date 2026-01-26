@@ -153,6 +153,66 @@ export function mapReadinessToEnergyLevel(readiness: number): EnergyLevel {
 // =============================================================================
 
 /**
+ * Generate detailed explanation for why tasks were filtered
+ * Provides breakdown of filtered tasks by cognitive load
+ *
+ * @param filteredTasks - Array of tasks that were filtered out
+ * @param readinessScore - Oura readiness score that triggered filtering
+ * @returns Detailed explanation string
+ */
+function generateFilterExplanation(
+  filteredTasks: Task[],
+  readinessScore: number
+): string {
+  if (filteredTasks.length === 0) {
+    return "";
+  }
+
+  // Count tasks by cognitive load
+  const loadCounts: Record<CognitiveLoad, number> = {
+    low: 0,
+    medium: 0,
+    high: 0,
+  };
+
+  for (const task of filteredTasks) {
+    const load = (task.cognitiveLoad || "medium") as CognitiveLoad;
+    loadCounts[load]++;
+  }
+
+  // Build breakdown string
+  const breakdown: string[] = [];
+  if (loadCounts.high > 0) {
+    breakdown.push(
+      `${loadCounts.high} high cognitive load task${loadCounts.high === 1 ? "" : "s"}`
+    );
+  }
+  if (loadCounts.medium > 0) {
+    breakdown.push(
+      `${loadCounts.medium} medium cognitive load task${loadCounts.medium === 1 ? "" : "s"}`
+    );
+  }
+  if (loadCounts.low > 0) {
+    breakdown.push(
+      `${loadCounts.low} low cognitive load task${loadCounts.low === 1 ? "" : "s"}`
+    );
+  }
+
+  // Generate explanation based on readiness threshold
+  let explanation = ` (Filtered: ${breakdown.join(", ")}.`;
+
+  if (readinessScore < 60) {
+    explanation += " Recovery mode active - prioritizing wellbeing over productivity.)";
+  } else if (readinessScore <= 75) {
+    explanation += " Moderate energy - protecting capacity by avoiding high-intensity work.)";
+  } else {
+    explanation += ")";
+  }
+
+  return explanation;
+}
+
+/**
  * Filter tasks based on readiness score using strict energy gates
  *
  * This implements hard filtering thresholds to protect wellbeing on low-energy days:
@@ -218,9 +278,13 @@ export function filterTasksByEnergy(
     }
   }
 
-  // Enhance filter reason with count information if tasks were filtered
+  // Enhance filter reason with detailed explanation if tasks were filtered
   if (filteredOutTasks.length > 0) {
-    filterReason = `${filterReason} (${filteredOutTasks.length} task${filteredOutTasks.length === 1 ? "" : "s"} filtered out)`;
+    const detailedExplanation = generateFilterExplanation(
+      filteredOutTasks,
+      readinessScore
+    );
+    filterReason = `${filterReason}${detailedExplanation}`;
   }
 
   return {
