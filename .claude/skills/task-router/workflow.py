@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Global MCP client cache (per-process)
 _mcp_client_cache: Optional[MCPBridge] = None
+_oura_client_cache: Optional[MCPBridge] = None
 
 
 def _get_mcp_client() -> MCPBridge:
@@ -64,6 +65,42 @@ def _get_mcp_client() -> MCPBridge:
     logger.debug(f"MCPBridge initialized for WorkOS (local: {workos_server})")
 
     return _mcp_client_cache
+
+
+def _get_oura_client() -> MCPBridge:
+    """
+    Get or create MCP client for Oura operations.
+
+    Returns:
+        MCPBridge: Initialized MCP client for Oura server
+
+    Note:
+        Creates a new client on first call, then reuses the cached instance.
+        MCPBridge uses session-per-call pattern, so no persistent connection.
+    """
+    global _oura_client_cache
+
+    if _oura_client_cache is not None:
+        return _oura_client_cache
+
+    # Find local Oura MCP server
+    oura_server = PROJECT_ROOT / "mcp-servers" / "oura-mcp" / "src" / "index.ts"
+
+    # Create Oura MCP configuration using bun (has built-in TypeScript support)
+    config = MCPServerConfig(
+        name="oura",
+        transport=StdioConfig(
+            command="bun",
+            args=["run", str(oura_server)],
+            env={}
+        ),
+        description="Oura health tracking MCP server"
+    )
+
+    _oura_client_cache = MCPBridge(config)
+    logger.debug(f"MCPBridge initialized for Oura (local: {oura_server})")
+
+    return _oura_client_cache
 
 
 class TaskIntent:
@@ -191,6 +228,81 @@ def parse_intent(user_message: str) -> TaskIntent:
     )
 
 
+async def _get_energy_level_async() -> tuple[int, str]:
+    """
+    Async implementation of energy level retrieval.
+
+    Tries Oura readiness first, falls back to WorkOS energy log.
+
+    Returns:
+        tuple: (readiness_score, energy_level)
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Try Oura readiness first
+    try:
+        oura_client = _get_oura_client()
+
+        # Call with 5s timeout
+        result: ToolResult = await asyncio.wait_for(
+            oura_client.call_tool(
+                "oura__get_daily_readiness",
+                {"startDate": today, "endDate": today}
+            ),
+            timeout=5.0
+        )
+
+        if result.success and result.data and len(result.data) > 0:
+            score = result.data[0].get("score", 75)
+            energy = map_readiness_to_energy(score)
+            logger.debug(f"Got Oura readiness: {score} -> {energy}")
+            return (score, energy)
+    except asyncio.TimeoutError:
+        logger.warning("Oura MCP call timed out after 5s")
+    except Exception as e:
+        logger.warning(f"Failed to get Oura readiness: {e}")
+
+    # Fallback to WorkOS energy log
+    try:
+        workos_client = _get_mcp_client()
+
+        # Call with 5s timeout
+        result: ToolResult = await asyncio.wait_for(
+            workos_client.call_tool(
+                "workos_get_energy",
+                {"limit": 1}
+            ),
+            timeout=5.0
+        )
+
+        if result.success and result.data and len(result.data) > 0:
+            # Map WorkOS energy level to readiness score
+            level = result.data[0].get("level", "medium")
+            score = _map_energy_level_to_score(level)
+            energy = map_readiness_to_energy(score)
+            logger.debug(f"Got WorkOS energy: {level} -> {score} -> {energy}")
+            return (score, energy)
+    except asyncio.TimeoutError:
+        logger.warning("WorkOS MCP call timed out after 5s")
+    except Exception as e:
+        logger.warning(f"Failed to get WorkOS energy: {e}")
+
+    # Final fallback - assume medium energy
+    logger.info("Using fallback energy level: medium (75)")
+    return (75, "medium")
+
+
+def _map_energy_level_to_score(level: str) -> int:
+    """Map WorkOS energy level string to readiness score."""
+    mapping = {
+        "high": 85,
+        "medium": 75,
+        "low": 60,
+        "exhausted": 50
+    }
+    return mapping.get(level.lower(), 75)
+
+
 def get_energy_level() -> tuple[int, str]:
     """
     Get current energy level from Oura or WorkOS.
@@ -198,27 +310,13 @@ def get_energy_level() -> tuple[int, str]:
     Returns:
         tuple: (readiness_score, energy_level)
                energy_level: 'low'|'medium'|'high'
+
+    Note:
+        This is a synchronous wrapper around async MCP calls.
+        Tries Oura readiness first, falls back to WorkOS energy.
+        Always returns a value (defaults to medium if all sources fail).
     """
-    # This would call MCP tools in production
-    # For now, return placeholder
-    # TODO: Implement MCP client integration
-
-    # Pseudo-code:
-    # try:
-    #     oura_data = mcp_client.call('oura__get_daily_readiness', {
-    #         'startDate': today,
-    #         'endDate': today
-    #     })
-    #     score = oura_data[0]['score']
-    # except:
-    #     energy_data = mcp_client.call('workos_get_energy', {'limit': 1})
-    #     score = map_energy_to_score(energy_data[0]['level'])
-
-    # Placeholder
-    score = 75  # Assume medium energy
-    energy = map_readiness_to_energy(score)
-
-    return (score, energy)
+    return asyncio.run(_get_energy_level_async())
 
 
 def map_readiness_to_energy(score: int) -> str:
