@@ -97,6 +97,14 @@ except ImportError:
     logger.warning("tiktoken not available - using fallback token counting")
     TIKTOKEN_AVAILABLE = False
 
+# Memory V2 for persistent storage
+try:
+    from Tools.memory_v2.service import MemoryService
+    MEMORY_V2_AVAILABLE = True
+except ImportError:
+    logger.warning("Memory V2 not available - summary storage will fail")
+    MEMORY_V2_AVAILABLE = False
+
 
 @dataclass
 class SummaryResult:
@@ -129,6 +137,7 @@ class ConversationSummarizer:
         extract_key_points: Extract bullet points from conversation
         count_tokens: Accurate token counting for messages
         estimate_compression: Estimate compressed size before summarizing
+        store_summary: Store summary in Memory V2 for persistence
     """
 
     def __init__(
@@ -555,3 +564,98 @@ Key points (one per line):"""
         )
 
         return groups
+
+    def store_summary(
+        self,
+        summary: Union[str, SummaryResult],
+        session_id: str,
+        message_range: Optional[str] = None,
+        additional_metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Store a conversation summary in Memory V2 for later retrieval.
+
+        This method persists summarized conversation segments to enable
+        long-term session continuity. Summaries are stored with metadata
+        that enables semantic search and heat-based ranking.
+
+        Args:
+            summary: Summary string or SummaryResult object to store
+            session_id: Unique session identifier
+            message_range: Optional description of message range (e.g., "1-50")
+            additional_metadata: Optional extra metadata to include
+
+        Returns:
+            Result dict from MemoryService.add()
+
+        Raises:
+            RuntimeError: If Memory V2 not available
+            ValueError: If summary is empty
+
+        Example:
+            >>> summarizer = ConversationSummarizer()
+            >>> messages = [...]  # Your conversation messages
+            >>> summary = summarizer.summarize_messages(messages)
+            >>> result = summarizer.store_summary(
+            ...     summary=summary,
+            ...     session_id="session-123",
+            ...     message_range="1-50"
+            ... )
+            >>> print(f"Stored summary: {result['id']}")
+        """
+        if not MEMORY_V2_AVAILABLE:
+            raise RuntimeError("Memory V2 not available - cannot store summary")
+
+        # Extract summary text from SummaryResult if needed
+        if isinstance(summary, SummaryResult):
+            summary_text = summary.summary
+            # Include summary metadata
+            metadata = {
+                "session_id": session_id,
+                "domain": "conversation_summary",
+                "timestamp": summary.timestamp,
+                "message_range": message_range or f"1-{summary.messages_summarized}",
+                "original_token_count": summary.original_token_count,
+                "summary_token_count": summary.summary_token_count,
+                "compression_ratio": summary.compression_ratio,
+                "messages_summarized": summary.messages_summarized,
+                "key_points": summary.key_points,
+            }
+        else:
+            # Summary is a plain string
+            summary_text = summary
+            from datetime import datetime
+            metadata = {
+                "session_id": session_id,
+                "domain": "conversation_summary",
+                "timestamp": datetime.now().isoformat(),
+                "message_range": message_range or "unknown",
+            }
+
+        if not summary_text or not summary_text.strip():
+            raise ValueError("Cannot store empty summary")
+
+        # Merge additional metadata if provided
+        if additional_metadata:
+            metadata.update(additional_metadata)
+
+        # Initialize Memory V2 service
+        memory_service = MemoryService()
+
+        # Store summary in memory
+        try:
+            result = memory_service.add(
+                content=summary_text,
+                metadata=metadata
+            )
+
+            logger.info(
+                f"Stored conversation summary for session {session_id} "
+                f"(range: {metadata.get('message_range', 'unknown')})"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to store summary in Memory V2: {e}")
+            raise
