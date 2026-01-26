@@ -135,16 +135,16 @@ export async function getEnergyContext(
 
 /**
  * Map Oura readiness score (0-100) to energy level
- * - High: readiness >= 85
- * - Medium: readiness 70-84
- * - Low: readiness < 70
+ * - High: readiness > 75
+ * - Medium: readiness 60-75
+ * - Low: readiness < 60
  *
  * @param readiness - Oura readiness score (0-100)
  * @returns EnergyLevel (high, medium, or low)
  */
 export function mapReadinessToEnergyLevel(readiness: number): EnergyLevel {
-  if (readiness >= 85) return "high";
-  if (readiness >= 70) return "medium";
+  if (readiness > 75) return "high";
+  if (readiness >= 60) return "medium";
   return "low";
 }
 
