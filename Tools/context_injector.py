@@ -28,6 +28,25 @@ except ImportError:
     pass
 
 
+# Maximum tokens for context injection (500-800 token budget)
+MAX_CONTEXT_TOKENS = 800
+
+
+def _estimate_tokens(content: str) -> int:
+    """Estimate token count for a string using rough approximation.
+
+    Uses ~4 characters per token as a conservative estimate.
+    This avoids importing tiktoken while providing reasonable accuracy.
+
+    Args:
+        content: Text content to estimate tokens for
+
+    Returns:
+        Estimated token count
+    """
+    return len(content) // 4 + 1  # +1 to avoid zero for short strings
+
+
 def get_yesterday_session() -> Optional[Dict]:
     """Load yesterday's session JSON file.
 
@@ -597,22 +616,108 @@ def build_session_context() -> str:
     - Relationship status (recent family/friend mentions)
     - Emotional continuity (yesterday's markers)
 
+    Token Budget Management:
+    - Enforces MAX_CONTEXT_TOKENS limit (500-800 tokens)
+    - Prioritizes critical sections (temporal, energy, emotional)
+    - Trims optional sections (memories, projects, commitments)
+
     Returns:
         Complete session context string for injection into Claude prompt
     """
     parts = []
+    total_tokens = 0
 
-    # Add each context section
-    parts.append(build_temporal_context())
-    parts.append(build_energy_context())
-    parts.append(build_hot_memory_context())
-    parts.append(active_projects_context())
-    parts.append(recent_commitments_context())
-    parts.append(build_relationship_context())
-    parts.append(build_emotional_context())
+    # Priority 1: Temporal context (always include - small and essential)
+    temporal = build_temporal_context()
+    if temporal and not temporal.startswith("<!--"):
+        temporal_tokens = _estimate_tokens(temporal)
+        if total_tokens + temporal_tokens <= MAX_CONTEXT_TOKENS:
+            parts.append(temporal)
+            total_tokens += temporal_tokens
 
-    # Filter out empty sections
-    parts = [p for p in parts if p and not p.startswith("<!--")]
+    # Priority 2: Energy context (always include - drives workflow gating)
+    energy = build_energy_context()
+    if energy and not energy.startswith("<!--"):
+        energy_tokens = _estimate_tokens(energy)
+        if total_tokens + energy_tokens <= MAX_CONTEXT_TOKENS:
+            parts.append(energy)
+            total_tokens += energy_tokens
+
+    # Priority 3: Emotional continuity (high priority - ADHD continuity)
+    emotional = build_emotional_context()
+    if emotional and not emotional.startswith("<!--"):
+        emotional_tokens = _estimate_tokens(emotional)
+        if total_tokens + emotional_tokens <= MAX_CONTEXT_TOKENS:
+            parts.append(emotional)
+            total_tokens += emotional_tokens
+
+    # Priority 4: Hot memories (medium priority - can be trimmed)
+    # Start with reduced limit if budget is tight
+    remaining_tokens = MAX_CONTEXT_TOKENS - total_tokens
+    if remaining_tokens > 100:  # Only include if we have reasonable space
+        # Dynamically adjust memory limit based on remaining budget
+        memory_limit = min(10, max(3, remaining_tokens // 50))
+        hot_mem = build_hot_memory_context(limit=memory_limit)
+        if hot_mem and not hot_mem.startswith("<!--"):
+            hot_mem_tokens = _estimate_tokens(hot_mem)
+            if total_tokens + hot_mem_tokens <= MAX_CONTEXT_TOKENS:
+                parts.append(hot_mem)
+                total_tokens += hot_mem_tokens
+
+    # Priority 5: Active projects (medium priority - can be trimmed)
+    remaining_tokens = MAX_CONTEXT_TOKENS - total_tokens
+    if remaining_tokens > 80:  # Only include if we have space
+        projects = active_projects_context()
+        if projects and not projects.startswith("<!--"):
+            projects_tokens = _estimate_tokens(projects)
+            # Trim if too large (truncate by removing lines from the end)
+            if projects_tokens > remaining_tokens:
+                # Keep header + first few items
+                lines = projects.split('\n')
+                trimmed_lines = lines[:min(8, len(lines))]
+                trimmed_lines.append("<!-- Additional projects trimmed for token budget -->")
+                projects = '\n'.join(trimmed_lines)
+                projects_tokens = _estimate_tokens(projects)
+
+            if total_tokens + projects_tokens <= MAX_CONTEXT_TOKENS:
+                parts.append(projects)
+                total_tokens += projects_tokens
+
+    # Priority 6: Recent commitments (can be trimmed)
+    remaining_tokens = MAX_CONTEXT_TOKENS - total_tokens
+    if remaining_tokens > 60:  # Only include if we have space
+        commitments = recent_commitments_context()
+        if commitments and not commitments.startswith("<!--"):
+            commitments_tokens = _estimate_tokens(commitments)
+            # Trim if too large
+            if commitments_tokens > remaining_tokens:
+                lines = commitments.split('\n')
+                trimmed_lines = lines[:min(6, len(lines))]
+                trimmed_lines.append("<!-- Additional commitments trimmed for token budget -->")
+                commitments = '\n'.join(trimmed_lines)
+                commitments_tokens = _estimate_tokens(commitments)
+
+            if total_tokens + commitments_tokens <= MAX_CONTEXT_TOKENS:
+                parts.append(commitments)
+                total_tokens += commitments_tokens
+
+    # Priority 7: Relationship context (lowest priority - can be skipped)
+    remaining_tokens = MAX_CONTEXT_TOKENS - total_tokens
+    if remaining_tokens > 60:  # Only include if we have space
+        relationships = build_relationship_context()
+        if relationships and not relationships.startswith("<!--"):
+            relationships_tokens = _estimate_tokens(relationships)
+            # Trim if too large
+            if relationships_tokens > remaining_tokens:
+                lines = relationships.split('\n')
+                trimmed_lines = lines[:min(5, len(lines))]
+                trimmed_lines.append("<!-- Additional relationships trimmed for token budget -->")
+                relationships = '\n'.join(trimmed_lines)
+                relationships_tokens = _estimate_tokens(relationships)
+
+            if total_tokens + relationships_tokens <= MAX_CONTEXT_TOKENS:
+                parts.append(relationships)
+                total_tokens += relationships_tokens
 
     return "\n\n".join(parts)
 
