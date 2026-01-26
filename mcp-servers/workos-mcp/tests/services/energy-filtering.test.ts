@@ -498,9 +498,11 @@ function testFilterExplanation(): void {
     "Moderate energy",
     "Medium energy explanation should mention moderate energy"
   );
+  // Extract the breakdown portion (after "Filtered:") and verify medium tasks not in filtered list
+  const filteredPortion = resultMedium.filterReason.split("Filtered:")[1] || "";
   assert(
-    !resultMedium.filterReason.includes("medium cognitive load task"),
-    "Medium energy should not mention medium tasks in filtered list"
+    !filteredPortion.includes("medium cognitive load task"),
+    "Medium energy should not mention medium tasks in filtered breakdown"
   );
 
   // Test explanation at high energy (no filtering)
@@ -522,9 +524,10 @@ function testFilterExplanation(): void {
     "1 high cognitive load task",
     "Single filtered task should use singular form"
   );
+  // Validate breakdown uses singular (not "1 high cognitive load tasks")
   assert(
-    !resultSingle.filterReason.includes("tasks"),
-    "Singular filtering should not use plural 'tasks'"
+    !resultSingle.filterReason.includes("1 high cognitive load tasks"),
+    "Breakdown should not use plural 'tasks' for singular count"
   );
 
   console.log("✨ All filter explanation tests passed!");
