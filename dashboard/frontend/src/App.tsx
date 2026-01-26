@@ -1,4 +1,5 @@
 import Layout from './components/Layout';
+import TasksWidget from './components/TasksWidget';
 import './styles/index.css';
 
 function App() {
@@ -6,17 +7,8 @@ function App() {
     <Layout>
       {/* Dashboard Grid */}
       <div className="grid grid-cols-4 gap-lg">
-        {/* Placeholder Widgets - will be replaced with actual components */}
-
         {/* Tasks Widget */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Today's Tasks</h3>
-          </div>
-          <div className="card-content">
-            <p className="text-muted">Tasks widget will appear here</p>
-          </div>
-        </div>
+        <TasksWidget refreshInterval={60000} />
 
         {/* Energy Widget */}
         <div className="card">
