@@ -32,6 +32,8 @@ from Tools.alert_checker import (
     HabitAlertChecker,
 )
 from Tools.alert_checkers.client_risk import ClientRiskAlertChecker
+from Tools.alert_checkers.commitment_reminder_checker import CommitmentReminderChecker
+from Tools.alert_checkers.relationship_decay_checker import RelationshipDecayChecker
 
 
 # Configure logging
@@ -49,7 +51,7 @@ class DaemonConfig:
     dedup_window: int = 3600  # 1 hour dedup window
     max_alerts_per_run: int = 20  # Prevent alert storms
     state_file: str = "State/daemon_state.json"
-    enabled_checkers: List[str] = field(default_factory=lambda: ['commitment', 'task', 'oura', 'habit', 'client_risk'])
+    enabled_checkers: List[str] = field(default_factory=lambda: ['commitment', 'task', 'oura', 'habit', 'client_risk', 'commitment_reminder', 'relationship_decay'])
 
     # Severity thresholds for notifications
     notify_severities: List[str] = field(default_factory=lambda: ['warning', 'alert', 'critical'])
@@ -117,6 +119,8 @@ class AlertDaemon:
             'oura': OuraAlertChecker,
             'habit': HabitAlertChecker,
             'client_risk': ClientRiskAlertChecker,
+            'commitment_reminder': CommitmentReminderChecker,
+            'relationship_decay': RelationshipDecayChecker,
         }
 
         for checker_name in self.config.enabled_checkers:
@@ -395,7 +399,7 @@ async def main():
     # Build config
     config = DaemonConfig(
         check_interval=args.interval,
-        enabled_checkers=args.checkers or ['commitment', 'task', 'oura', 'habit', 'client_risk']
+        enabled_checkers=args.checkers or ['commitment', 'task', 'oura', 'habit', 'client_risk', 'commitment_reminder', 'relationship_decay']
     )
 
     daemon = AlertDaemon(config)
