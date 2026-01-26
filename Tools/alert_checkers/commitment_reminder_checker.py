@@ -8,10 +8,14 @@ Monitors commitments for upcoming deadlines and generates low-pressure reminders
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
-from .base import AlertChecker, Alert
-
 import sys
 sys.path.insert(0, str(__file__).rsplit('/Tools', 1)[0])
+
+try:
+    from .base import AlertChecker, Alert
+except ImportError:
+    # When run directly, use absolute imports
+    from Tools.alert_checkers.base import AlertChecker, Alert
 
 from Tools.journal import EventType
 from Tools.commitment_tracker import CommitmentTracker, CommitmentStatus
