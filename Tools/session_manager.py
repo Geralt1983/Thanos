@@ -44,6 +44,10 @@ from pathlib import Path
 from typing import List, Dict, Optional
 import uuid
 import json
+import logging
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 
 # Maximum number of messages to keep in history (sliding window)
@@ -145,6 +149,66 @@ class SessionManager:
         self.session.total_output_tokens += tokens
         self._trim_history()
 
+    def _summarize_before_trim(self) -> Optional[str]:
+        """
+        Summarize messages that will be trimmed from history.
+
+        Called before _trim_history() removes old messages. Summarizes the
+        messages that are about to be discarded and stores the summary in
+        Memory V2 for later retrieval.
+
+        Returns:
+            Summary text if summarization was performed, None otherwise
+        """
+        if len(self.session.history) <= MAX_HISTORY:
+            return None
+
+        # Determine which messages will be trimmed
+        messages_to_remove = len(self.session.history) - MAX_HISTORY
+        messages_to_summarize = self.session.history[:messages_to_remove]
+
+        if not messages_to_summarize:
+            return None
+
+        # Convert to format expected by summarizer (list of dicts with role and content)
+        messages_dict = [
+            {"role": msg.role, "content": msg.content}
+            for msg in messages_to_summarize
+        ]
+
+        try:
+            from Tools.conversation_summarizer import ConversationSummarizer
+
+            summarizer = ConversationSummarizer()
+            result = summarizer.summarize_messages(messages_dict)
+
+            # Store summary using ConversationSummarizer.store_summary()
+            if result:
+                summary_text = result.summary if hasattr(result, 'summary') else str(result)
+
+                # Store via ConversationSummarizer's store_summary method
+                summarizer.store_summary(
+                    summary=summary_text,
+                    session_id=self.session.id,
+                    additional_metadata={
+                        "messages_count": len(messages_to_summarize),
+                        "agent": self.session.agent,
+                    }
+                )
+
+                logger.info(
+                    f"Summarized {len(messages_to_summarize)} messages before trim "
+                    f"(session={self.session.id})"
+                )
+
+                return summary_text
+
+        except Exception as e:
+            logger.warning(f"Failed to summarize messages before trim: {e}")
+            return None
+
+        return None
+
     def _trim_history(self) -> None:
         """
         Trim history to MAX_HISTORY messages using sliding window.
@@ -152,8 +216,14 @@ class SessionManager:
         Removes oldest messages (in pairs when possible) while maintaining
         cumulative token counts. This prevents memory growth in long sessions
         while preserving session statistics.
+
+        Before trimming, triggers summarization of messages that will be
+        removed to preserve context in Memory V2.
         """
         if len(self.session.history) > MAX_HISTORY:
+            # Summarize messages before trimming
+            self._summarize_before_trim()
+
             # Calculate how many messages to remove
             messages_to_remove = len(self.session.history) - MAX_HISTORY
 
@@ -176,7 +246,7 @@ class SessionManager:
         """
         return len(content) // 4 + 1  # +1 to avoid zero for short strings
 
-    def get_messages_for_api(self, max_tokens: int = MAX_CONTEXT_TOKENS) -> List[Dict[str, str]]:
+    def get_messages_for_api(self, max_tokens: int = MAX_CONTEXT_TOKENS, inject_memory: bool = True) -> List[Dict[str, str]]:
         """
         Convert conversation history to API format with token-based windowing.
 
@@ -188,15 +258,26 @@ class SessionManager:
         - Always includes at least the last user message
         - Preserves user/assistant pairs together when possible
         - Estimates tokens using ~4 chars per token
+        - Injects relevant memories from previous conversations when available
 
         Args:
             max_tokens: Maximum tokens to include (default: MAX_CONTEXT_TOKENS)
+            inject_memory: Whether to inject relevant context from memory (default: True)
 
         Returns:
             List of message dicts with 'role' and 'content' keys
         """
         if not self.session.history:
             return []
+
+        # Reserve tokens for memory injection if enabled
+        # Ensure memory budget doesn't exceed max_tokens
+        if inject_memory:
+            memory_budget = min(500, max_tokens)
+            message_budget = max(max_tokens - memory_budget, 0)
+        else:
+            memory_budget = 0
+            message_budget = max_tokens
 
         # Work backwards from most recent messages
         messages_to_include = []
@@ -213,7 +294,7 @@ class SessionManager:
                 continue
 
             # Check if adding this message would exceed limit
-            if total_tokens + msg_tokens > max_tokens:
+            if total_tokens + msg_tokens > message_budget:
                 # If we're breaking a pair, try to include the assistant response
                 # to maintain coherence (user question + assistant answer)
                 if messages_to_include and messages_to_include[0]["role"] == "assistant":
@@ -224,6 +305,53 @@ class SessionManager:
 
             messages_to_include.insert(0, {"role": msg.role, "content": msg.content})
             total_tokens += msg_tokens
+
+        # Inject relevant context from memory if enabled and we have messages
+        if inject_memory and messages_to_include:
+            try:
+                from Tools.context_optimizer import ContextOptimizer
+
+                # Initialize optimizer (lightweight - caches internally)
+                optimizer = ContextOptimizer(
+                    max_results=3,
+                    relevance_threshold=0.3,
+                    max_tokens=memory_budget
+                )
+
+                # Get the last user message as the query
+                last_user_msg = None
+                for msg in reversed(messages_to_include):
+                    if msg["role"] == "user":
+                        last_user_msg = msg["content"]
+                        break
+
+                if last_user_msg:
+                    # Retrieve relevant context
+                    context = optimizer.retrieve_relevant_context(
+                        current_prompt=last_user_msg,
+                        session_id=self.session.id,
+                        max_tokens=memory_budget
+                    )
+
+                    # Inject formatted context if we got results
+                    if context.get("formatted_context"):
+                        formatted_context = context["formatted_context"]
+
+                        # Inject as a system message at the beginning
+                        system_message = {
+                            "role": "system",
+                            "content": formatted_context
+                        }
+                        messages_to_include.insert(0, system_message)
+
+                        logger.info(
+                            f"Injected {context.get('count', 0)} memories "
+                            f"({context.get('token_count', 0)} tokens) into conversation context"
+                        )
+
+            except Exception as e:
+                # Memory injection is optional - don't fail if it errors
+                logger.warning(f"Failed to inject memory context: {e}")
 
         return messages_to_include
 
