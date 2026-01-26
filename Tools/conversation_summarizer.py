@@ -452,3 +452,106 @@ Key points (one per line):"""
             "savings": savings,
             "compression_ratio": self.compression_ratio
         }
+
+    def group_messages_by_token_limit(
+        self,
+        messages: List[Dict[str, str]],
+        token_limit: int
+    ) -> List[List[Dict[str, str]]]:
+        """
+        Group messages into chunks that fit within a token limit.
+
+        This method intelligently groups messages for batch summarization,
+        ensuring each group stays within the specified token limit while
+        maintaining conversation coherence by keeping user/assistant pairs
+        together when possible.
+
+        The grouping strategy:
+        - Works forward through messages sequentially
+        - Accumulates messages into groups until token limit reached
+        - Tries to preserve user/assistant pairs together
+        - Always includes at least one message per group (even if over limit)
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            token_limit: Maximum tokens per group
+
+        Returns:
+            List of message groups, where each group is a list of messages
+            that fit within the token limit
+
+        Example:
+            >>> summarizer = ConversationSummarizer()
+            >>> messages = [
+            ...     {"role": "user", "content": "Hello"},
+            ...     {"role": "assistant", "content": "Hi there!"},
+            ...     # ... more messages
+            ... ]
+            >>> groups = summarizer.group_messages_by_token_limit(messages, 1000)
+            >>> for i, group in enumerate(groups):
+            ...     print(f"Group {i}: {len(group)} messages")
+        """
+        if not messages:
+            return []
+
+        if token_limit <= 0:
+            logger.warning(f"Invalid token_limit {token_limit}, using default 1000")
+            token_limit = 1000
+
+        groups = []
+        current_group = []
+        current_tokens = 0
+
+        for i, message in enumerate(messages):
+            # Count tokens for this message
+            msg_tokens = self.count_tokens(message.get("role", ""))
+            msg_tokens += self.count_tokens(message.get("content", ""))
+            msg_tokens += 4  # Message structure overhead
+
+            # Check if adding this message would exceed the limit
+            if current_group and (current_tokens + msg_tokens > token_limit):
+                # We would exceed the limit - start a new group
+                # But first, check if we should include the next message
+                # to complete a user/assistant pair
+                should_complete_pair = False
+
+                if current_group:
+                    last_msg = current_group[-1]
+                    current_msg = message
+
+                    # If last message was user and current is assistant (or vice versa),
+                    # we might want to keep them together
+                    if (last_msg.get("role") == "user" and current_msg.get("role") == "assistant"):
+                        # User question followed by assistant answer
+                        # Check if pair fits in remaining budget with some tolerance
+                        if current_tokens + msg_tokens <= token_limit * 1.1:  # 10% tolerance
+                            should_complete_pair = True
+
+                if should_complete_pair:
+                    # Include this message to complete the pair
+                    current_group.append(message)
+                    current_tokens += msg_tokens
+                    # Save the completed group
+                    groups.append(current_group)
+                    current_group = []
+                    current_tokens = 0
+                else:
+                    # Save current group and start new one with this message
+                    groups.append(current_group)
+                    current_group = [message]
+                    current_tokens = msg_tokens
+            else:
+                # Message fits in current group
+                current_group.append(message)
+                current_tokens += msg_tokens
+
+        # Add final group if it has messages
+        if current_group:
+            groups.append(current_group)
+
+        logger.debug(
+            f"Grouped {len(messages)} messages into {len(groups)} groups "
+            f"(limit: {token_limit} tokens/group)"
+        )
+
+        return groups
