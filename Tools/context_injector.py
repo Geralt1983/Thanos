@@ -12,9 +12,11 @@ Part of enhanced session continuity (task-047):
 """
 
 import sys
+import json
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -33,7 +35,26 @@ def build_temporal_context() -> str:
         Formatted temporal context string
     """
     try:
-        now = datetime.now()
+        # Load timezone from critical_facts.json if available
+        timezone_name = "America/New_York"  # Default
+        try:
+            facts_file = Path(__file__).parent.parent / "State" / "critical_facts.json"
+            if facts_file.exists():
+                with open(facts_file, 'r', encoding='utf-8') as f:
+                    facts = json.load(f)
+                    timezone_name = facts.get("personal", {}).get("timezone", timezone_name)
+        except Exception:
+            pass  # Use default timezone if loading fails
+
+        # Get current time with timezone awareness
+        try:
+            tz = ZoneInfo(timezone_name)
+            now = datetime.now(tz)
+        except Exception:
+            # Fallback to naive datetime if timezone fails
+            now = datetime.now()
+            timezone_name = "local"
+
         hour = now.hour
 
         # Time of day context
@@ -46,7 +67,12 @@ def build_temporal_context() -> str:
         else:
             period = "Night (9pm-5am): The universe rests. Should you?"
 
-        return f"## Temporal Context\nCurrent time: {now.strftime('%Y-%m-%d %H:%M')}\n{period}"
+        # Build temporal context string
+        parts = [f"## Temporal Context"]
+        parts.append(f"Current time: {now.strftime('%Y-%m-%d %H:%M')} ({timezone_name})")
+        parts.append(period)
+
+        return "\n".join(parts)
     except Exception as e:
         return f"<!-- Temporal context failed: {e} -->"
 
