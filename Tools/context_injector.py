@@ -372,6 +372,75 @@ def relationship_context() -> str:
         return "## Relationship Context\n<!-- Memory service error -->"
 
 
+def recent_commitments_context() -> str:
+    """Load recent commitments from CommitmentData.json.
+
+    Loads commitment data and returns formatted context for active
+    commitments and promises. Filters for relevant commitments to
+    surface in session context.
+
+    Returns:
+        Formatted commitments context string
+    """
+    try:
+        # Load CommitmentData.json
+        commitments_file = Path(__file__).parent.parent / "State" / "CommitmentData.json"
+
+        if not commitments_file.exists():
+            return "## Recent Commitments\n<!-- CommitmentData.json not found -->"
+
+        with open(commitments_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        commitments = data.get('commitments', [])
+
+        if not commitments:
+            return "## Recent Commitments\n<!-- No commitments found -->"
+
+        # For now, just load and format basic commitment info
+        # Filtering logic will be added in subtask-4-2
+        lines = ["## Recent Commitments", ""]
+
+        # Show up to 5 commitments
+        for commitment in commitments[:5]:
+            title = commitment.get('title', 'Untitled')
+            status = commitment.get('status', 'unknown')
+            commitment_type = commitment.get('type', 'unknown')
+            domain = commitment.get('domain', 'general')
+            priority = commitment.get('priority', 3)
+
+            # Status indicator
+            if status == 'pending':
+                status_icon = "⏳"
+            elif status == 'in_progress':
+                status_icon = "🔄"
+            elif status == 'completed':
+                status_icon = "✅"
+            elif status == 'missed':
+                status_icon = "❌"
+            else:
+                status_icon = "•"
+
+            # Format: icon title [type] (domain) - priority marker if high
+            line = f"{status_icon} {title} [{commitment_type}]"
+            if domain != 'general':
+                line += f" ({domain})"
+            if priority <= 2:  # High priority
+                line += " ⚡"
+
+            lines.append(line)
+
+        return "\n".join(lines)
+
+    except FileNotFoundError:
+        return "## Recent Commitments\n<!-- CommitmentData.json not found -->"
+    except json.JSONDecodeError:
+        return "## Recent Commitments\n<!-- Invalid JSON in CommitmentData.json -->"
+    except Exception as e:
+        # Silent error handling - don't break session startup
+        return "## Recent Commitments\n<!-- Commitment loading error -->"
+
+
 def build_relationship_context() -> str:
     """Build relationship context from recent memory.
 
