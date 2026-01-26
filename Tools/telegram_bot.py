@@ -222,6 +222,67 @@ class TelegramBrainDumpBot:
         self.chat_mode[user_id] = not current
         return not current
 
+    def _create_button(self, text: str, callback_data: str):
+        """
+        Create a single inline keyboard button.
+
+        Args:
+            text: Button text to display
+            callback_data: Callback data to send when button is pressed
+
+        Returns:
+            InlineKeyboardButton instance
+        """
+        from telegram import InlineKeyboardButton
+        return InlineKeyboardButton(text=text, callback_data=callback_data)
+
+    def _create_button_row(self, buttons: List[tuple]) -> List:
+        """
+        Create a row of inline keyboard buttons.
+
+        Args:
+            buttons: List of (text, callback_data) tuples
+
+        Returns:
+            List of InlineKeyboardButton instances (single row)
+        """
+        return [self._create_button(text, callback_data) for text, callback_data in buttons]
+
+    def _build_inline_keyboard(self, button_rows: List[List[tuple]]):
+        """
+        Build an inline keyboard markup from button definitions.
+
+        Args:
+            button_rows: List of button rows, where each row is a list of (text, callback_data) tuples
+                        Example: [
+                            [("Button 1", "callback_1"), ("Button 2", "callback_2")],
+                            [("Button 3", "callback_3")]
+                        ]
+
+        Returns:
+            InlineKeyboardMarkup instance
+        """
+        from telegram import InlineKeyboardMarkup
+        keyboard = [self._create_button_row(row) for row in button_rows]
+        return InlineKeyboardMarkup(keyboard)
+
+    def _create_button_grid(self, buttons: List[tuple], columns: int = 2):
+        """
+        Create a grid layout of inline keyboard buttons.
+
+        Args:
+            buttons: List of (text, callback_data) tuples
+            columns: Number of buttons per row (default: 2)
+
+        Returns:
+            InlineKeyboardMarkup instance
+        """
+        button_rows = []
+        for i in range(0, len(buttons), columns):
+            row = buttons[i:i + columns]
+            button_rows.append(row)
+        return self._build_inline_keyboard(button_rows)
+
     async def get_ai_response(self, message: str, user_id: int) -> str:
         """
         Get AI response via ThanosOrchestrator.
