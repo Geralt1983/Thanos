@@ -239,6 +239,169 @@ class MemoryExporter:
                 "error": str(e)
             }
 
+    def _generate_markdown(
+        self,
+        memories: List[Dict[str, Any]],
+        relationships_data: Dict[str, Any],
+        metadata: Dict[str, Any]
+    ) -> str:
+        """
+        Generate Markdown formatted export of memories and relationships.
+
+        Creates a human-readable Markdown document with:
+        - Export metadata in header
+        - Memories grouped by client/project
+        - Heat indicators (🔥 hot, • normal, ❄️ cold)
+        - Relationships section
+
+        Args:
+            memories: List of memory dictionaries
+            relationships_data: Dictionary with relationships list
+            metadata: Export metadata dictionary
+
+        Returns:
+            Markdown formatted string
+        """
+        lines = []
+
+        # Header
+        lines.append("# Thanos Memory Export\n")
+        lines.append(f"**Exported:** {metadata['timestamp']}\n")
+        lines.append(f"**User:** {metadata['user_id']}\n")
+        lines.append(f"**Total Memories:** {metadata['memory_count']}\n")
+        lines.append(f"**Total Relationships:** {metadata['relationship_count']}\n")
+        lines.append("\n---\n")
+
+        # Group memories by client/project
+        grouped_memories = {}
+        ungrouped_memories = []
+
+        for mem in memories:
+            payload = mem.get("payload", {})
+            client = payload.get("client", "").strip()
+            project = payload.get("project", "").strip()
+
+            if client or project:
+                key = (client or "No Client", project or "General")
+                if key not in grouped_memories:
+                    grouped_memories[key] = []
+                grouped_memories[key].append(mem)
+            else:
+                ungrouped_memories.append(mem)
+
+        # Render grouped memories
+        if grouped_memories:
+            lines.append("## Memories by Client/Project\n\n")
+
+            for (client, project), mems in sorted(grouped_memories.items()):
+                lines.append(f"### Client: {client}\n")
+                if project != "General":
+                    lines.append(f"#### Project: {project}\n")
+                lines.append("\n")
+
+                for mem in mems:
+                    lines.append(self._format_memory_markdown(mem))
+                    lines.append("\n")
+
+        # Render ungrouped memories
+        if ungrouped_memories:
+            lines.append("## General Memories\n\n")
+            for mem in ungrouped_memories:
+                lines.append(self._format_memory_markdown(mem))
+                lines.append("\n")
+
+        # Relationships section
+        if relationships_data.get("relationships"):
+            lines.append("\n---\n\n")
+            lines.append("## Relationships\n\n")
+            lines.append(f"**Total Relationships:** {relationships_data['count']}\n\n")
+
+            # Group by relationship type
+            by_type = {}
+            for rel in relationships_data["relationships"]:
+                rel_type = rel.get("rel_type", "unknown")
+                if rel_type not in by_type:
+                    by_type[rel_type] = []
+                by_type[rel_type].append(rel)
+
+            for rel_type, rels in sorted(by_type.items()):
+                lines.append(f"### {rel_type.replace('_', ' ').title()}\n\n")
+                lines.append("| Source | Target | Strength | Created |\n")
+                lines.append("|--------|--------|----------|----------|\n")
+
+                for rel in rels:
+                    source = rel.get("source_id", "")[:12]
+                    target = rel.get("target_id", "")[:12]
+                    strength = rel.get("strength", 0)
+                    created = rel.get("created_at", "")[:10]
+                    lines.append(f"| `{source}...` | `{target}...` | {strength} | {created} |\n")
+
+                lines.append("\n")
+
+        return "".join(lines)
+
+    def _format_memory_markdown(self, mem: Dict[str, Any]) -> str:
+        """
+        Format a single memory as Markdown.
+
+        Includes heat indicator, content preview, and metadata.
+
+        Args:
+            mem: Memory dictionary with id, payload, optional vector
+
+        Returns:
+            Markdown formatted string for this memory
+        """
+        payload = mem.get("payload", {})
+        content = payload.get("data", "")
+        memory_type = payload.get("type", "")
+        domain = payload.get("domain", "")
+        source = payload.get("source", "")
+        heat = payload.get("heat", 0)
+        importance = payload.get("importance", "")
+        created_at = payload.get("created_at", "")
+
+        # Heat indicator
+        if heat > 0.7:
+            heat_icon = "🔥"
+            heat_label = "Hot"
+        elif heat > 0.3:
+            heat_icon = "•"
+            heat_label = "Normal"
+        else:
+            heat_icon = "❄️"
+            heat_label = "Cold"
+
+        # Content preview (first line or first 100 chars)
+        content_preview = content.split("\n")[0] if content else "[No content]"
+        if len(content_preview) > 100:
+            content_preview = content_preview[:97] + "..."
+
+        lines = []
+        lines.append(f"##### {heat_icon} {content_preview}\n\n")
+        lines.append(f"**ID:** `{mem.get('id', '')}`  \n")
+
+        if memory_type:
+            lines.append(f"**Type:** {memory_type}  \n")
+        if domain:
+            lines.append(f"**Domain:** {domain}  \n")
+        if source:
+            lines.append(f"**Source:** {source}  \n")
+
+        lines.append(f"**Heat:** {heat:.2f} ({heat_label})  \n")
+
+        if importance:
+            lines.append(f"**Importance:** {importance}  \n")
+        if created_at:
+            lines.append(f"**Created:** {created_at[:10]}  \n")
+
+        # Full content if different from preview
+        if len(content) > len(content_preview):
+            lines.append("\n**Content:**\n\n")
+            lines.append(f"```\n{content}\n```\n")
+
+        return "".join(lines)
+
     def export_all(
         self,
         output_path: str,
@@ -363,8 +526,19 @@ class MemoryExporter:
                 json.dump(export_metadata, f, indent=2)
             result["files"].append(str(metadata_file))
 
+        elif format == "markdown":
+            # Write markdown file
+            markdown_file = output_dir / "memories.md"
+            markdown_content = self._generate_markdown(memories, relationships_data, export_metadata)
+
+            with open(markdown_file, "w") as f:
+                f.write(markdown_content)
+
+            result["files"].append(str(markdown_file))
+            logger.info(f"Wrote markdown export to {markdown_file}")
+
         else:
-            raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'")
+            raise ValueError(f"Unsupported format: {format}. Use 'json', 'csv', or 'markdown'")
 
         logger.info(f"Export complete: {len(memories)} memories, {relationships_data['count']} relationships")
         return result
@@ -377,7 +551,7 @@ def main():
     )
     parser.add_argument(
         "--format",
-        choices=["json", "csv"],
+        choices=["json", "csv", "markdown"],
         default="json",
         help="Output format (default: json)"
     )
