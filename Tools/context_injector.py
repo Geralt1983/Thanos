@@ -14,8 +14,8 @@ Part of enhanced session continuity (task-047):
 import sys
 import json
 from pathlib import Path
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Optional, Dict
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,6 +26,52 @@ try:
     load_dotenv(Path(__file__).parent.parent / '.env')
 except ImportError:
     pass
+
+
+def get_yesterday_session() -> Optional[Dict]:
+    """Load yesterday's session JSON file.
+
+    Searches the History/Sessions directory for JSON session files from
+    yesterday and returns the most recent one (by filename timestamp).
+
+    Returns:
+        Dictionary containing session data if found, None otherwise.
+        Session data includes: id, started_at, agent, history, memory_snapshot.
+
+    Example:
+        >>> session = get_yesterday_session()
+        >>> if session:
+        ...     markers = session.get("memory_snapshot", {}).get("emotional_markers", {})
+        ...     print(f"Yesterday's frustration level: {markers.get('frustration', 0)}")
+    """
+    try:
+        # Calculate yesterday's date
+        yesterday = datetime.now() - timedelta(days=1)
+        yesterday_str = yesterday.strftime("%Y-%m-%d")
+
+        # Find History/Sessions directory relative to this file
+        sessions_dir = Path(__file__).parent.parent / "History" / "Sessions"
+
+        if not sessions_dir.exists():
+            return None
+
+        # Find all JSON files matching yesterday's date pattern
+        pattern = f"{yesterday_str}-*.json"
+        matching_files = list(sessions_dir.glob(pattern))
+
+        if not matching_files:
+            return None
+
+        # Sort by filename (which includes timestamp) and get the most recent
+        most_recent = sorted(matching_files)[-1]
+
+        # Load and return the JSON data
+        with open(most_recent, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    except Exception:
+        # Silently return None on any error (file read, JSON parse, etc.)
+        return None
 
 
 def build_temporal_context() -> str:
