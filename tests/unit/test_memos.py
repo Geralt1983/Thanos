@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 """
-Unit tests for MemOS (Memory Operating System).
+Unit tests for Memory Router and MemOS Deprecation.
+
+Updated for Memory System Consolidation (Task 049).
+This file now primarily tests the memory_router unified API, with a small subset
+of MemOS tests to verify deprecation warnings work correctly.
 
 Tests cover:
-- MemOS initialization with/without backends
-- MemoryResult dataclass
-- remember() operation
-- recall() operation
-- relate() operation
-- reflect() operation
-- get_entity_context()
-- health_check()
-- Graceful fallback when backends unavailable
+- Memory Router API (add_memory, search_memory, get_context)
+- ADHD helpers (whats_hot, whats_cold, pin/unpin)
+- Backend selection and fallback behavior
+- MemOS deprecation warnings
+- Convenience aliases (remember, recall)
 """
 
 from pathlib import Path
 import sys
 from unittest.mock import AsyncMock, Mock, patch
+import warnings
 
 import pytest
 
@@ -26,12 +27,319 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 # ========================================================================
-# Test MemoryResult Dataclass
+# Test Memory Router API
+# ========================================================================
+
+
+class TestMemoryRouter:
+    """Test unified memory router API."""
+
+    def test_import_memory_router(self):
+        """Test memory_router can be imported."""
+        from Tools.memory_router import add_memory, search_memory, get_context
+
+        assert add_memory is not None
+        assert search_memory is not None
+        assert get_context is not None
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_add_memory_routes_to_v2(self, mock_get_v2):
+        """Test add_memory routes to Memory V2 by default."""
+        from Tools.memory_router import add_memory
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.add = Mock(return_value={"id": "mem_123", "success": True})
+        mock_get_v2.return_value = mock_service
+
+        result = add_memory("Test memory", metadata={"source": "test"})
+
+        assert result["id"] == "mem_123"
+        assert result["success"] is True
+        mock_service.add.assert_called_once_with("Test memory", {"source": "test"})
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_search_memory_routes_to_v2(self, mock_get_v2):
+        """Test search_memory routes to Memory V2 by default."""
+        from Tools.memory_router import search_memory
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.search = Mock(return_value=[
+            {"id": "mem_123", "content": "Test result", "effective_score": 0.95}
+        ])
+        mock_get_v2.return_value = mock_service
+
+        results = search_memory("test query", limit=10)
+
+        assert len(results) == 1
+        assert results[0]["id"] == "mem_123"
+        mock_service.search.assert_called_once_with("test query", 10, None)
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_search_with_filters(self, mock_get_v2):
+        """Test search_memory with client/domain filters."""
+        from Tools.memory_router import search_memory
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.search = Mock(return_value=[
+            {"id": "mem_123", "content": "Orlando project", "client": "Orlando"}
+        ])
+        mock_get_v2.return_value = mock_service
+
+        results = search_memory(
+            "project update",
+            limit=10,
+            filters={"client": "Orlando", "domain": "work"}
+        )
+
+        assert len(results) == 1
+        assert results[0]["client"] == "Orlando"
+        mock_service.search.assert_called_once()
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_get_context(self, mock_get_v2):
+        """Test get_context for Claude prompts."""
+        from Tools.memory_router import get_context
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.get_context_for_query = Mock(
+            return_value="Context: Test memory (heat: 0.85)"
+        )
+        mock_get_v2.return_value = mock_service
+
+        context = get_context("test query", limit=5)
+
+        assert "Context: Test memory" in context
+        assert "heat: 0.85" in context
+        mock_service.get_context_for_query.assert_called_once_with("test query", 5)
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_get_stats(self, mock_get_v2):
+        """Test get_stats returns Memory V2 statistics."""
+        from Tools.memory_router import get_stats
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.stats = Mock(return_value={
+            "total": 1000,
+            "hot_count": 50,
+            "cold_count": 100
+        })
+        mock_get_v2.return_value = mock_service
+
+        stats = get_stats()
+
+        assert stats["total"] == 1000
+        assert stats["hot_count"] == 50
+        mock_service.stats.assert_called_once()
+
+
+# ========================================================================
+# Test ADHD Helpers
+# ========================================================================
+
+
+class TestADHDHelpers:
+    """Test ADHD helper functions."""
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_whats_hot(self, mock_get_v2):
+        """Test whats_hot ADHD helper function."""
+        from Tools.memory_router import whats_hot
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.whats_hot = Mock(return_value=[
+            {"id": "mem_456", "content": "Hot memory", "heat": 0.95}
+        ])
+        mock_get_v2.return_value = mock_service
+
+        results = whats_hot(limit=10)
+
+        assert len(results) == 1
+        assert results[0]["heat"] == 0.95
+        mock_service.whats_hot.assert_called_once_with(10)
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_whats_cold(self, mock_get_v2):
+        """Test whats_cold ADHD helper function."""
+        from Tools.memory_router import whats_cold
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.whats_cold = Mock(return_value=[
+            {"id": "mem_789", "content": "Cold memory", "heat": 0.1}
+        ])
+        mock_get_v2.return_value = mock_service
+
+        results = whats_cold(threshold=0.2, limit=10)
+
+        assert len(results) == 1
+        assert results[0]["heat"] == 0.1
+        mock_service.whats_cold.assert_called_once_with(0.2, 10)
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_pin_memory(self, mock_get_v2):
+        """Test pin_memory prevents decay."""
+        from Tools.memory_router import pin_memory
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.pin = Mock(return_value=True)
+        mock_get_v2.return_value = mock_service
+
+        result = pin_memory("mem_123")
+
+        assert result is True
+        mock_service.pin.assert_called_once_with("mem_123")
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_unpin_memory(self, mock_get_v2):
+        """Test unpin_memory allows normal decay."""
+        from Tools.memory_router import unpin_memory
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.unpin = Mock(return_value=True)
+        mock_get_v2.return_value = mock_service
+
+        result = unpin_memory("mem_123")
+
+        assert result is True
+        mock_service.unpin.assert_called_once_with("mem_123")
+
+
+# ========================================================================
+# Test Convenience Aliases
+# ========================================================================
+
+
+class TestConvenienceAliases:
+    """Test memory router convenience aliases."""
+
+    def test_remember_is_alias_for_add_memory(self):
+        """Test remember() is an alias for add_memory()."""
+        from Tools.memory_router import remember, add_memory
+
+        assert remember is add_memory
+
+    def test_recall_is_alias_for_search_memory(self):
+        """Test recall() is an alias for search_memory()."""
+        from Tools.memory_router import recall, search_memory
+
+        assert recall is search_memory
+
+    def test_get_memory_is_alias_for_get_context(self):
+        """Test get_memory() is an alias for get_context()."""
+        from Tools.memory_router import get_memory, get_context
+
+        assert get_memory is get_context
+
+
+# ========================================================================
+# Test Backend Selection
+# ========================================================================
+
+
+class TestBackendSelection:
+    """Test memory router backend selection logic."""
+
+    @patch("Tools.memory_router._get_memos_service")
+    def test_can_explicitly_use_memos_backend(self, mock_get_memos):
+        """Test explicit MemOS backend selection (for migration)."""
+        from Tools.memory_router import add_memory, MemoryBackend
+
+        # Mock MemOS service
+        mock_service = Mock()
+        mock_service.add = Mock(return_value={"id": "memos_123", "success": True})
+        mock_get_memos.return_value = mock_service
+
+        result = add_memory(
+            "Test memory",
+            metadata={"source": "test"},
+            backend=MemoryBackend.MEMOS
+        )
+
+        assert result["id"] == "memos_123"
+        mock_service.add.assert_called_once()
+
+    @patch("Tools.memory_router._get_v2_service")
+    def test_default_backend_is_v2(self, mock_get_v2):
+        """Test Memory V2 is the default backend."""
+        from Tools.memory_router import add_memory
+
+        # Mock Memory V2 service
+        mock_service = Mock()
+        mock_service.add = Mock(return_value={"id": "v2_123", "success": True})
+        mock_get_v2.return_value = mock_service
+
+        # Call without explicit backend - should use V2
+        result = add_memory("Test memory")
+
+        assert result["id"] == "v2_123"
+        mock_service.add.assert_called_once()
+
+
+# ========================================================================
+# Test MemOS Deprecation Warnings (Legacy Support)
+# ========================================================================
+
+
+class TestMemOSDeprecation:
+    """Test MemOS deprecation warnings."""
+
+    def test_memos_import_shows_deprecation_warning(self):
+        """Test that using get_memos() triggers deprecation warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            from Tools.memos import get_memos
+
+            # Call get_memos to trigger the deprecation warning
+            _ = get_memos()
+
+            # Check that at least one warning was raised
+            assert len(w) > 0
+
+            # Check that at least one is a DeprecationWarning
+            deprecation_warnings = [
+                warning for warning in w
+                if issubclass(warning.category, DeprecationWarning)
+            ]
+            assert len(deprecation_warnings) > 0
+
+            # Check message content
+            assert any(
+                "deprecated" in str(warning.message).lower()
+                for warning in deprecation_warnings
+            )
+
+    @patch("Tools.memos.NEO4J_AVAILABLE", False)
+    @patch("Tools.memos.CHROMA_AVAILABLE", False)
+    @patch("Tools.memos.OPENAI_AVAILABLE", False)
+    def test_memos_initialization_still_works(self):
+        """Test MemOS can still be initialized (for migration purposes)."""
+        from Tools.memos import MemOS
+
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            memos = MemOS()
+
+            assert memos is not None
+            assert memos.graph_available is False
+            assert memos.vector_available is False
+
+
+# ========================================================================
+# Test MemoryResult Dataclass (Minimal Legacy Support)
 # ========================================================================
 
 
 class TestMemoryResult:
-    """Test MemoryResult dataclass."""
+    """Test MemoryResult dataclass (legacy MemOS component)."""
 
     def test_import_memory_result(self):
         """Test MemoryResult can be imported."""
@@ -67,568 +375,6 @@ class TestMemoryResult:
         assert result.graph_results == []
         assert result.vector_results == []
 
-    def test_memory_result_combined_deduplication(self):
-        """Test that combined results are deduplicated by id."""
-        from Tools.memos import MemoryResult
-
-        graph = [{"id": "item1", "source": "graph"}]
-        vector = [{"id": "item1", "source": "vector"}, {"id": "item2", "source": "vector"}]
-
-        result = MemoryResult.ok(graph_results=graph, vector_results=vector)
-
-        # Should deduplicate by id, keeping first occurrence
-        assert len(result.combined) == 2
-        ids = [item.get("id") for item in result.combined]
-        assert "item1" in ids
-        assert "item2" in ids
-
-
-# ========================================================================
-# Test MemOS Initialization
-# ========================================================================
-
-
-class TestMemOSInitialization:
-    """Test MemOS class initialization."""
-
-    @patch("Tools.memos.NEO4J_AVAILABLE", False)
-    @patch("Tools.memos.CHROMA_AVAILABLE", False)
-    @patch("Tools.memos.OPENAI_AVAILABLE", False)
-    def test_init_no_backends(self):
-        """Test initialization when no backends are available."""
-        from Tools.memos import MemOS
-
-        memos = MemOS()
-
-        assert memos.graph_available is False
-        assert memos.vector_available is False
-
-    @patch("Tools.memos.NEO4J_AVAILABLE", False)
-    @patch("Tools.memos.CHROMA_AVAILABLE", True)
-    @patch("Tools.memos.OPENAI_AVAILABLE", False)
-    def test_init_chroma_only(self):
-        """Test initialization with only ChromaDB available."""
-        from Tools.memos import MemOS
-
-        # Mock ChromaDB
-        mock_chroma_client = Mock()
-        with patch("Tools.memos.ChromaClient", return_value=mock_chroma_client):
-            with patch("Tools.memos.Settings"):
-                with patch("pathlib.Path.mkdir"):
-                    memos = MemOS()
-
-                    assert memos.graph_available is False
-                    assert memos.vector_available is True
-
-    def test_status_property(self):
-        """Test status property returns backend states."""
-        from Tools.memos import MemOS
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    status = memos.status
-
-                    assert "neo4j" in status
-                    assert "chromadb" in status
-                    assert "embeddings" in status
-
-
-# ========================================================================
-# Test MemOS Remember Operation
-# ========================================================================
-
-
-class TestMemOSRemember:
-    """Test MemOS.remember() method."""
-
-    @pytest.fixture
-    def memos_with_mocks(self):
-        """Create MemOS with mocked backends."""
-        from Tools.memos import MemOS
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", True):
-            with patch("Tools.memos.CHROMA_AVAILABLE", True):
-                with patch("Tools.memos.OPENAI_AVAILABLE", True):
-                    # Mock Neo4j
-                    mock_neo4j = AsyncMock()
-                    mock_neo4j.call_tool = AsyncMock(
-                        return_value=Mock(success=True, data={"id": "neo4j_123"})
-                    )
-
-                    # Mock ChromaDB
-                    mock_chroma = Mock()
-                    mock_collection = Mock()
-                    mock_chroma.get_or_create_collection = Mock(return_value=mock_collection)
-
-                    # Mock OpenAI
-                    mock_openai = Mock()
-                    mock_embedding_response = Mock()
-                    mock_embedding_response.data = [Mock(embedding=[0.1] * 1536)]
-                    mock_openai.embeddings.create = Mock(return_value=mock_embedding_response)
-
-                    with patch("Tools.memos.Neo4jAdapter", return_value=mock_neo4j):
-                        with patch("Tools.memos.ChromaClient", return_value=mock_chroma):
-                            with patch("Tools.memos.Settings"):
-                                with patch("pathlib.Path.mkdir"):
-                                    with patch(
-                                        "Tools.memos.openai.OpenAI", return_value=mock_openai
-                                    ):
-                                        memos = MemOS()
-                                        memos._neo4j = mock_neo4j
-                                        memos._chroma = mock_chroma
-                                        memos._openai_client = mock_openai
-                                        yield memos, mock_neo4j, mock_chroma, mock_openai
-
-    @pytest.mark.asyncio
-    async def test_remember_commitment(self, memos_with_mocks):
-        """Test remembering a commitment."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.remember(
-            content="Complete project proposal",
-            memory_type="commitment",
-            domain="work",
-            metadata={"to_whom": "client", "priority": 1},
-        )
-
-        assert result.success is True
-        # Neo4j should have been called with create_commitment
-        mock_neo4j.call_tool.assert_called()
-        call_args = mock_neo4j.call_tool.call_args_list[0]
-        assert call_args[0][0] == "create_commitment"
-
-    @pytest.mark.asyncio
-    async def test_remember_decision(self, memos_with_mocks):
-        """Test remembering a decision."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.remember(
-            content="Chose React over Vue",
-            memory_type="decision",
-            domain="work",
-            metadata={"rationale": "Team expertise", "confidence": 0.9},
-        )
-
-        assert result.success is True
-        mock_neo4j.call_tool.assert_called()
-        call_args = mock_neo4j.call_tool.call_args_list[0]
-        assert call_args[0][0] == "record_decision"
-
-    @pytest.mark.asyncio
-    async def test_remember_pattern(self, memos_with_mocks):
-        """Test remembering a pattern."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.remember(
-            content="Energy crashes after lunch meetings",
-            memory_type="pattern",
-            domain="health",
-            metadata={"pattern_type": "behavior", "frequency": "weekly"},
-        )
-
-        assert result.success is True
-        mock_neo4j.call_tool.assert_called()
-        call_args = mock_neo4j.call_tool.call_args_list[0]
-        assert call_args[0][0] == "record_pattern"
-
-    @pytest.mark.asyncio
-    async def test_remember_with_entities(self, memos_with_mocks):
-        """Test remembering with entity linking."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.remember(
-            content="Meeting scheduled with client",
-            memory_type="observation",
-            entities=["Memphis", "John Smith"],
-        )
-
-        assert result.success is True
-        # Should have called create_entity for each entity
-        entity_calls = [
-            c for c in mock_neo4j.call_tool.call_args_list if c[0][0] == "create_entity"
-        ]
-        # Note: entities are only linked if graph result has an ID
-
-    @pytest.mark.asyncio
-    async def test_remember_no_backends(self):
-        """Test remember fails gracefully when no backends available."""
-        from Tools.memos import MemOS
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    result = await memos.remember("Test content")
-
-                    assert result.success is False
-                    assert "No storage backends" in result.error
-
-
-# ========================================================================
-# Test MemOS Recall Operation
-# ========================================================================
-
-
-class TestMemOSRecall:
-    """Test MemOS.recall() method."""
-
-    @pytest.fixture
-    def memos_with_mocks(self):
-        """Create MemOS with mocked backends for recall."""
-        from Tools.memos import MemOS
-
-        mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(
-            return_value=Mock(
-                success=True, data={"commitments": [{"id": "c1", "content": "Test commitment"}]}
-            )
-        )
-
-        mock_chroma = Mock()
-        mock_collection = Mock()
-        mock_collection.query = Mock(
-            return_value={
-                "ids": [["v1"]],
-                "documents": [["Test document"]],
-                "metadatas": [[{"domain": "work"}]],
-                "distances": [[0.1]],
-            }
-        )
-        mock_chroma.get_collection = Mock(return_value=mock_collection)
-
-        mock_openai = Mock()
-        mock_embedding_response = Mock()
-        mock_embedding_response.data = [Mock(embedding=[0.1] * 1536)]
-        mock_openai.embeddings.create = Mock(return_value=mock_embedding_response)
-
-        memos = Mock(spec=MemOS)
-        memos._neo4j = mock_neo4j
-        memos._chroma = mock_chroma
-        memos._openai_client = mock_openai
-
-        # Create actual MemOS instance for testing
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    actual_memos = MemOS()
-                    actual_memos._neo4j = mock_neo4j
-                    actual_memos._chroma = mock_chroma
-                    actual_memos._openai_client = mock_openai
-                    yield actual_memos, mock_neo4j, mock_chroma, mock_openai
-
-    @pytest.mark.asyncio
-    async def test_recall_basic(self, memos_with_mocks):
-        """Test basic recall operation."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.recall("What commitments do I have?")
-
-        assert result.success is True
-        # Should have queried Neo4j for commitments
-        neo4j_calls = [c for c in mock_neo4j.call_tool.call_args_list if "commitments" in str(c)]
-
-    @pytest.mark.asyncio
-    async def test_recall_with_domain_filter(self, memos_with_mocks):
-        """Test recall with domain filter."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.recall(
-            "What decisions did I make?", domain="work", memory_types=["decision"]
-        )
-
-        assert result.success is True
-
-    @pytest.mark.asyncio
-    async def test_recall_graph_only(self, memos_with_mocks):
-        """Test recall using only graph."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.recall(
-            "Show my commitments", use_vector=False, memory_types=["commitment"]
-        )
-
-        assert result.success is True
-        # Vector search should not have been called
-        mock_openai.embeddings.create.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_recall_vector_only(self, memos_with_mocks):
-        """Test recall using only vector search."""
-        memos, mock_neo4j, mock_chroma, mock_openai = memos_with_mocks
-
-        result = await memos.recall("Find similar patterns", use_graph=False)
-
-        assert result.success is True
-
-
-# ========================================================================
-# Test MemOS Relate Operation
-# ========================================================================
-
-
-class TestMemOSRelate:
-    """Test MemOS.relate() method."""
-
-    @pytest.mark.asyncio
-    async def test_relate_requires_neo4j(self):
-        """Test relate requires Neo4j."""
-        from Tools.memos import MemOS
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    result = await memos.relate("node1", "LEADS_TO", "node2")
-
-                    # MemOS now has SQLite fallback for relationships
-                    assert result.success is True
-                    assert any(r.get("source") == "sqlite" for r in result.graph_results)
-
-    @pytest.mark.asyncio
-    async def test_relate_success(self):
-        """Test successful relationship creation."""
-        from Tools.memos import MemOS
-
-        mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(
-            return_value=Mock(success=True, data={"relationship_id": "rel_123"})
-        )
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    memos._neo4j = mock_neo4j
-
-                    result = await memos.relate(
-                        from_id="decision_1",
-                        relationship="LEADS_TO",
-                        to_id="outcome_1",
-                        properties={"strength": 0.8},
-                    )
-
-                    assert result.success is True
-                    mock_neo4j.call_tool.assert_called_once()
-                    call_args = mock_neo4j.call_tool.call_args
-                    assert call_args[0][0] == "link_nodes"
-
-
-# ========================================================================
-# Test MemOS Reflect Operation
-# ========================================================================
-
-
-class TestMemOSReflect:
-    """Test MemOS.reflect() method."""
-
-    @pytest.mark.asyncio
-    async def test_reflect_finds_patterns(self):
-        """Test reflect finds related patterns."""
-        from Tools.memos import MemOS
-
-        mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(
-            return_value=Mock(
-                success=True,
-                data={
-                    "patterns": [
-                        {"description": "Energy drops after meetings", "frequency": "weekly"}
-                    ]
-                },
-            )
-        )
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    memos._neo4j = mock_neo4j
-
-                    result = await memos.reflect(
-                        topic="energy management", timeframe_days=30, domain="health"
-                    )
-
-                    assert result.success is True
-                    assert "topic" in result.metadata
-
-
-# ========================================================================
-# Test MemOS Entity Context
-# ========================================================================
-
-
-class TestMemOSEntityContext:
-    """Test MemOS.get_entity_context() method."""
-
-    @pytest.mark.asyncio
-    async def test_entity_context_requires_neo4j(self):
-        """Test entity context requires Neo4j."""
-        from Tools.memos import MemOS
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    result = await memos.get_entity_context("Memphis")
-
-                    assert result.success is False
-                    assert "Neo4j required" in result.error
-
-    @pytest.mark.asyncio
-    async def test_entity_context_success(self):
-        """Test successful entity context retrieval."""
-        from Tools.memos import MemOS
-
-        mock_neo4j = AsyncMock()
-        mock_neo4j.call_tool = AsyncMock(
-            return_value=Mock(
-                success=True,
-                data={
-                    "entity": "Memphis",
-                    "commitments": ["Complete integration"],
-                    "last_contact": "2024-01-15",
-                },
-            )
-        )
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    memos._neo4j = mock_neo4j
-
-                    result = await memos.get_entity_context("Memphis")
-
-                    assert result.success is True
-
-
-# ========================================================================
-# Test MemOS Health Check
-# ========================================================================
-
-
-class TestMemOSHealthCheck:
-    """Test MemOS.health_check() method."""
-
-    @pytest.mark.asyncio
-    async def test_health_check_no_backends(self):
-        """Test health check when no backends configured."""
-        from Tools.memos import MemOS
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    health = await memos.health_check()
-
-                    assert "backends" in health
-                    assert health["backends"]["neo4j"]["status"] == "not_configured"
-                    assert health["backends"]["chromadb"]["status"] == "not_configured"
-
-    @pytest.mark.asyncio
-    async def test_health_check_with_neo4j(self):
-        """Test health check with Neo4j configured."""
-        from Tools.memos import MemOS
-
-        mock_neo4j = AsyncMock()
-        mock_neo4j.health_check = AsyncMock(return_value=Mock(success=True, error=None))
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    memos._neo4j = mock_neo4j
-
-                    health = await memos.health_check()
-
-                    assert health["backends"]["neo4j"]["status"] == "ok"
-
-    @pytest.mark.asyncio
-    async def test_health_check_with_chroma(self):
-        """Test health check with ChromaDB configured."""
-        from Tools.memos import MemOS
-
-        mock_chroma = Mock()
-        mock_chroma.list_collections = Mock(return_value=[Mock(), Mock()])
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    memos._chroma = mock_chroma
-
-                    health = await memos.health_check()
-
-                    assert health["backends"]["chromadb"]["status"] == "ok"
-                    assert health["backends"]["chromadb"]["collections"] == 2
-
-
-# ========================================================================
-# Test Singleton Functions
-# ========================================================================
-
-
-class TestMemOSSingleton:
-    """Test MemOS singleton functions."""
-
-    def test_get_memos_creates_instance(self):
-        """Test get_memos() creates singleton instance."""
-        from Tools import memos as memos_module
-
-        # Reset singleton
-        memos_module._memos_instance = None
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    instance1 = memos_module.get_memos()
-                    instance2 = memos_module.get_memos()
-
-                    assert instance1 is instance2
-
-    @pytest.mark.asyncio
-    async def test_init_memos_returns_instance(self):
-        """Test init_memos() returns initialized instance."""
-        from Tools import memos as memos_module
-
-        # Reset singleton
-        memos_module._memos_instance = None
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    with patch("builtins.print"):  # Suppress output
-                        instance = await memos_module.init_memos()
-                        assert instance is not None
-
-
-# ========================================================================
-# Test MemOS Close
-# ========================================================================
-
-
-class TestMemOSClose:
-    """Test MemOS.close() method."""
-
-    @pytest.mark.asyncio
-    async def test_close_with_neo4j(self):
-        """Test close properly closes Neo4j connection."""
-        from Tools.memos import MemOS
-
-        mock_neo4j = AsyncMock()
-        mock_neo4j.close = AsyncMock()
-
-        with patch("Tools.memos.NEO4J_AVAILABLE", False):
-            with patch("Tools.memos.CHROMA_AVAILABLE", False):
-                with patch("Tools.memos.OPENAI_AVAILABLE", False):
-                    memos = MemOS()
-                    memos._neo4j = mock_neo4j
-
-                    await memos.close()
-
-                    mock_neo4j.close.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -27,8 +27,6 @@ from Tools.command_handlers.base import (
     Colors,
     CommandAction,
     CommandResult,
-    MEMOS_AVAILABLE,
-    MEMORY_V2_AVAILABLE,
 )
 from Tools.command_handlers.agent_handler import AgentHandler
 from Tools.command_handlers.session_handler import SessionHandler
@@ -43,8 +41,6 @@ __all__ = [
     "Colors",
     "CommandAction",
     "CommandResult",
-    "MEMOS_AVAILABLE",
-    "MEMORY_V2_AVAILABLE",
     "AgentHandler",
     "SessionHandler",
     "StateHandler",
