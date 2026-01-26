@@ -113,7 +113,7 @@ Include time context naturally:
 
 ### Session End Memory
 - Key decisions or frustrations should be captured for next session
-- Store emotional markers via `ms.add(content, metadata={"domain": "personal", "emotional": True})`
+- Store emotional markers via `add_memory(content, metadata={"domain": "personal", "emotional": True})`
 
 
 
@@ -283,7 +283,7 @@ These facts are PRE-VERIFIED. Use them without additional search.
 Before responding to ANY question requiring personal context:
 
 1. **CHECK** `State/critical_facts.json` first
-2. **IF NOT FOUND** search Memory V2: `ms.search("[topic]", limit=3)`
+2. **IF NOT FOUND** search memory: `search_memory("[topic]", limit=3)`
 3. **IF STILL NOT FOUND** ask the user — do NOT guess
 
 ### Example: Weather
@@ -305,30 +305,52 @@ Claude: "Checking King, NC..." // GOOD - used verified location
 
 ## Memory Protocol - HARD GATE
 
-**STOP. Before ANY memory operation, you MUST do ONE of these:**
+**STOP. Before ANY memory operation, you MUST read the skill file:**
 
-1. **Read the skill file:** `.claude/skills/memory-v2/skill.md`
-2. **OR search for the skill:** `ms.search("MEMORY V2 SKILL READ BEFORE")`
+→ `.claude/skills/memory-v2/skill.md`
 
-The skill is pinned in memory at max heat. It will surface in search results.
+The skill is pinned in memory at max heat and contains:
+- Complete API reference for memory_router
+- Migration guide from legacy systems (MemOS is deprecated)
+- Best practices and common patterns
+- Troubleshooting and error handling
 
 **This is not optional. This prevents:**
 - Wasted compute reinventing patterns
-- Bugs from wrong table/column names
+- Bugs from wrong API usage
 - Errors you've already solved before
 - User frustration watching you rediscover things
 
-**Memory operations include:**
-- Searching memory (ms.search, whats_hot, whats_cold)
-- Adding to memory (ms.add, ms.add_document)
-- Heat operations (pin, boost, decay)
-- Any pgvector/mem0 queries
+**All memory operations use the unified `memory_router` API:**
+
+```python
+from Tools.memory_router import add_memory, search_memory, get_context
+from Tools.memory_router import whats_hot, whats_cold, pin_memory
+
+# Add memory
+add_memory("Meeting notes", metadata={"client": "Orlando"})
+
+# Search memory
+results = search_memory("Orlando project status", limit=5)
+
+# Get context for prompts
+context = get_context("What's blocking Memphis?")
+
+# ADHD helpers
+hot = whats_hot(limit=10)    # What's top of mind?
+cold = whats_cold(limit=10)  # What am I neglecting?
+
+# Convenience aliases
+from Tools.memory_router import remember, recall
+remember("Important fact")
+recall("search query")
+```
 
 Do NOT:
+- Use MemOS directly (deprecated - use memory_router)
 - Write raw database queries from scratch
-- Guess at table/column names
-- Reinvent patterns that are documented
-- Skip the skill because "I remember from earlier"
+- Guess at API methods or parameters
+- Skip reading the skill file
 
 ### Tiered Memory Architecture
 
@@ -340,7 +362,7 @@ Do NOT:
 
 ### Auto-Search Triggers
 
-**ALWAYS search Memory V2 when user:**
+**ALWAYS search memory when user:**
 - References stored content ("the trip", "that document", "what I said about...")
 - Mentions client names (Orlando, Raleigh, Memphis, Kentucky, VersaCare)
 - Asks about past context, decisions, or conversations
@@ -349,9 +371,8 @@ Do NOT:
 
 **Quick search:**
 ```python
-from Tools.memory_v2.service import MemoryService
-ms = MemoryService()
-results = ms.search("[query]", limit=5)
+from Tools.memory_router import search_memory
+results = search_memory("[query]", limit=5)
 # Use results[0]['memory'] if effective_score > 0.3
 ```
 
@@ -369,8 +390,8 @@ results = ms.search("[query]", limit=5)
 
 ### Storing Content
 
-- **Facts/notes:** `ms.add(content, metadata)` - uses mem0 fact extraction
-- **Documents/PDFs:** `ms.add_document(content, metadata)` - direct storage with embeddings
+- **Facts/notes:** `add_memory(content, metadata)` - uses mem0 fact extraction
+- **Documents:** Use `add_memory()` with appropriate metadata - Memory V2 handles embeddings automatically
 
 ---
 

@@ -42,7 +42,7 @@ inbox/
 # Memory data (local only)
 .memory/
 .memory-v2/
-memory/
+/memory/
 
 # Claude Flow runtime
 .claude-flow@alpha/
@@ -73,8 +73,10 @@ mcp-servers/workos-mcp/.npmrc
 
 # Auto-claude framework files (at root level)
 .auto-claude-status
-.auto-claude-security.json
 .claude_settings.json
+
+# Auto-claude security config (contains machine-specific paths)
+.auto-claude-security.json
 
 # Python cache
 __pycache__/
@@ -106,3 +108,8 @@ tests/clean_*.py
 
 # MCP server local data
 mcp-servers/aiswarm/
+
+# Auto Claude generated files
+.worktrees/
+.security-key
+logs/security/

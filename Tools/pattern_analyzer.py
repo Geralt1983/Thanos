@@ -37,7 +37,7 @@ from typing import Any, Optional
 from pathlib import Path
 
 try:
-    from .memos import MemOS, get_memos, MemoryResult
+    from .memory_router import search_memory, add_memory
     from .relationships import RelationshipStore, RelationType, get_relationship_store
     DEPS_AVAILABLE = True
 except ImportError:
@@ -74,26 +74,22 @@ class PatternAnalyzer:
     and insights that should be proactively surfaced to the user.
 
     Attributes:
-        memos: MemOS instance for memory access
         relationships: RelationshipStore for relationship traversal
     """
 
     def __init__(
         self,
-        memos: Optional[MemOS] = None,
         relationships: Optional[RelationshipStore] = None,
     ):
         """
         Initialize PatternAnalyzer.
 
         Args:
-            memos: MemOS instance (uses singleton if not provided)
             relationships: RelationshipStore instance (uses singleton if not provided)
         """
         if not DEPS_AVAILABLE:
             raise ImportError("Required dependencies not available")
 
-        self.memos = memos or get_memos()
         self.relationships = relationships or get_relationship_store()
 
     async def analyze_all(
@@ -144,11 +140,15 @@ class PatternAnalyzer:
         # Store high-confidence insights for proactive surfacing
         for insight in insights:
             if insight.get("confidence", 0) >= 0.6:
-                self.memos.store_insight(
-                    insight_type=insight.get("type", "pattern"),
+                add_memory(
                     content=insight.get("content", ""),
-                    source_memories=insight.get("source_memories", []),
-                    confidence=insight.get("confidence", 0.5),
+                    metadata={
+                        "memory_type": "insight",
+                        "insight_type": insight.get("type", "pattern"),
+                        "source_memories": insight.get("source_memories", []),
+                        "confidence": insight.get("confidence", 0.5),
+                        "source": "pattern_analyzer",
+                    }
                 )
 
         return result
@@ -166,18 +166,17 @@ class PatternAnalyzer:
 
         for domain in domains:
             try:
-                result = await self.memos.recall(
+                results = search_memory(
                     query=f"recent {domain} events and observations",
-                    domain=domain,
                     limit=20,
+                    filters={"domain": domain}
                 )
-                if result.success:
-                    memory_ids = []
-                    for item in result.combined:
-                        mem_id = item.get("id") or item.get("_id")
-                        if mem_id:
-                            memory_ids.append(str(mem_id))
-                    domain_memories[domain] = memory_ids
+                memory_ids = []
+                for item in results:
+                    mem_id = item.get("id")
+                    if mem_id:
+                        memory_ids.append(str(mem_id))
+                domain_memories[domain] = memory_ids
             except Exception:
                 pass
 
@@ -241,27 +240,27 @@ class PatternAnalyzer:
 
         # Query for behavior patterns via semantic search
         try:
-            result = await self.memos.recall(
+            results = search_memory(
                 query="recurring patterns behaviors habits",
-                memory_types=["pattern", "observation"],
                 limit=20,
+                filters={"memory_type": ["pattern", "observation"]}
             )
 
-            if result.success:
-                # Group similar patterns by content similarity
-                seen_topics = set()
-                for item in result.combined:
-                    content = item.get("content", item.get("description", ""))
-                    # Simple deduplication by first 50 chars
-                    topic = content[:50].lower()
-                    if topic not in seen_topics:
-                        seen_topics.add(topic)
-                        patterns.append({
-                            "type": "semantic_pattern",
-                            "content": content,
-                            "domain": item.get("domain", item.get("metadata", {}).get("domain")),
-                            "source": item.get("_source", "unknown"),
-                        })
+            # Group similar patterns by content similarity
+            seen_topics = set()
+            for item in results:
+                content = item.get("memory", item.get("content", ""))
+                # Simple deduplication by first 50 chars
+                topic = content[:50].lower()
+                if topic not in seen_topics:
+                    seen_topics.add(topic)
+                    metadata = item.get("metadata", {})
+                    patterns.append({
+                        "type": "semantic_pattern",
+                        "content": content,
+                        "domain": metadata.get("domain"),
+                        "source": metadata.get("source", "unknown"),
+                    })
 
         except Exception:
             pass
@@ -277,18 +276,18 @@ class PatternAnalyzer:
 
         # Check for negative patterns
         try:
-            result = await self.memos.recall(
+            results = search_memory(
                 query="missed deadline failed broken commitment struggle difficulty",
-                memory_types=["commitment", "observation"],
                 limit=10,
+                filters={"memory_type": ["commitment", "observation"]}
             )
 
-            if result.success and len(result.combined) >= 3:
+            if len(results) >= 3:
                 warnings.append({
                     "type": "negative_pattern",
                     "content": "Multiple missed commitments or difficulties detected",
-                    "count": len(result.combined),
-                    "severity": "medium" if len(result.combined) < 5 else "high",
+                    "count": len(results),
+                    "severity": "medium" if len(results) < 5 else "high",
                     "recommendation": "Consider reviewing commitments and priorities",
                 })
 
@@ -327,17 +326,17 @@ class PatternAnalyzer:
 
         # Look for positive patterns that could be expanded
         try:
-            result = await self.memos.recall(
+            results = search_memory(
                 query="success improvement progress achievement completed",
-                memory_types=["observation", "decision"],
                 limit=10,
+                filters={"memory_type": ["observation", "decision"]}
             )
 
-            if result.success and len(result.combined) >= 2:
+            if len(results) >= 2:
                 opportunities.append({
                     "type": "positive_momentum",
                     "content": "Recent successes detected - good momentum to build on",
-                    "count": len(result.combined),
+                    "count": len(results),
                     "recommendation": "Consider expanding successful approaches to other areas",
                 })
 
@@ -432,8 +431,17 @@ class PatternAnalyzer:
             status["pending_insights"] = stats.get("pending_insights", 0)
 
             # Get any pending high-priority insights
-            pending = self.memos.get_pending_insights(min_confidence=0.7, limit=3)
-            status["urgent_insights"] = pending
+            pending = search_memory(
+                query="insights patterns warnings",
+                limit=10,
+                filters={"memory_type": "insight"}
+            )
+            # Post-filter for confidence >= 0.7
+            high_confidence = [
+                p for p in pending
+                if p.get("metadata", {}).get("confidence", 0) >= 0.7
+            ][:3]
+            status["urgent_insights"] = high_confidence
 
             if status["pending_insights"] > 5:
                 status["healthy"] = False

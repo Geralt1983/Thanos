@@ -189,7 +189,7 @@
     "cargo_aliases": [],
     "shell_scripts": []
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/010-add-token-count-and-cost-estimate-to-cli-prompt",
-  "created_at": "2026-01-11T22:55:43.544486",
-  "project_hash": "1f6d18ad961a41b570aa768cd83d6850"
+  "project_dir": "${PROJECT_ROOT}",
+  "created_at": "2026-01-26T07:31:08.975291",
+  "project_hash": "622512a706ea9a89bf0619f8f6fdc50c"
 }
