@@ -21,6 +21,7 @@ import {
   getEnergyContext,
   rankTasksByEnergy,
   applyDailyGoalAdjustment,
+  filterTasksByEnergy,
 } from "../../services/energy-prioritization.js";
 import { validateAndSanitize } from "../../shared/validation-schemas.js";
 import {
@@ -172,10 +173,11 @@ export async function handleGetTodayMetrics(
  * Get tasks with optional filtering by status and client
  * Uses cache-first pattern for optimal performance, falling back to Neon on cache miss or staleness
  * Supports both clientId (integer) and clientName (string) for flexible querying
+ * Optionally applies energy-aware filtering based on current Oura readiness score
  *
- * @param args - { status?: string, clientId?: number, clientName?: string, limit?: number } - Optional filters and result limit (default: 50)
+ * @param args - { status?: string, clientId?: number, clientName?: string, limit?: number, applyEnergyFilter?: boolean } - Optional filters and result limit (default: 50)
  * @param db - Database instance for querying tasks when cache is unavailable
- * @returns Promise resolving to MCP ContentResponse with array of tasks including client names
+ * @returns Promise resolving to MCP ContentResponse with array of tasks including client names and optional energy filter metadata
  */
 export async function handleGetTasks(
   args: Record<string, any>,
@@ -190,7 +192,7 @@ export async function handleGetTasks(
     };
   }
 
-  let { status, clientId, limit = 50 } = validation.data;
+  let { status, clientId, limit = 50, applyEnergyFilter = false } = validation.data;
   const { clientName } = validation.data as { clientName?: string };
 
   // If clientName provided but not clientId, lookup the client ID
@@ -279,6 +281,31 @@ export async function handleGetTasks(
         clientName: t.clientId ? clientMap.get(t.clientId) || null : null,
       }));
 
+      // Apply energy filtering if requested
+      if (applyEnergyFilter) {
+        const energyContext = await getEnergyContext(db);
+        const filterResult = filterTasksByEnergy(tasksWithClients, energyContext.readinessScore);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                tasks: filterResult.allowedTasks,
+                filterMetadata: {
+                  applied: true,
+                  readinessScore: energyContext.readinessScore,
+                  energyLevel: energyContext.energyLevel,
+                  filteredCount: filterResult.filteredOutTasks.length,
+                  totalCount: tasksWithClients.length,
+                  explanation: filterResult.filterReason,
+                },
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
       // Silent cache hit
       return {
         content: [
@@ -326,6 +353,31 @@ export async function handleGetTasks(
   const tasks = conditions.length > 0
     ? await query.where(and(...conditions))
     : await query;
+
+  // Apply energy filtering if requested
+  if (applyEnergyFilter) {
+    const energyContext = await getEnergyContext(db);
+    const filterResult = filterTasksByEnergy(tasks, energyContext.readinessScore);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            tasks: filterResult.allowedTasks,
+            filterMetadata: {
+              applied: true,
+              readinessScore: energyContext.readinessScore,
+              energyLevel: energyContext.energyLevel,
+              filteredCount: filterResult.filteredOutTasks.length,
+              totalCount: tasks.length,
+              explanation: filterResult.filterReason,
+            },
+          }, null, 2),
+        },
+      ],
+    };
+  }
 
   return {
     content: [
