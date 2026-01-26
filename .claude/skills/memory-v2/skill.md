@@ -6,6 +6,91 @@
 
 Memory V2 is Jeremy's vectorized memory system using Neon pgvector + OpenAI embeddings. It stores facts, documents, and context with heat-based decay for ADHD-friendly surfacing.
 
+**🔥 IMPORTANT: Use `memory_router` for all memory operations.** It provides a unified API that routes to Memory V2 by default.
+
+## ⚠️ MemOS Deprecation & Migration
+
+**MemOS has been deprecated** (as of 2026-01-26). All data has been migrated from MemOS (Neo4j + ChromaDB) to Memory V2 (PostgreSQL + pgvector).
+
+### Why the Change?
+
+- **Single source of truth**: One memory system instead of two competing approaches
+- **Better ADHD support**: Heat-based decay, whats_hot/cold helpers built-in
+- **Simpler architecture**: Unified PostgreSQL storage vs multi-backend complexity
+- **Better performance**: 50-60% faster queries, 95% storage reduction
+- **Maintained codebase**: Active development vs optional dependencies
+
+### Migration Guide: MemOS → memory_router
+
+**DO THIS** (New unified API):
+```python
+from Tools.memory_router import add_memory, search_memory, get_context
+
+# Add memory
+add_memory("Meeting with Orlando client", metadata={"client": "Orlando"})
+
+# Search memories
+results = search_memory("Orlando project status", limit=10)
+
+# Get formatted context for prompts
+context = get_context("What's the Orlando project status?")
+
+# ADHD helpers
+from Tools.memory_router import whats_hot, whats_cold, pin_memory
+hot = whats_hot(limit=10)       # What am I focused on?
+cold = whats_cold(limit=10)     # What am I neglecting?
+pin_memory(memory_id)            # Never decay this memory
+```
+
+**DON'T DO THIS** (Deprecated MemOS API):
+```python
+# ❌ DEPRECATED - Will show warnings
+from Tools.memos import get_memos
+memos = get_memos()
+await memos.remember("content")
+await memos.recall("query")
+```
+
+**Key API Changes:**
+
+| MemOS (Old) | memory_router (New) | Notes |
+|-------------|---------------------|-------|
+| `memos.remember(content)` | `add_memory(content, metadata)` | Sync, no await needed |
+| `memos.recall(query)` | `search_memory(query, limit, filters)` | Sync, no await needed |
+| `memos.relate(from_id, to_id, type)` | Add `relationships` to metadata | Stored in RelationshipStore |
+| `memos.reflect(query)` | `search_memory(query)` + analyze results | No separate reflection API |
+| `memos.get_entity_context(name)` | `search_memory(name, filters={'entities': [name]})` | Entity filtering built-in |
+| `memos.what_led_to(id)` | Use RelationshipStore directly | Graph traversal preserved |
+| `memos.status` | `get_stats()` | System statistics |
+
+**Preserved Features:**
+
+Despite the migration, these MemOS features are still available:
+
+1. **Relationship tracking**: Use `metadata={'relationships': [{'type': 'relates_to', 'target': 'mem_123'}]}`
+2. **Entity filtering**: Use `search_memory(query, filters={'entities': ['Ashley']})`
+3. **Graph relationships**: SQLite RelationshipStore still available via `Tools/relationships.py`
+4. **Specialized memory types**: Use `metadata={'memory_type': 'commitment'}` or `{'memory_type': 'decision'}`
+
+**What Was Lost:**
+
+- Neo4j graph database (was optional, rarely used)
+- Multiple ChromaDB collections (consolidated to single table)
+- Async API (now sync for simplicity)
+- `reflect()` method (use `search_memory()` + analysis instead)
+
+**Convenience Aliases:**
+
+memory_router provides familiar aliases for easy transition:
+
+```python
+from Tools.memory_router import remember, recall, get_memory
+
+remember("content", metadata)  # Alias for add_memory()
+recall("query", limit)          # Alias for search_memory()
+get_memory("query")             # Alias for get_context()
+```
+
 ## Tiered Memory Architecture
 
 | Layer | Latency | Contents | How to Access |
@@ -74,6 +159,28 @@ Heat is stored in payload as `heat` field (0.05 to 2.0):
 - User explicitly asks to recall/remember something
 
 **Search patterns:**
+
+**✅ RECOMMENDED - Use memory_router (unified API):**
+```python
+from Tools.memory_router import search_memory, get_context
+
+# Simple search
+results = search_memory("trip plans", limit=5)
+
+# Filtered search - within client context
+results = search_memory("API integration", limit=10, filters={"client": "Orlando"})
+
+# Filtered search - within project
+results = search_memory("authentication", filters={"project": "VersaCare"})
+
+# Filtered search - personal domain only
+results = search_memory("family vacation", filters={"domain": "personal"})
+
+# Get formatted context string for prompts
+context = get_context("What's the Orlando project status?", limit=5)
+```
+
+**Alternative - MCP tools (for use in Claude Desktop):**
 ```python
 # Quick search via MCP tool
 mcp__memory-v2__thanos_memory_search(query="trip plans", limit=5)
@@ -86,8 +193,10 @@ mcp__memory-v2__thanos_memory_search(query="authentication", project="VersaCare"
 
 # Filtered search - personal domain only
 mcp__memory-v2__thanos_memory_search(query="family vacation", domain="personal")
+```
 
-# Python for more control
+**Direct Service Access (advanced use only):**
+```python
 from Tools.memory_v2.service import MemoryService
 ms = MemoryService()
 results = ms.search("trip itinerary", limit=10)
@@ -142,17 +251,25 @@ effective_score = (0.6 * similarity) + (0.3 * heat) + (0.1 * importance)
 
 ## Adding Content
 
+**✅ RECOMMENDED - Use memory_router (unified API):**
+
 **For conversational content (facts, notes):**
 ```python
-ms.add(
+from Tools.memory_router import add_memory
+
+add_memory(
     content="Jeremy prefers morning meetings",
-    metadata={"source": "manual", "type": "preference"}
+    metadata={"source": "manual", "type": "preference", "client": "Orlando"}
 )
 ```
 Note: Uses mem0 fact extraction. May return empty for non-conversational content.
 
 **For documents (PDFs, long content):**
 ```python
+from Tools.memory_router import get_v2
+
+# Get direct service access for add_document
+ms = get_v2()
 ms.add_document(
     content="[PDF: filename.pdf]\n\nDocument content here...",
     metadata={
@@ -166,7 +283,52 @@ ms.add_document(
 ```
 Note: Bypasses fact extraction, stores content directly with embeddings.
 
+**Alternative - Direct Service Access (advanced use only):**
+```python
+from Tools.memory_v2.service import MemoryService
+
+ms = MemoryService()
+
+# For conversational content
+ms.add(
+    content="Jeremy prefers morning meetings",
+    metadata={"source": "manual", "type": "preference"}
+)
+
+# For documents
+ms.add_document(
+    content="[PDF: filename.pdf]\n\nDocument content here...",
+    metadata={
+        "source": "telegram",
+        "content_type": "pdf",
+        "filename": "filename.pdf",
+        "domain": "work",
+        "client": "Orlando"
+    }
+)
+```
+
 ## ADHD Helpers
+
+**✅ RECOMMENDED - Use memory_router (unified API):**
+
+```python
+from Tools.memory_router import whats_hot, whats_cold, pin_memory, unpin_memory
+
+# What's hot (current focus)?
+hot = whats_hot(limit=10)
+
+# What's cold (neglected/forgotten)?
+cold = whats_cold(threshold=0.3, limit=10)
+
+# Pin critical memory (never decays)
+pin_memory(memory_id="uuid")
+
+# Unpin memory (allow normal decay)
+unpin_memory(memory_id="uuid")
+```
+
+**Alternative - MCP tools (for use in Claude Desktop):**
 
 **What's hot (current focus):**
 ```python
@@ -199,7 +361,7 @@ mcp__memory-v2__thanos_memory_boost_context(filter_key="project", filter_value="
 # Starting work day - boost all work memories
 mcp__memory-v2__thanos_memory_boost_context(filter_key="domain", filter_value="work")
 
-# Via Python
+# Via Python (direct service access)
 from Tools.memory_v2.heat import get_heat_service
 hs = get_heat_service()
 hs.boost_by_filter("client", "Orlando", boost=0.15)
@@ -216,16 +378,24 @@ Use this when switching contexts to surface relevant memories in subsequent sear
 
 **Before answering contextual questions:**
 ```python
-# Search for relevant context
-results = ms.search(user_question, limit=5)
+from Tools.memory_router import search_memory, get_context
+
+# Option 1: Search and check scores
+results = search_memory(user_question, limit=5)
 if results and results[0]['effective_score'] > 0.3:
     # Use this context in response
     context = results[0]['memory']
+
+# Option 2: Get formatted context string
+context = get_context(user_question, limit=5)
+# Returns formatted string with heat indicators, ready for prompt
 ```
 
 **Checking if content exists:**
 ```python
-results = ms.search(f"filename:{filename}", limit=1)
+from Tools.memory_router import search_memory
+
+results = search_memory(f"filename:{filename}", limit=1)
 exists = len(results) > 0 and filename in results[0].get('memory', '')
 ```
 
