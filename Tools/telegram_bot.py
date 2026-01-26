@@ -199,6 +199,10 @@ class TelegramBrainDumpBot:
         self.chat_mode: Dict[int, bool] = {}  # user_id -> chat_mode_enabled
         self._orchestrator = None  # Lazy-loaded ThanosOrchestrator
 
+        # Callback routing system - maps callback prefixes to handler functions
+        # Example: {"cal_": handle_calendar, "task_": handle_task_action}
+        self.callback_handlers: Dict[str, callable] = {}
+
     @property
     def orchestrator(self):
         """Lazy-load ThanosOrchestrator for chat mode."""
@@ -282,6 +286,86 @@ class TelegramBrainDumpBot:
             row = buttons[i:i + columns]
             button_rows.append(row)
         return self._build_inline_keyboard(button_rows)
+
+    def _register_callback_handler(self, prefix: str, handler: callable):
+        """
+        Register a callback handler for a specific callback data prefix.
+
+        This enables unified routing of button callbacks through a single entry point.
+        Handlers are matched by prefix, allowing namespaced callback organization.
+
+        Args:
+            prefix: Callback data prefix (e.g., "task_", "menu_", "energy_")
+            handler: Async function that handles the callback
+                    Signature: async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
+
+        Example:
+            self._register_callback_handler("task_", handle_task_actions)
+            # Now all callbacks starting with "task_" will route to handle_task_actions
+        """
+        self.callback_handlers[prefix] = handler
+        logger.info(f"Registered callback handler for prefix: {prefix}")
+
+    async def _route_callback(self, update, context):
+        """
+        Unified callback routing system for inline keyboard button actions.
+
+        Routes callback queries to the appropriate handler based on callback_data prefix.
+        This provides a central dispatch point for all button interactions.
+
+        Args:
+            update: Telegram Update object containing callback_query
+            context: Telegram context object
+
+        Flow:
+            1. Extract callback_data from query
+            2. Find matching handler by prefix
+            3. Dispatch to handler or show error
+            4. Log routing for debugging
+
+        The callback_data format should be: "prefix_action_params"
+        Example: "task_complete_123" routes to handler registered for "task_"
+        """
+        query = update.callback_query
+
+        try:
+            # Always acknowledge the callback to remove loading state
+            await query.answer()
+
+            callback_data = query.data
+            logger.info(f"Routing callback: {callback_data}")
+
+            # Find matching handler by prefix
+            handler = None
+            matched_prefix = None
+
+            for prefix, registered_handler in self.callback_handlers.items():
+                if callback_data.startswith(prefix):
+                    handler = registered_handler
+                    matched_prefix = prefix
+                    break
+
+            if handler:
+                logger.info(f"Dispatching to handler for prefix: {matched_prefix}")
+                await handler(update, context)
+            else:
+                # No handler found for this callback
+                logger.warning(f"No handler registered for callback: {callback_data}")
+                await query.edit_message_text(
+                    "⚠️ This action is not yet implemented.\n"
+                    "Please try again later or use text commands."
+                )
+
+        except Exception as e:
+            logger.error(f"Error routing callback {query.data}: {e}", exc_info=True)
+            try:
+                await query.edit_message_text(
+                    f"❌ Error processing action: {str(e)[:100]}\n"
+                    "Please try again or contact support."
+                )
+            except Exception:
+                # If we can't edit the message, at least log it
+                logger.error("Failed to send error message to user")
 
     async def get_ai_response(self, message: str, user_id: int) -> str:
         """
@@ -2377,6 +2461,9 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             else:
                 await update.message.reply_text(response, parse_mode='Markdown')
 
+        # Register callback handlers with unified routing system
+        self._register_callback_handler("cal_", handle_calendar_callback)
+
         # Register handlers
         self.application.add_handler(CommandHandler("start", start_command))
         self.application.add_handler(CommandHandler("status", status_command))
@@ -2390,7 +2477,9 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
         self.application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         self.application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         self.application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-        self.application.add_handler(CallbackQueryHandler(handle_calendar_callback, pattern="^cal_"))
+
+        # Unified callback router - handles all button callbacks
+        self.application.add_handler(CallbackQueryHandler(self._route_callback))
 
         return True
 
