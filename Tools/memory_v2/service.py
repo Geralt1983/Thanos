@@ -24,6 +24,9 @@ from psycopg2.extras import RealDictCursor
 
 from .config import NEON_DATABASE_URL, MEM0_CONFIG, DEFAULT_USER_ID, OPENAI_API_KEY, validate_config
 
+# Initialize logger early so it's available for import error handling
+logger = logging.getLogger(__name__)
+
 # Try to import relationship store, but allow graceful degradation
 try:
     from ..relationships import RelationshipStore, RelationType, get_relationship_store
@@ -48,8 +51,6 @@ def _cached_query_embedding(query: str) -> Tuple[float, ...]:
     return tuple(response.data[0].embedding)
 
 from .heat import HeatService, get_heat_service
-
-logger = logging.getLogger(__name__)
 
 # Try to import mem0, but allow graceful degradation
 try:

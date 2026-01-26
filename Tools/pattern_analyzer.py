@@ -243,7 +243,7 @@ class PatternAnalyzer:
             results = search_memory(
                 query="recurring patterns behaviors habits",
                 limit=20,
-                filters={"memory_type": "pattern,observation"}
+                filters={"memory_type": ["pattern", "observation"]}
             )
 
             # Group similar patterns by content similarity
@@ -279,7 +279,7 @@ class PatternAnalyzer:
             results = search_memory(
                 query="missed deadline failed broken commitment struggle difficulty",
                 limit=10,
-                filters={"memory_type": "commitment,observation"}
+                filters={"memory_type": ["commitment", "observation"]}
             )
 
             if len(results) >= 3:
@@ -329,7 +329,7 @@ class PatternAnalyzer:
             results = search_memory(
                 query="success improvement progress achievement completed",
                 limit=10,
-                filters={"memory_type": "observation,decision"}
+                filters={"memory_type": ["observation", "decision"]}
             )
 
             if len(results) >= 2:
@@ -433,10 +433,15 @@ class PatternAnalyzer:
             # Get any pending high-priority insights
             pending = search_memory(
                 query="insights patterns warnings",
-                limit=3,
-                filters={"memory_type": "insight", "confidence": ">=0.7"}
+                limit=10,
+                filters={"memory_type": "insight"}
             )
-            status["urgent_insights"] = pending
+            # Post-filter for confidence >= 0.7
+            high_confidence = [
+                p for p in pending
+                if p.get("metadata", {}).get("confidence", 0) >= 0.7
+            ][:3]
+            status["urgent_insights"] = high_confidence
 
             if status["pending_insights"] > 5:
                 status["healthy"] = False

@@ -238,6 +238,7 @@ class MemOSMigrator:
         migrated = 0
         items_to_process = results['documents']
         if self.limit:
+            # Account for items already migrated globally across all collections
             remaining = self.limit - self.stats.migrated
             items_to_process = items_to_process[:remaining]
 
@@ -267,6 +268,7 @@ class MemOSMigrator:
                 print(f"    ID: {item_id}")
                 print(f"    Content: {doc[:80]}..." if len(doc) > 80 else f"    Content: {doc}")
                 print(f"    Metadata: {json.dumps(v2_metadata, indent=6)}")
+                self.stats.record_success(collection_name)  # Track dry-run items in global counter
                 migrated += 1
                 continue
 

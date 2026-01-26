@@ -729,8 +729,9 @@ class TestErrorHandlingIntegration:
                 except Exception:
                     pass  # Expected if memory system is down
 
-                # Should still work via session search or handle gracefully
-                assert mock_print.called or True  # At least attempted
+                # Verify that either memory search was attempted or fallback occurred
+                # The handler should print something (status message or search results)
+                assert mock_print.called, "Handler should have printed status or results during fallback"
 
     def test_memory_v2_error_graceful(self):
         """Test graceful handling of Memory V2 errors."""

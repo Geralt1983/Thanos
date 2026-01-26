@@ -105,8 +105,8 @@ class TestRecallAccuracy:
         deps = mock_dependencies
         handler = MemoryHandler(**deps)
 
-        # Mock memory_router.search_memory
-        with patch('Tools.memory_router.search_memory') as mock_search:
+        # Mock memory_router.search_memory where MemoryHandler imports it
+        with patch('Tools.command_handlers.memory_handler.memory_router.search_memory') as mock_search:
             mock_search.return_value = [{
                 "id": "mem_123",
                 "content": "Use Pytest for testing",
@@ -213,7 +213,8 @@ class TestMemoryRouterIntegration:
         deps = mock_dependencies
         handler = MemoryHandler(**deps)
 
-        with patch('Tools.memory_router.add_memory') as mock_add:
+        # Mock memory_router.add_memory where MemoryHandler imports it
+        with patch('Tools.command_handlers.memory_handler.memory_router.add_memory') as mock_add:
             mock_add.return_value = {"id": "mem_123", "success": True}
 
             with patch('builtins.print'):
