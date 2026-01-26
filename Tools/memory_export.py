@@ -899,6 +899,265 @@ class MemoryExporter:
         logger.info(f"✅ Export verification complete: All checks passed")
         return True
 
+    def restore_from_backup(
+        self,
+        backup_path: str,
+        dry_run: bool = False,
+        conflict_mode: str = "skip"
+    ) -> Dict[str, Any]:
+        """
+        Restore memories from a JSON backup.
+
+        Restores memories to the thanos_memories table, preserving:
+        - Memory IDs
+        - Vector embeddings
+        - Full payload data (content, metadata, heat, importance)
+        - Timestamps
+
+        Args:
+            backup_path: Path to backup directory containing export files
+            dry_run: If True, validate backup but don't restore (preview mode)
+            conflict_mode: How to handle duplicate IDs ("skip" or "update")
+
+        Returns:
+            Dictionary with restore statistics and results
+        """
+        backup_dir = Path(backup_path)
+        logger.info(f"{'[DRY RUN] ' if dry_run else ''}Restoring from {backup_dir}...")
+
+        # Verify backup exists and is valid
+        if not self.verify_export(str(backup_dir)):
+            raise ValueError(f"Backup verification failed: {backup_dir}")
+
+        # Detect format and load backup data
+        json_file = backup_dir / "memory_export.json"
+        csv_memories_file = backup_dir / "memories.csv"
+        csv_metadata_file = backup_dir / "export_metadata.json"
+
+        memories = []
+        metadata = None
+        format_type = None
+
+        if json_file.exists():
+            # Load JSON backup
+            format_type = "json"
+            logger.info("Loading JSON backup...")
+            with open(json_file, "r") as f:
+                data = json.load(f)
+
+            memories = data.get("memories", [])
+            metadata = data.get("metadata", {})
+
+        elif csv_memories_file.exists() and csv_metadata_file.exists():
+            # CSV format not supported for restore (no vector data)
+            raise ValueError("Cannot restore from CSV format: vector embeddings not included in CSV export. Use JSON format for backups intended for restore.")
+
+        else:
+            raise ValueError(f"No valid backup files found in {backup_dir}")
+
+        if not memories:
+            logger.warning("No memories found in backup")
+            return {
+                "success": True,
+                "dry_run": dry_run,
+                "restored": 0,
+                "skipped": 0,
+                "updated": 0,
+                "errors": []
+            }
+
+        logger.info(f"Found {len(memories)} memories in backup")
+
+        # Validate conflict_mode
+        if conflict_mode not in ["skip", "update"]:
+            raise ValueError(f"Invalid conflict_mode: {conflict_mode}. Use 'skip' or 'update'")
+
+        # Dry run: just report what would happen
+        if dry_run:
+            return self._dry_run_restore(memories, metadata, conflict_mode)
+
+        # Actual restore
+        return self._execute_restore(memories, metadata, conflict_mode)
+
+    def _dry_run_restore(
+        self,
+        memories: List[Dict[str, Any]],
+        metadata: Dict[str, Any],
+        conflict_mode: str
+    ) -> Dict[str, Any]:
+        """
+        Dry run: analyze restore without making changes.
+
+        Checks for conflicts and reports what would happen.
+
+        Args:
+            memories: List of memories to restore
+            metadata: Backup metadata
+            conflict_mode: How conflicts would be handled
+
+        Returns:
+            Dictionary with analysis results
+        """
+        logger.info("[DRY RUN] Analyzing restore operation...")
+
+        # Check which memory IDs already exist
+        memory_ids = [mem["id"] for mem in memories]
+        existing_ids = set()
+
+        if memory_ids:
+            conn = self._get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT id FROM thanos_memories
+                        WHERE id = ANY(%s)
+                    """, (memory_ids,))
+                    existing_ids = {row[0] for row in cur.fetchall()}
+            finally:
+                conn.close()
+
+        conflicts = [mem_id for mem_id in memory_ids if mem_id in existing_ids]
+        new_memories = [mem for mem in memories if mem["id"] not in existing_ids]
+        conflicting_memories = [mem for mem in memories if mem["id"] in existing_ids]
+
+        result = {
+            "success": True,
+            "dry_run": True,
+            "total_in_backup": len(memories),
+            "new_memories": len(new_memories),
+            "conflicts": len(conflicts),
+            "conflict_mode": conflict_mode,
+            "would_restore": len(new_memories),
+            "would_skip": len(conflicts) if conflict_mode == "skip" else 0,
+            "would_update": len(conflicts) if conflict_mode == "update" else 0,
+            "metadata": metadata
+        }
+
+        logger.info(f"[DRY RUN] Analysis complete:")
+        logger.info(f"  Total memories in backup: {result['total_in_backup']}")
+        logger.info(f"  New memories (would restore): {result['new_memories']}")
+        logger.info(f"  Conflicts detected: {result['conflicts']}")
+        if conflict_mode == "skip":
+            logger.info(f"  Would skip conflicts: {result['would_skip']}")
+        else:
+            logger.info(f"  Would update conflicts: {result['would_update']}")
+
+        return result
+
+    def _execute_restore(
+        self,
+        memories: List[Dict[str, Any]],
+        metadata: Dict[str, Any],
+        conflict_mode: str
+    ) -> Dict[str, Any]:
+        """
+        Execute the actual restore operation.
+
+        Inserts memories into thanos_memories table with conflict handling.
+
+        Args:
+            memories: List of memories to restore
+            metadata: Backup metadata
+            conflict_mode: How to handle conflicts ("skip" or "update")
+
+        Returns:
+            Dictionary with restore statistics
+        """
+        logger.info(f"Restoring {len(memories)} memories with conflict_mode={conflict_mode}...")
+
+        restored = 0
+        skipped = 0
+        updated = 0
+        errors = []
+
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                for mem in memories:
+                    try:
+                        memory_id = mem["id"]
+                        payload = mem["payload"]
+
+                        # Handle vector if present
+                        vector = mem.get("vector")
+
+                        if conflict_mode == "skip":
+                            # Insert only if ID doesn't exist
+                            if vector:
+                                cur.execute("""
+                                    INSERT INTO thanos_memories (id, vector, payload)
+                                    VALUES (%s, %s::vector, %s::jsonb)
+                                    ON CONFLICT (id) DO NOTHING
+                                """, (memory_id, vector, json.dumps(payload)))
+                            else:
+                                # No vector in backup (shouldn't happen with JSON, but handle gracefully)
+                                cur.execute("""
+                                    INSERT INTO thanos_memories (id, payload)
+                                    VALUES (%s, %s::jsonb)
+                                    ON CONFLICT (id) DO NOTHING
+                                """, (memory_id, json.dumps(payload)))
+
+                            # Check if row was actually inserted
+                            if cur.rowcount > 0:
+                                restored += 1
+                            else:
+                                skipped += 1
+
+                        elif conflict_mode == "update":
+                            # Insert or update if exists
+                            if vector:
+                                cur.execute("""
+                                    INSERT INTO thanos_memories (id, vector, payload)
+                                    VALUES (%s, %s::vector, %s::jsonb)
+                                    ON CONFLICT (id) DO UPDATE
+                                    SET vector = EXCLUDED.vector,
+                                        payload = EXCLUDED.payload
+                                """, (memory_id, vector, json.dumps(payload)))
+                            else:
+                                cur.execute("""
+                                    INSERT INTO thanos_memories (id, payload)
+                                    VALUES (%s, %s::jsonb)
+                                    ON CONFLICT (id) DO UPDATE
+                                    SET payload = EXCLUDED.payload
+                                """, (memory_id, json.dumps(payload)))
+
+                            # Check if it was an insert or update
+                            # Unfortunately, we can't easily distinguish, so we count as restored
+                            # In a more sophisticated implementation, we'd check beforehand
+                            restored += 1
+
+                    except Exception as e:
+                        error_msg = f"Failed to restore memory {mem.get('id', 'unknown')}: {e}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                        continue
+
+            # Commit all changes
+            conn.commit()
+            logger.info(f"✅ Restore complete: {restored} restored, {skipped} skipped, {len(errors)} errors")
+
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Restore failed: {e}", exc_info=True)
+            raise
+
+        finally:
+            conn.close()
+
+        result = {
+            "success": len(errors) == 0,
+            "dry_run": False,
+            "total_in_backup": len(memories),
+            "restored": restored,
+            "skipped": skipped,
+            "updated": updated,
+            "errors": errors,
+            "conflict_mode": conflict_mode,
+            "metadata": metadata
+        }
+
+        return result
+
 
 def main():
     """CLI entry point for memory export."""
