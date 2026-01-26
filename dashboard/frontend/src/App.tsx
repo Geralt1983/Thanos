@@ -2,6 +2,7 @@ import Layout from './components/Layout';
 import TasksWidget from './components/TasksWidget';
 import EnergyChart from './components/EnergyChart';
 import HealthMetrics from './components/HealthMetrics';
+import CorrelationChart from './components/CorrelationChart';
 import './styles/index.css';
 
 function App() {
@@ -19,14 +20,7 @@ function App() {
         <HealthMetrics refreshInterval={60000} />
 
         {/* Correlation Widget */}
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Correlations</h3>
-          </div>
-          <div className="card-content">
-            <p className="text-muted">Correlation chart will appear here</p>
-          </div>
-        </div>
+        <CorrelationChart refreshInterval={60000} />
       </div>
 
       {/* Status Section */}
