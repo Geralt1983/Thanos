@@ -29,19 +29,17 @@ _oura_client_cache: Optional[MCPBridge] = None
 _workos_client_cache: Optional[MCPBridge] = None
 
 
-def _get_oura_client() -> MCPBridge:
+def _get_oura_client() -> Optional[MCPBridge]:
     """
     Get or create MCP client for Oura operations.
 
     Returns:
-        MCPBridge: Initialized MCP client for Oura server
-
-    Raises:
-        RuntimeError: If MCP client cannot be initialized with actionable error message
+        MCPBridge: Initialized MCP client for Oura server, or None if unavailable
 
     Note:
         Creates a new client on first call, then reuses the cached instance.
         MCPBridge uses session-per-call pattern, so no persistent connection.
+        Returns None on initialization failure to enable graceful degradation.
     """
     global _oura_client_cache
 
@@ -52,15 +50,12 @@ def _get_oura_client() -> MCPBridge:
     oura_server = PROJECT_ROOT / "mcp-servers" / "oura-mcp" / "src" / "index.ts"
 
     if not oura_server.exists():
-        raise RuntimeError(
-            f"❌ Oura MCP server not found at: {oura_server}\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Check if the MCP server is installed:\n"
-            f"     ls -la {oura_server.parent}\n"
-            f"  2. Verify project structure is intact\n"
-            f"  3. Reinstall dependencies if needed:\n"
-            f"     cd {oura_server.parent} && bun install"
+        logger.warning(
+            f"⚠️ Oura MCP server not found at: {oura_server}\n"
+            f"Workflow will continue with placeholder data. "
+            f"To restore MCP functionality, ensure server is installed."
         )
+        return None
 
     try:
         # Create Oura MCP configuration using bun (has built-in TypeScript support)
@@ -80,45 +75,31 @@ def _get_oura_client() -> MCPBridge:
         return _oura_client_cache
 
     except FileNotFoundError as e:
-        raise RuntimeError(
-            f"❌ 'bun' command not found. The MCP server requires Bun to run.\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Install Bun:\n"
-            f"     curl -fsSL https://bun.sh/install | bash\n"
-            f"  2. Restart your terminal after installation\n"
-            f"  3. Verify installation: bun --version\n\n"
-            f"Original error: {e}"
-        ) from e
+        logger.warning(
+            f"⚠️ 'bun' command not found. Workflow will continue with placeholder data.\n"
+            f"To restore MCP functionality: curl -fsSL https://bun.sh/install | bash"
+        )
+        return None
     except Exception as e:
-        raise RuntimeError(
-            f"❌ Failed to initialize Oura MCP client.\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Check if server file exists:\n"
-            f"     ls -la {oura_server}\n"
-            f"  2. Verify dependencies installed:\n"
-            f"     cd {oura_server.parent} && bun install\n"
-            f"  3. Test server manually:\n"
-            f"     bun run {oura_server}\n"
-            f"  4. Check if OURA_API_KEY is set:\n"
-            f"     echo $OURA_API_KEY\n"
-            f"  5. Check logs in: {PROJECT_ROOT}/logs/\n\n"
-            f"Original error: {e}"
-        ) from e
+        logger.warning(
+            f"⚠️ Failed to initialize Oura MCP client: {e}\n"
+            f"Workflow will continue with placeholder data. "
+            f"Check OURA_API_KEY and server health."
+        )
+        return None
 
 
-def _get_workos_client() -> MCPBridge:
+def _get_workos_client() -> Optional[MCPBridge]:
     """
     Get or create MCP client for WorkOS operations.
 
     Returns:
-        MCPBridge: Initialized MCP client for WorkOS server
-
-    Raises:
-        RuntimeError: If MCP client cannot be initialized with actionable error message
+        MCPBridge: Initialized MCP client for WorkOS server, or None if unavailable
 
     Note:
         Creates a new client on first call, then reuses the cached instance.
         MCPBridge uses session-per-call pattern, so no persistent connection.
+        Returns None on initialization failure to enable graceful degradation.
     """
     global _workos_client_cache
 
@@ -129,15 +110,12 @@ def _get_workos_client() -> MCPBridge:
     workos_server = PROJECT_ROOT / "mcp-servers" / "workos-mcp" / "src" / "index.ts"
 
     if not workos_server.exists():
-        raise RuntimeError(
-            f"❌ WorkOS MCP server not found at: {workos_server}\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Check if the MCP server is installed:\n"
-            f"     ls -la {workos_server.parent}\n"
-            f"  2. Verify project structure is intact\n"
-            f"  3. Reinstall dependencies if needed:\n"
-            f"     cd {workos_server.parent} && bun install"
+        logger.warning(
+            f"⚠️ WorkOS MCP server not found at: {workos_server}\n"
+            f"Workflow will continue with placeholder data. "
+            f"To restore MCP functionality, ensure server is installed."
         )
+        return None
 
     try:
         # Create WorkOS MCP configuration using bun (has built-in TypeScript support)
@@ -157,47 +135,47 @@ def _get_workos_client() -> MCPBridge:
         return _workos_client_cache
 
     except FileNotFoundError as e:
-        raise RuntimeError(
-            f"❌ 'bun' command not found. The MCP server requires Bun to run.\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Install Bun:\n"
-            f"     curl -fsSL https://bun.sh/install | bash\n"
-            f"  2. Restart your terminal after installation\n"
-            f"  3. Verify installation: bun --version\n\n"
-            f"Original error: {e}"
-        ) from e
+        logger.warning(
+            f"⚠️ 'bun' command not found. Workflow will continue with placeholder data.\n"
+            f"To restore MCP functionality: curl -fsSL https://bun.sh/install | bash"
+        )
+        return None
     except Exception as e:
-        raise RuntimeError(
-            f"❌ Failed to initialize WorkOS MCP client.\n\n"
-            f"Troubleshooting:\n"
-            f"  1. Check if server file exists:\n"
-            f"     ls -la {workos_server}\n"
-            f"  2. Verify dependencies installed:\n"
-            f"     cd {workos_server.parent} && bun install\n"
-            f"  3. Test server manually:\n"
-            f"     bun run {workos_server}\n"
-            f"  4. Check logs in: {PROJECT_ROOT}/logs/\n\n"
-            f"Original error: {e}"
-        ) from e
+        logger.warning(
+            f"⚠️ Failed to initialize WorkOS MCP client: {e}\n"
+            f"Workflow will continue with placeholder data. "
+            f"Check server health or logs for details."
+        )
+        return None
 
 
-async def _get_health_snapshot_async(client: MCPBridge, today: str) -> Dict[str, Any]:
+async def _get_health_snapshot_async(client: Optional[MCPBridge], today: str) -> Dict[str, Any]:
     """
     Async helper to fetch Oura data with timeout handling.
 
     Args:
-        client: MCPBridge instance for Oura server
+        client: MCPBridge instance for Oura server, or None if unavailable
         today: Date string in YYYY-MM-DD format
 
     Returns:
         Dict with readiness, sleep_score, activity, stress data
-        Falls back to placeholder values on error
+        Falls back to placeholder values on error or when client is None
     """
     # Default fallback values
     readiness_score = 75
     sleep_score = 82
     activity_data = {"steps": 8500, "active_calories": 450}
     stress_data = {"stress_high": 2}
+
+    # Skip MCP calls if client unavailable
+    if client is None:
+        logger.info("Oura MCP client unavailable, using placeholder health data")
+        return {
+            "readiness": readiness_score,
+            "sleep_score": sleep_score,
+            "activity": activity_data,
+            "stress": stress_data
+        }
 
     timeout_seconds = MCP_CALL_TIMEOUT_SECONDS
 
@@ -395,7 +373,7 @@ def get_energy_message(energy_level: str, score: int) -> str:
 
 
 async def _get_energy_appropriate_tasks_async(
-    client: MCPBridge,
+    client: Optional[MCPBridge],
     energy_level: str,
     limit: int = 5
 ) -> List[Dict[str, Any]]:
@@ -403,13 +381,19 @@ async def _get_energy_appropriate_tasks_async(
     Async helper to fetch energy-appropriate tasks from WorkOS.
 
     Args:
-        client: MCPBridge instance for WorkOS server
+        client: MCPBridge instance for WorkOS server, or None if unavailable
         energy_level: low|medium|high
         limit: Maximum tasks to return
 
     Returns:
         List of task dictionaries filtered by energy-appropriate drain types
+        Returns empty list if client is None or on error
     """
+    # Return empty if client unavailable
+    if client is None:
+        logger.info("WorkOS MCP client unavailable, skipping task fetch")
+        return []
+
     # Map energy level to drain types
     # low → admin (low cognitive load)
     # medium → shallow (moderate cognitive load)
