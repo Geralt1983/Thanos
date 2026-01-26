@@ -7,7 +7,6 @@
 - Personal health and energy management
 
 ## Priorities
-- **TOMORROW FIRST:** Fill out passport forms
 - Break down Orlando, Memphis, Kentucky tasks
 
 ## Ready to Execute (Raleigh)

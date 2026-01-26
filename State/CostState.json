@@ -27,6 +27,104 @@
           "calls": 672
         }
       }
+    },
+    {
+      "timestamp": "2026-01-26T07:43:33.650580",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 109
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-26T07:55:17.316367",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 528
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-26T07:57:01.541343",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 423
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-26T08:09:30.157010",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 9
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-26T08:10:11.256297",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 9
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-26T08:13:45.924104",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 9
+        }
+      }
+    },
+    {
+      "timestamp": "2026-01-26T08:17:56.258154",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 15
+        }
+      }
     }
   ],
   "lifetime_total": {

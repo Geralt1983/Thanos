@@ -524,9 +524,9 @@
       "fix_commit": "58ddf2a"
     }
   },
-  "status": "human_review",
-  "planStatus": "review",
-  "updated_at": "2026-01-26T04:33:29.193Z",
+  "status": "pr_created",
+  "planStatus": "pr_created",
+  "updated_at": "2026-01-26T12:55:48.837Z",
   "last_updated": "2026-01-26T04:10:03.652606+00:00",
   "qa_iteration_history": [
     {

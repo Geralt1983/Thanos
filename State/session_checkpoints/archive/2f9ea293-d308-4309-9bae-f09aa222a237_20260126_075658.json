@@ -1,0 +1,12 @@
+{
+  "session_id": "2f9ea293-d308-4309-9bae-f09aa222a237",
+  "claude_pid": 20960,
+  "started_at": "2026-01-26T07:41:51.429369",
+  "last_updated": "2026-01-26T07:41:51.429369",
+  "prompt_count": 0,
+  "working_directory": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/050-memory-export-and-backup-system",
+  "entries": [],
+  "project": "thanos",
+  "client": null,
+  "cumulative_summary": ""
+}
