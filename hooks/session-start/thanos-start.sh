@@ -47,8 +47,8 @@ $CONTEXT_OUTPUT
 - memory-v2: Search "MEMORY V2 SKILL" or read .claude/skills/memory-v2/skill.md
 EOF
 
-# Run daily brief for meaningful context (suppress errors)
-bun "$THANOS_ROOT/Tools/daily-brief.ts" 2>/dev/null || true
+# Daily brief disabled - was always stale since it reads static files
+# To re-enable: bun "$THANOS_ROOT/Tools/daily-brief.ts" 2>/dev/null || true
 
 # Set visual state to CHAOS (morning disorder, unsorted tasks)
 python3 "$THANOS_ROOT/Tools/wallpaper_manager.py" --auto 2>/dev/null || true
