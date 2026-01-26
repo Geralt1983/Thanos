@@ -2534,12 +2534,15 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 )
 
             elif action == "energy":
-                # Show energy level selection (placeholder for now)
+                # Show energy level selection buttons (1-10)
+                energy_buttons = [(f"{i}", f"energy_{i}") for i in range(1, 11)]
+                keyboard = self._create_button_grid(energy_buttons, columns=5)
+
                 await query.edit_message_text(
-                    "⚡ *Log Energy*\n\n"
-                    "Energy logging will be available soon.\n"
-                    "This will let you quickly log your current energy level.\n\n"
-                    "_Send /menu to return to quick actions._",
+                    "⚡ *Log Energy Level*\n\n"
+                    "Select your current energy level:\n"
+                    "1 = Exhausted, 10 = Peak Energy",
+                    reply_markup=keyboard,
                     parse_mode='Markdown'
                 )
 
@@ -2795,10 +2798,88 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
             else:
                 await query.edit_message_text(f"⚠️ Unknown task action: {action}")
 
+        async def handle_energy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            """Handle energy level selection callbacks."""
+            query = update.callback_query
+            await query.answer()
+
+            # Parse callback data: "energy_level"
+            callback_data = query.data
+            parts = callback_data.split("_", 1)
+
+            if len(parts) < 2:
+                await query.edit_message_text("⚠️ Invalid energy level.")
+                return
+
+            try:
+                energy_level = int(parts[1])
+                if energy_level < 1 or energy_level > 10:
+                    await query.edit_message_text("⚠️ Energy level must be between 1 and 10.")
+                    return
+            except ValueError:
+                await query.edit_message_text("⚠️ Invalid energy level format.")
+                return
+
+            # Log to WorkOS
+            if not self.workos_enabled:
+                await query.edit_message_text("❌ WorkOS not configured - can't log energy.")
+                return
+
+            try:
+                import asyncpg
+                import ssl
+
+                db_url = WORKOS_DATABASE_URL.split('?')[0]
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+
+                conn = await asyncpg.connect(db_url, ssl=ssl_context)
+                try:
+                    # Insert energy log
+                    await conn.execute(
+                        """
+                        INSERT INTO energy_logs (energy_level, source, created_at)
+                        VALUES ($1, $2, NOW())
+                        """,
+                        energy_level,
+                        'telegram'
+                    )
+
+                    # Determine emoji based on energy level
+                    if energy_level >= 8:
+                        emoji = "🔥"
+                    elif energy_level >= 6:
+                        emoji = "⚡"
+                    elif energy_level >= 4:
+                        emoji = "😐"
+                    elif energy_level >= 2:
+                        emoji = "😴"
+                    else:
+                        emoji = "💤"
+
+                    await query.edit_message_text(
+                        f"{emoji} *Energy Logged*\n\n"
+                        f"Level: {energy_level}/10\n"
+                        f"Time: {datetime.now().strftime('%I:%M %p')}\n\n"
+                        f"_Send /menu to return to quick actions._",
+                        parse_mode='Markdown'
+                    )
+
+                    logger.info(f"Logged energy level {energy_level} to WorkOS")
+
+                finally:
+                    await conn.close()
+
+            except Exception as e:
+                logger.error(f"Failed to log energy: {e}")
+                await query.edit_message_text(f"❌ Failed to log energy: {e}")
+
         # Register callback handlers with unified routing system
         self._register_callback_handler("cal_", handle_calendar_callback)
         self._register_callback_handler("menu_", handle_menu_callback)
         self._register_callback_handler("task_", handle_task_callback)
+        self._register_callback_handler("energy_", handle_energy_callback)
 
         # Register handlers
         self.application.add_handler(CommandHandler("start", start_command))
