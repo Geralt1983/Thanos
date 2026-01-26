@@ -1,15 +1,15 @@
 {
   "active": true,
-  "spec": "010-add-token-count-and-cost-estimate-to-cli-prompt",
+  "spec": "047-enhanced-session-continuity",
   "state": "building",
   "subtasks": {
-    "completed": 0,
-    "total": 0,
+    "completed": 13,
+    "total": 16,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Testing & Documentation",
+    "current": "Integration & Token Optimization",
     "id": null,
     "total": 4
   },
@@ -19,7 +19,7 @@
   },
   "session": {
     "number": 15,
-    "started_at": "2026-01-11T22:40:44.645807"
+    "started_at": "2026-01-25T20:40:22.413386"
   },
-  "last_update": "2026-01-11T23:53:41.165304"
+  "last_update": "2026-01-25T21:13:24.237644"
 }

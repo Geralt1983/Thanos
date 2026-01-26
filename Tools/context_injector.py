@@ -47,6 +47,68 @@ def _estimate_tokens(content: str) -> int:
     return len(content) // 4 + 1  # +1 to avoid zero for short strings
 
 
+def _calculate_priority_score(created_at: Optional[datetime] = None, heat: float = 0.0) -> float:
+    """Calculate priority score for memory items based on recency and heat.
+
+    Priority order: recent > high-heat > older items
+    - Recent items (within days) score highest
+    - High heat items score second
+    - Older items score lowest
+
+    Args:
+        created_at: Timestamp when the item was created (None = treat as recent)
+        heat: Heat score from 0.0 to 1.0
+
+    Returns:
+        Priority score (higher = more important)
+
+    Example:
+        >>> from datetime import datetime, timedelta
+        >>> today = datetime.now()
+        >>> yesterday = today - timedelta(days=1)
+        >>> week_ago = today - timedelta(days=7)
+        >>> _calculate_priority_score(today, heat=0.5)  # Recent, medium heat
+        2.5
+        >>> _calculate_priority_score(week_ago, heat=0.9)  # Old, high heat
+        1.925
+        >>> _calculate_priority_score(today, heat=0.3)  # Recent, low heat
+        1.6
+    """
+    # Calculate recency component (higher for more recent)
+    if created_at is None:
+        # Treat missing timestamp as very recent (assume it's important)
+        recency_score = 1.0
+    else:
+        # Calculate days since creation
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            except Exception:
+                recency_score = 0.5  # Default for unparseable dates
+
+        now = datetime.now()
+        # Handle timezone-aware vs naive datetimes
+        if created_at.tzinfo is not None and now.tzinfo is None:
+            from zoneinfo import ZoneInfo
+            now = now.replace(tzinfo=ZoneInfo("America/New_York"))
+        elif created_at.tzinfo is None and now.tzinfo is not None:
+            now = now.replace(tzinfo=None)
+
+        days_ago = (now - created_at).total_seconds() / 86400  # Convert to days
+        # Recency score: 1.0 for today, decreasing as items get older
+        # Using 1/(days+1) so today=1.0, 1day=0.5, 7days=0.125, 30days=0.032
+        recency_score = 1.0 / (days_ago + 1.0)
+
+    # Normalize heat to 0.0-1.0 range
+    heat_score = max(0.0, min(1.0, heat))
+
+    # Combine scores: recency weighted 3x, heat weighted 2x
+    # This ensures: recent > high-heat > older
+    priority_score = (recency_score * 3.0) + (heat_score * 2.0)
+
+    return priority_score
+
+
 def get_yesterday_session() -> Optional[Dict]:
     """Load yesterday's session JSON file.
 
@@ -157,7 +219,9 @@ def build_energy_context() -> str:
 
 
 def build_hot_memory_context(limit: int = 10) -> str:
-    """Load hot memories from memory service.
+    """Load hot memories from memory service with priority-based filtering.
+
+    Prioritizes: recent > high-heat > older items
 
     Args:
         limit: Maximum number of hot memories to load (default: 10)
@@ -176,19 +240,34 @@ def build_hot_memory_context(limit: int = 10) -> str:
 
         return result
     except ImportError:
-        # If hot_memory_loader not available, implement inline
+        # If hot_memory_loader not available, implement inline with priority sorting
         try:
             from Tools.memory_v2.service import MemoryService
             ms = MemoryService()
 
-            # Get top memories by heat
-            hot = ms.whats_hot(limit=limit)
+            # Get top memories by heat (fetch more than limit to allow for priority sorting)
+            hot = ms.whats_hot(limit=limit * 2)
 
             if not hot:
                 return "## Hot Memory Context\n<!-- No hot memories available -->"
 
+            # Calculate priority score for each memory and sort
+            memories_with_priority = []
+            for mem in hot:
+                created_at = mem.get('created_at') or mem.get('timestamp')
+                heat = mem.get('heat', 0)
+                priority = _calculate_priority_score(created_at, heat)
+                memories_with_priority.append({
+                    'memory': mem,
+                    'priority': priority
+                })
+
+            # Sort by priority (highest first) and take top 'limit' items
+            memories_with_priority.sort(key=lambda x: x['priority'], reverse=True)
+            top_memories = [item['memory'] for item in memories_with_priority[:limit]]
+
             lines = ["## Hot Memory Context", ""]
-            for mem in hot[:limit]:
+            for mem in top_memories:
                 heat_indicator = "🔥" if mem.get('heat', 0) > 0.8 else "•" if mem.get('heat', 0) > 0.5 else "❄️"
                 memory_text = mem.get('memory', '')[:150]
                 client = mem.get('client')
@@ -208,9 +287,10 @@ def build_hot_memory_context(limit: int = 10) -> str:
 
 
 def active_projects_context() -> str:
-    """Load active projects context from Memory V2.
+    """Load active projects context from Memory V2 with priority-based filtering.
 
     Searches memory for client/project mentions from critical_facts.json.
+    Prioritizes: recent > high-heat > older items
 
     Returns:
         Formatted active projects context string
@@ -240,11 +320,27 @@ def active_projects_context() -> str:
         all_entities = list(active_clients) + list(primary_projects)
 
         for entity in all_entities:
-            results = ms.search(entity, limit=3)
+            results = ms.search(entity, limit=6)  # Fetch more for priority sorting
             # Only include high-quality results (effective_score > 0.3)
             relevant = [r for r in results if r.get('effective_score', 0) > 0.3]
+
             if relevant:
-                project_memories[entity] = relevant
+                # Calculate priority score and sort
+                memories_with_priority = []
+                for mem in relevant:
+                    created_at = mem.get('created_at') or mem.get('timestamp')
+                    heat = mem.get('heat', 0)
+                    priority = _calculate_priority_score(created_at, heat)
+                    memories_with_priority.append({
+                        'memory': mem,
+                        'priority': priority
+                    })
+
+                # Sort by priority (highest first)
+                memories_with_priority.sort(key=lambda x: x['priority'], reverse=True)
+                sorted_memories = [item['memory'] for item in memories_with_priority]
+
+                project_memories[entity] = sorted_memories
 
         # Format output
         if not project_memories:
@@ -279,6 +375,7 @@ def relationship_context() -> str:
 
     Searches for memories with domain='personal' to surface recent
     relationship mentions, family interactions, and personal commitments.
+    Prioritizes: recent > high-heat > older items
 
     Returns:
         Formatted relationship context string
@@ -360,9 +457,24 @@ def relationship_context() -> str:
         if not unique_memories:
             return "## Relationship Context\n<!-- No personal memories found in past 7 days -->"
 
+        # Calculate priority score and sort by priority
+        memories_with_priority = []
+        for mem in unique_memories:
+            created_at = mem.get('created_at') or mem.get('timestamp')
+            heat = mem.get('heat', 0)
+            priority = _calculate_priority_score(created_at, heat)
+            memories_with_priority.append({
+                'memory': mem,
+                'priority': priority
+            })
+
+        # Sort by priority (highest first) and take top 5
+        memories_with_priority.sort(key=lambda x: x['priority'], reverse=True)
+        top_memories = [item['memory'] for item in memories_with_priority[:5]]
+
         lines = ["## Relationship Context (Past 7 Days)", ""]
 
-        for mem in unique_memories[:5]:  # Limit to 5 most relevant
+        for mem in top_memories:
             memory_text = mem.get('memory', '')[:120]
             heat = mem.get('heat', 0)
             heat_indicator = "🔥" if heat > 0.8 else "•" if heat > 0.5 else "❄️"
