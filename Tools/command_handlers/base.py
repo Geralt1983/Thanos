@@ -12,20 +12,19 @@ Classes:
     CommandResult: Dataclass for command execution results
     BaseHandler: Base class providing dependency injection and shared utilities
 
-Constants:
-    MEMOS_AVAILABLE: Boolean indicating if MemOS integration is available
-
 Architecture:
     All handler classes (AgentHandler, SessionHandler, etc.) inherit from BaseHandler
     to gain access to shared dependencies and utilities. This promotes code reuse
     and ensures consistent dependency injection across all handlers.
+
+    Memory operations are routed through memory_router.py, which handles
+    backend selection and fallbacks automatically.
 
 Example:
     class MyHandler(BaseHandler):
         def handle_command(self, args: str) -> CommandResult:
             # Access shared utilities
             agent = self._get_current_agent()
-            memos = self._get_memos()
 
             # Return formatted result
             return CommandResult(success=True, message="Done!")
@@ -34,6 +33,7 @@ See Also:
     - Tools.command_handlers.agent_handler: Agent management commands
     - Tools.command_handlers.session_handler: Session management commands
     - Tools.routing.command_registry: Command registration system
+    - Tools.memory_router: Unified memory routing layer
 """
 
 import asyncio
@@ -41,25 +41,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
-
-
-# MemOS integration (optional - graceful degradation if unavailable)
-try:
-    from Tools.memos import MemOS, get_memos, init_memos
-
-    MEMOS_AVAILABLE = True
-except ImportError:
-    MEMOS_AVAILABLE = False
-    MemOS = None
-
-# Memory V2 integration (cloud-first with heat decay)
-try:
-    from Tools.memory_v2 import get_memory_service, MemoryService
-
-    MEMORY_V2_AVAILABLE = True
-except ImportError:
-    MEMORY_V2_AVAILABLE = False
-    MemoryService = None
 
 
 # ANSI color codes for terminal output
@@ -98,6 +79,8 @@ class BaseHandler:
 
     Provides shared utilities and dependency access for command handlers.
     Each specific handler (AgentHandler, SessionHandler, etc.) inherits from this.
+
+    Memory operations should use Tools.memory_router instead of direct service access.
     """
 
     def __init__(
@@ -127,14 +110,6 @@ class BaseHandler:
         self.thanos_dir = thanos_dir
         self._current_agent_getter = current_agent_getter
 
-        # MemOS integration (lazy initialization)
-        self._memos: Optional[MemOS] = None
-        self._memos_initialized = False
-
-        # Memory V2 integration (lazy initialization)
-        self._memory_v2: Optional["MemoryService"] = None
-        self._memory_v2_initialized = False
-
     def _get_current_agent(self) -> str:
         """
         Get the current agent name.
@@ -145,59 +120,6 @@ class BaseHandler:
         if self._current_agent_getter:
             return self._current_agent_getter()
         return "ops"  # Default fallback
-
-    def _get_memos(self) -> Optional["MemOS"]:
-        """
-        Get MemOS instance, initializing if needed.
-
-        Returns:
-            MemOS instance if available, None otherwise
-        """
-        if not MEMOS_AVAILABLE:
-            return None
-
-        if not self._memos_initialized:
-            try:
-                # Try to get existing instance
-                self._memos = get_memos()
-                self._memos_initialized = True
-            except Exception:
-                # Initialize new instance
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Can't use asyncio.run in running loop
-                        self._memos = None
-                    else:
-                        self._memos = loop.run_until_complete(init_memos())
-                        self._memos_initialized = True
-                except Exception:
-                    self._memos = None
-
-        return self._memos
-
-    def _get_memory_v2(self) -> Optional["MemoryService"]:
-        """
-        Get Memory V2 service, initializing if needed.
-
-        Returns:
-            MemoryService instance if available, None otherwise
-        """
-        if not MEMORY_V2_AVAILABLE:
-            return None
-
-        if not self._memory_v2_initialized:
-            try:
-                self._memory_v2 = get_memory_service()
-                self._memory_v2_initialized = True
-            except Exception as e:
-                # Log the error but don't crash
-                import logging
-                logging.getLogger(__name__).warning(f"Memory V2 init failed: {e}")
-                self._memory_v2 = None
-                self._memory_v2_initialized = True  # Mark as initialized to avoid retrying
-
-        return self._memory_v2
 
     def _run_async(self, coro):
         """
