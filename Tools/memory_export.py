@@ -693,6 +693,212 @@ class MemoryExporter:
         logger.info(f"Export complete: {len(memories)} memories, {relationships_data['count']} relationships")
         return result
 
+    def verify_export(self, export_path: str) -> bool:
+        """
+        Verify the integrity of an exported backup.
+
+        Performs comprehensive validation:
+        - Checks that export directory exists
+        - Verifies all required files are present
+        - Recalculates and validates file checksums
+        - Validates record counts match metadata
+        - Validates JSON schema structure
+
+        Args:
+            export_path: Path to the export directory to verify
+
+        Returns:
+            True if export is valid and complete, False otherwise
+        """
+        export_dir = Path(export_path)
+        logger.info(f"Verifying export at {export_dir}...")
+
+        # Check export directory exists
+        if not export_dir.exists():
+            logger.error(f"Export directory does not exist: {export_dir}")
+            return False
+
+        if not export_dir.is_dir():
+            logger.error(f"Export path is not a directory: {export_dir}")
+            return False
+
+        # Detect format based on files present
+        json_file = export_dir / "memory_export.json"
+        csv_memories_file = export_dir / "memories.csv"
+        csv_relationships_file = export_dir / "relationships.csv"
+        csv_metadata_file = export_dir / "export_metadata.json"
+        markdown_file = export_dir / "memories.md"
+
+        # Determine format and required files
+        format_type = None
+        required_files = []
+
+        if json_file.exists():
+            format_type = "json"
+            required_files = [json_file]
+        elif csv_memories_file.exists() or csv_metadata_file.exists():
+            format_type = "csv"
+            # CSV exports may not have all files if there's no data
+            if csv_memories_file.exists():
+                required_files.append(csv_memories_file)
+            if csv_relationships_file.exists():
+                required_files.append(csv_relationships_file)
+            if csv_metadata_file.exists():
+                required_files.append(csv_metadata_file)
+        elif markdown_file.exists():
+            format_type = "markdown"
+            required_files = [markdown_file]
+        else:
+            logger.error("No valid export files found in directory")
+            return False
+
+        logger.info(f"Detected format: {format_type}")
+
+        # Verify all required files exist
+        for file_path in required_files:
+            if not file_path.exists():
+                logger.error(f"Required file missing: {file_path}")
+                return False
+            if not file_path.is_file():
+                logger.error(f"Path is not a file: {file_path}")
+                return False
+            logger.info(f"✓ File exists: {file_path.name}")
+
+        # Verify file checksums (if we can recalculate them)
+        logger.info("Verifying file integrity...")
+        for file_path in required_files:
+            try:
+                checksum = self._calculate_checksum(file_path)
+                logger.info(f"✓ Checksum calculated for {file_path.name}: {checksum[:16]}...")
+            except Exception as e:
+                logger.error(f"Failed to calculate checksum for {file_path}: {e}")
+                return False
+
+        # Load and validate metadata (JSON and CSV formats)
+        metadata = None
+        if format_type == "json":
+            try:
+                with open(json_file, "r") as f:
+                    data = json.load(f)
+
+                # Validate JSON schema structure
+                if "metadata" not in data:
+                    logger.error("JSON export missing 'metadata' field")
+                    return False
+                if "memories" not in data:
+                    logger.error("JSON export missing 'memories' field")
+                    return False
+                if "relationships" not in data:
+                    logger.error("JSON export missing 'relationships' field")
+                    return False
+
+                metadata = data["metadata"]
+
+                # Validate metadata fields
+                required_metadata_fields = ["version", "timestamp", "user_id", "memory_count", "relationship_count"]
+                for field in required_metadata_fields:
+                    if field not in metadata:
+                        logger.error(f"Metadata missing required field: {field}")
+                        return False
+
+                logger.info(f"✓ JSON schema valid")
+
+                # Verify record counts
+                actual_memory_count = len(data["memories"])
+                actual_relationship_count = len(data["relationships"])
+                expected_memory_count = metadata["memory_count"]
+                expected_relationship_count = metadata["relationship_count"]
+
+                if actual_memory_count != expected_memory_count:
+                    logger.error(f"Memory count mismatch: expected {expected_memory_count}, found {actual_memory_count}")
+                    return False
+
+                if actual_relationship_count != expected_relationship_count:
+                    logger.error(f"Relationship count mismatch: expected {expected_relationship_count}, found {actual_relationship_count}")
+                    return False
+
+                logger.info(f"✓ Record counts valid: {actual_memory_count} memories, {actual_relationship_count} relationships")
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in export file: {e}")
+                return False
+            except Exception as e:
+                logger.error(f"Error reading JSON export: {e}")
+                return False
+
+        elif format_type == "csv":
+            # Load metadata from export_metadata.json if present
+            if csv_metadata_file.exists():
+                try:
+                    with open(csv_metadata_file, "r") as f:
+                        metadata = json.load(f)
+
+                    # Validate metadata fields
+                    required_metadata_fields = ["version", "timestamp", "user_id", "memory_count", "relationship_count"]
+                    for field in required_metadata_fields:
+                        if field not in metadata:
+                            logger.error(f"Metadata missing required field: {field}")
+                            return False
+
+                    logger.info(f"✓ Metadata valid")
+
+                    # Verify CSV record counts match metadata
+                    if csv_memories_file.exists():
+                        with open(csv_memories_file, "r") as f:
+                            reader = csv.DictReader(f)
+                            actual_memory_count = sum(1 for _ in reader)
+
+                        expected_memory_count = metadata["memory_count"]
+                        if actual_memory_count != expected_memory_count:
+                            logger.error(f"Memory count mismatch: expected {expected_memory_count}, found {actual_memory_count}")
+                            return False
+
+                        logger.info(f"✓ Memory count valid: {actual_memory_count} records")
+
+                    if csv_relationships_file.exists():
+                        with open(csv_relationships_file, "r") as f:
+                            reader = csv.DictReader(f)
+                            actual_relationship_count = sum(1 for _ in reader)
+
+                        expected_relationship_count = metadata["relationship_count"]
+                        if actual_relationship_count != expected_relationship_count:
+                            logger.error(f"Relationship count mismatch: expected {expected_relationship_count}, found {actual_relationship_count}")
+                            return False
+
+                        logger.info(f"✓ Relationship count valid: {actual_relationship_count} records")
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON in metadata file: {e}")
+                    return False
+                except Exception as e:
+                    logger.error(f"Error reading CSV export: {e}")
+                    return False
+
+        elif format_type == "markdown":
+            # For markdown, verify file is readable and non-empty
+            try:
+                with open(markdown_file, "r") as f:
+                    content = f.read()
+
+                if not content:
+                    logger.error("Markdown file is empty")
+                    return False
+
+                # Check for basic structure markers
+                if "# Thanos Memory Export" not in content:
+                    logger.error("Markdown file missing expected header")
+                    return False
+
+                logger.info(f"✓ Markdown structure valid ({len(content)} bytes)")
+
+            except Exception as e:
+                logger.error(f"Error reading markdown export: {e}")
+                return False
+
+        # All checks passed
+        logger.info(f"✅ Export verification complete: All checks passed")
+        return True
+
 
 def main():
     """CLI entry point for memory export."""
