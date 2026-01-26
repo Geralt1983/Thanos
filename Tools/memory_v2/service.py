@@ -330,6 +330,7 @@ class MemoryService:
         project: str = None,
         domain: str = None,
         source: str = None,
+        entities: List[str] = None,
         filters: dict = None
     ) -> List[Dict[str, Any]]:
         """
@@ -348,6 +349,7 @@ class MemoryService:
             project: Filter to specific project (e.g., "ScottCare", "VersaCare")
             domain: Filter to domain ("work" or "personal")
             source: Filter by source ("telegram", "hey_pocket", "manual")
+            entities: Filter by entities (e.g., ["Ashley", "Sullivan"])
             filters: Optional legacy filters dict (client, source, memory_type)
 
         Returns:
@@ -358,6 +360,7 @@ class MemoryService:
             ms.search("API integration", client="Orlando")  # Within client context
             ms.search("authentication", project="VersaCare")  # Within project
             ms.search("family", domain="personal")  # Personal memories only
+            ms.search("meeting", entities=["Ashley"])  # Memories involving Ashley
         """
         # Skill reminder on first use
         self._ensure_skill_reminder()
@@ -372,6 +375,8 @@ class MemoryService:
             search_filters["domain"] = domain
         if source:
             search_filters["source"] = source
+        if entities:
+            search_filters["entities"] = entities
 
         # Always use direct search with cached embeddings for speed
         # mem0.search() calls OpenAI per-query without caching
@@ -410,6 +415,11 @@ class MemoryService:
         if filters.get("memory_type"):
             where_clauses.append("payload->>'type' = %(filter_type)s")
             params["filter_type"] = filters["memory_type"]
+        if filters.get("entities"):
+            # Check if any of the specified entities are in the entities array
+            # Using ?| operator to check if any array element matches
+            where_clauses.append("payload->'entities' ?| %(filter_entities)s")
+            params["filter_entities"] = filters["entities"]
 
         where_sql = " AND ".join(where_clauses)
 
@@ -427,6 +437,7 @@ class MemoryService:
                         payload->>'project' as project,
                         payload->>'domain' as domain,
                         payload->>'source' as source,
+                        payload->'entities' as entities,
                         (vector <=> %(embedding)s::vector) as score
                     FROM thanos_memories
                     WHERE {where_sql}
