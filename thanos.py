@@ -11,7 +11,6 @@ Examples:
   thanos Should I take this client?
 
 EXPLICIT COMMANDS:
-  thanos interactive              Launch interactive mode
   thanos chat <message>           Chat with auto-routing
   thanos agent <name> <message>   Chat with specific agent
   thanos run <command> [args]     Run a specific command
@@ -160,8 +159,6 @@ SYSTEM_COMMANDS = {
     "help",
     "-h",
     "--help",
-    "interactive",
-    "i",
     "chat",
     "agent",
     "run",
@@ -279,7 +276,7 @@ def main():
     Main CLI entry point.
 
     Parses command line arguments and routes to appropriate handlers:
-    - System commands (help, usage, agents, commands, interactive)
+    - System commands (help, usage, agents, commands)
     - Explicit commands (chat, agent, run)
     - Command shortcuts (daily, email, tasks, etc.)
     - Command patterns (prefix:name)
@@ -310,17 +307,11 @@ def main():
     # System Commands
     # ====================================================================
 
-    # Interactive mode
+    # Interactive mode removed - show error
     if first_arg in ["interactive", "i"]:
-        try:
-            from Tools.thanos_interactive import ThanosInteractive
-
-            interactive = ThanosInteractive(orchestrator)
-            interactive.run()
-        except ImportError:
-            print("Error: Interactive mode not available")
-            sys.exit(1)
-        return
+        print("Error: Interactive mode is not available. Use natural language commands instead.")
+        print('Example: thanos "What should I focus on today?"')
+        sys.exit(1)
 
     # Chat command
     if first_arg == "chat":
