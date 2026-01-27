@@ -138,7 +138,7 @@ Spinners **automatically detect** your environment and behave appropriately:
 This means you can safely use Thanos in scripts and pipelines without worrying about escape code pollution:
 
 ```bash
-# Interactive mode - spinner shows
+# Interactive terminal - spinner shows
 ./thanos daily
 
 # Piped mode - no spinner, clean output

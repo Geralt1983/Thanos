@@ -128,17 +128,32 @@
     "zsh"
   ],
   "stack_commands": [
+    "ar",
+    "clang",
+    "clang++",
+    "cmake",
     "createdb",
     "createuser",
+    "dotnet",
     "dropdb",
     "dropuser",
+    "g++",
+    "gcc",
     "initdb",
     "ipython",
     "jupyter",
+    "ld",
+    "make",
+    "meson",
+    "msbuild",
+    "ninja",
+    "nm",
     "node",
     "notebook",
     "npm",
     "npx",
+    "nuget",
+    "objdump",
     "pdb",
     "pg_ctl",
     "pg_dump",
@@ -155,6 +170,7 @@
     "python",
     "python3",
     "ruff",
+    "strip",
     "ts-node",
     "tsc",
     "tsx"
@@ -165,7 +181,10 @@
     "languages": [
       "python",
       "javascript",
-      "typescript"
+      "typescript",
+      "csharp",
+      "c",
+      "cpp"
     ],
     "package_managers": [
       "pip"
@@ -189,7 +208,8 @@
     "cargo_aliases": [],
     "shell_scripts": []
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/053-web-visualization-dashboard",
-  "created_at": "2026-01-26T11:32:43.682316",
-  "project_hash": "d61a87525c088c7b315e26e26780aa40"
+  "project_dir": "/Users/jeremy/Projects/Thanos",
+  "created_at": "2026-01-26T19:59:45.520445",
+  "project_hash": "423fd35af864deff9b5dae88dc03e1b5",
+  "inherited_from": "/Users/jeremy/Projects/Thanos"
 }
