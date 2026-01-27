@@ -32,6 +32,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from Tools.litellm_client import get_client
+from Tools.output_formatter import truncate_smart, is_mobile
 
 
 # System prompt for calendar assistant persona
@@ -228,12 +229,15 @@ def format_calendar_for_display(calendar_data: dict, scope: str = "today") -> st
                 # All-day event
                 time_str = "All day"
 
-            output.append(f"- **{summary}**")
+            # Truncate summary for mobile terminals
+            display_summary = truncate_smart(summary)
+            output.append(f"- **{display_summary}**")
             output.append(f"  {time_str}")
 
-            # Add location if present
+            # Add location if present (truncated for mobile)
             if event.get("location"):
-                output.append(f"  📍 {event['location']}")
+                display_location = truncate_smart(event['location'])
+                output.append(f"  📍 {display_location}")
 
             # Add attendees count if present
             attendees = event.get("attendees", [])
