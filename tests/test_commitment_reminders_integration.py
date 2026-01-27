@@ -168,12 +168,12 @@ class TestCommitmentDetectionToReminder:
         assert len(alerts) > 0
 
         # Find the alert for our commitment
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
         assert len(our_alerts) > 0
 
         alert = our_alerts[0]
         assert alert.severity == "warning"  # Due within 24 hours
-        assert "Sullivan" in alert.message or commitment.title in alert.message
+        assert "Sullivan" in alert.title or commitment.title in alert.title
 
     @pytest.mark.asyncio
     async def test_far_future_commitment_low_priority_reminder(self, tracker, reminder_checker):
@@ -192,7 +192,7 @@ class TestCommitmentDetectionToReminder:
         alerts = await reminder_checker.check()
 
         # Should have generated a low-priority reminder
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
         assert len(our_alerts) > 0
 
         alert = our_alerts[0]
@@ -218,7 +218,7 @@ class TestCommitmentDetectionToReminder:
         alerts = await reminder_checker.check()
 
         # Should NOT have a reminder for the completed commitment
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
         assert len(our_alerts) == 0
 
     @pytest.mark.asyncio
@@ -239,12 +239,12 @@ class TestCommitmentDetectionToReminder:
         alerts = await reminder_checker.check()
 
         # Should have an overdue alert
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
         assert len(our_alerts) > 0
 
         alert = our_alerts[0]
-        assert alert.severity == "error"  # Overdue is high severity
-        assert "overdue" in alert.message.lower() or "past due" in alert.message.lower()
+        assert alert.severity == "critical"  # Overdue is high severity
+        assert "overdue" in alert.title.lower() or "past due" in alert.title.lower()
 
 
 @pytest.mark.integration
@@ -288,18 +288,18 @@ class TestCompleteE2EFlow:
 
         # Step 4: Reminder checker generates alert
         alerts = await reminder_checker.check()
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
         assert len(our_alerts) > 0
 
         alert = our_alerts[0]
         assert alert.severity in ["warning", "info"]  # Due soon
-        assert "Ashley" in alert.message or "photos" in alert.message.lower()
+        assert "Ashley" in alert.title or "photos" in alert.title.lower()
 
-        # Step 5: Verify alert metadata contains commitment context
-        assert "commitment_id" in alert.metadata
-        assert alert.metadata["commitment_id"] == commitment.id
-        if "person" in alert.metadata:
-            assert alert.metadata["person"] == "Ashley"
+        # Step 5: Verify alert data contains commitment context
+        assert "commitment_id" in alert.data
+        assert alert.data["commitment_id"] == commitment.id
+        if "person" in alert.data:
+            assert alert.data["person"] == "Ashley"
 
     @pytest.mark.asyncio
     async def test_multiple_commitments_prioritized_correctly(
@@ -346,17 +346,17 @@ class TestCompleteE2EFlow:
         assert len(alerts) >= 3
 
         # Verify high priority alert has highest severity
-        urgent_alerts = [a for a in alerts if urgent.id in str(a.metadata)]
+        urgent_alerts = [a for a in alerts if urgent.id in str(a.data)]
         assert len(urgent_alerts) > 0
         assert urgent_alerts[0].severity == "warning"
 
         # Verify medium priority alert
-        medium_alerts = [a for a in alerts if medium.id in str(a.metadata)]
+        medium_alerts = [a for a in alerts if medium.id in str(a.data)]
         assert len(medium_alerts) > 0
         assert medium_alerts[0].severity == "info"
 
         # Verify low priority alert
-        low_alerts = [a for a in alerts if low.id in str(a.metadata)]
+        low_alerts = [a for a in alerts if low.id in str(a.data)]
         assert len(low_alerts) > 0
         assert low_alerts[0].severity == "debug"
 
@@ -464,7 +464,7 @@ class TestReminderTiming:
         )
 
         alerts = await reminder_checker.check()
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
 
         assert len(our_alerts) > 0
         assert our_alerts[0].severity == "warning"
@@ -482,7 +482,7 @@ class TestReminderTiming:
         )
 
         alerts = await reminder_checker.check()
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
 
         assert len(our_alerts) > 0
         assert our_alerts[0].severity == "info"
@@ -500,7 +500,7 @@ class TestReminderTiming:
         )
 
         alerts = await reminder_checker.check()
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
 
         assert len(our_alerts) > 0
         assert our_alerts[0].severity == "debug"
@@ -518,7 +518,7 @@ class TestReminderTiming:
         )
 
         alerts = await reminder_checker.check()
-        our_alerts = [a for a in alerts if commitment.id in str(a.metadata)]
+        our_alerts = [a for a in alerts if commitment.id in str(a.data)]
 
         # Should not have generated a reminder yet
         assert len(our_alerts) == 0

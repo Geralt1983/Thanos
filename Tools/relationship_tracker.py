@@ -283,25 +283,31 @@ class RelationshipMentionTracker:
 
         return [PersonMention.from_row(row) for row in cursor.fetchall()]
 
-    def set_importance(self, person: str, importance: str) -> None:
+    def set_importance(self, person: str, importance) -> None:
         """
         Set importance level for a person.
 
         Args:
             person: Name of the person
-            importance: ImportanceLevel value (critical, high, medium, low)
+            importance: ImportanceLevel enum or string value (critical, high, medium, low)
         """
         cursor = self.conn.cursor()
         now = datetime.now().isoformat()
 
+        # Normalize importance input - handle both str and ImportanceLevel enum
+        if isinstance(importance, ImportanceLevel):
+            importance_str = importance.value
+        else:
+            importance_str = str(importance)
+
         # Validate importance level
-        ImportanceLevel(importance)  # Raises ValueError if invalid
+        ImportanceLevel(importance_str)  # Raises ValueError if invalid
 
         cursor.execute("""
             UPDATE person_mentions
             SET importance_level = ?, updated_at = ?
             WHERE person_name = ?
-        """, (importance, now, person))
+        """, (importance_str, now, person))
 
         # If person doesn't exist, create them
         if cursor.rowcount == 0:
@@ -310,7 +316,7 @@ class RelationshipMentionTracker:
                 (person_name, last_mentioned_at, mention_count, importance_level,
                  first_mentioned_at, metadata, created_at, updated_at)
                 VALUES (?, ?, 0, ?, ?, '{}', ?, ?)
-            """, (person, now, importance, now, now, now))
+            """, (person, now, importance_str, now, now, now))
 
         self.conn.commit()
 

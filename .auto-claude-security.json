@@ -189,7 +189,7 @@
     "cargo_aliases": [],
     "shell_scripts": []
   },
-  "project_dir": "/Users/jeremy/Projects/Thanos/.auto-claude/worktrees/tasks/052-commitment-tracking-with-proactive-reminders",
+  "project_dir": "./",
   "created_at": "2026-01-26T11:32:42.035487",
   "project_hash": "a7e5400415057faf109edfe92ce76426"
 }

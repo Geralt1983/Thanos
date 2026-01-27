@@ -110,19 +110,20 @@ class SignalManager:
             Unique signal ID string
         """
         signal_type = signal.get('type', '')
+        severity = signal.get('severity', '')
 
-        # For commitment reminders, use commitment_id
+        # For commitment reminders, use commitment_id with severity to differentiate events
         if signal_type == 'CommitmentReminderCell' and 'commitment_id' in signal:
-            return f"commitment-{signal['commitment_id']}"
+            return f"commitment-{signal['commitment_id']}-{severity}"
 
-        # For relationship decay, use person
+        # For relationship decay, use person with severity to differentiate events
         elif signal_type == 'RelationshipCell' and 'person' in signal:
-            return f"relationship-{signal['person']}"
+            return f"relationship-{signal['person']}-{severity}"
 
-        # For generic signals, hash the message
+        # For generic signals, hash the message with severity
         else:
             message_hash = hashlib.md5(signal.get('message', '').encode()).hexdigest()[:8]
-            return f"{signal_type.lower()}-{message_hash}"
+            return f"{signal_type.lower()}-{severity}-{message_hash}"
 
     def is_acknowledged(self, signal_id: str) -> bool:
         """
@@ -266,18 +267,31 @@ async def get_signals() -> List[Dict[str, Any]]:
     return signals
 
 
-def format_output(signals: List[Dict[str, Any]]) -> str:
+def format_output(signals: List[Dict[str, Any]], output_format: str = "json") -> str:
     """
     Format signals for display at session start.
 
     Args:
         signals: List of signal dictionaries
+        output_format: "json" for structured JSON, "text" for human-readable
 
     Returns:
-        Formatted string for output
+        Formatted string (JSON or human-readable text)
     """
+    if output_format == "json":
+        # Return structured JSON
+        if not signals:
+            return json.dumps({"count": 0, "signals": [], "summary": "No signals"})
+
+        return json.dumps({
+            "count": len(signals),
+            "signals": signals,
+            "summary": f"{len(signals)} signal(s) from Sentinel/Honeycomb"
+        }, indent=2)
+
+    # Human-readable text format (legacy)
     if not signals:
-        return "No critical signals"
+        return "No signals"
 
     # Build output
     lines = []
@@ -323,8 +337,12 @@ def format_output(signals: List[Dict[str, Any]]) -> str:
 
 async def main():
     """Main entry point for get_signals.py"""
+    import sys
+    # Allow text mode with --text flag for backwards compatibility
+    output_format = "text" if "--text" in sys.argv else "json"
+
     signals = await get_signals()
-    output = format_output(signals)
+    output = format_output(signals, output_format=output_format)
     print(output)
 
 

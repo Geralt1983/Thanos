@@ -78,7 +78,7 @@ class CommitmentReminderChecker(AlertChecker):
                 hours_until = (due_date - now).total_seconds() / 3600
 
                 # Check for overdue (shouldn't happen, but handle it)
-                if days_until < 0:
+                if hours_until < 0:
                     alerts.append(self._create_overdue_alert(commitment, abs(days_until)))
                     continue
 

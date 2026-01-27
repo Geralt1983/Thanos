@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "updated_at": "2026-01-26T11:54:44.174566",
+  "updated_at": "2026-01-26T12:21:48.955129",
   "commitments": [
     {
       "id": "example-commitment-001",
@@ -154,7 +154,7 @@
         "last_reminded": null
       },
       "notes": "",
-      "person": null,
+      "person": "Mom",
       "domain": "personal",
       "priority": 1,
       "tags": [],
@@ -210,6 +210,32 @@
       "notes": "",
       "person": null,
       "domain": "personal",
+      "priority": 3,
+      "tags": [],
+      "metadata": {}
+    },
+    {
+      "id": "0936876c-0616-446b-8093-a3c303ce3e60",
+      "title": "Call Mom",
+      "type": "task",
+      "status": "completed",
+      "created_date": "2026-01-26T12:21:48.951835",
+      "due_date": "2026-01-27T12:21:48.951782",
+      "recurrence_pattern": "none",
+      "streak_count": 0,
+      "longest_streak": 0,
+      "completion_rate": 0.0,
+      "completion_history": [],
+      "follow_up_schedule": {
+        "enabled": true,
+        "next_check": "2026-01-27T12:21:48.951782",
+        "frequency_hours": 24,
+        "escalation_count": 0,
+        "last_reminded": null
+      },
+      "notes": "Test commitment for QA",
+      "person": null,
+      "domain": "general",
       "priority": 3,
       "tags": [],
       "metadata": {}
