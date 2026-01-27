@@ -156,6 +156,7 @@ class StateStore:
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = None  # Pooled connection for reuse
         self._init_database()
 
     @contextmanager
