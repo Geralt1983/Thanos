@@ -87,3 +87,45 @@ def format_list(items: List[str], numbered: bool = False) -> str:
             prefix = f"{i}." if numbered else "-"
             output.append(f"{prefix} {item}")
     return "\n".join(output)
+
+def truncate_smart(text: str, max_length: int = None, preserve_words: bool = True) -> str:
+    """
+    Intelligently truncate text with mobile awareness.
+
+    Args:
+        text: Text to truncate
+        max_length: Maximum length (defaults to terminal-appropriate value)
+        preserve_words: If True, truncate at word boundaries
+
+    Returns:
+        Truncated text with ellipsis if needed
+    """
+    if not text:
+        return text
+
+    # Use mobile-aware default if not specified
+    if max_length is None:
+        max_length = 50 if is_mobile() else 150
+
+    # If text fits, return as-is
+    if len(text) <= max_length:
+        return text
+
+    # Reserve space for ellipsis
+    ellipsis = "..."
+    target_length = max_length - len(ellipsis)
+
+    if target_length <= 0:
+        return ellipsis
+
+    # Truncate
+    truncated = text[:target_length]
+
+    # Try to preserve word boundaries
+    if preserve_words and ' ' in truncated:
+        # Find last space
+        last_space = truncated.rfind(' ')
+        if last_space > target_length * 0.6:  # Only if we don't lose too much
+            truncated = truncated[:last_space]
+
+    return truncated + ellipsis
