@@ -11,7 +11,6 @@ Examples:
   thanos Should I take this client?
 
 EXPLICIT COMMANDS:
-  thanos interactive              Launch interactive mode
   thanos chat <message>           Chat with auto-routing
   thanos agent <name> <message>   Chat with specific agent
   thanos run <command> [args]     Run a specific command
@@ -160,8 +159,6 @@ SYSTEM_COMMANDS = {
     "help",
     "-h",
     "--help",
-    "interactive",
-    "i",
     "chat",
     "agent",
     "run",
@@ -309,23 +306,6 @@ def main():
     # ====================================================================
     # System Commands
     # ====================================================================
-
-    # Interactive mode
-    if first_arg in ["interactive", "i"]:
-        # Print deprecation warning
-        print("\n⚠️  WARNING: Interactive mode is deprecated and will be removed in a future version.")
-        print("📖 Please use Claude Code with the Thanos persona instead.")
-        print("   See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md for migration guide.\n")
-
-        try:
-            from Tools.thanos_interactive import ThanosInteractive
-
-            interactive = ThanosInteractive(orchestrator)
-            interactive.run()
-        except ImportError:
-            print("Error: Interactive mode not available")
-            sys.exit(1)
-        return
 
     # Chat command
     if first_arg == "chat":
