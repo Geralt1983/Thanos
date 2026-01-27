@@ -475,10 +475,10 @@ class MemoryService:
         # Apply heat ranking (converts distance to similarity, uses weighted addition)
         ranked = self._apply_heat_ranking(results)
 
-        # Boost accessed memories
-        for mem in ranked[:limit]:
-            if "id" in mem:
-                self.heat_service.boost_on_access(mem["id"])
+        # Boost accessed memories (batch operation)
+        memory_ids = [mem["id"] for mem in ranked[:limit] if "id" in mem]
+        if memory_ids:
+            self.heat_service.batch_boost_on_access(memory_ids)
 
         return ranked[:limit]
 
