@@ -1,10 +1,10 @@
 {
   "active": true,
   "spec": "063-statestore-sqlite-connection-reuse-for-high-freque",
-  "state": "planning",
+  "state": "building",
   "subtasks": {
-    "completed": 0,
-    "total": 0,
+    "completed": 1,
+    "total": 11,
     "in_progress": 1,
     "failed": 0
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 2,
+    "number": 3,
     "started_at": "2026-01-26T21:09:12.207804"
   },
-  "last_update": "2026-01-26T21:15:51.887405"
+  "last_update": "2026-01-26T21:17:35.115932"
 }

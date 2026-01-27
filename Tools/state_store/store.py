@@ -175,6 +175,23 @@ class StateStore:
         finally:
             conn.close()
 
+    def _get_pooled_connection(self):
+        """Get persistent pooled connection for reuse.
+
+        Returns the same connection across multiple calls for improved performance
+        in high-frequency operations. Connection is configured with proper settings
+        on first access.
+
+        Returns:
+            sqlite3.Connection: Persistent database connection
+        """
+        if self._conn is None:
+            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA foreign_keys = ON")
+            self._conn.execute("PRAGMA journal_mode = WAL")
+        return self._conn
+
     def _init_database(self):
         """Initialize database schema."""
         with self._get_connection() as conn:
