@@ -1244,13 +1244,13 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions)
 
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                f'SELECT * FROM focus_areas WHERE {where_clause} ORDER BY started_at DESC',
-                params
-            ).fetchall()
+        conn = self._get_pooled_connection()
+        rows = conn.execute(
+            f'SELECT * FROM focus_areas WHERE {where_clause} ORDER BY started_at DESC',
+            params
+        ).fetchall()
 
-            return [self._row_to_focus_area(row) for row in rows]
+        return [self._row_to_focus_area(row) for row in rows]
 
     def _row_to_focus_area(self, row: sqlite3.Row) -> FocusArea:
         """Convert database row to FocusArea object."""
