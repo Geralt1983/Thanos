@@ -52,6 +52,13 @@ fi
 
 cd "$SCRIPT_DIR"
 
+# DEPRECATED: Print deprecation warning
+echo ""
+echo "⚠️  DEPRECATED: Thanos Interactive mode is being phased out."
+echo "📖 Please use Claude Code with the Thanos persona instead."
+echo "   See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md for migration guide."
+echo ""
+
 # Use quiet mode wrapper to filter MCP noise while preserving interactivity
 exec $PYTHON_CMD -c "
 import sys
