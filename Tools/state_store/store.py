@@ -1272,10 +1272,13 @@ class StateStore:
     def export_summary(self) -> Dict[str, Any]:
         """Export a summary of all state.
 
+        Uses pooled connection for improved performance across multiple queries.
+
         Returns:
             Dictionary with counts and summary info
         """
-        return {
+        # All helper methods use pooled connection for efficient reuse
+        summary = {
             'exported_at': self._now_iso(),
             'tasks': {
                 'total': self.count_tasks(),
@@ -1295,6 +1298,12 @@ class StateStore:
             },
             'focus_areas': [asdict(f) for f in self.get_active_focus()],
         }
+
+        # Ensure pooled connection commits any pending transactions
+        conn = self._get_pooled_connection()
+        conn.commit()
+
+        return summary
 
 
 # =============================================================================
