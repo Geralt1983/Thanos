@@ -51,6 +51,7 @@ def _cached_query_embedding(query: str) -> Tuple[float, ...]:
     return tuple(response.data[0].embedding)
 
 from .heat import HeatService, get_heat_service
+from .search_cache import SearchResultCache
 
 # Try to import mem0, but allow graceful degradation
 try:
@@ -81,6 +82,7 @@ class MemoryService:
         self.user_id = user_id or DEFAULT_USER_ID
         self.heat_service = get_heat_service()
         self._persistent_conn = None  # Reuse connection for speed
+        self._search_cache = SearchResultCache(ttl_seconds=300)  # 5-minute TTL cache
 
         if not self.database_url:
             raise ValueError("Database URL not configured")
@@ -379,9 +381,31 @@ class MemoryService:
         if entities:
             search_filters["entities"] = entities
 
-        # Always use direct search with cached embeddings for speed
-        # mem0.search() calls OpenAI per-query without caching
-        return self._direct_search(query, limit, search_filters)
+        # Generate cache key for this search
+        cache_key = self._search_cache.generate_key(
+            query=query,
+            limit=limit,
+            client=client,
+            project=project,
+            domain=domain,
+            source=source,
+            entities=entities,
+            filters=filters
+        )
+
+        # Check cache first
+        cached_results = self._search_cache.get(cache_key)
+        if cached_results is not None:
+            logger.debug(f"Returning cached search results for: {query[:50]}...")
+            return cached_results
+
+        # Cache miss - perform search
+        results = self._direct_search(query, limit, search_filters)
+
+        # Cache the results
+        self._search_cache.set(cache_key, results)
+
+        return results
 
     def _direct_search(self, query: str, limit: int, filters: dict = None) -> List[Dict[str, Any]]:
         """Direct semantic search with cached embeddings and SQL-level filtering."""
