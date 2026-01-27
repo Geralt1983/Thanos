@@ -192,6 +192,30 @@ class StateStore:
             self._conn.execute("PRAGMA journal_mode = WAL")
         return self._conn
 
+    def close(self):
+        """Close the pooled connection if it exists.
+
+        This method should be called when done with the StateStore instance
+        to properly release database resources. It's also called automatically
+        by __del__() during garbage collection.
+        """
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                # Silently handle any errors during close
+                pass
+            finally:
+                self._conn = None
+
+    def __del__(self):
+        """Destructor to ensure pooled connection is closed.
+
+        Automatically called when the StateStore instance is garbage collected.
+        Ensures proper cleanup of database resources.
+        """
+        self.close()
+
     def _init_database(self):
         """Initialize database schema."""
         with self._get_connection() as conn:
