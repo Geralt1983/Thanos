@@ -141,7 +141,24 @@ class BrainDump:
 # =============================================================================
 
 class StateStore:
-    """Unified SQLite state store for all Thanos data."""
+    """Unified SQLite state store for all Thanos data.
+
+    Uses connection pooling for improved performance in high-frequency operations.
+    The same database connection is reused across multiple method calls, reducing
+    connection overhead.
+
+    Important: Call close() when done with the StateStore instance to properly
+    release database resources. If not called explicitly, cleanup happens
+    automatically during garbage collection via __del__().
+
+    Example:
+        store = StateStore()
+        try:
+            # Use the store
+            tasks = store.get_tasks()
+        finally:
+            store.close()  # Properly release resources
+    """
 
     SCHEMA_VERSION = 2
 
