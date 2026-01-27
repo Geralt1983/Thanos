@@ -111,6 +111,7 @@ if str(THANOS_DIR) not in sys.path:
     sys.path.insert(0, str(THANOS_DIR))
 
 from Tools.thanos_orchestrator import ThanosOrchestrator  # noqa: E402
+from Tools.first_run_detector import FirstRunDetector  # noqa: E402
 
 
 # ========================================================================
@@ -166,6 +167,55 @@ SYSTEM_COMMANDS = {
     "agent",
     "run",
 }
+
+# ========================================================================
+# Error Message Helpers
+# ========================================================================
+
+
+def print_error(text: str) -> None:
+    """Print an error message."""
+    print(f"✗ {text}")
+
+
+def print_info(text: str) -> None:
+    """Print an info message."""
+    print(f"ℹ️  {text}")
+
+
+def print_header(text: str) -> None:
+    """Print a formatted section header."""
+    print(f"\n{'='*70}")
+    print(f"  {text}")
+    print(f"{'='*70}\n")
+
+
+def validate_api_keys() -> bool:
+    """
+    Validate that required API keys are present.
+
+    Returns:
+        True if all required keys are present, False otherwise.
+    """
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+
+    if not anthropic_key:
+        print_header("Missing API Key")
+        print_error("ANTHROPIC_API_KEY not found in environment")
+        print()
+        print_info("Thanos requires an Anthropic API key to function.")
+        print_info("You can get one at: https://console.anthropic.com/")
+        print()
+        print_info("To fix this, run the setup wizard:")
+        print_info("  python3 Tools/setup_wizard.py")
+        print()
+        print_info("Or manually add it to your .env file:")
+        print_info("  ANTHROPIC_API_KEY=your-api-key-here")
+        print()
+        return False
+
+    return True
+
 
 # ========================================================================
 # Natural Language Detection
@@ -300,10 +350,55 @@ def main():
         print_usage()
         return
 
+    # ====================================================================
+    # First-Run Detection - Check if setup wizard needs to run
+    # ====================================================================
+    detector = FirstRunDetector()
+    if detector.is_first_run():
+        print("\n" + "="*70)
+        print("  Welcome to Thanos!")
+        print("="*70)
+        print("\nLooks like this is your first time running Thanos.")
+        print("Let's get you set up in under 5 minutes...\n")
+
+        try:
+            # Import wizard only when needed to avoid dependency issues
+            from Tools.setup_wizard import SetupWizard
+
+            wizard = SetupWizard()
+            success = wizard.run()
+
+            if not success:
+                print("\n" + "="*70)
+                print("  Setup Incomplete")
+                print("="*70)
+                print("\nSetup was not completed. You can run it again anytime:")
+                print("  python3 Tools/setup_wizard.py")
+                print()
+                sys.exit(1)
+
+            # Setup successful - exit and let user run thanos normally
+            print("\nSetup complete! Run 'thanos' again to start using it.")
+            sys.exit(0)
+
+        except KeyboardInterrupt:
+            print("\n\nSetup interrupted. Run 'python3 Tools/setup_wizard.py' to continue.")
+            sys.exit(1)
+        except Exception as e:
+            print(f"\nError during setup: {e}")
+            print("Please try running setup manually: python3 Tools/setup_wizard.py")
+            sys.exit(1)
+
+    # ====================================================================
+    # API Key Validation - Check required keys are present
+    # ====================================================================
+    if not validate_api_keys():
+        sys.exit(1)
+
     # Initialize orchestrator
     from Tools.server_manager import ServerManager
     ServerManager.ensure_chroma_running()
-    
+
     orchestrator = ThanosOrchestrator(str(THANOS_DIR))
 
     # ====================================================================
