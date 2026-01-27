@@ -4,7 +4,7 @@ Thanos is an AI-powered orchestration system that enables seamless integration w
 
 ## Features
 
-- **Interactive Mode**: Conversational AI interface with real-time token usage and cost monitoring
+- **Claude Code Integration**: Primary interface for Thanos - AI-powered orchestration through Claude Code
 - **Unified Adapter Framework**: Consistent interface for integrating with external services
 - **Direct Adapters**: Native Python adapters for WorkOS, Oura, Neo4j, ChromaDB, and more
 - **Full MCP SDK Integration**: Connect to any MCP-compatible server for maximum flexibility
@@ -43,89 +43,64 @@ tools = await manager.list_tools()
 result = await manager.call_tool("tool_name", {"arg": "value"})
 ```
 
-## Interactive Mode
+## Claude Code - Primary Interface
 
-Thanos provides a powerful interactive mode for conversational AI interactions with **real-time token usage and cost monitoring**.
+Thanos is designed to work seamlessly with **Claude Code**, Anthropic's AI-powered coding assistant. Claude Code provides the primary interface for interacting with Thanos through natural conversation and intelligent orchestration.
 
-### Quick Start
+### Why Claude Code?
 
-```bash
-python thanos.py interactive
-```
+- **Natural Conversation**: Interact with Thanos using natural language
+- **Context Awareness**: Claude Code maintains session context and understands your workflow
+- **Intelligent Routing**: Automatically routes requests to the right adapters and tools
+- **Memory Integration**: Access Thanos memory systems for continuity across sessions
+- **ADHD-Optimized**: Built-in support for ADHD workflows with energy gating and task management
+- **Persona System**: Thanos persona provides consistent, execution-focused interactions
 
-You'll see a prompt that displays live session statistics:
+### Getting Started with Claude Code
 
-```
-(1.2K | $0.04) Thanos>
-```
+1. **Install Claude Code**: Available through [Anthropic](https://claude.ai/claude-code)
 
-This shows:
-- **1.2K** - Total tokens used in the session
-- **$0.04** - Estimated cost in USD
+2. **Configure Thanos Persona**: The `CLAUDE.md` file in this repository defines the Thanos persona
+   - Execution-focused AI orchestration layer
+   - ADHD-optimized workflows
+   - Energy-aware task management
+   - Memory and context continuity
 
-The prompt updates after each interaction, helping you stay cost-conscious during development.
+3. **Setup MCP Integration**: Claude Code can directly access Thanos adapters through MCP
+   ```json
+   {
+     "mcpServers": {
+       "thanos": {
+         "command": "python",
+         "args": ["-m", "Tools.mcp_server"],
+         "enabled": true
+       }
+     }
+   }
+   ```
 
-### Key Features
+4. **Start Working**: Simply talk to Claude Code with the Thanos persona active
+   ```
+   "What's on my task list today?"
+   "Check my Oura readiness score"
+   "Add a brain dump: [your thoughts]"
+   ```
 
-- 🟢 **Real-Time Cost Tracking**: See token usage and costs update as you work
-- 🎨 **Color-Coded Alerts**: Green ($0-$0.50), Yellow ($0.50-$2.00), Red ($2.00+)
-- 📊 **Multiple Display Modes**: Compact, Standard (with duration), or Verbose (full details)
-- ⚡ **Runtime Switching**: Change display modes on-the-fly with `/prompt` command
-- 💰 **Budget Control**: Monitor spending and decide when to start fresh sessions
+### Key Capabilities
 
-### Display Modes
+Through Claude Code, Thanos provides:
 
-**Compact** (default):
-```
-(1.2K | $0.04) Thanos>
-```
-
-**Standard** (with session duration):
-```
-(45m | 1.2K tokens | $0.04) Thanos>
-```
-
-**Verbose** (complete breakdown):
-```
-(45m | 12 msgs | 1.2K in | 3.4K out | $0.04) Thanos>
-```
-
-### Common Commands
-
-```bash
-/prompt standard     # Switch to standard display mode
-/usage              # Show detailed usage statistics
-/agent research     # Switch to research agent
-/model sonnet       # Switch to Sonnet model
-/clear              # Start fresh conversation
-/help               # Show all commands
-/quit               # Exit interactive mode
-```
-
-### Configuration
-
-Customize the interactive prompt in `config/api.json`:
-
-```json
-{
-  "interactive_prompt": {
-    "enabled": true,
-    "mode": "compact",
-    "color_coding": {
-      "enabled": true,
-      "thresholds": {
-        "low": 0.50,
-        "medium": 2.00
-      }
-    }
-  }
-}
-```
+- **Task Management**: WorkOS integration for tasks, habits, and productivity tracking
+- **Health Data**: Oura integration for sleep, readiness, and activity data
+- **Memory Systems**: Persistent memory with heat-based retrieval (hot/warm/cold)
+- **Brain Dump Processing**: Capture loose thoughts and process them into actionable items
+- **Energy Gating**: Automatic task recommendations based on current energy levels
+- **Client Management**: Project and client tracking with time allocation
 
 ### Documentation
 
-- **[Interactive Mode Guide](docs/interactive-mode.md)**: Complete guide with usage patterns and tips
-- **[Prompt Configuration](docs/interactive-prompt-configuration.md)**: Detailed configuration options
+- **[CLAUDE.md](CLAUDE.md)**: Complete Thanos persona configuration and behavioral protocols
+- **[Migration Guide](docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md)**: Transitioning from legacy interactive mode
 
 ## Visual Feedback & Loading Indicators
 

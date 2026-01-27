@@ -169,19 +169,6 @@
     "temperature": 1.0,
     "stream": false
   },
-  "interactive_prompt": {
-    "enabled": true,
-    "mode": "compact",
-    "show_duration": true,
-    "show_message_count": false,
-    "color_coding": {
-      "enabled": true,
-      "thresholds": {
-        "low": 0.50,
-        "medium": 2.00
-      }
-    }
-  },
   "openai_responses": {
     "enabled": false,
     "model_prefixes": [
@@ -204,9 +191,6 @@
         "max_output_tokens": 4096
       }
     }
-  },
-  "startup": {
-    "default_command": "/pa:daily"
   },
   "mcp_servers": {
     "workos": {

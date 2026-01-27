@@ -1,4 +1,14 @@
 """
+⚠️ DEPRECATED - This test file is deprecated as of 2026-01-27
+
+The thanos-interactive CLI mode has been deprecated in favor of Claude Code
+as the primary interface for Thanos. These tests are skipped and will be
+removed in a future cleanup.
+
+See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md for migration guidance.
+
+---
+
 Integration tests for interactive prompt with token/cost display.
 
 These tests validate that the prompt updates correctly during interactive sessions
@@ -41,7 +51,11 @@ from Tools.command_router import CommandAction
 # Pytest Markers and Fixtures
 # ========================================================================
 
-pytestmark = pytest.mark.integration
+# Skip all tests in this file - interactive mode is deprecated
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skip(reason="DEPRECATED: thanos-interactive CLI mode has been deprecated in favor of Claude Code. See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md")
+]
 
 
 @pytest.fixture

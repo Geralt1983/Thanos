@@ -1,3 +1,16 @@
+> **⚠️ DEPRECATED - DO NOT USE**
+>
+> **This interactive mode (`python thanos.py interactive`) is DEPRECATED and will be removed in a future release.**
+>
+> **Use Claude Code instead** - Claude Code is now the primary and recommended interface for Thanos. It provides all the same capabilities with better integration, improved UX, and native support for the Thanos persona.
+>
+> **Migration Path:**
+> - See `CLAUDE.md` for the Thanos persona specification for Claude Code
+> - All Thanos workflows now run through Claude Code using this persona
+> - The legacy CLI interactive mode is no longer maintained
+>
+> ---
+
 # Thanos Interactive Mode
 
 Interactive mode provides a conversational interface to Thanos, allowing you to chat with AI agents, run commands, and monitor resource usage in real-time.
