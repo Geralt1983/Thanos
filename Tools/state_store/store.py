@@ -178,7 +178,18 @@ class StateStore:
 
     @contextmanager
     def _get_connection(self):
-        """Get database connection with proper handling."""
+        """Get database connection with isolated transaction scope.
+
+        Creates a new connection with automatic commit/rollback handling.
+        Best for write operations (INSERT, UPDATE, DELETE) that need
+        transaction isolation and automatic error recovery.
+
+        For high-frequency read operations, use _get_pooled_connection() instead
+        to avoid connection creation overhead.
+
+        Yields:
+            sqlite3.Connection: New database connection with transaction handling
+        """
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -197,7 +208,11 @@ class StateStore:
 
         Returns the same connection across multiple calls for improved performance
         in high-frequency operations. Connection is configured with proper settings
-        on first access.
+        on first access and reused for subsequent calls.
+
+        Best for read operations (SELECT, COUNT) that are called frequently.
+        For write operations that need transaction isolation, use _get_connection()
+        instead.
 
         Returns:
             sqlite3.Connection: Persistent database connection
