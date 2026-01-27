@@ -61,6 +61,7 @@ from Tools.command_handlers.base import (
     CommandResult,
     Colors,
 )
+from Tools.output_formatter import truncate_smart
 
 # Import memory router for all memory operations
 try:
@@ -270,8 +271,8 @@ class MemoryHandler(BaseHandler):
                 if hot_memories:
                     for mem in hot_memories:
                         heat = mem.get("heat", 1.0)
-                        content = mem.get("memory", mem.get("content", ""))[:100]
-                        print(f"  🔥 ({heat:.2f}) {content}...")
+                        content = truncate_smart(mem.get("memory", mem.get("content", "")))
+                        print(f"  🔥 ({heat:.2f}) {content}")
                 else:
                     print(f"  {Colors.DIM}No hot memories found{Colors.RESET}")
                 print()
@@ -287,8 +288,8 @@ class MemoryHandler(BaseHandler):
                 if cold_memories:
                     for mem in cold_memories:
                         heat = mem.get("heat", 0.1)
-                        content = mem.get("memory", mem.get("content", ""))[:100]
-                        print(f"  ❄️  ({heat:.2f}) {content}...")
+                        content = truncate_smart(mem.get("memory", mem.get("content", "")))
+                        print(f"  ❄️  ({heat:.2f}) {content}")
                 else:
                     print(f"  {Colors.DIM}No cold memories found{Colors.RESET}")
                 print()
@@ -308,7 +309,7 @@ class MemoryHandler(BaseHandler):
                     heat_icon = "🔥" if heat > 0.7 else "•" if heat > 0.3 else "❄️"
                     memory_results.append({
                         "source": "router",
-                        "content": mem.get("memory", mem.get("content", ""))[:150],
+                        "content": truncate_smart(mem.get("memory", mem.get("content", ""))),
                         "score": mem.get("effective_score", mem.get("score", 0)),
                         "heat": heat,
                         "heat_icon": heat_icon,
@@ -325,7 +326,7 @@ class MemoryHandler(BaseHandler):
                 score = r.get("score", 0)
                 client_str = f" #{r['client']}" if r.get("client") else ""
                 print(f"  {heat_icon} ({score:.2f}){client_str}")
-                print(f"     {r['content']}...")
+                print(f"     {r['content']}")
                 print()
 
         # Also search session history
@@ -347,7 +348,7 @@ class MemoryHandler(BaseHandler):
                                 "session": data.get("id", json_file.stem),
                                 "date": data.get("started_at", "")[:16].replace("T", " "),
                                 "role": msg.get("role", "unknown"),
-                                "preview": msg.get("content", "")[:100],
+                                "preview": truncate_smart(msg.get("content", "")),
                             })
                             if len(session_matches) >= 5:
                                 break
@@ -362,7 +363,7 @@ class MemoryHandler(BaseHandler):
             for m in session_matches:
                 role_color = Colors.PURPLE if m["role"] == "user" else Colors.CYAN
                 print(f"  {Colors.DIM}{m['date']}{Colors.RESET} ({m['session']})")
-                print(f"  {role_color}{m['role']}:{Colors.RESET} {m['preview']}...")
+                print(f"  {role_color}{m['role']}:{Colors.RESET} {m['preview']}")
                 print()
 
         if not memory_results and not session_matches:
