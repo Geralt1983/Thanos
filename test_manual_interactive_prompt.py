@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 """
+⚠️ DEPRECATED - This test script is deprecated as of 2026-01-27
+
+The thanos-interactive CLI mode has been deprecated in favor of Claude Code
+as the primary interface for Thanos. This manual test script will be removed
+in a future cleanup.
+
+See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md for migration guidance.
+
+---
+
 Manual Testing Script for Interactive Prompt Feature
 
 This script demonstrates the interactive prompt with token/cost display
@@ -303,6 +313,13 @@ def test_realistic_session():
 def main():
     """Run all manual tests"""
     print("\n" + "="*70)
+    print("  ⚠️  DEPRECATED - This test script is deprecated")
+    print("  The thanos-interactive CLI mode has been deprecated")
+    print("  in favor of Claude Code as the primary interface.")
+    print("  See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md")
+    print("="*70)
+    print()
+    print("="*70)
     print("  INTERACTIVE PROMPT FEATURE - MANUAL TESTING")
     print("  Feature: Token Count and Cost Estimate Display")
     print("="*70)
