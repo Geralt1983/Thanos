@@ -127,6 +127,77 @@ Customize the interactive prompt in `config/api.json`:
 - **[Interactive Mode Guide](docs/interactive-mode.md)**: Complete guide with usage patterns and tips
 - **[Prompt Configuration](docs/interactive-prompt-configuration.md)**: Detailed configuration options
 
+## Visual Feedback & Loading Indicators
+
+Thanos CLI provides animated loading spinners during long-running operations to give you immediate visual feedback that the system is processing.
+
+### When Spinners Appear
+
+**Command Execution** (cyan spinner):
+```bash
+./thanos daily
+# Shows: "Executing pa:daily..." with animated dots
+```
+
+**Chat Operations** (magenta spinner):
+```bash
+./thanos chat "What's on my schedule?"
+# Shows: "Thinking..." with animated dots
+```
+
+**Agent-Specific Chat** (magenta spinner with agent name):
+```bash
+./thanos chat --agent ops "Review my tasks"
+# Shows: "Thinking as Ops..." with animated dots
+```
+
+### Intelligent TTY Detection
+
+Spinners **automatically detect** your environment and behave appropriately:
+
+- **Interactive Terminal (TTY)**: Shows animated spinner with colors
+- **Piped Output**: Silent (no spinner, no ANSI codes)
+- **Redirected Output**: Silent (no spinner, no ANSI codes)
+- **CI/Automation**: Silent (no spinner, no ANSI codes)
+
+This means you can safely use Thanos in scripts and pipelines without worrying about escape code pollution:
+
+```bash
+# Interactive mode - spinner shows
+./thanos daily
+
+# Piped mode - no spinner, clean output
+./thanos daily | grep "tasks"
+
+# Redirected mode - no spinner, clean output
+./thanos daily > output.txt
+```
+
+### Graceful Degradation
+
+Spinners are a **visual enhancement only** and never break functionality:
+
+1. **Missing Dependency**: If `yaspin` library is unavailable, spinners fail silently
+2. **Non-TTY Environment**: Spinners detect and disable themselves automatically
+3. **Startup Errors**: If spinner initialization fails, execution continues normally
+
+### Dependencies
+
+Spinners use the `yaspin` library for animation:
+
+```bash
+pip install yaspin>=3.0.0
+```
+
+If not installed, commands work normally without visual spinners.
+
+### Implementation Details
+
+- **Colors**: Cyan for commands, magenta for chat operations
+- **Animation**: Rotating dots pattern
+- **Success/Failure**: Shows ✓ or ✗ symbol on completion
+- **Streaming Mode**: Spinner stops before first output chunk to avoid interference
+
 ## Model Context Protocol (MCP) Integration
 
 Thanos includes **full MCP SDK integration**, enabling connection to any MCP-compatible server. This opens up the entire MCP ecosystem to Thanos.
