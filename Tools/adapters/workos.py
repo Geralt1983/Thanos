@@ -5,6 +5,7 @@ Provides direct PostgreSQL access to the WorkOS productivity database,
 bypassing the MCP server for better performance and control.
 """
 
+import asyncio
 from datetime import datetime
 import os
 from typing import Any, Optional
