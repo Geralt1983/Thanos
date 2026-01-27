@@ -1,25 +1,25 @@
 {
   "active": true,
-  "spec": "051-memory-health-dashboard",
-  "state": "complete",
+  "spec": "077-deprecate-thanos-interactive-and-make-claude-code-",
+  "state": "building",
   "subtasks": {
-    "completed": 4,
-    "total": 4,
-    "in_progress": 0,
+    "completed": 6,
+    "total": 12,
+    "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Implement Memory Health Dashboard",
+    "current": "Remove Entry Points",
     "id": null,
-    "total": 4
+    "total": 3
   },
   "workers": {
     "active": 0,
     "max": 1
   },
   "session": {
-    "number": 5,
-    "started_at": "2026-01-25T22:02:15.150916"
+    "number": 6,
+    "started_at": "2026-01-26T21:21:41.591587"
   },
-  "last_update": "2026-01-25T22:19:11.647562"
+  "last_update": "2026-01-26T21:36:08.533218"
 }
