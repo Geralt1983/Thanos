@@ -276,7 +276,7 @@ def main():
     Main CLI entry point.
 
     Parses command line arguments and routes to appropriate handlers:
-    - System commands (help, usage, agents, commands, interactive)
+    - System commands (help, usage, agents, commands)
     - Explicit commands (chat, agent, run)
     - Command shortcuts (daily, email, tasks, etc.)
     - Command patterns (prefix:name)
