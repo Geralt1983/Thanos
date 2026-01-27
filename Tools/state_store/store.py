@@ -141,7 +141,24 @@ class BrainDump:
 # =============================================================================
 
 class StateStore:
-    """Unified SQLite state store for all Thanos data."""
+    """Unified SQLite state store for all Thanos data.
+
+    Uses connection pooling for improved performance in high-frequency operations.
+    The same database connection is reused across multiple method calls, reducing
+    connection overhead.
+
+    Important: Call close() when done with the StateStore instance to properly
+    release database resources. If not called explicitly, cleanup happens
+    automatically during garbage collection via __del__().
+
+    Example:
+        store = StateStore()
+        try:
+            # Use the store
+            tasks = store.get_tasks()
+        finally:
+            store.close()  # Properly release resources
+    """
 
     SCHEMA_VERSION = 2
 
@@ -156,11 +173,23 @@ class StateStore:
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = None  # Pooled connection for reuse
         self._init_database()
 
     @contextmanager
     def _get_connection(self):
-        """Get database connection with proper handling."""
+        """Get database connection with isolated transaction scope.
+
+        Creates a new connection with automatic commit/rollback handling.
+        Best for write operations (INSERT, UPDATE, DELETE) that need
+        transaction isolation and automatic error recovery.
+
+        For high-frequency read operations, use _get_pooled_connection() instead
+        to avoid connection creation overhead.
+
+        Yields:
+            sqlite3.Connection: New database connection with transaction handling
+        """
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -173,6 +202,51 @@ class StateStore:
             raise
         finally:
             conn.close()
+
+    def _get_pooled_connection(self):
+        """Get persistent pooled connection for reuse.
+
+        Returns the same connection across multiple calls for improved performance
+        in high-frequency operations. Connection is configured with proper settings
+        on first access and reused for subsequent calls.
+
+        Best for read operations (SELECT, COUNT) that are called frequently.
+        For write operations that need transaction isolation, use _get_connection()
+        instead.
+
+        Returns:
+            sqlite3.Connection: Persistent database connection
+        """
+        if self._conn is None:
+            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA foreign_keys = ON")
+            self._conn.execute("PRAGMA journal_mode = WAL")
+        return self._conn
+
+    def close(self):
+        """Close the pooled connection if it exists.
+
+        This method should be called when done with the StateStore instance
+        to properly release database resources. It's also called automatically
+        by __del__() during garbage collection.
+        """
+        if self._conn is not None:
+            try:
+                self._conn.close()
+            except Exception:
+                # Silently handle any errors during close
+                pass
+            finally:
+                self._conn = None
+
+    def __del__(self):
+        """Destructor to ensure pooled connection is closed.
+
+        Automatically called when the StateStore instance is garbage collected.
+        Ensures proper cleanup of database resources.
+        """
+        self.close()
 
     def _init_database(self):
         """Initialize database schema."""
@@ -515,11 +589,11 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions) if conditions else '1=1'
 
-        with self._get_connection() as conn:
-            row = conn.execute(
-                f'SELECT COUNT(*) FROM tasks WHERE {where_clause}', params
-            ).fetchone()
-            return row[0]
+        conn = self._get_pooled_connection()
+        row = conn.execute(
+            f'SELECT COUNT(*) FROM tasks WHERE {where_clause}', params
+        ).fetchone()
+        return row[0]
 
     def _row_to_task(self, row: sqlite3.Row) -> Task:
         """Convert database row to Task object."""
@@ -650,11 +724,11 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions)
 
-        with self._get_connection() as conn:
-            row = conn.execute(
-                f'SELECT COUNT(*) FROM commitments WHERE {where_clause}', params
-            ).fetchone()
-            return row[0]
+        conn = self._get_pooled_connection()
+        row = conn.execute(
+            f'SELECT COUNT(*) FROM commitments WHERE {where_clause}', params
+        ).fetchone()
+        return row[0]
 
     def _row_to_commitment(self, row: sqlite3.Row) -> Commitment:
         """Convert database row to Commitment object."""
@@ -1010,11 +1084,11 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions) if conditions else '1=1'
 
-        with self._get_connection() as conn:
-            row = conn.execute(
-                f'SELECT COUNT(*) FROM brain_dumps WHERE {where_clause}', params
-            ).fetchone()
-            return row[0]
+        conn = self._get_pooled_connection()
+        row = conn.execute(
+            f'SELECT COUNT(*) FROM brain_dumps WHERE {where_clause}', params
+        ).fetchone()
+        return row[0]
 
     def _row_to_brain_dump(self, row: sqlite3.Row) -> BrainDump:
         """Convert database row to BrainDump object."""
@@ -1202,13 +1276,13 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions)
 
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                f'SELECT * FROM focus_areas WHERE {where_clause} ORDER BY started_at DESC',
-                params
-            ).fetchall()
+        conn = self._get_pooled_connection()
+        rows = conn.execute(
+            f'SELECT * FROM focus_areas WHERE {where_clause} ORDER BY started_at DESC',
+            params
+        ).fetchall()
 
-            return [self._row_to_focus_area(row) for row in rows]
+        return [self._row_to_focus_area(row) for row in rows]
 
     def _row_to_focus_area(self, row: sqlite3.Row) -> FocusArea:
         """Convert database row to FocusArea object."""
@@ -1230,10 +1304,13 @@ class StateStore:
     def export_summary(self) -> Dict[str, Any]:
         """Export a summary of all state.
 
+        Uses pooled connection for improved performance across multiple queries.
+
         Returns:
             Dictionary with counts and summary info
         """
-        return {
+        # All helper methods use pooled connection for efficient reuse
+        summary = {
             'exported_at': self._now_iso(),
             'tasks': {
                 'total': self.count_tasks(),
@@ -1253,6 +1330,12 @@ class StateStore:
             },
             'focus_areas': [asdict(f) for f in self.get_active_focus()],
         }
+
+        # Ensure pooled connection commits any pending transactions
+        conn = self._get_pooled_connection()
+        conn.commit()
+
+        return summary
 
 
 # =============================================================================
