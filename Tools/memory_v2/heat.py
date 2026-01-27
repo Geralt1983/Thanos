@@ -39,6 +39,7 @@ class HeatService:
         self.database_url = database_url or NEON_DATABASE_URL
         self.config = HEAT_CONFIG
         self._degraded = True  # No memory_metadata table
+        self._persistent_conn = None  # Reuse connection for speed
 
         if not self.database_url:
             raise ValueError("Database URL not configured")
