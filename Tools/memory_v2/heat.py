@@ -125,6 +125,53 @@ class HeatService:
                     return result[0]
                 return 1.0  # Default if memory not found
 
+    def batch_boost_on_access(self, memory_ids: List[str]) -> int:
+        """
+        Boost heat for multiple memories in a single operation.
+
+        More efficient than calling boost_on_access() repeatedly when
+        boosting search results or related memories.
+
+        Args:
+            memory_ids: List of memory UUIDs to boost
+
+        Returns:
+            Number of memories boosted
+
+        Examples:
+            hs.batch_boost_on_access(["uuid1", "uuid2", "uuid3"])
+            # Boost all search results
+            result_ids = [r['id'] for r in search_results]
+            hs.batch_boost_on_access(result_ids)
+        """
+        if not memory_ids:
+            return 0
+
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Update heat in payload JSON for all specified IDs
+                cur.execute("""
+                    UPDATE thanos_memories
+                    SET payload = payload
+                        || jsonb_build_object(
+                            'heat', LEAST(%(max_heat)s,
+                                COALESCE((payload->>'heat')::float, 0.5) + %(boost)s
+                            ),
+                            'last_accessed', NOW()::text,
+                            'access_count', COALESCE((payload->>'access_count')::int, 0) + 1
+                        )
+                    WHERE id = ANY(%(ids)s)
+                    RETURNING id
+                """, {
+                    "max_heat": self.config["max_heat"],
+                    "boost": self.config["access_boost"],
+                    "ids": memory_ids
+                })
+
+                affected = cur.rowcount
+                logger.debug(f"Batch boosted {affected} memories")
+                return affected
+
     def boost_related(self, entity: str, boost_type: str = "mention") -> int:
         """
         Boost memories related to an entity (client, project, tag).
