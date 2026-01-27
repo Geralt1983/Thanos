@@ -557,11 +557,11 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions) if conditions else '1=1'
 
-        with self._get_connection() as conn:
-            row = conn.execute(
-                f'SELECT COUNT(*) FROM tasks WHERE {where_clause}', params
-            ).fetchone()
-            return row[0]
+        conn = self._get_pooled_connection()
+        row = conn.execute(
+            f'SELECT COUNT(*) FROM tasks WHERE {where_clause}', params
+        ).fetchone()
+        return row[0]
 
     def _row_to_task(self, row: sqlite3.Row) -> Task:
         """Convert database row to Task object."""
@@ -692,11 +692,11 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions)
 
-        with self._get_connection() as conn:
-            row = conn.execute(
-                f'SELECT COUNT(*) FROM commitments WHERE {where_clause}', params
-            ).fetchone()
-            return row[0]
+        conn = self._get_pooled_connection()
+        row = conn.execute(
+            f'SELECT COUNT(*) FROM commitments WHERE {where_clause}', params
+        ).fetchone()
+        return row[0]
 
     def _row_to_commitment(self, row: sqlite3.Row) -> Commitment:
         """Convert database row to Commitment object."""
@@ -1052,11 +1052,11 @@ class StateStore:
 
         where_clause = ' AND '.join(conditions) if conditions else '1=1'
 
-        with self._get_connection() as conn:
-            row = conn.execute(
-                f'SELECT COUNT(*) FROM brain_dumps WHERE {where_clause}', params
-            ).fetchone()
-            return row[0]
+        conn = self._get_pooled_connection()
+        row = conn.execute(
+            f'SELECT COUNT(*) FROM brain_dumps WHERE {where_clause}', params
+        ).fetchone()
+        return row[0]
 
     def _row_to_brain_dump(self, row: sqlite3.Row) -> BrainDump:
         """Convert database row to BrainDump object."""
