@@ -49,6 +49,7 @@ See Also:
 """
 
 from Tools.command_handlers.base import BaseHandler, CommandResult, Colors
+from Tools.output_formatter import truncate_smart
 
 
 class SessionHandler(BaseHandler):
@@ -131,8 +132,10 @@ class SessionHandler(BaseHandler):
 
         print(f"\n{Colors.CYAN}Recent Sessions:{Colors.RESET}")
         for s in sessions:
+            session_id = truncate_smart(s['id'], max_length=20)
+            agent_name = truncate_smart(s['agent'], max_length=12)
             print(
-                f"  {s['id']}  {s['date']}  {s['agent']:8}  "
+                f"  {session_id}  {s['date']}  {agent_name:12}  "
                 f"{s['messages']:3} msgs  {s['tokens']:,} tokens"
             )
         print(f"\n{Colors.DIM}Use /resume <id> or /resume last to restore{Colors.RESET}\n")
@@ -161,7 +164,9 @@ class SessionHandler(BaseHandler):
 
             print(f"\n{Colors.CYAN}Recent Sessions:{Colors.RESET}")
             for s in sessions:
-                print(f"  {s['id']}  {s['date']}  {s['agent']:8}  {s['messages']:3} msgs")
+                session_id = truncate_smart(s['id'], max_length=20)
+                agent_name = truncate_smart(s['agent'], max_length=12)
+                print(f"  {session_id}  {s['date']}  {agent_name:12}  {s['messages']:3} msgs")
             print(f"\n{Colors.DIM}Usage: /resume <session_id> or /resume last{Colors.RESET}\n")
             return CommandResult()
 
@@ -239,12 +244,14 @@ class SessionHandler(BaseHandler):
         print(f"\n{Colors.CYAN}Session Branches:{Colors.RESET}\n")
         for b in branches:
             marker = "→" if b.get("is_current") else " "
+            branch_name = truncate_smart(b['name'], max_length=25)
+            branch_id = truncate_smart(b['id'], max_length=20)
             parent_info = (
                 f" (from {b['parent_id'][:4]}... at msg {b['branch_point']})"
                 if b.get("parent_id")
                 else ""
             )
-            print(f"  {marker} {b['name']}: {b['id']}{parent_info}")
+            print(f"  {marker} {branch_name}: {branch_id}{parent_info}")
             print(f"      {b['date']}  {b['messages']} messages")
 
         print(f"\n{Colors.DIM}Use /switch <name or id> to change branches{Colors.RESET}\n")
