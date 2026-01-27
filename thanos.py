@@ -312,6 +312,11 @@ def main():
 
     # Interactive mode
     if first_arg in ["interactive", "i"]:
+        # Print deprecation warning
+        print("\n⚠️  WARNING: Interactive mode is deprecated and will be removed in a future version.")
+        print("📖 Please use Claude Code with the Thanos persona instead.")
+        print("   See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md for migration guide.\n")
+
         try:
             from Tools.thanos_interactive import ThanosInteractive
 
