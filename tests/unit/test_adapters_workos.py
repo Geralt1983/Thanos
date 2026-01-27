@@ -566,22 +566,44 @@ class TestWorkOSAdapterDailySummary:
 
     @pytest.mark.asyncio
     async def test_daily_summary(self, adapter):
-        """Test getting comprehensive daily summary"""
+        """Test getting comprehensive daily summary with parallel query execution"""
         with patch.object(adapter, "_get_today_metrics", new_callable=AsyncMock) as mock_metrics:
             with patch.object(adapter, "_get_tasks", new_callable=AsyncMock) as mock_tasks:
                 with patch.object(adapter, "_get_habits", new_callable=AsyncMock) as mock_habits:
+                    # Setup mock return values
                     mock_metrics.return_value = ToolResult.ok({"earned_points": 10})
-                    mock_tasks.return_value = ToolResult.ok([{"id": 1, "title": "Task"}])
+                    # _get_tasks is called twice (active and queued), return different data each time
+                    mock_tasks.side_effect = [
+                        ToolResult.ok([{"id": 1, "title": "Active Task"}]),
+                        ToolResult.ok([{"id": 2, "title": "Queued Task"}]),
+                    ]
                     mock_habits.return_value = ToolResult.ok([{"id": 1, "name": "Habit"}])
 
                     mock_pool = AsyncMock()
                     result = await adapter._daily_summary(mock_pool)
 
+                    # Verify result structure
                     assert result.success is True
                     assert "progress" in result.data
                     assert "active_tasks" in result.data
+                    assert "queued_tasks" in result.data
                     assert "habits" in result.data
                     assert "generated_at" in result.data
+
+                    # Verify parallel execution: all 4 methods should be called
+                    mock_metrics.assert_called_once_with(mock_pool)
+                    mock_habits.assert_called_once_with(mock_pool)
+
+                    # Verify _get_tasks is called twice with correct parameters
+                    assert mock_tasks.call_count == 2
+                    calls = mock_tasks.call_args_list
+                    # First call: active tasks
+                    assert calls[0][0][0] == mock_pool
+                    assert calls[0][1]["status"] == "active"
+                    # Second call: queued tasks with limit
+                    assert calls[1][0][0] == mock_pool
+                    assert calls[1][1]["status"] == "queued"
+                    assert calls[1][1]["limit"] == 5
 
 
 # ========================================================================

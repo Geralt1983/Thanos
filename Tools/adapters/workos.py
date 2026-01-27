@@ -5,6 +5,7 @@ Provides direct PostgreSQL access to the WorkOS productivity database,
 bypassing the MCP server for better performance and control.
 """
 
+import asyncio
 from datetime import datetime
 import os
 from typing import Any, Optional
@@ -509,10 +510,13 @@ class WorkOSAdapter(BaseAdapter):
 
     async def _daily_summary(self, pool: asyncpg.Pool) -> ToolResult:
         """Get comprehensive daily summary."""
-        metrics = await self._get_today_metrics(pool)
-        active = await self._get_tasks(pool, status="active")
-        queued = await self._get_tasks(pool, status="queued", limit=5)
-        habits = await self._get_habits(pool)
+        # Execute all queries in parallel
+        metrics, active, queued, habits = await asyncio.gather(
+            self._get_today_metrics(pool),
+            self._get_tasks(pool, status="active"),
+            self._get_tasks(pool, status="queued", limit=5),
+            self._get_habits(pool),
+        )
 
         return ToolResult.ok(
             {
