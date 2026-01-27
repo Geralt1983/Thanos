@@ -4,7 +4,6 @@ Thanos is an AI-powered orchestration system that enables seamless integration w
 
 ## Features
 
-- **Interactive Mode**: Conversational AI interface with real-time token usage and cost monitoring
 - **Unified Adapter Framework**: Consistent interface for integrating with external services
 - **Direct Adapters**: Native Python adapters for WorkOS, Oura, Neo4j, ChromaDB, and more
 - **Full MCP SDK Integration**: Connect to any MCP-compatible server for maximum flexibility
@@ -43,90 +42,6 @@ tools = await manager.list_tools()
 result = await manager.call_tool("tool_name", {"arg": "value"})
 ```
 
-## Interactive Mode
-
-Thanos provides a powerful interactive mode for conversational AI interactions with **real-time token usage and cost monitoring**.
-
-### Quick Start
-
-```bash
-python thanos.py interactive
-```
-
-You'll see a prompt that displays live session statistics:
-
-```
-(1.2K | $0.04) Thanos>
-```
-
-This shows:
-- **1.2K** - Total tokens used in the session
-- **$0.04** - Estimated cost in USD
-
-The prompt updates after each interaction, helping you stay cost-conscious during development.
-
-### Key Features
-
-- 🟢 **Real-Time Cost Tracking**: See token usage and costs update as you work
-- 🎨 **Color-Coded Alerts**: Green ($0-$0.50), Yellow ($0.50-$2.00), Red ($2.00+)
-- 📊 **Multiple Display Modes**: Compact, Standard (with duration), or Verbose (full details)
-- ⚡ **Runtime Switching**: Change display modes on-the-fly with `/prompt` command
-- 💰 **Budget Control**: Monitor spending and decide when to start fresh sessions
-
-### Display Modes
-
-**Compact** (default):
-```
-(1.2K | $0.04) Thanos>
-```
-
-**Standard** (with session duration):
-```
-(45m | 1.2K tokens | $0.04) Thanos>
-```
-
-**Verbose** (complete breakdown):
-```
-(45m | 12 msgs | 1.2K in | 3.4K out | $0.04) Thanos>
-```
-
-### Common Commands
-
-```bash
-/prompt standard     # Switch to standard display mode
-/usage              # Show detailed usage statistics
-/agent research     # Switch to research agent
-/model sonnet       # Switch to Sonnet model
-/clear              # Start fresh conversation
-/help               # Show all commands
-/quit               # Exit interactive mode
-```
-
-### Configuration
-
-Customize the interactive prompt in `config/api.json`:
-
-```json
-{
-  "interactive_prompt": {
-    "enabled": true,
-    "mode": "compact",
-    "color_coding": {
-      "enabled": true,
-      "thresholds": {
-        "low": 0.50,
-        "medium": 2.00
-      }
-    }
-  }
-}
-```
-
-### Documentation
-
-- **[Interactive Mode Guide](docs/interactive-mode.md)**: Complete guide with usage patterns and tips
-- **[Prompt Configuration](docs/interactive-prompt-configuration.md)**: Detailed configuration options
-
 ## Visual Feedback & Loading Indicators
 
 Thanos CLI provides animated loading spinners during long-running operations to give you immediate visual feedback that the system is processing.
@@ -163,7 +78,7 @@ Spinners **automatically detect** your environment and behave appropriately:
 This means you can safely use Thanos in scripts and pipelines without worrying about escape code pollution:
 
 ```bash
-# Interactive mode - spinner shows
+# Interactive terminal - spinner shows
 ./thanos daily
 
 # Piped mode - no spinner, clean output
