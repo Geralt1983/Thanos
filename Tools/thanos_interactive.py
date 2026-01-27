@@ -122,6 +122,18 @@ logger = logging.getLogger(__name__)
 
 class ThanosInteractive:
     """
+    ⚠️  DEPRECATED: This interactive mode is being phased out in favor of Claude Code.
+
+    Claude Code provides a superior experience with:
+    - Full IDE integration and file navigation
+    - Better context management and memory
+    - Enhanced tool execution and debugging
+    - Seamless git workflow integration
+
+    See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md for migration guidance.
+
+    ---
+
     Interactive mode controller for Thanos conversations.
 
     Manages the interactive session loop, integrating prompt formatting,
@@ -1100,6 +1112,12 @@ class ThanosInteractive:
     def _show_welcome(self) -> None:
         """Display welcome message when starting interactive mode."""
         print(f"\n{Colors.CYAN}Welcome to Thanos Interactive Mode{Colors.RESET}")
+
+        # Show deprecation warning
+        print(f"\n{Colors.BRIGHT_MAGENTA}⚠️  DEPRECATED: This interactive mode is being phased out.{Colors.RESET}")
+        print(f"{Colors.DIM}   Please migrate to Claude Code for a better experience.{Colors.RESET}")
+        print(f"{Colors.DIM}   See docs/MIGRATION_INTERACTIVE_TO_CLAUDE_CODE.md for details.{Colors.RESET}\n")
+
         print(f"{Colors.DIM}Type /help for commands, /quit to exit{Colors.RESET}")
 
         # Show MCP tools info if available
