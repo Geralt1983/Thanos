@@ -137,6 +137,25 @@ You wake up fresh each session. These files are your continuity:
 
 Capture what matters. Decisions, context, things to remember. Skip the secrets unless asked to keep them.
 
+### Multi-Tier Memory System
+
+Before answering technical questions, check memory sources in this order:
+
+1. **ByteRover** (project/technical knowledge) - `brv query "question"`
+   - Use for: code patterns, architecture, system design, "how does X work?"
+   - Curate after: implementing features, fixing bugs, making decisions
+   
+2. **Memory V2** (semantic search) - `.venv/bin/python -c "from Tools.memory_v2.mcp_tools import memory_search; ..."`
+   - Use for: facts, events, searchable context
+   
+3. **Graphiti** (knowledge graph) - via MCP at http://localhost:8000/sse
+   - Use for: entity relationships, people, connections
+   
+4. **MEMORY.md** (personal long-term) - flat file, curated manually
+   - Use for: personal preferences, high-level context, decisions
+
+**Rule:** Technical/code questions → ByteRover first. Personal context → MEMORY.md.
+
 ### 🧠 MEMORY.md - Your Long-Term Memory
 - **ONLY load in main session** (direct chats with your human)
 - **DO NOT load in shared contexts** (Discord, group chats, sessions with other people)
