@@ -79,6 +79,54 @@
   - Always dry-run first: `--dry-run --verbose`
 - **Migration Guide:** `Tools/memory_v2/MIGRATION.md`
 
+## LinkedIn Epic Contract Scraper
+
+**Purpose:** Daily scraping of LinkedIn for Epic EHR consulting/contract opportunities
+
+**Architecture:**
+```
+Apify Actor (supreme_coder/linkedin-post)
+    ↓ (scrapes 9 search terms)
+Raw Posts (~2,400)
+    ↓ (filter: recency ≤7 days)
+This Week (~2,100)
+    ↓ (filter: Epic keywords + job phrases)
+Relevant Posts (~50)
+    ↓ (dedup against seen_posts.json)
+New Posts (0-10)
+    ↓ (save to Supabase)
+Email Digest
+```
+
+**Key Files:**
+- `scripts/linkedin-epic-scrape.js` - Main scraper (Apify → filter → output)
+- `data/linkedin-seen-posts.json` - Persistent dedup (auto-prunes 30 days)
+- `docs/linkedin-epic-scraper.md` - Full documentation
+
+**Filtering Logic:**
+
+1. **Recency:** ≤7 days only (rejects "2w", "1mo", etc.)
+2. **Epic Keywords:** Definitive terms (mychart, beaker, clindoc, etc.) OR "epic contract" + module/position
+3. **Job Phrases:** Must contain hiring language + contract indicator
+4. **Deduplication:** Tracks URLs, prevents re-sending same posts
+
+**Cron Job:** `linkedin-epic-digest`
+- Schedule: 8am ET Mon-Fri
+- Command: `node scripts/linkedin-epic-scrape.js`
+- Delivery: Email via gog to jkimble1983@gmail.com
+- Fallback: Report to Telegram if no new posts
+
+**Failure Modes:**
+- Browser automation: DO NOT USE (unreliable for cron)
+- Perplexity/Grok: DO NOT USE (not designed for LinkedIn posts)
+- Always use Apify actor `supreme_coder/linkedin-post`
+
+**Stats (typical run):**
+- Raw scraped: ~2,400 posts
+- After filters: ~50 relevant
+- After dedup: 0-10 new posts
+- Runtime: ~2-3 minutes
+
 ## Infrastructure
 
 ### Memory Capture (Graphiti)
