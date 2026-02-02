@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "OpenClaw Model Escalator Configuration",
+  "description": "Configuration for dynamic model selection and escalation",
+  "properties": {
+    "baseModel": {
+      "type": "string",
+      "description": "Default base model to start conversations",
+      "default": "anthropic/claude-3-haiku-20240307"
+    },
+    "escalationModels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Ordered list of models for escalation",
+      "default": [
+        "anthropic/claude-3-haiku-20240307",
+        "anthropic/claude-3-5-sonnet-20241022",
+        "anthropic/claude-opus-4-5"
+      ]
+    },
+    "escalationThresholds": {
+      "type": "object",
+      "description": "Complexity thresholds for model escalation",
+      "properties": {
+        "complexity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 60,
+          "description": "Overall conversation complexity threshold"
+        },
+        "cognitive_load": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "description": "Cognitive load threshold for escalation"
+        },
+        "technical_depth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 55,
+          "description": "Technical depth threshold for escalation"
+        }
+      },
+      "required": ["complexity", "cognitive_load", "technical_depth"]
+    },
+    "de_escalation_hysteresis": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 20,
+      "description": "Hysteresis value to prevent rapid model oscillation"
+    }
+  },
+  "required": ["baseModel", "escalationModels"]
+}

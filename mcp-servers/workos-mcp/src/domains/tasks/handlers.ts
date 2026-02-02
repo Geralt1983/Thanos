@@ -8,7 +8,7 @@ import {
 } from "../../shared/utils.js";
 import * as schema from "../../schema.js";
 import type { EnergyLevel } from "../../schema.js";
-import { eq, and, gte, ne, desc, asc, or, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, ne, desc, asc, or, inArray } from "drizzle-orm";
 import {
   getCachedTasks,
   getCachedTasksByClient,
@@ -26,6 +26,7 @@ import {
 import { validateAndSanitize } from "../../shared/validation-schemas.js";
 import {
   GetTodayMetricsSchema,
+  GetMetricsForDateSchema,
   GetTasksSchema,
   GetClientsSchema,
   CreateTaskSchema,
@@ -163,6 +164,85 @@ export async function handleGetTodayMetrics(
           streak: latestGoal?.currentStreak ?? 0,
           clientsTouchedToday,
           totalExternalClients: externalClientIds.size,
+        }, null, 2),
+      },
+    ],
+  };
+}
+
+/**
+ * Get metrics for a specific historical date
+ * Returns points earned, tasks completed, and clients touched for the given date
+ *
+ * @param args - Object containing date in YYYY-MM-DD format
+ * @param db - Database instance for querying tasks and clients
+ * @returns Promise resolving to MCP ContentResponse with historical metrics
+ */
+export async function handleGetMetricsForDate(
+  args: Record<string, any>,
+  db: Database
+): Promise<ContentResponse> {
+  // Validate input
+  const validation = validateAndSanitize(GetMetricsForDateSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
+  const { date } = validation.data;
+
+  // Parse the date and create start/end boundaries in EST
+  const dateStart = new Date(`${date}T00:00:00-05:00`); // EST
+  const dateEnd = new Date(`${date}T23:59:59.999-05:00`); // EST
+
+  const completedOnDate = await db
+    .select()
+    .from(schema.tasks)
+    .where(
+      and(
+        eq(schema.tasks.status, "done"),
+        eq(schema.tasks.category, "work"),
+        gte(schema.tasks.completedAt, dateStart),
+        lte(schema.tasks.completedAt, dateEnd)
+      )
+    );
+
+  const earnedPoints = calculateTotalPoints(completedOnDate);
+
+  const externalClients = await db
+    .select({ id: schema.clients.id })
+    .from(schema.clients)
+    .where(ne(schema.clients.type, "internal"));
+
+  const externalClientIds = new Set(externalClients.map((c) => c.id));
+  const clientsTouched = new Set(
+    completedOnDate
+      .filter((t) => t.clientId && externalClientIds.has(t.clientId))
+      .map((t) => t.clientId)
+  ).size;
+
+  // Build task summary with points breakdown
+  const taskSummary = completedOnDate.map((t) => ({
+    id: t.id,
+    title: t.title,
+    clientId: t.clientId,
+    valueTier: t.valueTier,
+    points: calculatePoints(t),
+    completedAt: t.completedAt,
+  }));
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          date,
+          completedCount: completedOnDate.length,
+          earnedPoints,
+          clientsTouched,
+          tasks: taskSummary,
         }, null, 2),
       },
     ],

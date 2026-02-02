@@ -1,0 +1,296 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-02-01T20:20:00Z",
+  "domains": {
+    "orderset_builds": {
+      "strength": "beginner",
+      "strength_level": 1,
+      "concepts_learned": 14,
+      "solutions_captured": 7,
+      "questions_asked": 8,
+      "last_updated": "2026-02-02T01:38:22.635972+00:00",
+      "knowledge_gaps": [
+        "Preference list cascading logic",
+        "Dynamic defaults using SmartData Elements"
+      ],
+      "recent_concepts": [
+        {
+          "concept": "Built orderset with SmartGroups and appropriate defaults",
+          "learned_date": "2026-02-02",
+          "confidence": "high",
+          "source": "task_closure"
+        },
+        {
+          "concept": "Built orderset with SmartGroups and appropriate defaults",
+          "learned_date": "2026-02-02",
+          "confidence": "high",
+          "source": "task_closure"
+        },
+        {
+          "concept": "Phantom defaults in OCC",
+          "learned_date": "2026-02-01",
+          "confidence": "high",
+          "source": "solution_capture"
+        },
+        {
+          "concept": "SmartGroups vs Sections hierarchy",
+          "learned_date": "2026-01-30",
+          "confidence": "high",
+          "source": "targeted_question"
+        }
+      ]
+    },
+    "interfaces": {
+      "strength": "beginner",
+      "strength_level": 1,
+      "concepts_learned": 11,
+      "solutions_captured": 6,
+      "questions_asked": 5,
+      "last_updated": "2026-02-02T01:38:22.586464+00:00",
+      "knowledge_gaps": [
+        "Bridges configuration workflow",
+        "HL7 segment ordering rules",
+        "ACK/NAK handling details"
+      ],
+      "recent_concepts": [
+        {
+          "concept": "Fixed provider matching by using NPI instead of internal ID",
+          "learned_date": "2026-02-02",
+          "confidence": "high",
+          "source": "task_closure"
+        },
+        {
+          "concept": "Fixed provider matching by using NPI instead of internal ID",
+          "learned_date": "2026-02-02",
+          "confidence": "high",
+          "source": "task_closure"
+        },
+        {
+          "concept": "Fixed provider matching by using NPI instead of internal ID",
+          "learned_date": "2026-02-02",
+          "confidence": "high",
+          "source": "task_closure"
+        },
+        {
+          "concept": "Provider matching: NPI vs internal ID",
+          "learned_date": "2026-02-01",
+          "confidence": "high",
+          "source": "solution_capture"
+        },
+        {
+          "concept": "VersaCare interface message structure",
+          "learned_date": "2026-01-31",
+          "confidence": "medium",
+          "source": "observation"
+        }
+      ]
+    },
+    "clindoc_configuration": {
+      "strength": "novice",
+      "strength_level": 0,
+      "concepts_learned": 3,
+      "solutions_captured": 1,
+      "questions_asked": 2,
+      "last_updated": "2026-01-28T15:00:00Z",
+      "knowledge_gaps": [
+        "SmartText syntax and patient data",
+        "Template inheritance rules",
+        "Flowsheet configuration"
+      ],
+      "recent_concepts": [
+        {
+          "concept": "SmartPhrase basics",
+          "learned_date": "2026-01-28",
+          "confidence": "medium",
+          "source": "targeted_question"
+        }
+      ]
+    },
+    "cardiac_rehab_integrations": {
+      "strength": "beginner",
+      "strength_level": 1,
+      "concepts_learned": 8,
+      "solutions_captured": 5,
+      "questions_asked": 3,
+      "last_updated": "2026-02-02T01:38:22.684553+00:00",
+      "knowledge_gaps": [
+        "ScottCare vs VersaCare data differences",
+        "Insurance authorization workflows",
+        "Device identifier mapping strategies"
+      ],
+      "recent_concepts": [
+        {
+          "concept": "Configured ScottCare exercise/monitoring data interface",
+          "learned_date": "2026-02-02",
+          "confidence": "high",
+          "source": "task_closure"
+        },
+        {
+          "concept": "VersaCare telemonitoring data ingest",
+          "learned_date": "2026-02-01",
+          "confidence": "high",
+          "source": "solution_capture"
+        },
+        {
+          "concept": "Rehab session attendance tracking",
+          "learned_date": "2026-01-30",
+          "confidence": "medium",
+          "source": "observation"
+        }
+      ]
+    },
+    "workflow_optimization": {
+      "strength": "novice",
+      "strength_level": 0,
+      "concepts_learned": 5,
+      "solutions_captured": 3,
+      "questions_asked": 3,
+      "last_updated": "2026-02-02T01:38:22.816845+00:00",
+      "knowledge_gaps": [
+        "BPA firing logic",
+        "Click reduction analysis methodology",
+        "Role-based workspace customization"
+      ],
+      "recent_concepts": [
+        {
+          "concept": "Configured BPA with appropriate firing logic and suppression rules",
+          "learned_date": "2026-02-02",
+          "confidence": "high",
+          "source": "task_closure"
+        },
+        {
+          "concept": "Order Sets vs Preference Lists use cases",
+          "learned_date": "2026-01-29",
+          "confidence": "medium",
+          "source": "targeted_question"
+        }
+      ]
+    },
+    "cutover_procedures": {
+      "strength": "novice",
+      "strength_level": 0,
+      "concepts_learned": 2,
+      "solutions_captured": 0,
+      "questions_asked": 1,
+      "last_updated": "2026-01-25T10:00:00Z",
+      "knowledge_gaps": [
+        "Cutover checklist components",
+        "Data migration validation",
+        "Command center operations",
+        "Post-live optimization cycles"
+      ],
+      "recent_concepts": [
+        {
+          "concept": "Pre-cutover validation importance",
+          "learned_date": "2026-01-25",
+          "confidence": "low",
+          "source": "mentioned_in_conversation"
+        }
+      ]
+    }
+  },
+  "global_stats": {
+    "total_concepts_learned": 43,
+    "total_solutions_captured": 22,
+    "total_questions_asked": 22,
+    "days_active": 8,
+    "avg_concepts_per_day": 4.5
+  },
+  "recent_learnings": [
+    {
+      "date": "2026-02-01",
+      "domain": "interfaces",
+      "concept": "Provider matching: NPI vs internal ID for external systems",
+      "source": "solution_capture",
+      "confidence": "high",
+      "context": "VersaCare interface debugging - external system doesn't have Epic IDs"
+    },
+    {
+      "date": "2026-02-01",
+      "domain": "orderset_builds",
+      "concept": "Phantom defaults in OCC override manual selections",
+      "source": "NotebookLM cross-reference",
+      "confidence": "high",
+      "context": "Epic Orders HOD guide review"
+    },
+    {
+      "date": "2026-01-31",
+      "domain": "cardiac_rehab_integrations",
+      "concept": "VersaCare telemonitoring HL7 message structure",
+      "source": "observation",
+      "confidence": "medium",
+      "context": "KY ScottCare project interface work"
+    },
+    {
+      "date": "2026-01-30",
+      "domain": "orderset_builds",
+      "concept": "SmartGroups nest within Sections within Order Sets",
+      "source": "targeted_question",
+      "confidence": "high",
+      "context": "Asked about orderset hierarchy"
+    },
+    {
+      "date": "2026-01-29",
+      "domain": "workflow_optimization",
+      "concept": "Order Sets for multi-order templates, Preference Lists for defaults",
+      "source": "targeted_question",
+      "confidence": "medium",
+      "context": "When to use which ordering tool"
+    }
+  ],
+  "knowledge_gaps": [
+    {
+      "domain": "interfaces",
+      "gap": "Bridges configuration workflow details",
+      "priority": "high",
+      "identified_date": "2026-02-01"
+    },
+    {
+      "domain": "interfaces",
+      "gap": "HL7 segment ordering rules and parser implications",
+      "priority": "high",
+      "identified_date": "2026-01-30"
+    },
+    {
+      "domain": "orderset_builds",
+      "gap": "Preference list cascading logic (system \u2192 dept \u2192 provider)",
+      "priority": "medium",
+      "identified_date": "2026-01-31"
+    },
+    {
+      "domain": "cutover_procedures",
+      "gap": "End-to-end cutover workflow and command center mechanics",
+      "priority": "medium",
+      "identified_date": "2026-01-25"
+    },
+    {
+      "domain": "clindoc_configuration",
+      "gap": "SmartText syntax and patient data integration",
+      "priority": "low",
+      "identified_date": "2026-01-28"
+    }
+  ],
+  "settings": {
+    "daily_review_time": "18:00",
+    "max_questions_per_session": 2,
+    "min_question_interval_minutes": 30,
+    "auto_capture_enabled": true,
+    "ask_permission_for_questions": true,
+    "learning_session_cooldown_hours": 2,
+    "confidence_threshold_for_storage": 0.6,
+    "priority_domains": [
+      "orderset_builds",
+      "interfaces",
+      "cardiac_rehab_integrations"
+    ]
+  },
+  "session_history": {
+    "last_question_timestamp": "2026-02-01T17:45:00Z",
+    "questions_asked_today": 1,
+    "last_capture_timestamp": "2026-02-01T19:30:00Z",
+    "captures_today": 2,
+    "task_closures_captured": 7,
+    "last_task_closure_timestamp": "2026-02-02T01:38:22.817006+00:00",
+    "last_review_timestamp": "2026-02-02T01:30:38.540155+00:00"
+  }
+}

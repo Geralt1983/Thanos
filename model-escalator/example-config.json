@@ -1,0 +1,43 @@
+{
+  "models": [
+    {
+      "name": "Claude Haiku",
+      "provider": "Anthropic",
+      "maxTokens": 4096,
+      "costPerThousandTokens": 0.25,
+      "capabilities": ["fast", "concise"],
+      "complexity": {
+        "baseline": 3,
+        "maxComplexity": 5
+      }
+    },
+    {
+      "name": "Claude Sonnet",
+      "provider": "Anthropic", 
+      "maxTokens": 8192,
+      "costPerThousandTokens": 0.50,
+      "capabilities": ["balanced", "versatile"],
+      "complexity": {
+        "baseline": 6,
+        "maxComplexity": 8
+      }
+    },
+    {
+      "name": "Claude Opus",
+      "provider": "Anthropic",
+      "maxTokens": 16384, 
+      "costPerThousandTokens": 1.00,
+      "capabilities": ["advanced", "complex"],
+      "complexity": {
+        "baseline": 9,
+        "maxComplexity": 10
+      }
+    }
+  ],
+  "defaultStrategy": 2,
+  "complexityThresholds": {
+    "low": 3,
+    "medium": 6, 
+    "high": 9
+  }
+}

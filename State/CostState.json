@@ -125,6 +125,20 @@
           "calls": 15
         }
       }
+    },
+    {
+      "timestamp": "2026-01-26T22:06:17.997674",
+      "cost": 0.0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "models": {
+        "unknown": {
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "cost": 0.0,
+          "calls": 518
+        }
+      }
     }
   ],
   "lifetime_total": {

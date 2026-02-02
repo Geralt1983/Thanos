@@ -1,0 +1,76 @@
+# Morning Brief Data Sources Configuration
+# Each source can be enabled/disabled independently with fallback behavior
+
+sources:
+  energy:
+    enabled: true
+    provider: oura
+    fallback: manual_prompt
+    cache_ttl_minutes: 30
+    endpoints:
+      readiness: https://api.ouraring.com/v2/usercollection/daily_readiness
+      sleep: https://api.ouraring.com/v2/usercollection/daily_sleep
+    # Uses OURA_ACCESS_TOKEN from environment
+
+  calendar:
+    enabled: true
+    provider: google
+    cli: gog
+    account: jkimble1983@gmail.com
+    calendars:
+      - id: kimble.corin@gmail.com
+        name: MY PLANNED LIFE
+        priority: 1
+      - id: jkimble1983@gmail.com
+        name: Primary
+        priority: 2
+      - id: 6138b022643cdc3f3c35656282ef4b2bc67e76bf3be77e403fe12f42524724aa@group.calendar.google.com
+        name: Work
+        priority: 1
+      - id: family12378744586345757418@group.calendar.google.com
+        name: Family
+        priority: 2
+    lookahead_hours: 48
+
+  budget:
+    enabled: true
+    provider: monarch
+    cli: monarch
+    categories_to_watch:
+      - name: Groceries
+        id: "225123032227674020"
+        monthly_limit: 2700
+      - name: Food Out
+        id: null  # Will need to look up
+        monthly_limit: 3000
+      - name: Baby
+        id: "225123032227674020"
+        monthly_limit: 1000
+    alert_threshold_percent: 80
+
+  tasks:
+    enabled: true
+    providers:
+      - name: todoist
+        cli: todoist
+        projects: [Inbox, Personal, Someday]
+      - name: workos
+        enabled: false  # Work tasks separate
+    max_display: 5
+
+  weather:
+    enabled: true
+    provider: wttr
+    location: "King, NC"
+    units: imperial
+    alerts: true
+
+output:
+  format: telegram_markdown
+  sections:
+    - energy
+    - calendar
+    - budget
+    - tasks
+    - weather
+  emoji_headers: true

@@ -1,0 +1,40 @@
+model_escalator:
+  enabled: true
+  default_model: claude-3-haiku
+  
+  complexity_thresholds:
+    code:
+      low: 0.3
+      medium: 0.6
+      high: 0.9
+    prose:
+      low: 0.2
+      medium: 0.5
+      high: 0.8
+    technical:
+      low: 0.4
+      medium: 0.7
+      high: 0.95
+  
+  model_hierarchy:
+    - claude-3-haiku
+    - claude-3-sonnet
+    - claude-3-opus
+  
+  domain_weights:
+    code: 1.2
+    prose: 0.8
+    technical: 1.0
+  
+  budget:
+    default_limit: 10.00  # USD per session
+    hard_stop: 15.00     # Absolute maximum
+  
+  telemetry:
+    enabled: true
+    log_path: /var/log/openclaw/model_escalator.log
+  
+  fallback_strategy:
+    - availability_check
+    - cost_optimization
+    - performance_priority

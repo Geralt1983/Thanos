@@ -38,6 +38,7 @@ from Tools.state_reader import StateReader
 from Tools.state_store import SQLiteStateStore
 from Tools.state_store.summary_builder import SummaryBuilder
 from Tools.router_executor import Router, Executor, get_tool_catalog_text
+from Tools.model_escalator import model_escalation_hook, EscalationResult
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -1184,6 +1185,24 @@ You maintain a compact daily plan and a scoreboard.
         """
         if agent is None and model is None and not stream:
             return self.route(message, stream=False)
+        
+        # Model Escalation: Check if we should switch models based on complexity
+        if model is None:
+            try:
+                escalation_result = model_escalation_hook(
+                    conversation_id=f"thanos-chat-{datetime.now().strftime('%Y%m%d')}",
+                    conversation_context={
+                        'current_message': message,
+                        'messages': history or [],
+                        'token_count': len(message.split()) * 2
+                    }
+                )
+                if escalation_result.escalated:
+                    model = escalation_result.model
+                    print(f"[ModelEscalator] Escalated to {model} (complexity: {escalation_result.complexity_score:.2f})")
+            except Exception as e:
+                log_error("model_escalator", e, "Model escalation check failed in chat")
+        
         self._ensure_client()
 
         # Get agent
@@ -1251,6 +1270,24 @@ You maintain a compact daily plan and a scoreboard.
 
     def route(self, message: str, stream: bool = False, model: Optional[str] = None) -> Union[str, Dict]:
         """Route a message through the Operator router and executor."""
+        
+        # Model Escalation: Check if we should switch models based on complexity
+        if model is None:  # Only auto-escalate if no model override specified
+            try:
+                escalation_result = model_escalation_hook(
+                    conversation_id=f"thanos-main-{datetime.now().strftime('%Y%m%d')}",
+                    conversation_context={
+                        'current_message': message,
+                        'messages': [],  # Could be populated from history if available
+                        'token_count': len(message.split()) * 2  # Rough estimate
+                    }
+                )
+                if escalation_result.escalated:
+                    model = escalation_result.model
+                    print(f"[ModelEscalator] Escalated to {model} (complexity: {escalation_result.complexity_score:.2f})")
+            except Exception as e:
+                log_error("model_escalator", e, "Model escalation check failed")
+        
         self._update_plan_and_scoreboard(message)
         state_summary = self._build_state_summary()
         tool_catalog = get_tool_catalog_text()

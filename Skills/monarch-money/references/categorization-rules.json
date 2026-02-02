@@ -1,0 +1,56 @@
+{
+  "description": "Auto-categorization rules for Monarch Money transactions",
+  "lastUpdated": "2026-02-02",
+  "rules": {
+    "gas": {
+      "category": "Gas",
+      "patterns": ["sheetz", "shell", "exxon", "bp ", "chevron", "speedway", "wawa", "love's", "pilot", "circle k", "racetrac"]
+    },
+    "coffee": {
+      "category": "Coffee Shops",
+      "patterns": ["starbucks", "dunkin", "cup of joe", "peet's", "caribou", "local coffee", "coffee house"]
+    },
+    "restaurants": {
+      "category": "Restaurants & Bars",
+      "patterns": ["mcdonald", "chick-fil-a", "wendy", "taco bell", "chipotle", "olive garden", "applebee", "little caesars", "domino", "pizza hut", "panera", "subway", "jersey mike", "restaurant", "bar ", "grill"]
+    },
+    "groceries": {
+      "category": "Groceries",
+      "patterns": ["walmart", "kroger", "food lion", "aldi", "publix", "harris teeter", "whole foods", "trader joe", "ingles", "bi-lo", "grocery", "market"]
+    },
+    "shopping": {
+      "category": "Shopping",
+      "patterns": ["amazon", "target", "costco", "sam's club", "walmart.com", "online shopping"]
+    },
+    "home": {
+      "category": "Home Improvement",
+      "patterns": ["home depot", "lowe's", "ace hardware", "menards", "home repair", "construction supply"]
+    },
+    "business": {
+      "category": "Business expense",
+      "patterns": ["google one", "microsoft", "adobe", "openai", "anthropic", "github", "slack", "zoom", "dropbox", "notion", "linear", "vercel", "software subscription"]
+    },
+    "entertainment": {
+      "category": "Entertainment",
+      "patterns": ["netflix", "hulu", "disney", "spotify", "apple music", "amc", "regal", "santikos", "movie", "streaming"]
+    },
+    "children": {
+      "category": "Children's Clothing",
+      "patterns": ["carter's", "children's place", "old navy", "gap kids", "baby clothes"]
+    },
+    "baby": {
+      "category": "Baby Expenses",
+      "patterns": ["diaper", "baby food", "infant", "toddler supplies", "baby store"]
+    },
+    "health": {
+      "category": "Health & Wellness",
+      "patterns": ["pharmacy", "cvs", "walgreens", "rite aid", "medical supply", "health clinic"]
+    }
+  },
+  "notes": [
+    "Patterns are case-insensitive and match if contained in merchant name",
+    "Amazon may need manual review - could be business or personal",
+    "Added more generic patterns to improve matching",
+    "New categories: Baby Expenses, Health & Wellness"
+  ]
+}

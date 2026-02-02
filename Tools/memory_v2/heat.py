@@ -38,7 +38,6 @@ class HeatService:
     def __init__(self, database_url: str = None):
         self.database_url = database_url or NEON_DATABASE_URL
         self.config = HEAT_CONFIG
-        self._degraded = True  # No memory_metadata table
         self._persistent_conn = None  # Reuse connection for speed
 
         if not self.database_url:
@@ -57,36 +56,70 @@ class HeatService:
         finally:
             conn.close()
 
-    def apply_decay(self) -> int:
+    def apply_decay(self, use_advanced_formula: bool = True) -> int:
         """
-        Apply daily decay to all non-pinned memories.
+        Apply time-based decay to all non-pinned memories.
 
+        Two decay formulas available:
+        1. Simple: heat *= decay_rate (0.97)
+        2. Advanced: heat = base_score * decay_factor^days * log(access_count + 1)
+        
+        Advanced formula balances:
+        - Time decay (exponential based on age)
+        - Access frequency (logarithmic boost for popular memories)
+        
         Run via cron: 0 3 * * * python -c "from Tools.memory_v2.heat import apply_decay; apply_decay()"
+
+        Args:
+            use_advanced_formula: Use advanced time+access formula (default True)
 
         Returns:
             Number of memories decayed
         """
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                # Apply decay to heat in payload, respecting pinned flag
-                cur.execute("""
-                    UPDATE thanos_memories
-                    SET payload = payload
-                        || jsonb_build_object(
-                            'heat', GREATEST(%(min_heat)s,
-                                COALESCE((payload->>'heat')::float, 1.0) * %(decay_rate)s
+                if use_advanced_formula:
+                    # Advanced formula: heat = base_score * decay_factor^days * log(access_count + 1)
+                    # This favors frequently accessed memories even if old
+                    cur.execute("""
+                        UPDATE thanos_memories
+                        SET payload = payload
+                            || jsonb_build_object(
+                                'heat', GREATEST(%(min_heat)s,
+                                    COALESCE((payload->>'importance')::float, 1.0) *
+                                    POWER(%(decay_rate)s, 
+                                        EXTRACT(EPOCH FROM (NOW() - COALESCE((payload->>'created_at')::timestamp, NOW()))) / 86400
+                                    ) *
+                                    LOG(COALESCE((payload->>'access_count')::int, 0) + 2)
+                                )
                             )
-                        )
-                    WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
-                      AND (payload->>'last_accessed')::timestamp < NOW() - INTERVAL '24 hours'
-                    RETURNING id
-                """, {
-                    "min_heat": self.config["min_heat"],
-                    "decay_rate": self.config["decay_rate"]
-                })
+                        WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                        RETURNING id
+                    """, {
+                        "min_heat": self.config["min_heat"],
+                        "decay_rate": self.config["decay_rate"]
+                    })
+                else:
+                    # Simple formula: heat *= decay_rate
+                    cur.execute("""
+                        UPDATE thanos_memories
+                        SET payload = payload
+                            || jsonb_build_object(
+                                'heat', GREATEST(%(min_heat)s,
+                                    COALESCE((payload->>'heat')::float, 1.0) * %(decay_rate)s
+                                )
+                            )
+                        WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                          AND (payload->>'last_accessed')::timestamp < NOW() - INTERVAL '24 hours'
+                        RETURNING id
+                    """, {
+                        "min_heat": self.config["min_heat"],
+                        "decay_rate": self.config["decay_rate"]
+                    })
 
                 affected = cur.rowcount
-                logger.info(f"Applied decay to {affected} memories")
+                formula = "advanced (time+access)" if use_advanced_formula else "simple"
+                logger.info(f"Applied {formula} decay to {affected} memories")
                 return affected
 
     def boost_on_access(self, memory_id: str) -> float:
@@ -161,7 +194,7 @@ class HeatService:
                             'last_accessed', NOW()::text,
                             'access_count', COALESCE((payload->>'access_count')::int, 0) + 1
                         )
-                    WHERE id = ANY(%(ids)s)
+                    WHERE id = ANY(%(ids)s::uuid[])
                     RETURNING id
                 """, {
                     "max_heat": self.config["max_heat"],
@@ -553,11 +586,24 @@ def get_heat_service() -> HeatService:
     return _heat_service
 
 
-def apply_decay():
-    """Convenience function for cron job."""
+def apply_decay(use_advanced_formula: bool = True):
+    """
+    Convenience function for cron job.
+    
+    Args:
+        use_advanced_formula: Use advanced time+access decay formula (default True)
+    
+    Cron examples:
+        # Advanced formula (recommended)
+        0 3 * * * cd /path/to/Thanos && .venv/bin/python -c "from Tools.memory_v2.heat import apply_decay; apply_decay()"
+        
+        # Simple formula
+        0 3 * * * cd /path/to/Thanos && .venv/bin/python -c "from Tools.memory_v2.heat import apply_decay; apply_decay(False)"
+    """
     service = get_heat_service()
-    count = service.apply_decay()
-    print(f"Applied decay to {count} memories at {datetime.now()}")
+    count = service.apply_decay(use_advanced_formula=use_advanced_formula)
+    formula = "advanced" if use_advanced_formula else "simple"
+    print(f"Applied {formula} decay to {count} memories at {datetime.now()}")
     return count
 
 

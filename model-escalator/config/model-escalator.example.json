@@ -1,0 +1,44 @@
+{
+  "providers": [
+    {
+      "id": "anthropic-claude",
+      "name": "Claude 3 Haiku",
+      "apiKey": "${ANTHROPIC_API_KEY}",
+      "baseUrl": "https://api.anthropic.com/v1",
+      "maxTokens": 200000
+    },
+    {
+      "id": "openai-gpt4",
+      "name": "GPT-4 Turbo",
+      "apiKey": "${OPENAI_API_KEY}",
+      "baseUrl": "https://api.openai.com/v1",
+      "maxTokens": 128000
+    },
+    {
+      "id": "google-gemini",
+      "name": "Gemini Pro",
+      "apiKey": "${GOOGLE_API_KEY}",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "maxTokens": 100000
+    }
+  ],
+  "complexityRules": [
+    {
+      "name": "Low Complexity Task",
+      "maxTokens": 1000,
+      "minSpecialTokens": 5
+    },
+    {
+      "name": "Medium Complexity Task",
+      "maxTokens": 5000,
+      "minContextTokens": 500
+    },
+    {
+      "name": "High Complexity Task",
+      "maxTokens": 50000
+    }
+  ],
+  "defaultProvider": "anthropic-claude",
+  "loggingLevel": "info",
+  "performanceThreshold": 750
+}

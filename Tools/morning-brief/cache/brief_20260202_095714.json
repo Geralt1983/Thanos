@@ -1,0 +1,129 @@
+{
+  "data": {
+    "energy": {
+      "status": "ok",
+      "readiness_score": 74,
+      "sleep_score": 74,
+      "energy_level": "MODERATE"
+    },
+    "calendar": {
+      "status": "ok",
+      "events": [
+        {
+          "summary": "FW: Rover Project Team Meeting",
+          "start": "04:30 PM",
+          "date": "2026-02-02",
+          "is_tomorrow": false
+        },
+        {
+          "summary": "Dog",
+          "start": "10:30 AM",
+          "date": "2026-02-03",
+          "is_tomorrow": true
+        }
+      ],
+      "count": 2
+    },
+    "budget": {
+      "status": "ok",
+      "accounts": [
+        {
+          "id": "234566766514173574",
+          "name": "Share (...0372)",
+          "type": "Cash",
+          "balance": "$519.63"
+        },
+        {
+          "id": "234566766814066311",
+          "name": "Mortgage Loan (...1690)",
+          "type": "Loans",
+          "balance": "-$460961.00"
+        },
+        {
+          "id": "234566766876980872",
+          "name": "Money Market (...3777)",
+          "type": "Cash",
+          "balance": "$319.87"
+        },
+        {
+          "id": "234566766956672649",
+          "name": "Checking (...4773)",
+          "type": "Cash",
+          "balance": "$1715.18"
+        },
+        {
+          "id": "234566767016441482",
+          "name": "Home Equity Line of Credit ...",
+          "type": "Loans",
+          "balance": "-$47171.94"
+        },
+        {
+          "id": "234566767076210315",
+          "name": "Home Equity Line of Credit ...",
+          "type": "Loans",
+          "balance": "-$52511.70"
+        },
+        {
+          "id": "234566767135979148",
+          "name": "Money Market (...8269)",
+          "type": "Cash",
+          "balance": "$3.57"
+        },
+        {
+          "id": "234566901473244903",
+          "name": "High Yield Savings Account ...",
+          "type": "Cash",
+          "balance": "$87.83"
+        },
+        {
+          "id": "234566901764749032",
+          "name": "Additional Gold Card (...1038)",
+          "type": "Credit Cards",
+          "balance": "-$71.99"
+        },
+        {
+          "id": "234566901825566441",
+          "name": "Platinum Card\u00ae (...2006)",
+          "type": "Credit Cards",
+          "balance": "-$968.72"
+        },
+        {
+          "id": "234566901889529578",
+          "name": "Rewards Checking (...2015)",
+          "type": "Cash",
+          "balance": "$0.92"
+        }
+      ],
+      "total_cash": 2647.0000000000005,
+      "total_debt": -561685.35,
+      "net_worth": -559038.35
+    },
+    "tasks": {
+      "status": "ok",
+      "tasks": [
+        {
+          "content": "6fvQ4HcGVgvfGHMf  Put up drinks from store (today)"
+        },
+        {
+          "content": "6fvQ5WcGM69M9XXf  Put rubber feet on bottom of couch (today)"
+        }
+      ]
+    },
+    "weather": {
+      "status": "ok",
+      "current": {
+        "temp_f": "17",
+        "feels_like_f": "9",
+        "condition": "Sunny",
+        "humidity": "56"
+      },
+      "forecast": {
+        "high_f": "46",
+        "low_f": "15",
+        "rain_chance": "0"
+      }
+    }
+  },
+  "errors": [],
+  "timestamp": "2026-02-02T09:57:14.843365"
+}

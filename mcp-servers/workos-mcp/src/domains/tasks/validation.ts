@@ -156,6 +156,18 @@ export const GetClientMemorySchema = z.object({
 export const GetTodayMetricsSchema = z.object({});
 
 /**
+ * Schema for workos_get_metrics_for_date tool
+ * Validates date parameter for historical metrics lookup
+ *
+ * @property date - Required date in YYYY-MM-DD format
+ */
+export const GetMetricsForDateSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+    message: "Date must be in YYYY-MM-DD format",
+  }),
+});
+
+/**
  * Schema for workos_get_clients tool
  * No parameters required - validates empty object
  */
@@ -187,6 +199,7 @@ export const DailySummarySchema = z.object({});
  */
 export const TASK_SCHEMAS = {
   workos_get_today_metrics: GetTodayMetricsSchema,
+  workos_get_metrics_for_date: GetMetricsForDateSchema,
   workos_get_tasks: GetTasksSchema,
   workos_get_clients: GetClientsSchema,
   workos_create_task: CreateTaskSchema,

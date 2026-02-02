@@ -1,0 +1,112 @@
+---
+name: model-escalation
+description: Automatic model switching based on task complexity for OpenClaw agents. Dynamically escalates between Haiku (simple), Sonnet (medium), and Opus (complex) models. Tracks prefix consistency ([H], [S], [O]) and logs discrepancies. USE WHEN configuring multi-model agents, optimizing API costs, or implementing complexity-based model routing.
+---
+
+# Model Escalation
+
+Complexity-based model switching with prefix tracking for OpenClaw agents.
+
+## Quick Start
+
+```python
+from model_escalation import ModelEscalator
+
+escalator = ModelEscalator()
+
+# Determine model from complexity score (0-1)
+model = escalator.escalate_model(current_model, complexity=0.8)
+prefix = escalator.get_prefix(model)
+
+# Use with OpenClaw session_status
+session_status(model=model)
+```
+
+## Complexity Thresholds
+
+| Range | Model | Prefix | Use Cases |
+|-------|-------|--------|-----------|
+| 0-0.25 | Haiku | [H] | Simple questions, confirmations, chat |
+| 0.25-0.75 | Sonnet | [S] | Code, debugging, API integration |
+| 0.75-1.0 | Opus | [O] | Architecture, complex algorithms, strategic planning |
+
+## High Complexity Indicators (Opus)
+
+- System architecture design
+- Distributed systems
+- Multi-step technical implementations
+- Deep code reviews
+- Strategic planning with tradeoffs
+- "Implement X mechanism/system" requests
+
+## Prefix Tracking
+
+Ensures conversation prefix matches active model:
+
+```python
+from model_prefix_tracker import ModelPrefixTracker
+
+tracker = ModelPrefixTracker()
+
+# Validate and correct prefix
+correction = tracker.correct_prefix(
+    session_id='main',
+    current_prefix='[S]',
+    current_model='anthropic/claude-opus-4-5'
+)
+# Returns '[O]' if mismatch detected
+```
+
+Logs all discrepancies to SQLite for analysis.
+
+## Integration with AGENTS.md
+
+Add to your agent's AGENTS.md:
+
+```markdown
+## Model Self-Check
+
+At response START, assess complexity:
+- High (0.75+) → `session_status(model="anthropic/claude-opus-4-5")`
+- Medium (0.25-0.75) → `session_status(model="anthropic/claude-sonnet-4-5")`
+- Low (<0.25) → Stay on Haiku
+
+Prefix responses with [H], [S], or [O] to match model.
+```
+
+## Configuration
+
+Edit `scripts/config.json` to customize:
+
+```json
+{
+  "thresholds": {
+    "low": 0.25,
+    "high": 0.75
+  },
+  "models": {
+    "haiku": "anthropic/claude-3-5-haiku-20241022",
+    "sonnet": "anthropic/claude-3-5-sonnet-20241022",
+    "opus": "anthropic/claude-opus-4-5"
+  },
+  "cooldown_minutes": 5
+}
+```
+
+## Database Schema
+
+Prefix tracking logs stored in SQLite:
+
+```sql
+-- prefix_log table
+timestamp REAL,
+session_id TEXT,
+detected_prefix TEXT,
+actual_model TEXT,
+correction_applied INTEGER
+```
+
+Query discrepancies:
+```bash
+sqlite3 model_prefix_state.db "SELECT * FROM prefix_log WHERE correction_applied=1;"
+```

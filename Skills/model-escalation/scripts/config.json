@@ -1,0 +1,18 @@
+{
+  "thresholds": {
+    "low": 0.25,
+    "high": 0.75
+  },
+  "models": {
+    "haiku": "anthropic/claude-3-5-haiku-20241022",
+    "sonnet": "anthropic/claude-3-5-sonnet-20241022", 
+    "opus": "anthropic/claude-opus-4-5"
+  },
+  "prefixes": {
+    "haiku": "[H]",
+    "sonnet": "[S]",
+    "opus": "[O]"
+  },
+  "cooldown_minutes": 5,
+  "database_path": "model_prefix_state.db"
+}

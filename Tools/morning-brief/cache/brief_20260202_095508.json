@@ -1,0 +1,38 @@
+{
+  "data": {
+    "energy": {
+      "status": "error",
+      "message": "No API token"
+    },
+    "calendar": {
+      "status": "error",
+      "message": "unexpected argument today"
+    },
+    "budget": {
+      "status": "error",
+      "message": "[Errno 2] No such file or directory: 'monarch'"
+    },
+    "tasks": {
+      "status": "ok",
+      "tasks": [
+        {
+          "content": "6fvQ4HcGVgvfGHMf  Put up drinks from store (today)"
+        },
+        {
+          "content": "6fvQ5WcGM69M9XXf  Put rubber feet on bottom of couch (today)"
+        }
+      ]
+    },
+    "weather": {
+      "status": "error",
+      "message": "('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+    }
+  },
+  "errors": [
+    "OURA_ACCESS_TOKEN not set",
+    "Calendar fetch failed: unexpected argument today",
+    "Monarch fetch failed: [Errno 2] No such file or directory: 'monarch'",
+    "Weather fetch failed: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+  ],
+  "timestamp": "2026-02-02T09:55:08.675176"
+}

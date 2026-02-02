@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenClaw Model Escalator Service
+After=network.target
+
+[Service]
+Type=simple
+User=jeremy
+WorkingDirectory=/Users/jeremy/Projects/Thanos
+ExecStart=/usr/bin/env python3 /Users/jeremy/Projects/Thanos/model_escalator.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

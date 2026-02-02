@@ -3,6 +3,7 @@ import { errorResponse } from "../../shared/types.js";
 import { getTaskTools } from "./tools.js";
 import {
   handleGetTodayMetrics,
+  handleGetMetricsForDate,
   handleGetTasks,
   handleGetClients,
   handleCreateTask,
@@ -42,6 +43,8 @@ export const handleTaskTool: ToolRouter = async (
   switch (name) {
     case "workos_get_today_metrics":
       return handleGetTodayMetrics(args, db);
+    case "workos_get_metrics_for_date":
+      return handleGetMetricsForDate(args, db);
     case "workos_get_tasks":
       return handleGetTasks(args, db);
     case "workos_get_clients":

@@ -11,7 +11,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Path to the Thanos project root
-const THANOS_ROOT = path.resolve(__dirname, "../../../..");
+// From dist/ -> mcp-servers/memory-v2-mcp -> mcp-servers -> Thanos
+const THANOS_ROOT = path.resolve(__dirname, "../../..");
+
+// Use venv Python if available
+const PYTHON_PATH = path.join(THANOS_ROOT, ".venv", "bin", "python");
 
 /**
  * Execute a Python function from the Memory V2 module
@@ -39,7 +43,7 @@ result = ${functionName}(**args)
 print(json.dumps(result, default=str))
 `;
 
-    const python = spawn("python3", ["-c", pythonScript], {
+    const python = spawn(PYTHON_PATH, ["-c", pythonScript], {
       cwd: THANOS_ROOT,
       env: {
         ...process.env,

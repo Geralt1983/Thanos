@@ -1,0 +1,13 @@
+{
+    "initial_model": "anthropic/claude-3-5-haiku-20241022",
+    "escalation_models": [
+        "anthropic/claude-sonnet-4-5",
+        "anthropic/claude-opus-4-5"
+    ],
+    "complexity_thresholds": {
+        "low": 0.25,
+        "medium": 0.5,
+        "high": 0.75
+    },
+    "hysteresis_cooldown": 300
+}

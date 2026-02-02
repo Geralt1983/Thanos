@@ -2,10 +2,15 @@
 Configuration for Thanos Memory V2.
 
 Integrates:
-- mem0 for fact extraction and embedding generation
-- OpenAI text-embedding-3-small for embeddings (1536 dimensions)
+- mem0 for fact extraction
+- Voyage AI voyage-3 for embeddings (1024 dimensions)
 - Neon pgvector for storage
 - Heat decay for ADHD-friendly memory surfacing
+
+Embedding Migration:
+- Old: OpenAI text-embedding-3-small (1536 dimensions)
+- New: Voyage AI voyage-3 (1024 dimensions)
+- Set USE_VOYAGE=false to use OpenAI (backward compatibility)
 """
 
 import os
@@ -41,12 +46,18 @@ NEON_CONFIG = parse_neon_url(NEON_DATABASE_URL)
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# Embedding provider selection
+USE_VOYAGE = os.getenv("USE_VOYAGE", "true").lower() == "true"
+EMBEDDING_DIMENSIONS = 1024 if USE_VOYAGE else 1536
+EMBEDDING_MODEL = "voyage-3" if USE_VOYAGE else "text-embedding-3-small"
+
 # User configuration
 DEFAULT_USER_ID = "jeremy"
 
 # mem0 configuration
-# Note: mem0 doesn't support Voyage embeddings natively, so we use OpenAI
-# For Voyage, we use direct API calls in our custom implementation
+# Note: mem0 is used for fact extraction only
+# It always uses OpenAI embeddings internally (mem0 doesn't support Voyage)
+# Our direct search/add operations use Voyage when USE_VOYAGE=true
 MEM0_CONFIG = {
     "llm": {
         "provider": "openai",
@@ -59,7 +70,7 @@ MEM0_CONFIG = {
         "provider": "openai",
         "config": {
             "api_key": OPENAI_API_KEY,
-            "model": "text-embedding-3-small"  # 1536 dimensions
+            "model": "text-embedding-3-small"  # mem0 requires OpenAI models
         }
     },
     "vector_store": {
@@ -115,9 +126,12 @@ def validate_config():
     if not OPENAI_API_KEY:
         errors.append("OPENAI_API_KEY not set in .env (needed for mem0 extraction)")
 
-    if not VOYAGE_API_KEY:
-        # Warning, not error - can fall back to OpenAI
-        print("WARNING: VOYAGE_API_KEY not set, falling back to OpenAI embeddings")
+    if USE_VOYAGE and not VOYAGE_API_KEY:
+        print("WARNING: VOYAGE_API_KEY not set but USE_VOYAGE=true, falling back to OpenAI embeddings")
+        # Auto-switch to OpenAI if Voyage key missing
+        globals()['USE_VOYAGE'] = False
+        globals()['EMBEDDING_DIMENSIONS'] = 1536
+        globals()['EMBEDDING_MODEL'] = "text-embedding-3-small"
 
     if errors:
         raise ValueError("Configuration errors:\n" + "\n".join(errors))
@@ -130,10 +144,12 @@ if __name__ == "__main__":
     print("Memory V2 Configuration")
     print("=" * 40)
     print(f"Database URL: {'✓ Set' if NEON_DATABASE_URL else '✗ Missing'}")
-    print(f"Voyage API Key: {'✓ Set' if VOYAGE_API_KEY else '⚠ Missing (using OpenAI)'}")
+    print(f"Voyage API Key: {'✓ Set' if VOYAGE_API_KEY else '⚠ Missing'}")
     print(f"OpenAI API Key: {'✓ Set' if OPENAI_API_KEY else '✗ Missing'}")
     print()
-    print("Embedder:", MEM0_CONFIG["embedder"]["config"]["model"])
+    print(f"Embedding Provider: {'Voyage AI' if USE_VOYAGE else 'OpenAI'}")
+    print(f"Embedding Model: {EMBEDDING_MODEL}")
+    print(f"Embedding Dimensions: {EMBEDDING_DIMENSIONS}")
 
     try:
         validate_config()

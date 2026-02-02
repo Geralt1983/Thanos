@@ -36,6 +36,20 @@ export function getTaskTools(): ToolDefinition[] {
       },
     },
     {
+      name: "workos_get_metrics_for_date",
+      description: "Get work metrics for a specific date: points earned, tasks completed, clients touched. Use for historical lookups (e.g., 'what did I earn yesterday?')",
+      inputSchema: {
+        type: "object",
+        properties: {
+          date: {
+            type: "string",
+            description: "Date in YYYY-MM-DD format (e.g., '2026-01-30')",
+          },
+        },
+        required: ["date"],
+      },
+    },
+    {
       name: "workos_get_tasks",
       description: "Get tasks from WorkOS. Filter by status: 'active' (today), 'queued' (up next), 'backlog', or 'done'. Can filter by clientId (number) or clientName (string like 'Orlando')",
       inputSchema: {

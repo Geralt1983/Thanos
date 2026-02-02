@@ -1,0 +1,59 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "title": "Model Escalator Configuration",
+    "description": "Configuration for dynamic model selection based on conversation complexity",
+    "properties": {
+        "initial_model": {
+            "type": "string",
+            "description": "Default starting model for conversations",
+            "default": "anthropic/claude-3-5-haiku-20241022"
+        },
+        "escalation_models": {
+            "type": "array",
+            "description": "List of models to escalate to, in order of increasing complexity",
+            "items": {
+                "type": "string"
+            },
+            "default": [
+                "anthropic/claude-3-5-sonnet-20241022",
+                "anthropic/claude-3-opus-20240229"
+            ],
+            "minItems": 1
+        },
+        "complexity_thresholds": {
+            "type": "object",
+            "description": "Thresholds for determining model complexity levels",
+            "properties": {
+                "low": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Lower bound for low complexity",
+                    "default": 0.3
+                },
+                "medium": {
+                    "type": "number", 
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Lower bound for medium complexity",
+                    "default": 0.6
+                },
+                "high": {
+                    "type": "number",
+                    "minimum": 0, 
+                    "maximum": 1,
+                    "description": "Lower bound for high complexity",
+                    "default": 0.9
+                }
+            }
+        },
+        "hysteresis_cooldown": {
+            "type": "number",
+            "description": "Minimum time (in seconds) between model switches",
+            "default": 300,
+            "minimum": 0
+        }
+    },
+    "additionalProperties": false
+}

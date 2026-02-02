@@ -1,0 +1,4 @@
+pyyaml>=5.4.1
+pytest>=7.3.1
+typing-extensions>=4.5.0
+dataclasses>=0.8; python_version < '3.7'

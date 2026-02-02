@@ -22,7 +22,11 @@ from contextlib import contextmanager
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from .config import NEON_DATABASE_URL, MEM0_CONFIG, DEFAULT_USER_ID, OPENAI_API_KEY, validate_config
+from .config import (
+    NEON_DATABASE_URL, MEM0_CONFIG, DEFAULT_USER_ID, 
+    OPENAI_API_KEY, VOYAGE_API_KEY, USE_VOYAGE, 
+    EMBEDDING_DIMENSIONS, EMBEDDING_MODEL, validate_config
+)
 
 # Initialize logger early so it's available for import error handling
 logger = logging.getLogger(__name__)
@@ -38,17 +42,27 @@ except ImportError:
     get_relationship_store = None
     logger.warning("Relationship store not available")
 
-# Query embedding cache - avoids repeated OpenAI API calls
+# Query embedding cache - avoids repeated API calls
 @lru_cache(maxsize=256)
 def _cached_query_embedding(query: str) -> Tuple[float, ...]:
-    """Cache query embeddings to reduce OpenAI API latency."""
-    import openai
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=query
-    )
-    return tuple(response.data[0].embedding)
+    """Cache query embeddings to reduce API latency."""
+    if USE_VOYAGE:
+        import voyageai
+        client = voyageai.Client(api_key=VOYAGE_API_KEY)
+        result = client.embed(
+            texts=[query],
+            model=EMBEDDING_MODEL,
+            input_type="query"  # Optimized for search queries
+        )
+        return tuple(result.embeddings[0])
+    else:
+        import openai
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        response = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=query
+        )
+        return tuple(response.data[0].embedding)
 
 from .heat import HeatService, get_heat_service
 from .search_cache import SearchResultCache
@@ -178,26 +192,39 @@ class MemoryService:
             return self._direct_add_with_embedding(content, metadata)
 
     def _direct_add_with_embedding(self, content: str, metadata: dict) -> Dict[str, Any]:
-        """Direct storage with manual OpenAI embedding when mem0 unavailable."""
+        """Direct storage with manual embedding when mem0 unavailable."""
         import uuid
-        import openai
-        from .config import OPENAI_API_KEY
 
-        if not OPENAI_API_KEY:
-            raise ValueError("Cannot store memory: mem0 unavailable and OPENAI_API_KEY not set")
+        if USE_VOYAGE:
+            if not VOYAGE_API_KEY:
+                raise ValueError("Cannot store memory: mem0 unavailable and VOYAGE_API_KEY not set")
+        else:
+            if not OPENAI_API_KEY:
+                raise ValueError("Cannot store memory: mem0 unavailable and OPENAI_API_KEY not set")
 
         memory_id = str(uuid.uuid4())
 
         # Extract relationships from metadata (don't store in payload)
         relationships = metadata.pop("relationships", None)
 
-        # Generate embedding via OpenAI
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=content
-        )
-        embedding = response.data[0].embedding
+        # Generate embedding via Voyage or OpenAI
+        if USE_VOYAGE:
+            import voyageai
+            client = voyageai.Client(api_key=VOYAGE_API_KEY)
+            result = client.embed(
+                texts=[content],
+                model=EMBEDDING_MODEL,
+                input_type="document"  # Optimized for storage
+            )
+            embedding = result.embeddings[0]
+        else:
+            import openai
+            client = openai.OpenAI(api_key=OPENAI_API_KEY)
+            response = client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=content
+            )
+            embedding = response.data[0].embedding
 
         # Build payload matching mem0 format with all metadata
         import hashlib
@@ -409,7 +436,10 @@ class MemoryService:
 
     def _direct_search(self, query: str, limit: int, filters: dict = None) -> List[Dict[str, Any]]:
         """Direct semantic search with cached embeddings and SQL-level filtering."""
-        if not OPENAI_API_KEY:
+        if USE_VOYAGE and not VOYAGE_API_KEY:
+            logger.warning("No VOYAGE_API_KEY, falling back to text search")
+            return self._text_search(query, limit, filters)
+        elif not USE_VOYAGE and not OPENAI_API_KEY:
             logger.warning("No OPENAI_API_KEY, falling back to text search")
             return self._text_search(query, limit, filters)
 

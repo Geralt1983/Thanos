@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "graphiti": {
+      "version": "1.0.1",
+      "installedAt": 1769868305458
+    },
+    "monarch-money": {
+      "version": "1.0.1",
+      "installedAt": 1769957609256
+    },
+    "gemini-deep-research": {
+      "version": "1.0.0",
+      "installedAt": 1769992141204
+    },
+    "git-essentials": {
+      "version": "1.0.0",
+      "installedAt": 1770048054214
+    },
+    "git-sync": {
+      "version": "1.0.0",
+      "installedAt": 1770048064018
+    }
+  }
+}
