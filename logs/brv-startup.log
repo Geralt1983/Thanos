@@ -9,3 +9,9 @@
 [Tue Feb  3 12:58:34 EST 2026] ByteRover headless status: unexpected output; falling back to TTY shim
 [Tue Feb  3 12:58:34 EST 2026] Headless status failed; falling back to TTY shim
 [Tue Feb  3 12:58:38 EST 2026] Failed to start ByteRover MCP
+[Tue Feb  3 13:06:20 EST 2026] ByteRover headless status: logged in
+[Tue Feb  3 13:07:37 EST 2026] ByteRover headless status: logged in
+[Tue Feb  3 13:09:02 EST 2026] ByteRover headless status: logged in
+[Tue Feb  3 13:09:12 EST 2026] ByteRover headless status: logged in
+[Tue Feb  3 13:09:22 EST 2026] ByteRover headless status: logged in
+[Tue Feb  3 13:09:26 EST 2026] ByteRover headless status: logged in

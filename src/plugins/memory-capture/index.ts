@@ -1,6 +1,8 @@
 import { Plugin, PluginContext } from 'openclaw';
 import { MemoryCaptureConfig, MemoryCaptureConfigSchema } from './schema';
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
 
 type MessageContext = {
   session?: { id?: string };
@@ -104,7 +106,10 @@ export class MemoryCapturePlugin implements Plugin {
           + 'source=payload.get("source","openclaw_plugin"), allow_llm=payload.get("allow_llm", False))'
       ].join('; ');
 
-      const child = spawn('python3', ['-c', pythonCode], {
+      const venvPython = join(process.cwd(), '.venv', 'bin', 'python');
+      const pythonExe = existsSync(venvPython) ? venvPython : 'python3';
+
+      const child = spawn(pythonExe, ['-c', pythonCode], {
         cwd: process.cwd(),
         env: { ...process.env, MEMORY_CAPTURE_PAYLOAD: encoded },
         stdio: 'ignore'

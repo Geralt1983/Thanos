@@ -15,6 +15,8 @@ ADHD helpers:
 import logging
 import atexit
 import hashlib
+import os
+import concurrent.futures
 from datetime import datetime
 from functools import lru_cache
 from typing import Optional, List, Dict, Any, Tuple
@@ -76,6 +78,8 @@ except ImportError:
     MEM0_AVAILABLE = False
     logger.warning("mem0 not installed. Run: pip install mem0ai")
 
+MEM0_DISABLED = os.getenv("MEMORY_V2_DISABLE_MEM0", "false").lower() in ("1", "true", "yes")
+
 
 class MemoryService:
     """
@@ -98,18 +102,22 @@ class MemoryService:
         self.heat_service = get_heat_service()
         self._persistent_conn = None  # Reuse connection for speed
         self._search_cache = SearchResultCache(ttl_seconds=300)  # 5-minute TTL cache
+        self._mem0_timeout = int(os.getenv("MEMORY_V2_MEM0_TIMEOUT", "8"))
+        self._embed_timeout = int(os.getenv("MEMORY_V2_EMBED_TIMEOUT", "10"))
 
         if not self.database_url:
             raise ValueError("Database URL not configured")
 
-        # Initialize mem0 if available
+        # Initialize mem0 if available and not explicitly disabled
         self.memory = None
-        if MEM0_AVAILABLE:
+        if MEM0_AVAILABLE and not MEM0_DISABLED:
             try:
                 self.memory = Memory.from_config(MEM0_CONFIG)
                 logger.info("mem0 initialized successfully")
             except Exception as e:
                 logger.warning(f"Could not initialize mem0: {e}")
+        elif MEM0_DISABLED:
+            logger.info("mem0 disabled via MEMORY_V2_DISABLE_MEM0")
 
         # Initialize relationship store if available
         self.relationships = None
@@ -169,11 +177,25 @@ class MemoryService:
 
         if self.memory:
             # Use mem0 for fact extraction and storage
-            result = self.memory.add(
-                messages=[{"role": "user", "content": content}],
-                user_id=self.user_id,
-                metadata=metadata
-            )
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        self.memory.add,
+                        messages=[{"role": "user", "content": content}],
+                        user_id=self.user_id,
+                        metadata=metadata
+                    )
+                    result = future.result(timeout=self._mem0_timeout)
+            except concurrent.futures.TimeoutError:
+                logger.warning(f"mem0 add timed out after {self._mem0_timeout}s; falling back to direct embedding")
+                if relationships:
+                    metadata["relationships"] = relationships
+                return self._direct_add_with_embedding(content, metadata)
+            except Exception as e:
+                logger.warning(f"mem0 add failed: {e}; falling back to direct embedding")
+                if relationships:
+                    metadata["relationships"] = relationships
+                return self._direct_add_with_embedding(content, metadata)
 
             # Store extended metadata with heat and relationships
             if result and "results" in result:
@@ -216,24 +238,32 @@ class MemoryService:
         # Extract relationships from metadata (don't store in payload)
         relationships = metadata.pop("relationships", None)
 
-        # Generate embedding via Voyage or OpenAI
-        if USE_VOYAGE:
-            import voyageai
-            client = voyageai.Client(api_key=VOYAGE_API_KEY)
-            result = client.embed(
-                texts=[content],
-                model=EMBEDDING_MODEL,
-                input_type="document"  # Optimized for storage
-            )
-            embedding = result.embeddings[0]
-        else:
-            import openai
-            client = openai.OpenAI(api_key=OPENAI_API_KEY)
-            response = client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=content
-            )
-            embedding = response.data[0].embedding
+        # Generate embedding via Voyage or OpenAI (with timeout)
+        def _embed_call():
+            if USE_VOYAGE:
+                import voyageai
+                client = voyageai.Client(api_key=VOYAGE_API_KEY)
+                result = client.embed(
+                    texts=[content],
+                    model=EMBEDDING_MODEL,
+                    input_type="document"  # Optimized for storage
+                )
+                return result.embeddings[0]
+            else:
+                import openai
+                client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=self._embed_timeout)
+                response = client.embeddings.create(
+                    model=EMBEDDING_MODEL,
+                    input=content
+                )
+                return response.data[0].embedding
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_embed_call)
+            try:
+                embedding = future.result(timeout=self._embed_timeout)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(f"Embedding generation timed out after {self._embed_timeout}s")
 
         # Build payload matching mem0 format with all metadata
         import hashlib
