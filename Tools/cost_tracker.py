@@ -14,21 +14,17 @@ from typing import Dict, List, Optional
 
 # Claude Code model pricing (as of 2026)
 MODEL_PRICING = {
-    "claude-sonnet-4-5-20250929": {
+    "anthropic/claude-sonnet-4-5": {
         "input": 3.00 / 1_000_000,   # $3 per million input tokens
         "output": 15.00 / 1_000_000  # $15 per million output tokens
     },
-    "claude-opus-4-5-20251101": {
+    "anthropic/claude-opus-4-5": {
         "input": 15.00 / 1_000_000,
         "output": 75.00 / 1_000_000
     },
-    "claude-3-5-haiku-20241022": {
+    "anthropic/claude-3-5-haiku-20241022": {
         "input": 1.00 / 1_000_000,
         "output": 5.00 / 1_000_000
-    },
-    "claude-3-5-sonnet-20241022": {
-        "input": 3.00 / 1_000_000,
-        "output": 15.00 / 1_000_000
     }
 }
 

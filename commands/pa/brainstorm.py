@@ -6,7 +6,7 @@ Facilitates creative thinking and idea generation.
 Usage:
     python -m commands.pa.brainstorm [topic]
 
-Model: claude-3-5-sonnet-20241022 (standard task - needs creativity)
+Model: anthropic/claude-sonnet-4-5 (standard task - needs creativity)
 """
 
 from datetime import datetime
@@ -130,7 +130,7 @@ Let's think together.
 """
 
     # Use Claude Sonnet for creative tasks (better reasoning)
-    model = "claude-3-5-sonnet-20241022"
+    model = "anthropic/claude-sonnet-4-5"
 
     print(f"💡 Brainstorm: {topic[:50]}...")
     print(f"📡 Using {model}\n")

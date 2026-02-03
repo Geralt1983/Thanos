@@ -17,13 +17,13 @@ class TestCostEfficiency(unittest.TestCase):
         # Mock configuration
         self.mock_config = {
             "litellm": {
-                "default_model": "claude-opus-4-5-20251101",
-                "fallback_chain": ["claude-opus-4-5-20251101", "gpt-4-turbo"],
+                "default_model": "anthropic/claude-opus-4-5",
+                "fallback_chain": ["anthropic/claude-opus-4-5", "gpt-4-turbo"],
             },
             "model_routing": {
                 "rules": {
-                    "complex": {"model": "claude-3-5-sonnet-20241022", "min_complexity": 0.7},
-                    "standard": {"model": "claude-3-5-haiku-20241022", "min_complexity": 0.3},
+                    "complex": {"model": "anthropic/claude-sonnet-4-5", "min_complexity": 0.7},
+                    "standard": {"model": "anthropic/claude-3-5-haiku-20241022", "min_complexity": 0.3},
                     "simple": {"model": "gpt-4.1-nano", "max_complexity": 0.3}
                 },
                 "complexity_factors": {
@@ -37,8 +37,8 @@ class TestCostEfficiency(unittest.TestCase):
                 "storage_path": "State/usage.json",
                 "pricing": {
                     "gpt-4.1-nano": {"input": 0.0002, "output": 0.0008},
-                    "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-                    "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075}
+                    "anthropic/claude-sonnet-4-5": {"input": 0.003, "output": 0.015},
+                    "anthropic/claude-opus-4-5": {"input": 0.015, "output": 0.075}
                 }
             },
             "caching": {"enabled": False}  # Disable cache for these tests
@@ -83,7 +83,7 @@ class TestCostEfficiency(unittest.TestCase):
         
         # Verify mapping
         rule = self.mock_config["model_routing"]["rules"][tier]
-        self.assertEqual(rule["model"], "claude-3-5-sonnet-20241022")
+        self.assertEqual(rule["model"], "anthropic/claude-sonnet-4-5")
 
     def test_routing_standard_query(self):
         """Test that standard queries route to the balanced model."""
@@ -109,7 +109,7 @@ class TestCostEfficiency(unittest.TestCase):
         
         # Verify mapping
         rule = self.mock_config["model_routing"]["rules"][tier]
-        self.assertEqual(rule["model"], "claude-3-5-haiku-20241022")
+        self.assertEqual(rule["model"], "anthropic/claude-3-5-haiku-20241022")
 
     def test_cost_calculation_accuracy(self):
         """Test that usage tracker calculates costs correctly with configured pricing."""
@@ -123,12 +123,12 @@ class TestCostEfficiency(unittest.TestCase):
             
             # Case 2: Sonnet (Standard)
             # 1000 in, 1000 out -> $0.003 + $0.015 = $0.018
-            cost_sonnet = tracker.calculate_cost("claude-sonnet-4-20250514", 1000, 1000)
+            cost_sonnet = tracker.calculate_cost("anthropic/claude-sonnet-4-5", 1000, 1000)
             self.assertAlmostEqual(cost_sonnet, 0.018)
             
             # Case 3: Opus (Expensive)
             # 1000 in, 1000 out -> $0.015 + $0.075 = $0.090
-            cost_opus = tracker.calculate_cost("claude-opus-4-5-20251101", 1000, 1000)
+            cost_opus = tracker.calculate_cost("anthropic/claude-opus-4-5", 1000, 1000)
             self.assertAlmostEqual(cost_opus, 0.090)
 
     @patch("Tools.litellm.client.LiteLLMClient._load_config")
@@ -168,8 +168,8 @@ class TestCostEfficiency(unittest.TestCase):
         agent_config["agent_routing"] = {
             "enabled": True,
             "agents": {
-                "ops": {"model": "claude-3-5-haiku-20241022"},
-                "strategy": {"model": "claude-3-5-sonnet-20241022"}
+                "ops": {"model": "anthropic/claude-3-5-haiku-20241022"},
+                "strategy": {"model": "anthropic/claude-sonnet-4-5"}
             }
         }
         
@@ -190,12 +190,12 @@ class TestCostEfficiency(unittest.TestCase):
             # Test Ops Agent -> Haiku
             client.chat("Task", agent="ops")
             args, kwargs = mock_call.call_args
-            self.assertEqual(kwargs['model'], "claude-3-5-haiku-20241022")
+            self.assertEqual(kwargs['model'], "anthropic/claude-3-5-haiku-20241022")
             
             # Test Strategy Agent -> Sonnet
             client.chat("Plan", agent="strategy")
             args, kwargs = mock_call.call_args
-            self.assertEqual(kwargs['model'], "claude-3-5-sonnet-20241022")
+            self.assertEqual(kwargs['model'], "anthropic/claude-sonnet-4-5")
 
 if __name__ == '__main__':
     unittest.main()

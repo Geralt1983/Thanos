@@ -17,7 +17,7 @@ from model_prefix_tracker import ModelPrefixTracker
 class ModelEscalator:
     MODELS = {
         'haiku': 'anthropic/claude-3-5-haiku-20241022',
-        'sonnet': 'anthropic/claude-3-5-sonnet-20241022',
+        'sonnet': 'anthropic/claude-sonnet-4-5',
         'opus': 'anthropic/claude-opus-4-5'
     }
     

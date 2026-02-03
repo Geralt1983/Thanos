@@ -15,8 +15,8 @@ Usage:
     from Tools.litellm.agent_router import AgentRouter
     
     router = AgentRouter(config)
-    model = router.get_model("coach")  # Returns "claude-3-5-haiku-20241022"
-    chain = router.get_agent_chain("coach")  # ["claude-3-5-haiku-20241022", "gpt-4.1-mini"]
+    model = router.get_model("coach")  # Returns "anthropic/claude-3-5-haiku-20241022"
+    chain = router.get_agent_chain("coach")  # ["anthropic/claude-3-5-haiku-20241022", "gpt-4.1-mini"]
 """
 
 from typing import Dict, List, Optional
@@ -33,17 +33,17 @@ class AgentRouter:
             "description": "Fast operations, tool calls, scheduling"
         },
         "coach": {
-            "model": "claude-3-5-haiku-20241022",
+            "model": "anthropic/claude-3-5-haiku-20241022",
             "fallback": "gpt-4.1-mini",
             "description": "Empathetic coaching, accountability"
         },
         "strategy": {
             "model": "gpt-4o",
-            "fallback": "claude-3-5-sonnet-20241022",
+            "fallback": "anthropic/claude-sonnet-4-5",
             "description": "Complex reasoning, big-picture planning"
         },
         "health": {
-            "model": "claude-3-5-haiku-20241022",
+            "model": "anthropic/claude-3-5-haiku-20241022",
             "fallback": "gpt-4.1-mini",
             "description": "Sensitive health topics, ADHD support"
         }

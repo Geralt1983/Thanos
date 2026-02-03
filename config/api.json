@@ -4,9 +4,9 @@
       "anthropic": {
         "api_key_env": "ANTHROPIC_API_KEY",
         "models": {
-          "opus": "claude-3-opus-20240229",
-          "sonnet": "claude-3-5-sonnet-20241022",
-          "haiku": "claude-3-5-haiku-20241022"
+          "opus": "anthropic/claude-opus-4-5",
+          "sonnet": "anthropic/claude-sonnet-4-5",
+          "haiku": "anthropic/claude-3-5-haiku-20241022"
         }
       },
       "openai": {
@@ -43,22 +43,22 @@
     "enabled": true,
     "agents": {
       "ops": {
-        "model": "claude-3-5-haiku-20241022",
+        "model": "anthropic/claude-3-5-haiku-20241022",
         "fallback": "gpt-4.1-mini",
         "description": "Fast operations, tool calls, scheduling"
       },
       "coach": {
-        "model": "claude-3-5-haiku-20241022",
+        "model": "anthropic/claude-3-5-haiku-20241022",
         "fallback": "gpt-4.1-mini",
         "description": "Empathetic coaching, accountability"
       },
       "strategy": {
-        "model": "claude-3-5-sonnet-20241022",
-        "fallback": "claude-3-5-sonnet-20241022",
+        "model": "anthropic/claude-sonnet-4-5",
+        "fallback": "anthropic/claude-sonnet-4-5",
         "description": "Complex reasoning, big-picture planning"
       },
       "health": {
-        "model": "claude-3-5-haiku-20241022",
+        "model": "anthropic/claude-3-5-haiku-20241022",
         "fallback": "gpt-4.1-mini",
         "description": "Sensitive health topics, ADHD support"
       }
@@ -68,7 +68,7 @@
   "model_routing": {
     "rules": {
       "complex": {
-        "model": "claude-3-5-sonnet-20241022",
+        "model": "anthropic/claude-sonnet-4-5",
         "indicators": [
           "architecture",
           "analysis",
@@ -80,7 +80,7 @@
         "min_complexity": 0.7
       },
       "standard": {
-        "model": "claude-3-5-haiku-20241022",
+        "model": "anthropic/claude-3-5-haiku-20241022",
         "indicators": [
           "task",
           "summary",
@@ -115,15 +115,15 @@
     "alert_threshold": 100000,
     "cost_projection_enabled": true,
     "pricing": {
-      "claude-3-opus-20240229": {
+      "anthropic/claude-opus-4-5": {
         "input": 0.015,
         "output": 0.075
       },
-      "claude-3-5-sonnet-20241022": {
+      "anthropic/claude-sonnet-4-5": {
         "input": 0.003,
         "output": 0.015
       },
-      "claude-3-5-haiku-20241022": {
+      "anthropic/claude-3-5-haiku-20241022": {
         "input": 0.00025,
         "output": 0.00125
       },

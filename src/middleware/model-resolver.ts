@@ -8,7 +8,7 @@ export class ModelResolver {
   // List of supported Anthropic models
   private static ANTHROPIC_MODELS = [
     'anthropic/claude-3-5-haiku-20241022',
-    'anthropic/claude-3-5-sonnet-20241022',
+    'anthropic/claude-sonnet-4-5',
     'anthropic/claude-opus-4-5'
   ];
 

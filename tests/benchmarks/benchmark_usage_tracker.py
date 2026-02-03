@@ -141,7 +141,7 @@ class BenchmarkRunner:
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.pricing = {
-            "claude-3-5-sonnet-20241022": {"input": 0.003, "output": 0.015},
+            "anthropic/claude-sonnet-4-5": {"input": 0.003, "output": 0.015},
             "gpt-4": {"input": 0.03, "output": 0.06},
             "gemini-pro": {"input": 0.001, "output": 0.002}
         }
@@ -166,7 +166,7 @@ class BenchmarkRunner:
         for i in range(num_calls):
             start = time.perf_counter()
             sync_tracker.record(
-                model="claude-3-5-sonnet-20241022",
+                model="anthropic/claude-sonnet-4-5",
                 input_tokens=100 + i,
                 output_tokens=50 + i,
                 cost_usd=0.001,
@@ -184,7 +184,7 @@ class BenchmarkRunner:
         for i in range(num_calls):
             start = time.perf_counter()
             async_tracker.record(
-                model="claude-3-5-sonnet-20241022",
+                model="anthropic/claude-sonnet-4-5",
                 input_tokens=100 + i,
                 output_tokens=50 + i,
                 cost_usd=0.001,
@@ -274,7 +274,7 @@ class BenchmarkRunner:
         for i in range(num_chunks):
             chunk_start = time.perf_counter()
             sync_tracker.record(
-                model="claude-3-5-sonnet-20241022",
+                model="anthropic/claude-sonnet-4-5",
                 input_tokens=500,  # Fixed input
                 output_tokens=i + 1,  # Incremental output
                 cost_usd=0.001,
@@ -296,7 +296,7 @@ class BenchmarkRunner:
         for i in range(num_chunks):
             chunk_start = time.perf_counter()
             async_tracker.record(
-                model="claude-3-5-sonnet-20241022",
+                model="anthropic/claude-sonnet-4-5",
                 input_tokens=500,  # Fixed input
                 output_tokens=i + 1,  # Incremental output
                 cost_usd=0.001,

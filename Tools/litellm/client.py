@@ -41,7 +41,7 @@ Usage - Advanced:
     # Force specific model
     response = client.chat(
         "Analyze this complex system architecture...",
-        model="claude-opus-4-5-20251101",
+        model="anthropic/claude-opus-4-5",
         max_tokens=8000,
         temperature=0.7,
         system_prompt="You are a senior architect."
@@ -75,8 +75,8 @@ Configuration:
 
     {
         "litellm": {
-            "default_model": "claude-opus-4-5-20251101",
-            "fallback_chain": ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514"],
+            "default_model": "anthropic/claude-opus-4-5",
+            "fallback_chain": ["anthropic/claude-opus-4-5", "anthropic/claude-sonnet-4-5"],
             "timeout": 600,
             "max_retries": 3,
             "providers": {
@@ -88,9 +88,9 @@ Configuration:
         },
         "model_routing": {
             "rules": {
-                "complex": {"model": "claude-opus-4-5-20251101", "min_complexity": 0.7},
-                "standard": {"model": "claude-sonnet-4-20250514", "min_complexity": 0.3},
-                "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3}
+                "complex": {"model": "anthropic/claude-opus-4-5", "min_complexity": 0.7},
+                "standard": {"model": "anthropic/claude-sonnet-4-5", "min_complexity": 0.3},
+                "simple": {"model": "anthropic/claude-3-5-haiku-20241022", "max_complexity": 0.3}
             }
         },
         "usage_tracking": {
@@ -270,8 +270,8 @@ class LiteLLMClient:
         # Default config
         return {
             "litellm": {
-                "default_model": "claude-3-5-sonnet-20241022",
-                "fallback_chain": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"],
+                "default_model": "anthropic/claude-sonnet-4-5",
+                "fallback_chain": ["anthropic/claude-sonnet-4-5", "anthropic/claude-opus-4-5", "anthropic/claude-3-5-haiku-20241022"],
                 "allow_fallback_client": False,
                 "timeout": 600,
                 "max_retries": 3,
@@ -279,9 +279,9 @@ class LiteLLMClient:
             },
             "model_routing": {
                 "rules": {
-                    "complex": {"model": "claude-3-opus-20240229", "min_complexity": 0.7},
-                    "standard": {"model": "claude-3-5-sonnet-20241022", "min_complexity": 0.3},
-                    "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3}
+                    "complex": {"model": "anthropic/claude-opus-4-5", "min_complexity": 0.7},
+                    "standard": {"model": "anthropic/claude-sonnet-4-5", "min_complexity": 0.3},
+                    "simple": {"model": "anthropic/claude-3-5-haiku-20241022", "max_complexity": 0.3}
                 }
             },
             "usage_tracking": {"enabled": True, "storage_path": "State/usage.json"},
@@ -393,7 +393,7 @@ class LiteLLMClient:
         rule = self.routing_rules.get(tier, {})
         selected_model = rule.get(
             "model",
-            self.config.get("litellm", {}).get("default_model", "claude-opus-4-5-20251101")
+            self.config.get("litellm", {}).get("default_model", "anthropic/claude-opus-4-5")
         )
         return {
             "model": selected_model,
@@ -486,9 +486,9 @@ class LiteLLMClient:
             5. If all models fail, raises the last error encountered
 
         Chain Construction Example:
-            Config: fallback_chain = ["claude-opus-4-5", "claude-sonnet-4"]
-            Request: model = "claude-3-5-haiku"
-            Final chain: ["claude-3-5-haiku", "claude-opus-4-5", "claude-sonnet-4"]
+            Config: fallback_chain = ["anthropic/claude-opus-4-5", "anthropic/claude-sonnet-4-5"]
+            Request: model = "anthropic/claude-3-5-haiku-20241022"
+            Final chain: ["anthropic/claude-3-5-haiku-20241022", "anthropic/claude-opus-4-5", "anthropic/claude-sonnet-4-5"]
 
         IMPORTANT - This is NOT Retry Logic:
             - Fallback = Tries different MODELS (immediate, no delay)
@@ -510,9 +510,9 @@ class LiteLLMClient:
             that actually processed the request.
 
             Example:
-                - Request claude-opus (fails) → fallback to claude-sonnet (succeeds)
-                - Response cached against "claude-opus" (not "claude-sonnet")
-                - Next request to claude-opus → cache miss, tries opus again
+                - Request anthropic/claude-opus-4-5 (fails) → fallback to anthropic/claude-sonnet-4-5 (succeeds)
+                - Response cached against "anthropic/claude-opus-4-5" (not "anthropic/claude-sonnet-4-5")
+                - Next request to anthropic/claude-opus-4-5 → cache miss, tries opus again
                 - Result: Lower cache hit rates, repeated failures
 
             This is expected behavior. See docs/TROUBLESHOOTING.md section
@@ -524,9 +524,9 @@ class LiteLLMClient:
             cost calculations.
 
             Example:
-                - User requests: claude-opus-4-5-20251101 (costs $15/1M input tokens)
-                - Actual model: claude-sonnet-4-20250514 (costs $3/1M input tokens)
-                - Tracked as: claude-opus-4-5-20251101 ← WRONG PRICING
+                - User requests: anthropic/claude-opus-4-5 (costs $15/1M input tokens)
+                - Actual model: anthropic/claude-sonnet-4-5 (costs $3/1M input tokens)
+                - Tracked as: anthropic/claude-opus-4-5 ← WRONG PRICING
                 - Result: Cost reports show 5x higher costs than reality
 
             See docs/TROUBLESHOOTING.md section "Usage Tracking with Fallbacks"
@@ -556,9 +556,9 @@ class LiteLLMClient:
             {
                 "litellm": {
                     "fallback_chain": [
-                        "claude-opus-4-5-20251101",     // Anthropic
+                        "anthropic/claude-opus-4-5",     // Anthropic
                         "gpt-4-turbo",                  // OpenAI
-                        "claude-sonnet-4-20250514"      // Anthropic fallback
+                        "anthropic/claude-sonnet-4-5"      // Anthropic fallback
                     ]
                 }
             }
