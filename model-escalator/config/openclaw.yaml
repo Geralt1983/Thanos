@@ -32,7 +32,7 @@ model_escalator:
   
   telemetry:
     enabled: true
-    log_path: /var/log/openclaw/model_escalator.log
+    log_path: ~/Library/Logs/openclaw/model_escalator.log
   
   fallback_strategy:
     - availability_check
