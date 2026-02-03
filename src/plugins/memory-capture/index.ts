@@ -111,7 +111,13 @@ export class MemoryCapturePlugin implements Plugin {
 
       const child = spawn(pythonExe, ['-c', pythonCode], {
         cwd: process.cwd(),
-        env: { ...process.env, MEMORY_CAPTURE_PAYLOAD: encoded },
+        env: {
+          ...process.env,
+          MEMORY_CAPTURE_PAYLOAD: encoded,
+          MEMORY_CAPTURE_DISABLE_MEM0: this.config.disableMem0 ? '1' : '0',
+          MEMORY_CAPTURE_EMBED_TIMEOUT: String(this.config.embedTimeoutSeconds),
+          MEMORY_CAPTURE_SKIP_BRV: this.config.skipByterover ? '1' : '0'
+        },
         stdio: 'ignore'
       });
 

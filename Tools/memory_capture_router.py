@@ -34,6 +34,12 @@ LOG_DIR.mkdir(exist_ok=True)
 
 DEDUPE_PATH = STATE_DIR / "memory_capture_dedupe.json"
 DEDUPE_TTL_DAYS = 7
+
+# Propagate capture-level knobs to Memory V2 settings if provided
+if os.getenv("MEMORY_CAPTURE_DISABLE_MEM0") is not None:
+    os.environ["MEMORY_V2_DISABLE_MEM0"] = os.getenv("MEMORY_CAPTURE_DISABLE_MEM0", "0")
+if os.getenv("MEMORY_CAPTURE_EMBED_TIMEOUT") is not None:
+    os.environ["MEMORY_V2_EMBED_TIMEOUT"] = os.getenv("MEMORY_CAPTURE_EMBED_TIMEOUT", "10")
 BACKLOG_PATH = STATE_DIR / "memory_capture_backlog.jsonl"
 BRV_BACKLOG_PATH = STATE_DIR / "byterover_backlog.jsonl"
 BACKLOG_MAX_ITEMS = 500
@@ -41,6 +47,13 @@ BACKLOG_TTL_DAYS = 30
 BACKLOG_FLUSH_INTERVAL_SECONDS = 600
 
 _last_backlog_flush = 0.0
+_use_subprocess = os.getenv("MEMORY_CAPTURE_SUBPROCESS", "1").lower() in ("1", "true", "yes")
+_skip_brv = os.getenv("MEMORY_CAPTURE_SKIP_BRV", "0").lower() in ("1", "true", "yes")
+
+
+def _get_python_exe() -> str:
+    venv_py = ROOT_DIR / ".venv" / "bin" / "python"
+    return str(venv_py) if venv_py.exists() else "python3"
 
 
 # ----------------------------
@@ -356,8 +369,46 @@ def _format_brv_entry(item: LearningItem, context: Dict[str, Any], session_id: s
     return f"Category: {category} - {item.content}. Reason: {reason}. Context: {ctx}."
 
 
+def _capture_item_subprocess(item: LearningItem, capture_type: Any, metadata: Dict[str, Any], source: str) -> bool:
+    try:
+        payload = {
+            "content": item.content,
+            "capture_type": getattr(capture_type, "name", None) or getattr(capture_type, "value", None),
+            "metadata": metadata,
+            "source": source
+        }
+        encoded = json.dumps(payload)
+        python_code = (
+            "import os, json; "
+            "from Tools.memory_v2.unified_capture import capture, CaptureType; "
+            "payload=json.loads(os.environ.get('MEMORY_CAPTURE_ITEM','{}')); "
+            "ct=payload.get('capture_type') or 'LEARNING'; "
+            "ct_enum=CaptureType[ct] if isinstance(ct, str) else CaptureType.LEARNING; "
+            "capture(payload.get('content',''), capture_type=ct_enum, metadata=payload.get('metadata') or {}, "
+            "source=payload.get('source','openclaw'))"
+        )
+        env = os.environ.copy()
+        env["MEMORY_CAPTURE_ITEM"] = encoded
+        result = subprocess.run(
+            [_get_python_exe(), "-c", python_code],
+            capture_output=True,
+            text=True,
+            timeout=12,
+            env=env,
+            cwd=str(ROOT_DIR)
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def _curate_brv(items: List[LearningItem], context: Dict[str, Any], session_id: str) -> int:
     if not items:
+        return 0
+    if _skip_brv:
+        for item in items:
+            if item.type in ("decision", "bug_fix", "pattern", "learning") and _is_technical(item, context):
+                _enqueue_brv_backlog(item, context, session_id)
         return 0
     if not _ensure_brv_running():
         for item in items:
@@ -445,8 +496,15 @@ def _capture_memory(items: List[LearningItem], context: Dict[str, Any], session_
             metadata["project"] = context["project"]
 
         try:
-            capture(item.content, capture_type=capture_type, metadata=metadata, source=source)
-            stored += 1
+            if _use_subprocess:
+                ok = _capture_item_subprocess(item, capture_type, metadata, source)
+                if ok:
+                    stored += 1
+                else:
+                    _enqueue_backlog(item, context, session_id, source, capture_type=capture_type, metadata=metadata)
+            else:
+                capture(item.content, capture_type=capture_type, metadata=metadata, source=source)
+                stored += 1
         except Exception as e:
             logger.warning(f"Memory capture failed: {e}")
             _enqueue_backlog(item, context, session_id, source, capture_type=capture_type, metadata=metadata)
@@ -760,8 +818,16 @@ def process_memory_backlog(max_items: int = 50) -> int:
             capture_type = CaptureType[capture_type_val.upper()] if capture_type_val else CaptureType.LEARNING
             metadata = rec.get("metadata", {})
             source = rec.get("source", "openclaw")
-            capture(rec.get("content", ""), capture_type=capture_type, metadata=metadata, source=source)
-            processed += 1
+            if _use_subprocess:
+                item = LearningItem(rec.get("item_type", "learning"), rec.get("content", ""), 0.6, source="backlog")
+                ok = _capture_item_subprocess(item, capture_type, metadata, source)
+                if ok:
+                    processed += 1
+                else:
+                    raise RuntimeError("subprocess capture failed")
+            else:
+                capture(rec.get("content", ""), capture_type=capture_type, metadata=metadata, source=source)
+                processed += 1
         except Exception as e:
             rec["attempts"] = rec.get("attempts", 0) + 1
             rec["last_error"] = str(e)

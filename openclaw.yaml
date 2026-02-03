@@ -25,6 +25,9 @@ session:
     minIntervalSeconds: 120
     allowLLM: false
     source: openclaw_plugin
+    disableMem0: true
+    embedTimeoutSeconds: 10
+    skipByterover: true
 
 # Other OpenClaw configurations can be added here
 plugins:

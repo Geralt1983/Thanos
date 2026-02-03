@@ -20,6 +20,11 @@ _original_stderr = sys.stderr
 sys.stdout = open(os.devnull, 'w')
 sys.stderr = open(os.devnull, 'w')
 
+# Reliability defaults (can be overridden by environment)
+os.environ.setdefault("MEMORY_V2_DISABLE_MEM0", "1")
+os.environ.setdefault("MEMORY_V2_EMBED_TIMEOUT", "10")
+os.environ.setdefault("MEMORY_CAPTURE_SKIP_BRV", "1")
+
 # Add Thanos to path
 THANOS_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(THANOS_ROOT))
