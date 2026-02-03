@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.append(str(Path(__file__).parent))
-from model_prefix_tracker import ModelPrefixTracker
+from Tools.model_prefix_tracker import ModelPrefixTracker
 
 class ModelEscalator:
     MODELS = {
