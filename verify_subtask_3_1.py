@@ -41,7 +41,7 @@ print("\n✓ Test 2: record() method queues writes instead of blocking")
 start = time.time()
 for i in range(100):
     tracker.record(
-        model="claude-3-sonnet",
+        model="anthropic/claude-sonnet-4-5",
         input_tokens=100,
         output_tokens=200,
         cost_usd=0.01,
@@ -62,7 +62,7 @@ else:
 # Test 4: Backward compatible interface
 print("\n✓ Test 4: Backward compatible interface (same method signature)")
 result = tracker.record(
-    model="claude-3-sonnet",
+    model="anthropic/claude-sonnet-4-5",
     input_tokens=150,
     output_tokens=250,
     cost_usd=0.02,
@@ -101,7 +101,7 @@ print("  PASS: Daily totals updated")
 
 # Verify model breakdown
 model_breakdown = data.get("model_breakdown", {})
-assert "claude-3-sonnet" in model_breakdown, "Model breakdown missing"
+assert "anthropic/claude-sonnet-4-5" in model_breakdown, "Model breakdown missing"
 print("  PASS: Model breakdown updated")
 
 # Test graceful shutdown

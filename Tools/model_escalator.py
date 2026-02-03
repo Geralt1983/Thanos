@@ -42,7 +42,7 @@ class ModelEscalator:
             "initial_model": "anthropic/claude-3-5-haiku-20241022",
             "escalation_models": [
                 "anthropic/claude-3-5-sonnet-20241022",
-                "anthropic/claude-3-opus-20240229"
+                "anthropic/claude-opus-4-5"
             ],
             "complexity_thresholds": {
                 "low": 0.3,

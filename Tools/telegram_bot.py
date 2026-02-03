@@ -1469,7 +1469,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                         "content-type": "application/json"
                     },
                     json={
-                        "model": "claude-3-haiku-20240307",
+                        "model": "anthropic/claude-3-5-haiku-20241022",
                         "max_tokens": 500,
                         "messages": [{"role": "user", "content": prompt}]
                     },

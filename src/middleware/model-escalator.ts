@@ -17,9 +17,9 @@ export class ModelEscalator implements OpenClawMiddleware {
     
     // Default configuration with sensible defaults
     this.config = {
-      baseModel: 'anthropic/claude-3-haiku-20240307',
+      baseModel: 'anthropic/claude-3-5-haiku-20241022',
       escalationModels: [
-        'anthropic/claude-3-haiku-20240307',
+        'anthropic/claude-3-5-haiku-20241022',
         'anthropic/claude-3-5-sonnet-20241022',
         'anthropic/claude-opus-4-5'
       ],

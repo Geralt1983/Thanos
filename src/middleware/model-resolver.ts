@@ -7,7 +7,7 @@ import axios from 'axios';
 export class ModelResolver {
   // List of supported Anthropic models
   private static ANTHROPIC_MODELS = [
-    'anthropic/claude-3-haiku-20240307',
+    'anthropic/claude-3-5-haiku-20241022',
     'anthropic/claude-3-5-sonnet-20241022',
     'anthropic/claude-opus-4-5'
   ];

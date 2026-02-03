@@ -1718,7 +1718,7 @@ Calculate the estimated cost for a given model and token count using the configu
 
 **Parameters:**
 
-- `model` (str, **required**): The model name to calculate costs for. The method uses fuzzy matching to find the pricing entry, so partial model names work (e.g., "claude-opus" will match "claude-opus-4-5-20251101").
+- `model` (str, **required**): The model name to calculate costs for. The method uses fuzzy matching to find the pricing entry, so partial model names work (e.g., "anthropic/claude-opus-4-5" will match "claude-opus-4-5-20251101").
 
 - `input_tokens` (int, **required**): Number of input/prompt tokens to calculate cost for.
 

@@ -30,7 +30,7 @@ class ModelAvailabilityChecker:
         In a real implementation, this would interface with model provider APIs.
         """
         # Placeholder implementation - replace with actual availability check
-        available_models = ['claude-3-haiku', 'claude-3-sonnet', 'claude-3-opus']
+        available_models = ['anthropic/claude-3-5-haiku-20241022', 'anthropic/claude-sonnet-4-5', 'anthropic/claude-opus-4-5']
         return model_name in available_models
 
 class ComplexityAnalyzer:
@@ -145,9 +145,9 @@ class ModelEscalator:
         """
         # Placeholder token-to-cost conversion (would be model-specific)
         token_cost_usd = {
-            'claude-3-haiku': 0.00025,
-            'claude-3-sonnet': 0.00300,
-            'claude-3-opus': 0.01500
+            'anthropic/claude-3-5-haiku-20241022': 0.00025,
+            'anthropic/claude-sonnet-4-5': 0.00300,
+            'anthropic/claude-opus-4-5': 0.01500
         }
         
         interaction_cost = tokens_used * token_cost_usd.get(session.model_name, 0.001)
@@ -172,7 +172,7 @@ def main():
     
     # Simulated conversation flow
     conversation = ['Hello', 'Can you help me with a complex coding problem?']
-    current_model = 'claude-3-haiku'
+    current_model = 'anthropic/claude-3-5-haiku-20241022'
     domain = Domain.CODE
     
     recommended_model = escalator.determine_model(conversation, current_model, domain)

@@ -1,6 +1,6 @@
 model_escalator:
   enabled: true
-  default_model: claude-3-haiku
+  default_model: anthropic/claude-3-5-haiku-20241022
   
   complexity_thresholds:
     code:
@@ -17,9 +17,9 @@ model_escalator:
       high: 0.95
   
   model_hierarchy:
-    - claude-3-haiku
-    - claude-3-sonnet
-    - claude-3-opus
+    - anthropic/claude-3-5-haiku-20241022
+    - anthropic/claude-sonnet-4-5
+    - anthropic/claude-opus-4-5
   
   domain_weights:
     code: 1.2

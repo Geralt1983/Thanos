@@ -176,7 +176,7 @@ def run_benchmark():
             "records": [
                 {
                     "timestamp": datetime.now().isoformat(),
-                    "model": ["gpt-4", "gpt-3.5-turbo", "claude-3-sonnet"][i % 3],
+                    "model": ["gpt-4", "gpt-3.5-turbo", "anthropic/claude-sonnet-4-5"][i % 3],
                     "provider": ["openai", "anthropic"][i % 2],
                     "total_tokens": 300,
                     "cost_usd": 0.01,

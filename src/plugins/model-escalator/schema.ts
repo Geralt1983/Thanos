@@ -23,9 +23,9 @@ export const ModelEscalatorConfigSchema = z.object({
 
   // Configured model hierarchy for escalation
   modelHierarchy: z.array(z.string()).min(1).default([
-    'anthropic/claude-3-haiku-20240307', 
-    'anthropic/claude-3-sonnet-20240229', 
-    'anthropic/claude-3-opus-20240229'
+    'anthropic/claude-3-5-haiku-20241022', 
+    'anthropic/claude-sonnet-4-5', 
+    'anthropic/claude-opus-4-5'
   ]),
 
   // Hysteresis parameters for preventing rapid model switches

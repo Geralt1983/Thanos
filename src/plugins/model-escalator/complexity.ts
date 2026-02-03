@@ -32,9 +32,9 @@ export class ComplexityAnalyzer {
 
     // Previous model usage impact
     const modelComplexityBoost: Record<string, number> = {
-      'anthropic/claude-3-haiku-20240307': 0,
-      'anthropic/claude-3-sonnet-20240229': 20,
-      'anthropic/claude-3-opus-20240229': 40
+      'anthropic/claude-3-5-haiku-20241022': 0,
+      'anthropic/claude-sonnet-4-5': 20,
+      'anthropic/claude-opus-4-5': 40
     };
     complexityScore += modelComplexityBoost[previousModelUsed] || 0;
 

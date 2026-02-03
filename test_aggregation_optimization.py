@@ -134,7 +134,7 @@ def test_aggregation_optimization():
         for i in range(5):
             writer.queue_write({
                 "timestamp": datetime.now().isoformat(),
-                "model": "claude-3-sonnet",
+                "model": "anthropic/claude-sonnet-4-5",
                 "provider": "anthropic",
                 "prompt_tokens": 80,
                 "completion_tokens": 120,
@@ -143,7 +143,7 @@ def test_aggregation_optimization():
                 "session_id": f"test-session-claude-{i}"
             })
 
-        print(f"✓ Queued 5 gpt-4 + 5 claude-3-sonnet records")
+        print(f"✓ Queued 5 gpt-4 + 5 anthropic/claude-sonnet-4-5 records")
 
         # Flush and verify
         time.sleep(2.0)
@@ -161,10 +161,10 @@ def test_aggregation_optimization():
         print(f"✓ gpt-4: {data['model_breakdown']['gpt-4']['calls']} calls")
 
         # Verify claude has 5 calls
-        assert "claude-3-sonnet" in data["model_breakdown"], "Missing claude-3-sonnet in model breakdown"
-        assert data["model_breakdown"]["claude-3-sonnet"]["calls"] == 5, \
-            f"Expected 5 calls for claude-3-sonnet, got {data['model_breakdown']['claude-3-sonnet']['calls']}"
-        print(f"✓ claude-3-sonnet: {data['model_breakdown']['claude-3-sonnet']['calls']} calls")
+        assert "anthropic/claude-sonnet-4-5" in data["model_breakdown"], "Missing anthropic/claude-sonnet-4-5 in model breakdown"
+        assert data["model_breakdown"]["anthropic/claude-sonnet-4-5"]["calls"] == 5, \
+            f"Expected 5 calls for anthropic/claude-sonnet-4-5, got {data['model_breakdown']['anthropic/claude-sonnet-4-5']['calls']}"
+        print(f"✓ anthropic/claude-sonnet-4-5: {data['model_breakdown']['anthropic/claude-sonnet-4-5']['calls']} calls")
 
         # Verify provider breakdown
         assert data["provider_breakdown"]["openai"]["calls"] == 15, \

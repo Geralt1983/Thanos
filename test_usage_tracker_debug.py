@@ -27,7 +27,7 @@ print(f"Storage path: {storage_path}")
 # Record a few entries
 for i in range(3):
     tracker.record(
-        model="claude-3-sonnet",
+        model="anthropic/claude-sonnet-4-5",
         input_tokens=100,
         output_tokens=200,
         cost_usd=0.01,

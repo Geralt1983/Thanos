@@ -26,7 +26,7 @@ def test_async_writes():
         start_time = time.time()
         for i in range(10):
             tracker.record(
-                model="claude-3-sonnet",
+                model="anthropic/claude-sonnet-4-5",
                 input_tokens=100,
                 output_tokens=200,
                 cost_usd=0.01,

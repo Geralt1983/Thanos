@@ -34,7 +34,7 @@ def test_complexity_analysis(model_escalator):
     for case in test_cases:
         complexity = model_escalator.determine_model(
             case['conversation'], 
-            'claude-3-haiku', 
+            'anthropic/claude-3-5-haiku-20241022', 
             case['domain']
         )
         
@@ -51,16 +51,16 @@ def test_model_escalation(model_escalator):
     
     escalated_model = model_escalator.determine_model(
         high_complexity_conv, 
-        'claude-3-haiku', 
+        'anthropic/claude-3-5-haiku-20241022', 
         Domain.TECHNICAL
     )
     
-    assert escalated_model == 'claude-3-sonnet', "Failed to escalate to more capable model"
+    assert escalated_model == 'anthropic/claude-sonnet-4-5', "Failed to escalate to more capable model"
 
 def test_session_cost_tracking(model_escalator):
     """Test session cost tracking and budget enforcement."""
     session = ModelSession(
-        model_name='claude-3-haiku',
+        model_name='anthropic/claude-3-5-haiku-20241022',
         session_id='test_session_123',
         domain=Domain.CODE
     )
@@ -85,11 +85,11 @@ def test_model_availability(model_escalator):
     unavailable_conv = ['Complex task that requires high-end model']
     fallback_model = model_escalator.determine_model(
         unavailable_conv, 
-        'claude-3-opus',  # Assuming this is currently unavailable
+        'anthropic/claude-opus-4-5',  # Assuming this is currently unavailable
         Domain.TECHNICAL
     )
     
-    assert fallback_model in ['claude-3-sonnet', 'claude-3-haiku'], "Failed to provide fallback model"
+    assert fallback_model in ['anthropic/claude-sonnet-4-5', 'anthropic/claude-3-5-haiku-20241022'], "Failed to provide fallback model"
 
 def test_config_validation():
     """Validate the OpenClaw configuration schema."""
