@@ -24,13 +24,13 @@ const HAIKU_TRIGGERS = [
   'status', 'check', 'confirm', 'ok', 'thanks'
 ];
 
-interface ComplexityResult {
+export interface ComplexityResult {
   score: number;
   model: 'haiku' | 'sonnet' | 'opus';
   triggers: string[];
 }
 
-function scoreComplexity(message: string): ComplexityResult {
+export function scoreComplexity(message: string): ComplexityResult {
   const lower = message.toLowerCase();
   const triggers: string[] = [];
   let score = 0.3; // Default to low-medium
@@ -120,6 +120,3 @@ const handler = async (event: any) => {
 };
 
 export default handler;
-
-// Export for testing
-export { scoreComplexity, ComplexityResult };

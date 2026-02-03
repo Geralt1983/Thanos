@@ -65,7 +65,7 @@ function runThanosRoute(
 
 export default function register(api: any) {
   api.registerTool({
-    name: "thanos.route",
+    name: "thanos_route",
     description:
       "Route a message through the Thanos orchestrator (OpenClaw harness) and return the response.",
     parameters: {
