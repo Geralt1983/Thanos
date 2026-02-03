@@ -16,7 +16,7 @@ Usage:
     # Create a response object
     response = ModelResponse(
         content="Assistant response text",
-        model="claude-sonnet-4-20250514",
+        model="anthropic/claude-sonnet-4-5",
         provider="anthropic",
         input_tokens=150,
         output_tokens=200,

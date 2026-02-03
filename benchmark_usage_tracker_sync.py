@@ -27,9 +27,9 @@ def create_test_tracker(num_existing_records=0):
 
     # Create tracker
     pricing = {
-        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
-        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-opus-4-5": {"input": 0.015, "output": 0.075},
+        "anthropic/claude-sonnet-4-5": {"input": 0.003, "output": 0.015},
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
     tracker = UsageTracker(str(temp_path), pricing)
 
@@ -38,7 +38,7 @@ def create_test_tracker(num_existing_records=0):
         print(f"Pre-populating with {num_existing_records} records...")
         for i in range(num_existing_records):
             tracker.record(
-                model="claude-sonnet-4-20250514",
+                model="anthropic/claude-sonnet-4-5",
                 input_tokens=100 + i,
                 output_tokens=50 + i,
                 cost_usd=0.01,
@@ -55,7 +55,7 @@ def measure_single_record(tracker, trial_num):
     start = time.perf_counter()
 
     tracker.record(
-        model="claude-opus-4-5-20251101",
+        model="anthropic/claude-opus-4-5",
         input_tokens=1000,
         output_tokens=500,
         cost_usd=0.05,
@@ -150,7 +150,7 @@ def simulate_streaming_scenario():
         # Record usage (this blocks!)
         record_start = time.perf_counter()
         tracker.record(
-            model="claude-opus-4-5-20251101",
+            model="anthropic/claude-opus-4-5",
             input_tokens=1000,
             output_tokens=50 * (chunk_num + 1),
             cost_usd=0.001 * (chunk_num + 1),

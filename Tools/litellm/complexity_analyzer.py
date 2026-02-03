@@ -55,9 +55,9 @@ Configuration Example:
     {
         "model_routing": {
             "rules": {
-                "complex": {"model": "claude-opus-4-5-20251101", "min_complexity": 0.7},
-                "standard": {"model": "claude-sonnet-4-20250514", "min_complexity": 0.3},
-                "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3}
+                "complex": {"model": "anthropic/claude-opus-4-5", "min_complexity": 0.7},
+                "standard": {"model": "anthropic/claude-sonnet-4-5", "min_complexity": 0.3},
+                "simple": {"model": "anthropic/claude-3-5-haiku-20241022", "max_complexity": 0.3}
             },
             "complexity_factors": {
                 "token_count_weight": 0.3,

@@ -34,3 +34,12 @@ Stats:
   Hot: 15
   Cold: 38668
   Pinned: 1
+Running memory decay at 2026-02-03 03:00:03.757545
+✓ Decayed 38712 memories
+
+Stats:
+  Total: 38713
+  Avg Heat: 0.15
+  Hot: 12
+  Cold: 38696
+  Pinned: 1

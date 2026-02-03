@@ -12,7 +12,7 @@ Phases:
     plan    - Just planning phase
     metrics - Weekly metrics summary
 
-Model: claude-opus-4.5 (strategic task - deep reasoning)
+Model: anthropic/claude-opus-4-5.5 (strategic task - deep reasoning)
 """
 
 from datetime import datetime, timedelta
@@ -303,7 +303,7 @@ Ask me uncomfortable questions if you see patterns I'm avoiding.
 """
 
     # Use Claude Opus for strategic thinking
-    model = "claude-opus-4.5"
+    model = "anthropic/claude-opus-4-5.5"
 
     print(f"📊 Weekly {phase.title()} - Week {week_num}")
     print(f"📡 Using {model}")

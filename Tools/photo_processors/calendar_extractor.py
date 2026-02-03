@@ -129,7 +129,7 @@ class CalendarExtractor:
     Extract calendar events from photos using Claude Vision.
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "anthropic/claude-sonnet-4-5"):
         """
         Initialize the extractor.
 

@@ -51,7 +51,7 @@ def test_real_scenarios():
     print(f"{Colors.GREEN}Continue conversation on this branch. Use /branches to switch back to main.{Colors.RESET}")
     print(f"{Colors.GREEN}Switched to branch:{Colors.RESET}")
     print(f"{Colors.GREEN}Model switched:{Colors.RESET} opus → sonnet")
-    print(f"{Colors.GREEN}Using: claude-sonnet-4-20250514{Colors.RESET}")
+    print(f"{Colors.GREEN}Using: anthropic/claude-sonnet-4-5{Colors.RESET}")
 
     print("\n" + "=" * 70)
     print("VERIFICATION CHECKLIST")

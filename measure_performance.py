@@ -42,7 +42,7 @@ print("Phase 1: First Instantiation (Cold Start)")
 print("=" * 70)
 
 start = time.perf_counter()
-cm_first = ContextManager(model="claude-opus-4-5-20251101")
+cm_first = ContextManager(model="anthropic/claude-opus-4-5")
 first_time_ms = (time.perf_counter() - start) * 1000
 
 print(f"✓ First instantiation time: {first_time_ms:.3f}ms")
@@ -60,7 +60,7 @@ num_iterations = 100
 
 for i in range(num_iterations):
     start = time.perf_counter()
-    cm = ContextManager(model="claude-opus-4-5-20251101")
+    cm = ContextManager(model="anthropic/claude-opus-4-5")
     elapsed_ms = (time.perf_counter() - start) * 1000
     subsequent_times.append(elapsed_ms)
 
@@ -151,7 +151,7 @@ encoder_ids = set()
 
 print("Creating 10 ContextManager instances...")
 for i in range(10):
-    cm = ContextManager(model=f"claude-opus-4-5-20251101")
+    cm = ContextManager(model=f"anthropic/claude-opus-4-5")
     managers.append(cm)
     encoder_ids.add(id(cm.encoding))
 

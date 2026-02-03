@@ -25,7 +25,7 @@ class TestModelResponse:
         """ModelResponse should be properly initialized."""
         response = ModelResponse(
             content="Test content",
-            model="claude-opus-4-5-20251101",
+            model="anthropic/claude-opus-4-5",
             provider="anthropic",
             input_tokens=100,
             output_tokens=50,
@@ -36,7 +36,7 @@ class TestModelResponse:
         )
 
         assert response.content == "Test content"
-        assert response.model == "claude-opus-4-5-20251101"
+        assert response.model == "anthropic/claude-opus-4-5"
         assert response.total_tokens == 150
         assert response.cached is False
 

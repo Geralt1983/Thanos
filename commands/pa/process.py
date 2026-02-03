@@ -11,7 +11,7 @@ Options:
     --dry-run    Preview processing without making changes
     --limit N    Process only N entries at a time (default: 10)
 
-Model: claude-3-5-haiku-20241022 (fast classification task)
+Model: anthropic/claude-3-5-haiku-20241022 (fast classification task)
 """
 
 from datetime import datetime
@@ -202,7 +202,7 @@ Return your analysis as a JSON object following the format specified in the syst
 
     try:
         # Use Haiku for fast, cost-effective classification
-        model = "claude-3-5-haiku-20241022"
+        model = "anthropic/claude-3-5-haiku-20241022"
 
         response = client.chat(
             prompt=prompt,
@@ -415,7 +415,7 @@ def execute(args: Optional[str] = None) -> str:
     # Print header
     mode = "DRY RUN" if dry_run else "Processing"
     print(f"🧠 Brain Dump {mode}")
-    print(f"📡 Using claude-3-5-haiku-20241022")
+    print(f"📡 Using anthropic/claude-3-5-haiku-20241022")
     print(f"📊 Limit: {limit} entries\n")
     print("-" * 70)
 

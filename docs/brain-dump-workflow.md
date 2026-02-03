@@ -167,7 +167,7 @@ For each unprocessed brain dump entry, the system:
 
 ```
 🧠 Brain Dump Processing
-📡 Using claude-3-5-haiku-20241022
+📡 Using anthropic/claude-3-5-haiku-20241022
 📊 Limit: 10 entries
 
 ----------------------------------------------------------------------

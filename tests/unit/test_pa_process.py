@@ -88,7 +88,7 @@ class TestAnalyzeBrainDumpEntry:
         # Verify client was called correctly
         mock_litellm_client.chat.assert_called_once()
         call_args = mock_litellm_client.chat.call_args
-        assert call_args[1]["model"] == "claude-3-5-haiku-20241022"
+        assert call_args[1]["model"] == "anthropic/claude-3-5-haiku-20241022"
         assert call_args[1]["temperature"] == 0.3
         assert call_args[1]["system_prompt"] == CATEGORIZATION_SYSTEM_PROMPT
 
@@ -507,7 +507,7 @@ class TestCategorizationConsistency:
 
         # Verify Haiku model is used
         call_args = mock_litellm_client.chat.call_args
-        assert call_args[1]["model"] == "claude-3-5-haiku-20241022"
+        assert call_args[1]["model"] == "anthropic/claude-3-5-haiku-20241022"
 
     @pytest.mark.asyncio
     async def test_max_tokens_is_reasonable(self, mock_litellm_client):

@@ -1,0 +1,403 @@
+{
+  "data": {
+    "energy": {
+      "status": "ok",
+      "readiness_score": 74,
+      "sleep_score": 74,
+      "energy_level": "MODERATE"
+    },
+    "calendar": {
+      "status": "ok",
+      "events": [
+        {
+          "summary": "Dog",
+          "start": "10:30 AM",
+          "date": "2026-02-03",
+          "is_tomorrow": false
+        }
+      ],
+      "count": 1
+    },
+    "budget": {
+      "status": "ok",
+      "accounts": [
+        {
+          "id": "234566766514173574",
+          "name": "Share (...0372)",
+          "type": "Cash",
+          "balance": "$519.78"
+        },
+        {
+          "id": "234566766814066311",
+          "name": "Mortgage Loan (...1690)",
+          "type": "Loans",
+          "balance": "-$460961.00"
+        },
+        {
+          "id": "234566766876980872",
+          "name": "Money Market (...3777)",
+          "type": "Cash",
+          "balance": "$340.18"
+        },
+        {
+          "id": "234566766956672649",
+          "name": "Checking (...4773)",
+          "type": "Cash",
+          "balance": "$476.82"
+        },
+        {
+          "id": "234566767016441482",
+          "name": "Home Equity Line of Credit ...",
+          "type": "Loans",
+          "balance": "-$47171.94"
+        },
+        {
+          "id": "234566767076210315",
+          "name": "Home Equity Line of Credit ...",
+          "type": "Loans",
+          "balance": "-$52511.70"
+        },
+        {
+          "id": "234566767135979148",
+          "name": "Money Market (...8269)",
+          "type": "Cash",
+          "balance": "$1.78"
+        },
+        {
+          "id": "234566901473244903",
+          "name": "High Yield Savings Account ...",
+          "type": "Cash",
+          "balance": "$87.83"
+        },
+        {
+          "id": "234566901764749032",
+          "name": "Additional Gold Card (...1038)",
+          "type": "Credit Cards",
+          "balance": "-$71.99"
+        },
+        {
+          "id": "234566901825566441",
+          "name": "Platinum Card\u00ae (...2006)",
+          "type": "Credit Cards",
+          "balance": "-$968.72"
+        },
+        {
+          "id": "234566901889529578",
+          "name": "Rewards Checking (...2015)",
+          "type": "Cash",
+          "balance": "$0.92"
+        }
+      ],
+      "total_cash": 1427.31,
+      "total_debt": -561685.35,
+      "net_worth": -560258.0399999999
+    },
+    "forecast": {
+      "status": "ok",
+      "brief": "\ud83d\udcb0 FINANCIAL PULSE\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\nCash: $1,427 | Cards: $-1,041\nRunway: 141 days @ $10/day\n\nMTD Spending: $2,231 / $29,750\n[\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591] 7%\nMTD Income: $0 (expected $2,800) \u26a0\ufe0f\n\nEOM Scenarios:\n  \ud83d\udfe2 Disciplined spending: $1,250 cash\n  \ud83d\udfe1 Current trajectory: $1,175 cash\n  \ud83d\udd34 Impulse spending spike: $1,073 cash\n\nCategories:\n  \u2705 Groceries: $479/$2700\n  \u2705 Baby formula: $0/$1000\n  \u2705 Gas: $0/$800\n  \u2705 Restaurants & Bars: $140/$2500\n\nAlerts:\n  \u26a0\ufe0f Income behind: $-2,800 below expected\n  \u2139\ufe0f Impulse pattern: 7 Amazon orders on 2026-02-02, total $2411.62\n  \u2139\ufe0f Impulse pattern: 3 Amazon orders on 2026-01-30, total $25175.00\n\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
+      "analysis": {
+        "timestamp": "2026-02-03T08:27:01.461510",
+        "velocity": {
+          "daily_burn": 10.11,
+          "mtd_total": 2230.62,
+          "last_month_total": 313.52,
+          "days_elapsed": 3,
+          "weekly_trend": 0,
+          "this_week": 2544.14,
+          "last_week": 0
+        },
+        "runway": {
+          "days": 141.2,
+          "status": "ok",
+          "liquid_cash": 1427.31,
+          "daily_burn": 10.11,
+          "message": "Cash runway: 141 days at $10/day"
+        },
+        "projection": {
+          "projected_spending": 2483.37,
+          "projected_balance": 1174.56,
+          "days_remaining": 25,
+          "over_budget": false,
+          "variance": -27266.63,
+          "message": "Projected EOM: $2483 spending, $1175 cash"
+        },
+        "scenarios": {
+          "best_case": {
+            "daily_burn": 7.08,
+            "remaining_spend": 176.92,
+            "eom_balance": 1250.38,
+            "total_spend": 2407.55,
+            "description": "Disciplined spending"
+          },
+          "expected": {
+            "daily_burn": 10.11,
+            "remaining_spend": 252.75,
+            "eom_balance": 1174.56,
+            "total_spend": 2483.37,
+            "description": "Current trajectory"
+          },
+          "worst_case": {
+            "daily_burn": 14.15,
+            "remaining_spend": 353.85,
+            "eom_balance": 1073.46,
+            "total_spend": 2584.47,
+            "description": "Impulse spending spike"
+          }
+        },
+        "income": {
+          "mtd_income": 0.39,
+          "expected_to_date": 2800.0,
+          "expected_monthly": 28000,
+          "variance": -2799.61,
+          "variance_pct": -100.0,
+          "sources": {
+            "Interest Payment": 0.39
+          },
+          "status": "behind"
+        },
+        "categories": {
+          "Groceries": {
+            "spent": 479.02,
+            "budget": 2700,
+            "percent": 17.7,
+            "status": "ok",
+            "remaining": 2220.98
+          },
+          "Restaurants & Bars": {
+            "spent": 139.74,
+            "budget": 2500,
+            "percent": 5.6,
+            "status": "ok",
+            "remaining": 2360.26
+          },
+          "Coffee Shops": {
+            "spent": 30.0,
+            "budget": 400,
+            "percent": 7.5,
+            "status": "ok",
+            "remaining": 370.0
+          },
+          "Baby formula": {
+            "spent": 0,
+            "budget": 1000,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 1000
+          },
+          "Household": {
+            "spent": 0,
+            "budget": 950,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 950
+          },
+          "Gas": {
+            "spent": 0,
+            "budget": 800,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 800
+          },
+          "Auto Maintenance": {
+            "spent": 0,
+            "budget": 150,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 150
+          },
+          "Business expense": {
+            "spent": 0,
+            "budget": 3000,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 3000
+          },
+          "Business Expenses": {
+            "spent": 0,
+            "budget": 300,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 300
+          },
+          "Software": {
+            "spent": 0,
+            "budget": 100,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 100
+          },
+          "Phone": {
+            "spent": 0,
+            "budget": 700,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 700
+          },
+          "Subscription": {
+            "spent": 220.16,
+            "budget": 400,
+            "percent": 55.0,
+            "status": "ok",
+            "remaining": 179.84
+          },
+          "Streaming": {
+            "spent": 0,
+            "budget": 100,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 100
+          },
+          "Medical": {
+            "spent": 0,
+            "budget": 200,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 200
+          },
+          "Prescriptions": {
+            "spent": 0,
+            "budget": 150,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 150
+          },
+          "Supplements": {
+            "spent": 0,
+            "budget": 50,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 50
+          },
+          "Education": {
+            "spent": 0,
+            "budget": 400,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 400
+          },
+          "School expense": {
+            "spent": 0,
+            "budget": 250,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 250
+          },
+          "Child Activities": {
+            "spent": 0,
+            "budget": 100,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 100
+          },
+          "Family Activities": {
+            "spent": 0,
+            "budget": 100,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 100
+          },
+          "Dog Care": {
+            "spent": 0,
+            "budget": 500,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 500
+          },
+          "Dog Grooming": {
+            "spent": 0,
+            "budget": 150,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 150
+          },
+          "Jeremy Spending Money": {
+            "spent": 97.36,
+            "budget": 250,
+            "percent": 38.9,
+            "status": "ok",
+            "remaining": 152.64
+          },
+          "Clothing": {
+            "spent": 0,
+            "budget": 400,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 400
+          },
+          "Gifts": {
+            "spent": 0,
+            "budget": 1000,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 1000
+          },
+          "Home Improvement": {
+            "spent": 0,
+            "budget": 1000,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 1000
+          },
+          "Travel & Vacation": {
+            "spent": 0,
+            "budget": 1000,
+            "percent": 0.0,
+            "status": "ok",
+            "remaining": 1000
+          }
+        },
+        "warnings": [
+          "\u26a0\ufe0f Income behind: $-2,800 below expected",
+          "\u2139\ufe0f Impulse pattern: 7 Amazon orders on 2026-02-02, total $2411.62",
+          "\u2139\ufe0f Impulse pattern: 3 Amazon orders on 2026-01-30, total $25175.00"
+        ],
+        "impulse_patterns": [
+          {
+            "type": "impulse_cluster",
+            "date": "2026-02-02",
+            "count": 36,
+            "amazon_count": 7,
+            "total": 2411.62,
+            "message": "Impulse pattern: 7 Amazon orders on 2026-02-02, total $2411.62"
+          },
+          {
+            "type": "impulse_cluster",
+            "date": "2026-01-30",
+            "count": 9,
+            "amazon_count": 3,
+            "total": 25175.0,
+            "message": "Impulse pattern: 3 Amazon orders on 2026-01-30, total $25175.00"
+          }
+        ]
+      }
+    },
+    "tasks": {
+      "status": "ok",
+      "tasks": [
+        {
+          "content": "6fvQ4HcGVgvfGHMf  Put up drinks from store (today)"
+        },
+        {
+          "content": "6fvQ5WcGM69M9XXf  Put rubber feet on bottom of couch (today)"
+        },
+        {
+          "content": "6fvWfgvvQPX3QJG7  Order tablet mount (2026-02-03)"
+        },
+        {
+          "content": "6fvq5rh4xPrCccC9  Carry up storage boxes (Feb 3)"
+        },
+        {
+          "content": "6fvq733p8rWcPJgh  Book dentist appointment (tomorrow)"
+        }
+      ]
+    },
+    "weather": {
+      "status": "error",
+      "message": "Command timed out"
+    }
+  },
+  "errors": [
+    "Weather fetch failed: Command timed out"
+  ],
+  "timestamp": "2026-02-03T08:27:19.556707"
+}

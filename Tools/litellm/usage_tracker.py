@@ -23,14 +23,14 @@ Usage:
     tracker = UsageTracker(
         storage_path="State/usage.json",
         pricing={
-            "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-            "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+            "anthropic/claude-sonnet-4-5": {"input": 0.003, "output": 0.015},
+            "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
         }
     )
 
     # Record API call
     tracker.record(
-        model="claude-sonnet-4-20250514",
+        model="anthropic/claude-sonnet-4-5",
         input_tokens=150,
         output_tokens=200,
         cost_usd=0.0045,

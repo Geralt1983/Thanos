@@ -92,9 +92,9 @@ class CommandRouter:
 
         # Available models (from config/api.json)
         self._available_models = {
-            "opus": "claude-opus-4-5-20251101",
-            "sonnet": "claude-sonnet-4-20250514",
-            "haiku": "claude-3-5-haiku-20241022",
+            "opus": "anthropic/claude-opus-4-5",
+            "sonnet": "anthropic/claude-sonnet-4-5",
+            "haiku": "anthropic/claude-3-5-haiku-20241022",
         }
         self._default_model = None
 

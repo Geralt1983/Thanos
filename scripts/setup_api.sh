@@ -76,7 +76,7 @@ else
 {
   "anthropic": {
     "api_key_env": "ANTHROPIC_API_KEY",
-    "default_model": "claude-opus-4.5",
+    "default_model": "anthropic/claude-opus-4-5.5",
     "fallback_model": "claude-3-5-sonnet-20241022",
     "max_tokens": 4096,
     "temperature": 1.0,

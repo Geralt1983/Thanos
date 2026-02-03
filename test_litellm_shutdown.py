@@ -41,12 +41,12 @@ def test_shutdown_flushes_pending_writes():
                 "enabled": True,
                 "storage_path": str(usage_file),
                 "pricing": {
-                    "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
+                    "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
                 }
             },
             "litellm": {
-                "default_model": "claude-3-5-haiku-20241022",
-                "fallback_chain": ["claude-3-5-haiku-20241022"]
+                "default_model": "anthropic/claude-3-5-haiku-20241022",
+                "fallback_chain": ["anthropic/claude-3-5-haiku-20241022"]
             },
             "defaults": {"max_tokens": 100, "temperature": 1.0}
         }
@@ -59,7 +59,7 @@ def test_shutdown_flushes_pending_writes():
         for i in range(15):
             if client.usage_tracker:
                 client.usage_tracker.record(
-                    model="claude-3-5-haiku-20241022",
+                    model="anthropic/claude-3-5-haiku-20241022",
                     input_tokens=100,
                     output_tokens=50,
                     cost_usd=0.01,
@@ -115,12 +115,12 @@ def test_del_flushes_pending_writes():
                 "enabled": True,
                 "storage_path": str(usage_file),
                 "pricing": {
-                    "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
+                    "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
                 }
             },
             "litellm": {
-                "default_model": "claude-3-5-haiku-20241022",
-                "fallback_chain": ["claude-3-5-haiku-20241022"]
+                "default_model": "anthropic/claude-3-5-haiku-20241022",
+                "fallback_chain": ["anthropic/claude-3-5-haiku-20241022"]
             },
             "defaults": {"max_tokens": 100, "temperature": 1.0}
         }
@@ -133,7 +133,7 @@ def test_del_flushes_pending_writes():
         for i in range(12):
             if client.usage_tracker:
                 client.usage_tracker.record(
-                    model="claude-3-5-haiku-20241022",
+                    model="anthropic/claude-3-5-haiku-20241022",
                     input_tokens=100,
                     output_tokens=50,
                     cost_usd=0.01,
@@ -179,14 +179,14 @@ def test_usage_tracker_shutdown():
 
         # Create UsageTracker directly
         pricing = {
-            "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
+            "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
         }
         tracker = UsageTracker(str(usage_file), pricing)
 
         # Record multiple entries quickly (all buffered)
         for i in range(20):
             tracker.record(
-                model="claude-3-5-haiku-20241022",
+                model="anthropic/claude-3-5-haiku-20241022",
                 input_tokens=100,
                 output_tokens=50,
                 cost_usd=0.01,
@@ -248,11 +248,11 @@ def test_no_data_loss_rapid_shutdown():
                 "enabled": True,
                 "storage_path": str(usage_file),
                 "pricing": {
-                    "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
+                    "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.003}
                 }
             },
             "litellm": {
-                "default_model": "claude-3-5-haiku-20241022"
+                "default_model": "anthropic/claude-3-5-haiku-20241022"
             },
             "defaults": {"max_tokens": 100, "temperature": 1.0}
         }
@@ -265,7 +265,7 @@ def test_no_data_loss_rapid_shutdown():
         for i in range(25):
             if client.usage_tracker:
                 client.usage_tracker.record(
-                    model="claude-3-5-haiku-20241022",
+                    model="anthropic/claude-3-5-haiku-20241022",
                     input_tokens=200,
                     output_tokens=100,
                     cost_usd=0.02,
@@ -323,7 +323,7 @@ def test_signal_handlers_registered():
                 "pricing": {}
             },
             "litellm": {
-                "default_model": "claude-3-5-haiku-20241022"
+                "default_model": "anthropic/claude-3-5-haiku-20241022"
             }
         }
         config_file.write_text(json.dumps(config))

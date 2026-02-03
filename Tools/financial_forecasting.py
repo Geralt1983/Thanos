@@ -62,23 +62,45 @@ def get_transactions(days: int = 30) -> List[dict]:
     end_date = datetime.now().strftime("%Y-%m-%d")
     start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     
+    # Note: Monarch API has issues with large result sets (>60 transactions)
+    # Use pagination or smaller date ranges if needed
     cmd = [
         "node", "skills/monarch-money/dist/cli/index.js",
         "tx", "search",
         "--start", start_date,
         "--end", end_date,
-        "--limit", "500",
+        "--limit", "50",
         "--json"
     ]
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        # Parse JSON from output (skip non-JSON lines)
-        lines = result.stdout.strip().split('\n')
-        for i, line in enumerate(lines):
-            if line.strip().startswith('['):
-                json_str = '\n'.join(lines[i:])
-                return json.loads(json_str)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=90, cwd="/Users/jeremy/Projects/Thanos")
+        # JSON is in stdout, logs go to stderr
+        output = result.stdout.strip()
+        
+        # Find JSON array in output
+        start_idx = output.find('[')
+        if start_idx == -1:
+            print(f"No JSON array found in output", file=sys.stderr)
+            return []
+        
+        # Find matching end bracket
+        bracket_count = 0
+        end_idx = start_idx
+        for i, char in enumerate(output[start_idx:], start_idx):
+            if char == '[':
+                bracket_count += 1
+            elif char == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    end_idx = i + 1
+                    break
+        
+        json_str = output[start_idx:end_idx]
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e}", file=sys.stderr)
+        return []
     except Exception as e:
         print(f"Error fetching transactions: {e}", file=sys.stderr)
         return []
@@ -91,30 +113,48 @@ def get_account_balances() -> Dict[str, float]:
     cmd = ["node", "skills/monarch-money/dist/cli/index.js", "acc", "list", "--json"]
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        lines = result.stdout.strip().split('\n')
-        for i, line in enumerate(lines):
-            if line.strip().startswith('['):
-                json_str = '\n'.join(lines[i:])
-                accounts = json.loads(json_str)
-                
-                balances = {"liquid": 0, "credit": 0, "total": 0}
-                for acc in accounts:
-                    bal = acc.get("currentBalance", 0) or 0
-                    acc_type = str(acc.get("type", "") or "").lower()
-                    acc_name = str(acc.get("displayName", "") or "").lower()
-                    
-                    # Identify account types
-                    if acc_type == "credit" or "card" in acc_name or "platinum" in acc_name or "gold" in acc_name:
-                        balances["credit"] += bal  # Usually negative
-                    elif any(x in acc_name for x in ["checking", "savings", "money market", "share"]):
-                        balances["liquid"] += bal
-                    elif bal > 0:  # Positive balance, likely liquid
-                        balances["liquid"] += bal
-                    
-                    balances["total"] += bal
-                
-                return balances
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd="/Users/jeremy/Projects/Thanos")
+        # JSON is in stdout, logs go to stderr
+        output = result.stdout.strip()
+        
+        # Find JSON array in output
+        start_idx = output.find('[')
+        if start_idx == -1:
+            print(f"No JSON array found in account output", file=sys.stderr)
+            return {"liquid": 0, "credit": 0, "total": 0}
+        
+        # Find matching end bracket
+        bracket_count = 0
+        end_idx = start_idx
+        for i, char in enumerate(output[start_idx:], start_idx):
+            if char == '[':
+                bracket_count += 1
+            elif char == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    end_idx = i + 1
+                    break
+        
+        json_str = output[start_idx:end_idx]
+        accounts = json.loads(json_str)
+        
+        balances = {"liquid": 0, "credit": 0, "total": 0}
+        for acc in accounts:
+            bal = acc.get("currentBalance", 0) or 0
+            acc_type = str(acc.get("type", "") or "").lower()
+            acc_name = str(acc.get("displayName", "") or "").lower()
+            
+            # Identify account types
+            if acc_type == "credit" or "card" in acc_name or "platinum" in acc_name or "gold" in acc_name:
+                balances["credit"] += bal  # Usually negative
+            elif any(x in acc_name for x in ["checking", "savings", "money market", "share"]):
+                balances["liquid"] += bal
+            elif bal > 0:  # Positive balance, likely liquid
+                balances["liquid"] += bal
+            
+            balances["total"] += bal
+        
+        return balances
     except Exception as e:
         print(f"Error fetching balances: {e}", file=sys.stderr)
     
@@ -125,16 +165,26 @@ def analyze_spending_velocity(transactions: List[dict]) -> Dict:
     """Analyze spending rate and velocity."""
     now = datetime.now()
     
-    # Group spending by day (exclude transfers, income, credit card payments)
-    transfer_categories = ["Transfer", "Credit Card Payment", "Paychecks", "Interest"]
+    # Exclude from burn rate: transfers, income, credit card payments, one-time large payments
+    transfer_categories = ["Transfer", "Credit Card Payment", "Paychecks", "Interest", "Mortgage", "HELOC"]
+    exclude_patterns = ["wire transfer", "outgoing wire", "transfer to"]
     daily_spending = defaultdict(float)
     
     for tx in transactions:
         if tx.get("amount", 0) < 0:  # Expenses are negative
             cat_name = tx.get("category", {}).get("name", "")
-            if cat_name not in transfer_categories:
-                date = tx.get("date", "")
-                daily_spending[date] += abs(tx["amount"])
+            merchant_name = tx.get("merchant", {}).get("name", "").lower()
+            
+            # Skip transfers and excluded categories
+            if cat_name in transfer_categories:
+                continue
+            
+            # Skip wire transfers and other large one-time payments
+            if any(pattern in merchant_name for pattern in exclude_patterns):
+                continue
+            
+            date = tx.get("date", "")
+            daily_spending[date] += abs(tx["amount"])
     
     if not daily_spending:
         return {"daily_burn": 0, "weekly_trend": 0, "mtd_total": 0, "last_month_total": 0}
@@ -302,6 +352,88 @@ def project_end_of_month(velocity: Dict, balances: Dict) -> Dict:
     }
 
 
+def scenario_analysis(velocity: Dict, balances: Dict) -> Dict:
+    """Generate best/expected/worst case scenarios per web best practices."""
+    now = datetime.now()
+    days_in_month = (now.replace(month=now.month % 12 + 1, day=1) - timedelta(days=1)).day
+    days_remaining = days_in_month - now.day
+    
+    mtd = velocity.get("mtd_total", 0)
+    daily_burn = velocity.get("daily_burn", 0)
+    liquid = balances.get("liquid", 0)
+    
+    # Scenarios based on burn rate variance
+    scenarios = {
+        "best_case": {
+            "burn_multiplier": 0.7,  # 30% less spending
+            "description": "Disciplined spending"
+        },
+        "expected": {
+            "burn_multiplier": 1.0,  # Current pace
+            "description": "Current trajectory"
+        },
+        "worst_case": {
+            "burn_multiplier": 1.4,  # 40% more (ADHD impulse risk)
+            "description": "Impulse spending spike"
+        }
+    }
+    
+    results = {}
+    for name, params in scenarios.items():
+        adj_burn = daily_burn * params["burn_multiplier"]
+        remaining_spend = adj_burn * days_remaining
+        eom_balance = liquid - remaining_spend
+        total_spend = mtd + remaining_spend
+        
+        results[name] = {
+            "daily_burn": round(adj_burn, 2),
+            "remaining_spend": round(remaining_spend, 2),
+            "eom_balance": round(eom_balance, 2),
+            "total_spend": round(total_spend, 2),
+            "description": params["description"]
+        }
+    
+    return results
+
+
+def track_income(transactions: List[dict]) -> Dict:
+    """Track income vs expected for variance monitoring."""
+    now = datetime.now()
+    month_start = now.replace(day=1).strftime("%Y-%m-%d")
+    
+    # Expected monthly income (from MEMORY.md - consultant income)
+    # 4 clients typical: ~$25k-30k/month expected
+    EXPECTED_MONTHLY_INCOME = 28000
+    
+    income_categories = ["Paychecks", "Business Income", "Interest"]
+    mtd_income = 0
+    income_sources = defaultdict(float)
+    
+    for tx in transactions:
+        if tx.get("amount", 0) > 0 and tx.get("date", "") >= month_start:
+            cat = tx.get("category", {}).get("name", "")
+            if cat in income_categories:
+                mtd_income += tx["amount"]
+                merchant = tx.get("merchant", {}).get("name", "Unknown")
+                income_sources[merchant] += tx["amount"]
+    
+    # Calculate variance
+    days_elapsed = now.day
+    expected_to_date = EXPECTED_MONTHLY_INCOME * (days_elapsed / 30)
+    variance = mtd_income - expected_to_date
+    variance_pct = (variance / expected_to_date * 100) if expected_to_date > 0 else 0
+    
+    return {
+        "mtd_income": round(mtd_income, 2),
+        "expected_to_date": round(expected_to_date, 2),
+        "expected_monthly": EXPECTED_MONTHLY_INCOME,
+        "variance": round(variance, 2),
+        "variance_pct": round(variance_pct, 1),
+        "sources": dict(income_sources),
+        "status": "ahead" if variance > 0 else "behind" if variance < -1000 else "on_track"
+    }
+
+
 def generate_warnings(velocity: Dict, categories: Dict, runway: Dict, 
                       projection: Dict, impulse: List) -> List[str]:
     """Generate prioritized warning messages."""
@@ -340,7 +472,8 @@ def generate_warnings(velocity: Dict, categories: Dict, runway: Dict,
 
 
 def format_brief_section(velocity: Dict, categories: Dict, runway: Dict,
-                         projection: Dict, balances: Dict, warnings: List[str]) -> str:
+                         projection: Dict, balances: Dict, warnings: List[str],
+                         scenarios: Dict = None, income: Dict = None) -> str:
     """Format the financial section for morning brief."""
     
     # Budget progress bar
@@ -354,9 +487,22 @@ def format_brief_section(velocity: Dict, categories: Dict, runway: Dict,
     output.append(f"Cash: ${balances['liquid']:,.0f} | Cards: ${balances['credit']:,.0f}")
     output.append(f"Runway: {runway['days']:.0f} days @ ${velocity['daily_burn']:.0f}/day")
     output.append("")
-    output.append(f"MTD: ${velocity['mtd_total']:,.0f} / ${MONTHLY_BUDGET:,}")
+    output.append(f"MTD Spending: ${velocity['mtd_total']:,.0f} / ${MONTHLY_BUDGET:,}")
     output.append(f"[{bar}] {pct:.0f}%")
-    output.append(f"Pace: ${projection['projected_spending']:,.0f} projected")
+    
+    # Income tracking
+    if income:
+        inc_emoji = "✅" if income["status"] == "ahead" else "⚠️" if income["status"] == "behind" else "📊"
+        output.append(f"MTD Income: ${income['mtd_income']:,.0f} (expected ${income['expected_to_date']:,.0f}) {inc_emoji}")
+    
+    # Scenarios
+    if scenarios:
+        output.append("")
+        output.append("EOM Scenarios:")
+        for name in ["best_case", "expected", "worst_case"]:
+            s = scenarios[name]
+            emoji = "🟢" if name == "best_case" else "🟡" if name == "expected" else "🔴"
+            output.append(f"  {emoji} {s['description']}: ${s['eom_balance']:,.0f} cash")
     
     # Top categories
     output.append("")
@@ -397,12 +543,22 @@ def main():
     impulse = detect_impulse_patterns(transactions)
     runway = calculate_runway(balances, velocity)
     projection = project_end_of_month(velocity, balances)
+    scenarios = scenario_analysis(velocity, balances)
+    income = track_income(transactions)
     
     # Generate warnings
     warnings = generate_warnings(velocity, categories, runway, projection, impulse)
     
+    # Add income warnings
+    if income["status"] == "behind":
+        warnings.insert(0, f"⚠️ Income behind: ${income['variance']:,.0f} below expected")
+    
+    # Add scenario warnings
+    if scenarios["worst_case"]["eom_balance"] < 500:
+        warnings.insert(0, f"🔴 Risk: Worst case EOM balance ${scenarios['worst_case']['eom_balance']:,.0f}")
+    
     # Output
-    brief = format_brief_section(velocity, categories, runway, projection, balances, warnings)
+    brief = format_brief_section(velocity, categories, runway, projection, balances, warnings, scenarios, income)
     print(brief)
     
     # Detailed JSON output to stderr for logging
@@ -411,6 +567,8 @@ def main():
         "velocity": velocity,
         "runway": runway,
         "projection": projection,
+        "scenarios": scenarios,
+        "income": income,
         "categories": categories,
         "warnings": warnings,
         "impulse_patterns": impulse,

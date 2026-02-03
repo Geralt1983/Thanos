@@ -502,7 +502,7 @@ import anthropic
 import os
 client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
 message = client.messages.create(
-    model='claude-3-5-haiku-20241022',
+    model='anthropic/claude-3-5-haiku-20241022',
     max_tokens=50,
     messages=[{'role': 'user', 'content': 'Say hello'}]
 )

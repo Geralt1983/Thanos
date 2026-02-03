@@ -38,7 +38,7 @@ python -m commands.pa.process --dry-run --limit 10
 
 **Output Format:**
 - 🧠 Clear header showing "DRY RUN" mode
-- 📡 Model information displayed (claude-3-5-haiku-20241022)
+- 📡 Model information displayed (anthropic/claude-3-5-haiku-20241022)
 - 📊 Limit information shown
 - Each entry displayed with:
   - Entry number and creation date

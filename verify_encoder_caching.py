@@ -37,7 +37,7 @@ else:
 # Test 2: First instantiation initializes encoder
 print("\n✓ Test 2: First ContextManager instantiation initializes encoder")
 start = time.time()
-cm1 = ContextManager(model="claude-opus-4-5-20251101")
+cm1 = ContextManager(model="anthropic/claude-opus-4-5")
 first_init_time = (time.time() - start) * 1000
 print(f"  First instantiation time: {first_init_time:.2f}ms")
 
@@ -69,7 +69,7 @@ else:
 # Test 4: Second instantiation reuses cached encoder
 print("\n✓ Test 4: Second ContextManager instantiation reuses encoder")
 start = time.time()
-cm2 = ContextManager(model="claude-sonnet-4-20250514")
+cm2 = ContextManager(model="anthropic/claude-sonnet-4-5")
 second_init_time = (time.time() - start) * 1000
 print(f"  Second instantiation time: {second_init_time:.2f}ms")
 
@@ -168,8 +168,8 @@ else:
 print("\n✓ Test 10: Different models share same encoder")
 managers = []
 for i, model in enumerate([
-    "claude-opus-4-5-20251101",
-    "claude-sonnet-4-20250514",
+    "anthropic/claude-opus-4-5",
+    "anthropic/claude-sonnet-4-5",
     "claude-3-5-sonnet-20241022",
     "unknown-model-falls-back-to-default"
 ]):

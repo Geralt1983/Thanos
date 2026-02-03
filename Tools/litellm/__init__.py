@@ -38,16 +38,16 @@ Basic Usage:
 
     # Auto-route based on complexity analysis
     response = client.chat("Explain quantum computing in detail")
-    # Automatically uses claude-opus-4-5-20251101 for complex queries
+    # Automatically uses anthropic/claude-opus-4-5 for complex queries
 
     # Simple queries use cheaper models
     response = client.chat("Hi there!")
-    # Automatically uses claude-3-5-haiku-20241022 for simple queries
+    # Automatically uses anthropic/claude-3-5-haiku-20241022 for simple queries
 
     # Force specific model
     response = client.chat(
         "Your prompt",
-        model="claude-sonnet-4-20250514",
+        model="anthropic/claude-sonnet-4-5",
         max_tokens=2048,
         temperature=0.7
     )

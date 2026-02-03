@@ -1,0 +1,52 @@
+#!/bin/bash
+# Google Chat CLI wrapper
+# Usage: gchat <command> [args]
+#
+# Commands:
+#   login          - One-time interactive login (opens browser)
+#   monitor        - Check for new messages (headless)
+#   send <chat> <msg> - Send a message
+#   read [chat]    - Read messages (or list chats)
+#   list           - List available chats
+
+cd "$(dirname "$0")/google-chat-automation"
+
+case "$1" in
+  login)
+    node login.js
+    ;;
+  monitor)
+    shift
+    node monitor.js "$@"
+    ;;
+  send)
+    shift
+    node send.js "$@"
+    ;;
+  read)
+    shift
+    node read.js "$@"
+    ;;
+  list)
+    node read.js
+    ;;
+  *)
+    echo "Google Chat Automation"
+    echo ""
+    echo "Usage: gchat <command> [args]"
+    echo ""
+    echo "Commands:"
+    echo "  login              - One-time interactive login (opens browser)"
+    echo "  monitor [--notify] - Check for new messages (headless)"
+    echo "  send <chat> <msg>  - Send a message to a chat"
+    echo "  read [chat]        - Read messages from a chat"
+    echo "  list               - List available chats"
+    echo ""
+    echo "Examples:"
+    echo "  gchat login"
+    echo "  gchat list"
+    echo "  gchat read 'Safe Harbor'"
+    echo "  gchat send 'Safe Harbor' 'Hello from Thanos!'"
+    echo "  gchat monitor --notify"
+    ;;
+esac

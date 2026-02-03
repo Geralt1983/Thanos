@@ -17,7 +17,7 @@ def test_agent_routing():
             'enabled': True, 
             'agents': {
                 'ops': {'model': 'gpt-4.1-nano'},
-                'coach': {'model': 'claude-3-5-haiku-20241022'}
+                'coach': {'model': 'anthropic/claude-3-5-haiku-20241022'}
             }
         }
     }
@@ -28,7 +28,7 @@ def test_agent_routing():
     print(f"[PASS] Ops Agent routes to: {ops_model}")
     
     coach_model = router.get_model('coach')
-    assert coach_model == 'claude-3-5-haiku-20241022', f"Expected claude-3-5-haiku-20241022 for coach, got {coach_model}"
+    assert coach_model == 'anthropic/claude-3-5-haiku-20241022', f"Expected anthropic/claude-3-5-haiku-20241022 for coach, got {coach_model}"
     print(f"[PASS] Coach Agent routes to: {coach_model}")
 
 def test_client_integration():

@@ -6,6 +6,7 @@
  */
 
 const { execSync, execFileSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -14,12 +15,15 @@ process.env.PATH = `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${process.env
 
 // Persistent dedup file
 const SEEN_FILE = path.join(__dirname, '../data/linkedin-seen-posts.json');
+const RUN_CACHE_FILE = path.join(__dirname, '../data/linkedin-last-run.json');
+const RUN_CACHE_TTL_HOURS = parseInt(process.env.LINKEDIN_RUN_CACHE_HOURS || '6', 10);
 
 const args = new Set(process.argv.slice(2));
 const USE_MOCK = args.has('--mock');
 const DRY_RUN = args.has('--dry-run');
 const NO_EMAIL = DRY_RUN || args.has('--no-email');
 const NO_SUPABASE = DRY_RUN || args.has('--no-supabase');
+const FORCE_RUN = args.has('--force');
 
 // More specific search terms for Epic EHR jobs
 // REDUCED TO 4 BEST TERMS (cost optimization - saves 70%)
@@ -103,9 +107,40 @@ const STAFFING_FIRMS = [
   'Core Solutions', 'Walker Healthforce', 'Contech', 'Ernst & Young', 'CTG Health'
 ];
 
-function buildSearchUrls() {
+function loadRunCache() {
+  try {
+    if (fs.existsSync(RUN_CACHE_FILE)) {
+      return JSON.parse(fs.readFileSync(RUN_CACHE_FILE, 'utf8'));
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+function saveRunCache(data) {
+  const dir = path.dirname(RUN_CACHE_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(RUN_CACHE_FILE, JSON.stringify(data, null, 2));
+}
+
+function getLookbackParam() {
+  if (process.env.LINKEDIN_DATE_POSTED) {
+    return process.env.LINKEDIN_DATE_POSTED;
+  }
+
+  const cache = loadRunCache();
+  if (cache?.successAt) {
+    const hoursSince = (Date.now() - new Date(cache.successAt).getTime()) / (1000 * 60 * 60);
+    if (hoursSince > 36) return 'past-week';
+  }
+
+  // Monday backfill for weekend posts; otherwise 24h to cut volume
+  const day = new Date().getDay(); // 0=Sun, 1=Mon
+  return day === 1 ? 'past-week' : 'past-24h';
+}
+
+function buildSearchUrls(lookbackParam) {
   return SEARCH_TERMS.map(term =>
-    `https://www.linkedin.com/search/results/content/?keywords=${encodeURIComponent(term)}&datePosted="past-week"`
+    `https://www.linkedin.com/search/results/content/?keywords=${encodeURIComponent(term)}&datePosted=${encodeURIComponent(lookbackParam)}&sortBy=DATE`
   );
 }
 
@@ -265,10 +300,16 @@ function normalizeLinkedInUrl(url) {
     u.searchParams.delete('rcm');
     u.searchParams.delete('utm_source');
     u.searchParams.delete('utm_medium');
+    u.searchParams.delete('trk');
+    u.searchParams.delete('trackingId');
     return u.toString();
   } catch {
     return url;
   }
+}
+
+function hashText(text) {
+  return crypto.createHash('sha1').update(text).digest('hex');
 }
 
 // Get unique key for post
@@ -276,8 +317,10 @@ function getPostKey(post) {
   // Prefer normalized URL, fallback to URN, fallback to text hash
   if (post.url) return normalizeLinkedInUrl(post.url);
   if (post.urn) return post.urn;
-  const text = post.text || post.postText || '';
-  return text.substring(0, 150);
+  const text = (post.text || post.postText || '').trim();
+  if (text) return `text:${hashText(text)}`;
+  if (post.id) return `id:${post.id}`;
+  return JSON.stringify(post).substring(0, 150);
 }
 
 function extractContractDetails(text) {
@@ -323,8 +366,18 @@ async function mockApifyResults() {
 }
 
 async function scrapeLinkedIn() {
-  const urls = buildSearchUrls();
-  console.error(`Scraping ${urls.length} search terms...`);
+  const lookbackParam = getLookbackParam();
+  const urls = buildSearchUrls(lookbackParam);
+  console.error(`Scraping ${urls.length} search terms (datePosted=${lookbackParam})...`);
+
+  const cache = loadRunCache();
+  if (!FORCE_RUN && cache?.datasetId && cache?.lookbackParam === lookbackParam && cache?.successAt) {
+    const ageHours = (Date.now() - new Date(cache.successAt).getTime()) / (1000 * 60 * 60);
+    if (ageHours <= RUN_CACHE_TTL_HOURS) {
+      console.error(`Reusing cached dataset from ${cache.successAt} (${Math.round(ageHours * 10) / 10}h old)`);
+      return fetchDataset(cache.datasetId);
+    }
+  }
 
   const input = JSON.stringify({ urls });
   const inputFile = '/tmp/linkedin-epic-input.json';
@@ -341,6 +394,7 @@ async function scrapeLinkedIn() {
 
     // Extract dataset ID from output - multiple patterns
     let datasetId = null;
+    let runId = null;
 
     // Pattern 1: datasets/XXXXX in URL
     const datasetUrlMatch = callOutput.match(/datasets\/([a-zA-Z0-9]+)/);
@@ -356,8 +410,9 @@ async function scrapeLinkedIn() {
     if (!datasetId) {
       const runMatch = callOutput.match(/runs\/([a-zA-Z0-9]+)/);
       if (runMatch) {
-        console.error(`Found run ID: ${runMatch[1]}, fetching run info...`);
-        const runInfo = execSync(`apify runs get ${runMatch[1]} --json 2>/dev/null || echo "{}"`).toString();
+        runId = runMatch[1];
+        console.error(`Found run ID: ${runId}, fetching run info...`);
+        const runInfo = execSync(`apify runs get ${runId} --json 2>/dev/null || echo "{}"`).toString();
         try {
           const run = JSON.parse(runInfo);
           datasetId = run.defaultDatasetId;
@@ -373,18 +428,27 @@ async function scrapeLinkedIn() {
 
     console.error(`Dataset ID: ${datasetId}`);
 
-    // Fetch dataset items
-    const datasetResult = execSync(
-      `apify datasets get-items ${datasetId} --format=json`,
-      { maxBuffer: 100 * 1024 * 1024 }
-    ).toString();
-
-    const posts = JSON.parse(datasetResult);
-    return Array.isArray(posts) ? posts : [posts];
+    const posts = await fetchDataset(datasetId);
+    saveRunCache({
+      datasetId,
+      runId,
+      lookbackParam,
+      successAt: new Date().toISOString()
+    });
+    return posts;
   } catch (e) {
     console.error('Apify error:', e.message?.substring(0, 300));
     return [];
   }
+}
+
+async function fetchDataset(datasetId) {
+  const datasetResult = execSync(
+    `apify datasets get-items ${datasetId} --format=json`,
+    { maxBuffer: 100 * 1024 * 1024 }
+  ).toString();
+  const posts = JSON.parse(datasetResult);
+  return Array.isArray(posts) ? posts : [posts];
 }
 
 function processResults(posts) {

@@ -60,7 +60,7 @@ export class ModelEscalatorConfigManager {
 
   private createDefaultConfig(): ModelEscalatorConfig {
     return {
-      defaultModel: 'claude-haiku',
+      defaultModel: 'anthropic/claude-3-5-haiku-20241022',
       plugins: [],
       complexityThresholds: {
         low: 3,

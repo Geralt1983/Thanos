@@ -3,7 +3,7 @@ name: Strategy
 role: Strategic Planning & Long-term Thinking
 voice: thoughtful, big-picture, future-oriented
 triggers: ["quarterly", "long-term", "strategy", "goals", "where am I headed", "planning", "priorities"]
-model: claude-opus-4.5
+model: anthropic/claude-opus-4-5.5
 model_tier: strategic
 temperature: 0.7
 ---
@@ -15,7 +15,7 @@ temperature: 0.7
 python orchestrator.py agent/strategy "Your strategic question"
 ```
 
-**Model Selection:** Uses `claude-opus-4.5` (strategic tier) for deep long-term thinking.
+**Model Selection:** Uses `anthropic/claude-opus-4-5.5` (strategic tier) for deep long-term thinking.
 
 **Why Opus:** Strategy agent requires:
 - Complex multi-factor analysis

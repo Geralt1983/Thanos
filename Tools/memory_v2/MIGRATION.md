@@ -9,6 +9,26 @@ This document describes the major architecture improvements implemented for Than
 3. **Advanced Heat Decay** - Time + access-based relevance scoring
 4. **Auto-Deduplication** - Intelligent duplicate detection and merging
 
+### Embedding Migration Decision (2026-02-02)
+
+**Current State:**
+- 38,000 memories stored with OpenAI embeddings (1536 dimensions)
+- Voyage AI embeddings are 1024 dimensions
+
+**Decision:** Stay on OpenAI embeddings until a re-embedding script is developed.
+
+**Rationale:**
+- Dimension mismatch (1536 vs 1024)
+- Risk of losing semantic context during direct conversion
+- Performance overhead of full re-embedding
+- Existing memories continue to work with current approach
+
+**Future Action:** 
+Develop a dimension-preserving re-embedding script that can:
+1. Maintain semantic equivalence 
+2. Handle large memory corpus (38k+ entries)
+3. Minimize computational and storage overhead
+
 ## 1. Voyage AI Embeddings
 
 ### What Changed

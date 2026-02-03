@@ -37,7 +37,7 @@ Usage - Basic:
 Usage - Advanced:
     # Custom configuration
     summarizer = ConversationSummarizer(
-        model="claude-sonnet-4-20250514",
+        model="anthropic/claude-sonnet-4-5",
         max_tokens=2000,
         compression_ratio=0.3
     )
@@ -142,7 +142,7 @@ class ConversationSummarizer:
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "anthropic/claude-sonnet-4-5",
         max_tokens: int = 2000,
         compression_ratio: float = 0.3
     ):

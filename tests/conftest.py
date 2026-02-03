@@ -27,7 +27,7 @@ def mock_anthropic_response():
         "type": "message",
         "role": "assistant",
         "content": [{"type": "text", "text": "Test response"}],
-        "model": "claude-sonnet-4-5-20250929",
+        "model": "anthropic/claude-sonnet-4-5",
         "stop_reason": "end_turn",
         "usage": {"input_tokens": 100, "output_tokens": 50},
     }
@@ -71,7 +71,7 @@ def mock_api_config(temp_config_dir):
 
     config = {
         "anthropic_api_key": "test_api_key_12345",
-        "model": "claude-sonnet-4-5-20250929",
+        "model": "anthropic/claude-sonnet-4-5",
     }
     config_file = temp_config_dir / "api.json"
     config_file.write_text(json.dumps(config, indent=2))

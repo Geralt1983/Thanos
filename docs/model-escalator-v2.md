@@ -82,7 +82,7 @@ python Tools/escalator_cli.py metrics --days 30
 # Average rating: 3.2/5.0
 # 
 # Model usage:
-#   claude-3-5-haiku: 45
+#   anthropic/claude-3-5-haiku-20241022: 45
 #   claude-sonnet-4-5: 28
 #   claude-opus-4-5: 12
 ```
@@ -109,7 +109,7 @@ python Tools/escalator_cli.py history --conversation main-session
 # Output:
 # 📜 Model Switch History: main-session
 # 2026-02-01 16:00:32
-#   claude-3-5-haiku → claude-sonnet-4-5
+#   anthropic/claude-3-5-haiku-20241022 → claude-sonnet-4-5
 #   Complexity: 0.623
 ```
 

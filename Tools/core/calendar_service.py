@@ -31,8 +31,8 @@ class CalendarService:
         self._calendar_context_cache: Optional[Dict[str, Any]] = None
         self._calendar_cache_time: Optional[datetime] = None
 
-        # WorkOS adapter
-        self._workos_adapter = None
+        # WorkOS gateway (MCP-first)
+        self._workos_gateway = None
         self._workos_context_cache: Optional[Dict[str, Any]] = None
         self._workos_cache_time: Optional[datetime] = None
 
@@ -61,22 +61,22 @@ class CalendarService:
 
         return self._calendar_adapter
 
-    def _get_workos_adapter(self) -> Optional[Any]:
-        """Lazy load the WorkOS adapter.
+    def _get_workos_gateway(self) -> Optional[Any]:
+        """Lazy load the WorkOS gateway.
 
         Returns:
-            WorkOSAdapter or None if unavailable
+            WorkOSGateway or None if unavailable
         """
-        if self._workos_adapter is None:
+        if self._workos_gateway is None:
             try:
-                from Tools.adapters.workos import WorkOSAdapter
+                from Tools.core.workos_gateway import WorkOSGateway
 
-                self._workos_adapter = WorkOSAdapter()
+                self._workos_gateway = WorkOSGateway()
             except Exception as e:
-                log_error("calendar_service", e, "Failed to initialize WorkOS adapter")
+                log_error("calendar_service", e, "Failed to initialize WorkOS gateway")
                 return None
 
-        return self._workos_adapter
+        return self._workos_gateway
 
     def _is_cache_valid(self, cache_time: Optional[datetime]) -> bool:
         """Check if a cache is still valid.
@@ -338,16 +338,14 @@ class CalendarService:
         if not force_refresh and self._is_cache_valid(self._workos_cache_time):
             return self._workos_context_cache
 
-        adapter = self._get_workos_adapter()
-        if adapter is None:
+        gateway = self._get_workos_gateway()
+        if gateway is None:
             return None
 
         try:
-            result = await adapter.call_tool("daily_summary", {})
-            if not result.success:
+            context = await gateway.get_daily_summary(force_refresh=force_refresh)
+            if context is None:
                 return None
-
-            context = result.data
             self._workos_context_cache = context
             self._workos_cache_time = datetime.now()
             return context

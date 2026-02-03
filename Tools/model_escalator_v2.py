@@ -564,7 +564,7 @@ def record_model_feedback(conversation_id: str, message: str, model: str,
         record_model_feedback(
             conversation_id="main-session",
             message="Implement authentication system",
-            model="claude-haiku",
+            model="anthropic/claude-3-5-haiku-20241022",
             complexity=0.3,
             rating=1,  # Too weak
             comment="Needed Opus for this"

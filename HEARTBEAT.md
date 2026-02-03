@@ -1,5 +1,23 @@
 # HEARTBEAT.md
 
+## Balance Alert Check (Every Heartbeat)
+
+Check balance if >4 hours since last check:
+```bash
+cd ~/Projects/Thanos && .venv/bin/python Tools/balance_alert.py
+```
+
+If output contains `WHATSAPP_ALERT:`, send that message via WhatsApp to Jeremy.
+
+## Impulse Monitor (Every Heartbeat)
+
+Check for impulse patterns if during waking hours (8am-10pm):
+```bash
+cd ~/Projects/Thanos && .venv/bin/python Tools/impulse_monitor.py
+```
+
+If alerts returned, send via Telegram.
+
 ## Memory Capture (Every Heartbeat)
 
 Check if there's been meaningful conversation since last capture:

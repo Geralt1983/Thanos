@@ -35,8 +35,8 @@ class TestResponseCache:
         """Cache should store and retrieve responses."""
         cache = ResponseCache(str(temp_dir / "cache"), ttl_seconds=3600)
 
-        cache.set("test prompt", "claude-opus-4-5-20251101", {}, "cached response")
-        result = cache.get("test prompt", "claude-opus-4-5-20251101", {})
+        cache.set("test prompt", "anthropic/claude-opus-4-5", {}, "cached response")
+        result = cache.get("test prompt", "anthropic/claude-opus-4-5", {})
 
         assert result == "cached response"
 

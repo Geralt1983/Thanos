@@ -165,7 +165,7 @@ class StruggleDetector:
     - Behavioral pattern tracking over time
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "anthropic/claude-sonnet-4-5"):
         """
         Initialize the detector.
 

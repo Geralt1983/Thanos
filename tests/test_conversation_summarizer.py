@@ -93,19 +93,19 @@ class TestInitialization:
         """Test initialization with default parameters."""
         summarizer = ConversationSummarizer()
 
-        assert summarizer.model == "claude-sonnet-4-20250514"
+        assert summarizer.model == "anthropic/claude-sonnet-4-5"
         assert summarizer.max_tokens == 2000
         assert summarizer.compression_ratio == 0.3
 
     def test_custom_initialization(self):
         """Test initialization with custom parameters."""
         summarizer = ConversationSummarizer(
-            model="claude-opus-4-20250514",
+            model="anthropic/claude-opus-4-5-20250514",
             max_tokens=4000,
             compression_ratio=0.5
         )
 
-        assert summarizer.model == "claude-opus-4-20250514"
+        assert summarizer.model == "anthropic/claude-opus-4-5-20250514"
         assert summarizer.max_tokens == 4000
         assert summarizer.compression_ratio == 0.5
 

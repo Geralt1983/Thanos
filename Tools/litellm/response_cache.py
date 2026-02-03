@@ -28,14 +28,14 @@ Usage:
 
     # Check for cached response
     params = {"max_tokens": 4096, "temperature": 1.0}
-    cached_response = cache.get("Your prompt", "claude-sonnet-4-20250514", params)
+    cached_response = cache.get("Your prompt", "anthropic/claude-sonnet-4-5", params)
     if cached_response:
         print("Cache hit!")
         return cached_response
 
     # Cache a new response
     response = "Generated response from API..."
-    cache.set("Your prompt", "claude-sonnet-4-20250514", params, response)
+    cache.set("Your prompt", "anthropic/claude-sonnet-4-5", params, response)
 
     # Cleanup expired entries
     cache.clear_expired()

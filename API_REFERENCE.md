@@ -142,7 +142,7 @@ The package uses a configuration file (default: `config/api.json`) for settings:
         "min_complexity": 0.3
       },
       "simple": {
-        "model": "claude-3-5-haiku-20241022",
+        "model": "anthropic/claude-3-5-haiku-20241022",
         "max_complexity": 0.3
       }
     }
@@ -205,7 +205,7 @@ client = get_client()
 
 # Simple query → automatically uses Haiku (cheapest)
 response = client.chat("Hi there!")
-print(f"Used model: {response.model}")  # claude-3-5-haiku-20241022
+print(f"Used model: {response.model}")  # anthropic/claude-3-5-haiku-20241022
 
 # Complex query → automatically uses Opus (most capable)
 response = client.chat("""
@@ -417,7 +417,7 @@ Creates a new LiteLLMClient instance with the specified configuration.
     "rules": {
       "complex": {"model": "claude-opus-4-5-20251101", "min_complexity": 0.7},
       "standard": {"model": "claude-sonnet-4-20250514", "min_complexity": 0.3},
-      "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3}
+      "simple": {"model": "anthropic/claude-3-5-haiku-20241022", "max_complexity": 0.3}
     }
   },
   "usage_tracking": {
@@ -481,7 +481,7 @@ Send a chat message and receive a complete response with intelligent model routi
 
 - `prompt` (str, **required**): The user message/question to send to the model. This is the main input text.
 
-- `model` (str, optional): Model name override to force a specific model. If `None`, the client automatically selects the most cost-effective model based on prompt complexity analysis. Examples: `"claude-opus-4-5-20251101"`, `"claude-sonnet-4-20250514"`, `"claude-3-5-haiku-20241022"`, `"gpt-4"`, `"gpt-3.5-turbo"`.
+- `model` (str, optional): Model name override to force a specific model. If `None`, the client automatically selects the most cost-effective model based on prompt complexity analysis. Examples: `"claude-opus-4-5-20251101"`, `"claude-sonnet-4-20250514"`, `"anthropic/claude-3-5-haiku-20241022"`, `"gpt-4"`, `"gpt-3.5-turbo"`.
 
 - `max_tokens` (int, optional): Maximum number of tokens in the response. If `None`, uses the value from config defaults (typically 4096). Higher values allow longer responses but increase cost.
 
@@ -905,7 +905,7 @@ Analyze prompt complexity and determine which model would be selected for routin
 - `Dict`: A dictionary containing complexity analysis results:
   - `complexity_score` (float): Numerical complexity score (0.0 to 1.0). Higher values indicate more complex prompts.
   - `tier` (str): Complexity tier classification - one of `"simple"`, `"standard"`, or `"complex"`.
-  - `selected_model` (str): The model that would be selected based on routing rules (e.g., `"claude-3-5-haiku-20241022"` for simple, `"claude-sonnet-4-20250514"` for standard, `"claude-opus-4-5-20251101"` for complex).
+  - `selected_model` (str): The model that would be selected based on routing rules (e.g., `"anthropic/claude-3-5-haiku-20241022"` for simple, `"claude-sonnet-4-20250514"` for standard, `"claude-opus-4-5-20251101"` for complex).
   - `routing_rules` (Dict): The complete routing rules configuration showing complexity thresholds for each tier.
 
 **Complexity Tiers:**
@@ -923,7 +923,7 @@ client = get_client()
 simple = client.analyze_complexity("Hi there!")
 print(f"Complexity: {simple['complexity_score']:.2f}")  # ~0.1
 print(f"Tier: {simple['tier']}")  # 'simple'
-print(f"Model: {simple['selected_model']}")  # 'claude-3-5-haiku-20241022'
+print(f"Model: {simple['selected_model']}")  # 'anthropic/claude-3-5-haiku-20241022'
 
 # Analyze a complex query
 complex = client.analyze_complexity("""
@@ -1224,7 +1224,7 @@ Creates a new UsageTracker instance with the specified storage location and pric
   {
       "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
       "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-      "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005},
+      "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005},
       "gpt-4": {"input": 0.03, "output": 0.06},
       "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002}
   }
@@ -1255,7 +1255,7 @@ tracker = UsageTracker(
     pricing={
         "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
         "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 )
 ```
@@ -1397,13 +1397,13 @@ from Tools.litellm.usage_tracker import UsageTracker
 tracker = UsageTracker(
     storage_path="State/usage.json",
     pricing={
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 )
 
 # Record different types of operations
 tracker.record(
-    model="claude-3-5-haiku-20241022",
+    model="anthropic/claude-3-5-haiku-20241022",
     input_tokens=50,
     output_tokens=100,
     cost_usd=0.0006,
@@ -1412,7 +1412,7 @@ tracker.record(
 )
 
 tracker.record(
-    model="claude-3-5-haiku-20241022",
+    model="anthropic/claude-3-5-haiku-20241022",
     input_tokens=200,
     output_tokens=150,
     cost_usd=0.0010,
@@ -1421,7 +1421,7 @@ tracker.record(
 )
 
 tracker.record(
-    model="claude-3-5-haiku-20241022",
+    model="anthropic/claude-3-5-haiku-20241022",
     input_tokens=100,
     output_tokens=50,
     cost_usd=0.0004,
@@ -1562,7 +1562,7 @@ tracker = UsageTracker(
     pricing={
         "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
         "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 )
 
@@ -1657,14 +1657,14 @@ from Tools.litellm.usage_tracker import UsageTracker
 tracker = UsageTracker(
     storage_path="State/usage.json",
     pricing={
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 )
 
 # Make some API calls
-tracker.record("claude-3-5-haiku-20241022", 100, 150, 0.0009, 500.0, "chat")
-tracker.record("claude-3-5-haiku-20241022", 200, 250, 0.0015, 600.0, "chat")
-tracker.record("claude-3-5-haiku-20241022", 150, 100, 0.0007, 450.0, "chat")
+tracker.record("anthropic/claude-3-5-haiku-20241022", 100, 150, 0.0009, 500.0, "chat")
+tracker.record("anthropic/claude-3-5-haiku-20241022", 200, 250, 0.0015, 600.0, "chat")
+tracker.record("anthropic/claude-3-5-haiku-20241022", 150, 100, 0.0007, 450.0, "chat")
 
 # Check accumulated usage
 today = tracker.get_today()
@@ -1741,14 +1741,14 @@ tracker = UsageTracker(
     pricing={
         "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
         "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 )
 
 # Calculate cost for different models
 opus_cost = tracker.calculate_cost("claude-opus-4-5-20251101", 1000, 2000)
 sonnet_cost = tracker.calculate_cost("claude-sonnet-4-20250514", 1000, 2000)
-haiku_cost = tracker.calculate_cost("claude-3-5-haiku-20241022", 1000, 2000)
+haiku_cost = tracker.calculate_cost("anthropic/claude-3-5-haiku-20241022", 1000, 2000)
 
 print("Cost comparison for 1000 input + 2000 output tokens:")
 print(f"  Opus:   ${opus_cost:.4f}")
@@ -1822,7 +1822,7 @@ tracker = UsageTracker(
     pricing={
         "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
         "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 )
 
@@ -1832,7 +1832,7 @@ avg_input_tokens = 250
 avg_output_tokens = 500
 
 print("Budget Planning:")
-for model in ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"]:
+for model in ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514", "anthropic/claude-3-5-haiku-20241022"]:
     cost_per_call = tracker.calculate_cost(model, avg_input_tokens, avg_output_tokens)
     daily_cost = cost_per_call * expected_calls_per_day
     monthly_cost = daily_cost * 30
@@ -1863,7 +1863,7 @@ tracker = UsageTracker(
     pricing={
         "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
         "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 )
 
@@ -1871,7 +1871,7 @@ tracker = UsageTracker(
 print("Recording API calls...")
 
 tracker.record(
-    model="claude-3-5-haiku-20241022",
+    model="anthropic/claude-3-5-haiku-20241022",
     input_tokens=50,
     output_tokens=100,
     cost_usd=0.0006,
@@ -1927,7 +1927,7 @@ for provider, stats in summary['provider_breakdown'].items():
 
 # Calculate estimated costs
 print(f"\nCost Estimation:")
-for model in ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"]:
+for model in ["claude-opus-4-5-20251101", "claude-sonnet-4-20250514", "anthropic/claude-3-5-haiku-20241022"]:
     cost = tracker.calculate_cost(model, 1000, 1000)
     print(f"  {model}: ${cost:.4f} per 2000 tokens")
 ```
@@ -2304,7 +2304,7 @@ analyzer = ComplexityAnalyzer(config={})
 
 # Define routing rules (matches LiteLLMClient configuration)
 routing_rules = {
-    "simple": {"model": "claude-3-5-haiku-20241022", "max_complexity": 0.3},
+    "simple": {"model": "anthropic/claude-3-5-haiku-20241022", "max_complexity": 0.3},
     "standard": {"model": "claude-sonnet-4-20250514", "min_complexity": 0.3},
     "complex": {"model": "claude-opus-4-5-20251101", "min_complexity": 0.7}
 }
@@ -2446,7 +2446,7 @@ The ComplexityAnalyzer is configured from `config/api.json`:
         "min_complexity": 0.3
       },
       "simple": {
-        "model": "claude-3-5-haiku-20241022",
+        "model": "anthropic/claude-3-5-haiku-20241022",
         "max_complexity": 0.3
       }
     },
@@ -3827,7 +3827,7 @@ def switch_to_model_tier(tier: str):
     elif tier == 'standard':
         config['litellm']['default_model'] = 'claude-sonnet-4-20250514'
     elif tier == 'budget':
-        config['litellm']['default_model'] = 'claude-3-5-haiku-20241022'
+        config['litellm']['default_model'] = 'anthropic/claude-3-5-haiku-20241022'
 
     # Save temporary config
     with open('config/api_temp.json', 'w') as f:
@@ -4180,12 +4180,12 @@ def compare_providers(responses: List[ModelResponse]):
 # Example output:
 # Provider     Model                          Cost       Speed      Tokens
 # --------------------------------------------------------------------------------
-# anthropic    claude-3-5-haiku-20241022      $0.000023  234.5ms    23
+# anthropic    anthropic/claude-3-5-haiku-20241022      $0.000023  234.5ms    23
 # anthropic    claude-sonnet-4-20250514       $0.000120  456.7ms    23
 # openai       gpt-3.5-turbo                  $0.000035  189.2ms    23
 # openai       gpt-4                          $0.000690  678.9ms    23
 #
-# Cheapest: claude-3-5-haiku-20241022 ($0.000023)
+# Cheapest: anthropic/claude-3-5-haiku-20241022 ($0.000023)
 # Fastest: gpt-3.5-turbo (189.2ms)
 ```
 
@@ -4308,7 +4308,7 @@ client = LiteLLMClient(config_path="path/to/custom/config.json")
         "models": {
           "opus": "claude-opus-4-5-20251101",
           "sonnet": "claude-sonnet-4-20250514",
-          "haiku": "claude-3-5-haiku-20241022"
+          "haiku": "anthropic/claude-3-5-haiku-20241022"
         }
       },
       "openai": {
@@ -4332,7 +4332,7 @@ client = LiteLLMClient(config_path="path/to/custom/config.json")
         "min_complexity": 0.3
       },
       "simple": {
-        "model": "claude-3-5-haiku-20241022",
+        "model": "anthropic/claude-3-5-haiku-20241022",
         "max_complexity": 0.3
       }
     },
@@ -4356,7 +4356,7 @@ client = LiteLLMClient(config_path="path/to/custom/config.json")
         "input": 3.0,
         "output": 15.0
       },
-      "claude-3-5-haiku-20241022": {
+      "anthropic/claude-3-5-haiku-20241022": {
         "input": 0.8,
         "output": 4.0
       }
@@ -4524,7 +4524,7 @@ Defines the mapping from complexity tiers to specific models. Each tier has comp
     "min_complexity": 0.3
   },
   "simple": {
-    "model": "claude-3-5-haiku-20241022",
+    "model": "anthropic/claude-3-5-haiku-20241022",
     "max_complexity": 0.3
   }
 }

@@ -16,7 +16,7 @@ Usage:
     response = client.chat("Complex analysis question")
 
     # Force specific model
-    response = client.chat("Simple task", model="claude-3-5-haiku-20241022")
+    response = client.chat("Simple task", model="anthropic/claude-3-5-haiku-20241022")
 
     # Streaming
     for chunk in client.chat_stream("Your prompt"):

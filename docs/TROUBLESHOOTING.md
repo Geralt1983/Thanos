@@ -118,9 +118,9 @@ The LiteLLM client implements a **fallback chain mechanism** that automatically 
 
 2. **Chain Construction**:
    - If requested model is not in the chain, it's automatically prepended
-   - Example: Request for `claude-3-5-haiku` → Chain becomes:
+   - Example: Request for `anthropic/claude-3-5-haiku-20241022` → Chain becomes:
      ```
-     ["claude-3-5-haiku", "claude-opus-4-5-20251101", "claude-sonnet-4-20250514"]
+     ["anthropic/claude-3-5-haiku-20241022", "claude-opus-4-5-20251101", "claude-sonnet-4-20250514"]
      ```
 
 3. **Execution Flow**:
@@ -392,7 +392,7 @@ tail -f ~/.claude/logs/thanos.log
     "fallback_chain": [
       "claude-opus-4-5-20251101",
       "claude-sonnet-4-20250514",
-      "claude-3-5-haiku-20241022"
+      "anthropic/claude-3-5-haiku-20241022"
     ]
   }
 }
@@ -3084,7 +3084,7 @@ curl -I -H "Authorization: Bearer $OPENAI_API_KEY" https://api.openai.com/v1/mod
 {
   "litellm": {
     "fallback_chain": [
-      "claude-3-5-haiku-20241022"  // Fastest, most reliable Anthropic model
+      "anthropic/claude-3-5-haiku-20241022"  // Fastest, most reliable Anthropic model
     ]
   }
 }
@@ -3124,7 +3124,7 @@ curl -I -H "Authorization: Bearer $OPENAI_API_KEY" https://api.openai.com/v1/mod
     "fallback_chain": [
       "claude-opus-4-5-20251101",
       "claude-sonnet-4-20250514",
-      "claude-3-5-haiku-20241022"
+      "anthropic/claude-3-5-haiku-20241022"
     ]
   }
 }

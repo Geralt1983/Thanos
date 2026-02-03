@@ -61,7 +61,7 @@ Added `pa:process` command to automatically categorize and process brain dump en
 - `docs/brain-dump-workflow.md` - Complete user guide for brain dump workflow
 
 **AI Model:**
-- Uses `claude-3-5-haiku-20241022` for fast classification
+- Uses `anthropic/claude-3-5-haiku-20241022` for fast classification
 - Temperature 0.3 for consistent results
 - Structured output with JSON schema validation
 - Conservative prompting to prevent task list clutter

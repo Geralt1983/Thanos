@@ -84,7 +84,7 @@ When converting to a task, the AI extracts:
 
 ```markdown
 🧠 Brain Dump Processing
-📡 Using claude-3-5-haiku-20241022
+📡 Using anthropic/claude-3-5-haiku-20241022
 📊 Limit: 10 entries
 
 ----------------------------------------------------------------------
@@ -167,7 +167,7 @@ See what would happen with 20 entries without making changes.
 
 ## AI Model
 
-**Model**: `claude-3-5-haiku-20241022`
+**Model**: `anthropic/claude-3-5-haiku-20241022`
 - Fast classification optimized for this task
 - Cost-effective for high-volume processing
 - Temperature: 0.3 for consistent categorization

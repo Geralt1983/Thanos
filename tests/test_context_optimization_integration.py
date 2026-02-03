@@ -151,7 +151,7 @@ def mock_memory_service():
 def summarizer_with_mock_client(mock_llm_client):
     """ConversationSummarizer with mocked LLM client."""
     summarizer = ConversationSummarizer(
-        model="claude-sonnet-4-20250514",
+        model="anthropic/claude-sonnet-4-5",
         max_tokens=2000,
         compression_ratio=0.3
     )

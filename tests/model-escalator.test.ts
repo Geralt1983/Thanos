@@ -17,12 +17,12 @@ describe('ModelEscalator', () => {
 
     const mockModelRegistry = {
       process: jest.fn(),
-      getNextTierModel: jest.fn().mockReturnValue('claude-sonnet'),
-      getHighestCapacityModel: jest.fn().mockReturnValue('claude-opus')
+      getNextTierModel: jest.fn().mockReturnValue('anthropic/claude-sonnet-4-5'),
+      getHighestCapacityModel: jest.fn().mockReturnValue('anthropic/claude-opus-4-5')
     };
 
     const defaultConfig = {
-      defaultModel: 'claude-haiku',
+      defaultModel: 'anthropic/claude-3-5-haiku-20241022',
       plugins: [],
       complexityThresholds: {
         low: 3,
@@ -67,17 +67,17 @@ describe('ModelEscalator', () => {
       const testScenarios = [
         { 
           input: 'Hello world', 
-          currentModel: 'claude-haiku', 
+          currentModel: 'anthropic/claude-3-5-haiku-20241022', 
           expectedModelPattern: 'haiku' 
         },
         { 
           input: 'Detailed explanation of quantum computing principles...', 
-          currentModel: 'claude-haiku', 
+          currentModel: 'anthropic/claude-3-5-haiku-20241022', 
           expectedModelPattern: 'sonnet' 
         },
         { 
           input: 'Extremely complex research paper on advanced machine learning architectures...', 
-          currentModel: 'claude-sonnet', 
+          currentModel: 'anthropic/claude-sonnet-4-5', 
           expectedModelPattern: 'opus' 
         }
       ];
@@ -95,7 +95,7 @@ describe('ModelEscalator', () => {
     it('should log performance warnings for slow processing', async () => {
       // Implement performance tracking test
       const longInput = 'A'.repeat(100000); // Large input to potentially trigger performance tracking
-      await modelEscalator.processInput(longInput, 'claude-haiku');
+      await modelEscalator.processInput(longInput, 'anthropic/claude-3-5-haiku-20241022');
       
       // Add assertions based on your logging mechanism
     });

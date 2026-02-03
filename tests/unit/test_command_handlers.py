@@ -547,7 +547,7 @@ class TestModelHandler:
         handler = ModelHandler(**handler_dependencies)
         model = handler.get_current_model()
 
-        assert model == "claude-opus-4-5-20251101"  # Default opus
+        assert model == "anthropic/claude-opus-4-5"  # Default opus
 
     def test_get_current_model_custom(self, handler_dependencies):
         """Test get_current_model returns set model"""
@@ -555,7 +555,7 @@ class TestModelHandler:
         handler.current_model = "haiku"
         model = handler.get_current_model()
 
-        assert model == "claude-3-5-haiku-20241022"
+        assert model == "anthropic/claude-3-5-haiku-20241022"
 
 
 class TestCoreHandler:

@@ -1,0 +1,17 @@
+{
+  "name": "google-chat-automation",
+  "version": "1.0.0",
+  "description": "Playwright-based Google Chat automation for OpenClaw",
+  "type": "module",
+  "scripts": {
+    "login": "node login.js",
+    "monitor": "node monitor.js",
+    "send": "node send.js",
+    "read": "node read.js"
+  },
+  "dependencies": {
+    "playwright": "^1.58.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}

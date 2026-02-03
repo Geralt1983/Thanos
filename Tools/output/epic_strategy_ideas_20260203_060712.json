@@ -1,0 +1,61 @@
+{
+  "generated_at": "2026-02-03T06:07:12.601664",
+  "generator_version": "1.0.0",
+  "num_ideas": 5,
+  "ideas": [
+    {
+      "strategic_focus": "Telehealth & Virtual Care",
+      "focus_description": "Epic video visit and remote patient monitoring",
+      "concept": "Create a rapid-deployment methodology for telehealth & virtual care projects",
+      "next_action": "Develop a 2-page service offering document and pricing model",
+      "potential_impact": "Emerging: Early-stage opportunity with long-term potential",
+      "confidence_score": 0.82,
+      "target_module": "Tapestry (Long-term Care)",
+      "target_market": "academic medical centers"
+    },
+    {
+      "strategic_focus": "Integration & Interoperability",
+      "focus_description": "Connect Epic with third-party systems via APIs and HL7/FHIR",
+      "concept": "Create a staff augmentation practice for integration & interoperability projects",
+      "next_action": "Attend Epic UGM to network with potential clients and partners",
+      "potential_impact": "Medium-High: Strong growth potential (15-25% increase)",
+      "confidence_score": 0.8,
+      "target_module": "Stork (OB)",
+      "target_market": "integrated delivery networks"
+    },
+    {
+      "strategic_focus": "Implementation Optimization",
+      "focus_description": "Accelerate go-live timelines and reduce implementation risk",
+      "concept": "Create a rapid-deployment methodology for implementation optimization projects",
+      "next_action": "Identify 3 target clients and schedule discovery calls this week",
+      "potential_impact": "Medium-High: Strong growth potential (15-25% increase)",
+      "confidence_score": 0.79,
+      "target_module": "Healthy Planet (Population Health)",
+      "target_market": "academic medical centers"
+    },
+    {
+      "strategic_focus": "Training & Adoption",
+      "focus_description": "End-user training and change management",
+      "concept": "Create a staff augmentation practice for training & adoption projects",
+      "next_action": "Attend Epic UGM to network with potential clients and partners",
+      "potential_impact": "Medium-High: Strong growth potential (15-25% increase)",
+      "confidence_score": 0.76,
+      "target_module": "Tapestry (Long-term Care)",
+      "target_market": "rural health systems"
+    },
+    {
+      "strategic_focus": "Upgrade & Migration Services",
+      "focus_description": "Help organizations transition to latest Epic versions",
+      "concept": "Create a staff augmentation practice for upgrade & migration services projects",
+      "next_action": "Create a webinar showcasing upgrade & migration services best practices",
+      "potential_impact": "High: Potential for significant revenue growth (>25% increase)",
+      "confidence_score": 0.72,
+      "target_module": "Healthy Planet (Population Health)",
+      "target_market": "rural health systems"
+    }
+  ],
+  "metadata": {
+    "source": "EpicConsultingStrategyGenerator",
+    "purpose": "Epic EHR Consulting Growth Strategy"
+  }
+}

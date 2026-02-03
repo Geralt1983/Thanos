@@ -14,7 +14,7 @@ ModelEscalator is an intelligent model selection and complexity management syste
 
 ```typescript
 const modelEscalatorConfig: ModelEscalatorConfig = {
-  defaultModel: 'claude-haiku',
+  defaultModel: 'anthropic/claude-3-5-haiku-20241022',
   plugins: [
     new DomainSpecificModelPlugin('coding', {
       javascript: 'function|class|const|let',

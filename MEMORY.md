@@ -181,7 +181,9 @@ Email Digest
 ### Credentials
 - Apify: user `knightly_issue`, ID `XzsBgZyeigzCTboMd` (paid plan)
 - Supabase: project `dmanuzntzlreurhtdcdd`, table `epic_contract_opportunities`
-- Gmail/Calendar: jkimble1983@gmail.com (gog CLI authenticated)
+- **gog CLI accounts:**
+  - `jkimble1983@gmail.com` - Personal (calendar, contacts, drive, gmail)
+  - `jeremy@kimbleconsultancy.com` - Work/Client (full suite: gmail, calendar, chat, drive, docs, sheets, etc.)
 - 1Password Google creds: Item ID `kpowkgmnqbsrmyivy43bqjkp5y`
 
 ### Monthly Budgets (Monarch)
@@ -214,6 +216,16 @@ See `skills/Productivity/references/budgets.md` for category IDs.
   - 🔴 CRITICAL: Runway <15 days, projected negative
   - ⚠️ WARNING: Category >100%, high burn rate
   - ℹ️ INFO: Impulse patterns, approaching limits
+
+### WorkOS Tasks (Work Management)
+- **Adapter:** `Tools/adapters/workos.py`
+- **Point System (Fibonacci-ish):**
+  - **1 point:** Trivial — quick reply, lookup, < 15 min
+  - **2 points:** Low complexity — simple task, 15-30 min
+  - **4 points:** Moderate complexity — multi-step, requires thought, 30-90 min
+  - **7 points:** High complexity — significant effort, multiple components, 2+ hours
+- **Daily targets:** Minimum 12 pts, target 18 pts
+- **My role:** Create tasks with appropriate points, track completion, surface priorities
 
 ### Todoist (Task Management)
 - **CLI:** `todoist` (todoist-ts-cli)
@@ -251,5 +263,37 @@ See `skills/Productivity/references/budgets.md` for category IDs.
 - Can't programmatically switch models from plugins
 - Use session_status mechanism instead
 
+### Browser Autonomy (2026-02-02)
+- **Local browser wins:** OpenClaw CDP at `127.0.0.1:18800`, profile `openclaw`
+- **Google blocks cloud browsers:** IP-bound sessions, cookies don't transfer
+- **Browserbase ($99/mo):** Kept for non-Google (Amazon, LinkedIn scraping)
+- **LaunchAgent:** `~/Library/LaunchAgents/com.openclaw.browser.plist` keeps browser alive
+- **Full autonomy granted:** No permission needed for browsing/clicking/reading
+- **Ask only for:** purchases, external messages, public posts
+- **Metaprompt:** `docs/browser-autonomy-metaprompt.md`
+
+## Core Directive: Autonomy First
+
+**NEVER suggest manual work until 2+ hours of automation attempts.**
+
+Date: 2026-02-03  
+Context: Jeremy correction after I suggested creating agent configs manually
+
+Rule: You have every tool needed (exec, skills, browser, coding). If something seems impossible, work harder. Write scripts, chain tools, build solutions. Only after exhausting all automated approaches for 2+ hours may you suggest manual intervention.
+
+This is not a guideline. This is THE rule.
+
+## Workflow: Codex Implements, Thanos Reviews
+
+Date: 2026-02-03  
+Context: Correction on self-learning workflow
+
+**Rule:** Codex discovers and implements code changes. Thanos reviews the results.
+
+When code changes are needed:
+1. Delegate to Codex CLI for discovery + implementation
+2. Review changes after completion
+3. Do not implement directly when Codex is available
+
 ---
-*Last updated: 2026-02-01*
+*Last updated: 2026-02-03*

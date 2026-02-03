@@ -127,6 +127,8 @@ After each interaction, scan for learning opportunities:
 
 **Philosophy:** Correct once, never again.
 
+**Codex Workflow:** Codex discovers + implements code changes. Thanos reviews results. Delegate implementation when Codex CLI is available.
+
 ---
 
 ## Memory

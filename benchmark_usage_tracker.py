@@ -44,7 +44,7 @@ def create_test_tracker(file_size: str = "small") -> UsageTracker:
         for i in range(100):
             initial_data["sessions"].append({
                 "timestamp": f"2026-01-{(i % 30) + 1:02d}T12:00:00",
-                "model": "claude-opus-4-5-20251101",
+                "model": "anthropic/claude-opus-4-5",
                 "provider": "anthropic",
                 "input_tokens": 1000,
                 "output_tokens": 500,
@@ -59,7 +59,7 @@ def create_test_tracker(file_size: str = "small") -> UsageTracker:
         for i in range(1000):
             initial_data["sessions"].append({
                 "timestamp": f"2026-01-{(i % 30) + 1:02d}T12:00:00",
-                "model": "claude-opus-4-5-20251101",
+                "model": "anthropic/claude-opus-4-5",
                 "provider": "anthropic",
                 "input_tokens": 1000,
                 "output_tokens": 500,
@@ -76,9 +76,9 @@ def create_test_tracker(file_size: str = "small") -> UsageTracker:
 
     # Create tracker
     pricing = {
-        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
-        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+        "anthropic/claude-opus-4-5": {"input": 0.015, "output": 0.075},
+        "anthropic/claude-sonnet-4-5": {"input": 0.003, "output": 0.015},
+        "anthropic/claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
     }
 
     tracker = UsageTracker(temp_path, pricing)
@@ -90,7 +90,7 @@ def measure_single_record(tracker: UsageTracker) -> float:
     start = time.perf_counter()
 
     tracker.record(
-        model="claude-opus-4-5-20251101",
+        model="anthropic/claude-opus-4-5",
         input_tokens=1000,
         output_tokens=500,
         cost_usd=0.05,
@@ -167,7 +167,7 @@ def benchmark_concurrent_impact(num_concurrent: int = 10):
 
     for i in range(num_concurrent):
         tracker.record(
-            model="claude-opus-4-5-20251101",
+            model="anthropic/claude-opus-4-5",
             input_tokens=1000,
             output_tokens=500,
             cost_usd=0.05,

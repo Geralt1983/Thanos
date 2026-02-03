@@ -1,36 +1,29 @@
 ## Relations
-@structure/architecture/core_architecture_overview.md
+@structure/infrastructure/web_automation/google_automation_constraints.md
 
 ## Raw Concept
 **Task:**
-Manage AI lifecycle hooks and real-time context injection
+Automate therapy session scheduling for Jeff Willis
 
 **Changes:**
-- Corrected OpenClaw hook event availability and roadmap status
-- Implemented robust fail-safe logging for hook failures
-
-**Files:**
-- Tools/thanos_orchestrator.py
-- hooks/pre-tool-use/proactive_context.py
+- Automated therapy session extraction from Gmail to Family calendar
 
 **Flow:**
-Claude Event -> thanos_orchestrator.py hook -> handle_hook -> JSON Response -> Claude Context
+Gmail Scan -> Detect "Jeff Willis" therapy session -> Extract time/date -> Proactively create 1hr event in Family calendar
 
-**Timestamp:** 2026-01-31
+**Timestamp:** 2026-02-02
 
 ## Narrative
 ### Structure
-- Tools/thanos_orchestrator.py: Main hook handler (handle_hook)
-- hooks/pre-tool-use/: Domain-specific pre-processing hooks (e.g., proactive_context.py)
+- Input: Gmail scan
+- Logic: Identify 'Jeff Willis' + scheduled time
+- Output: Google Calendar entry (Family calendar)
 
 ### Dependencies
-- Claude Code lifecycle events
-- File-based state reading (StateReader)
-- Local history logging (History/Sessions/)
+Requires read access to Gmail and write access to Google Calendar (Family calendar).
 
 ### Features
-- command:new, command:reset, command:stop, agent:bootstrap, gateway:startup (Available)
-- morning-brief: Fast state-based context injection
-- session-end: Automated session logging to markdown
-- Multi-layer fail-safe error handling (always exit 0)
-- Real-time sync currently limited to file watchers (per-turn events planned but not implemented)
+- Proactive scheduling: Events are added automatically without user confirmation if time/date are clear.
+- Target: Therapy sessions with 'Jeff Willis'.
+- Calendar: 'Family' calendar.
+- Duration: Default to 1-hour blocks.

@@ -215,7 +215,7 @@ class BrainDumpClassifier:
     structured data when appropriate. Defaults to NOT creating tasks.
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "anthropic/claude-sonnet-4-5"):
         """
         Initialize the classifier.
 

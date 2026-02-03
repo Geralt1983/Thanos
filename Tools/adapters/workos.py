@@ -13,7 +13,10 @@ from zoneinfo import ZoneInfo
 
 import asyncpg
 
-from .base import BaseAdapter, ToolResult
+try:
+    from .base import BaseAdapter, ToolResult
+except ImportError:
+    from base import BaseAdapter, ToolResult
 
 
 class WorkOSAdapter(BaseAdapter):

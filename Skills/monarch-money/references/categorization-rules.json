@@ -4,53 +4,90 @@
   "rules": {
     "gas": {
       "category": "Gas",
-      "patterns": ["sheetz", "shell", "exxon", "bp ", "chevron", "speedway", "wawa", "love's", "pilot", "circle k", "racetrac"]
+      "categoryId": "162777981853398759",
+      "patterns": ["sheetz", "shell", "exxon", "bp ", "chevron", "speedway", "wawa", "love's", "pilot", "circle k", "racetrac", "murphy usa", "quiktrip"]
     },
     "coffee": {
       "category": "Coffee Shops",
+      "categoryId": "162777981853398773",
       "patterns": ["starbucks", "dunkin", "cup of joe", "peet's", "caribou", "local coffee", "coffee house"]
     },
     "restaurants": {
       "category": "Restaurants & Bars",
-      "patterns": ["mcdonald", "chick-fil-a", "wendy", "taco bell", "chipotle", "olive garden", "applebee", "little caesars", "domino", "pizza hut", "panera", "subway", "jersey mike", "restaurant", "bar ", "grill"]
+      "categoryId": "162777981853398772",
+      "patterns": ["mcdonald", "chick-fil-a", "wendy", "taco bell", "chipotle", "olive garden", "applebee", "little caesars", "domino", "pizza hut", "panera", "subway", "jersey mike", "restaurant", "bar ", "grill", "food delivery"]
     },
     "groceries": {
       "category": "Groceries",
+      "categoryId": "162777981853398771",
       "patterns": ["walmart", "kroger", "food lion", "aldi", "publix", "harris teeter", "whole foods", "trader joe", "ingles", "bi-lo", "grocery", "market"]
     },
-    "shopping": {
-      "category": "Shopping",
-      "patterns": ["amazon", "target", "costco", "sam's club", "walmart.com", "online shopping"]
+    "baby": {
+      "category": "Baby formula",
+      "categoryId": "225123032227674020",
+      "patterns": ["formula", "baby gate", "baby-proof", "cabinet lock", "outlet cover", "corner guard", "baby monitor", "formuland", "enfamil", "similac", "gerber baby"]
+    },
+    "healthcare": {
+      "category": "Healthcare",
+      "categoryId": "178464170624185526",
+      "patterns": ["tudca", "supplement", "vitamin", "probiotic", "omega-3", "magnesium", "melatonin", "ashwagandha", "pharmacy", "cvs", "walgreens", "medical"]
+    },
+    "court_legal": {
+      "category": "Financial & Legal Services",
+      "categoryId": "162777981853398791",
+      "patterns": ["court", "stokes county", "legal", "attorney", "law office", "dmv", "court fee", "clerk of court"]
+    },
+    "auto_maintenance": {
+      "category": "Auto Maintenance",
+      "categoryId": "162777981853398760",
+      "patterns": ["tire", "oil change", "jiffy lube", "firestone", "midas", "autozone", "advance auto", "o'reilly", "car wash", "auto repair"]
     },
     "home": {
       "category": "Home Improvement",
+      "categoryId": "162777981853398762",
       "patterns": ["home depot", "lowe's", "ace hardware", "menards", "home repair", "construction supply"]
     },
     "business": {
       "category": "Business expense",
-      "patterns": ["google one", "microsoft", "adobe", "openai", "anthropic", "github", "slack", "zoom", "dropbox", "notion", "linear", "vercel", "software subscription"]
+      "categoryId": "178462006985127548",
+      "patterns": ["google one", "microsoft", "adobe", "openai", "anthropic", "github", "slack", "zoom", "dropbox", "notion", "linear", "vercel", "railway", "digitalocean", "aws", "heroku", "supabase", "neon", "browserbase"]
     },
-    "entertainment": {
-      "category": "Entertainment",
-      "patterns": ["netflix", "hulu", "disney", "spotify", "apple music", "amc", "regal", "santikos", "movie", "streaming"]
+    "streaming": {
+      "category": "Streaming",
+      "categoryId": "225122905397837639",
+      "patterns": ["netflix", "hulu", "disney+", "spotify", "apple music", "youtube premium", "hbo max", "paramount", "peacock", "google yt primetim"]
     },
-    "children": {
-      "category": "Children's Clothing",
-      "patterns": ["carter's", "children's place", "old navy", "gap kids", "baby clothes"]
+    "subscriptions": {
+      "category": "Subscription",
+      "categoryId": "225122791379203427",
+      "patterns": ["apple.com/bill", "apple subscription", "1password", "obsidian", "todoist", "elevenlabs", "perplexity"]
     },
-    "baby": {
-      "category": "Baby Expenses",
-      "patterns": ["diaper", "baby food", "infant", "toddler supplies", "baby store"]
+    "household": {
+      "category": "Household",
+      "categoryId": "162959461244237526",
+      "patterns": ["humidifier", "air filter", "cleaning supplies", "paper towels", "toilet paper", "laundry", "household essentials", "trash bags"]
     },
-    "health": {
-      "category": "Health & Wellness",
-      "patterns": ["pharmacy", "cvs", "walgreens", "rite aid", "medical supply", "health clinic"]
+    "child_support": {
+      "category": "Child Support",
+      "categoryId": "225119818392565429",
+      "patterns": ["child support", "nc child support", "sdu"]
     }
+  },
+  "excludeFromBurnRate": {
+    "description": "Transaction types to exclude from daily burn rate calculation",
+    "patterns": ["wire transfer", "outgoing wire", "transfer to", "credit card payment", "mortgage", "heloc"],
+    "categories": ["Transfer", "Credit Card Payment", "Mortgage", "HELOC"]
+  },
+  "bnplServices": {
+    "description": "Buy Now Pay Later services - require manual categorization based on what was purchased",
+    "services": ["affirm", "klarna", "afterpay", "zip", "sezzle"],
+    "action": "flag_for_review"
   },
   "notes": [
     "Patterns are case-insensitive and match if contained in merchant name",
-    "Amazon may need manual review - could be business or personal",
-    "Added more generic patterns to improve matching",
-    "New categories: Baby Expenses, Health & Wellness"
+    "Added categoryId for programmatic updates",
+    "BNPL services (Affirm/Klarna) flagged for review - category depends on purchase",
+    "excludeFromBurnRate helps smooth cash flow projections",
+    "Court/legal fees now properly categorized (was being tagged as Gas/Restaurants)"
   ]
 }

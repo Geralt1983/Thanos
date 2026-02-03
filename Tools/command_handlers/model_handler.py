@@ -19,9 +19,9 @@ Dependencies:
 
 Architecture:
     Supports three Claude models with different capabilities and pricing:
-    - opus: claude-opus-4-5-20251101 ($15/$75 per 1M tokens) - Most capable
-    - sonnet: claude-sonnet-4-20250514 ($3/$15 per 1M tokens) - Balanced
-    - haiku: claude-3-5-haiku-20241022 ($0.25/$1.25 per 1M tokens) - Fastest
+    - opus: anthropic/claude-opus-4-5 ($15/$75 per 1M tokens) - Most capable
+    - sonnet: anthropic/claude-sonnet-4-5 ($3/$15 per 1M tokens) - Balanced
+    - haiku: anthropic/claude-3-5-haiku-20241022 ($0.25/$1.25 per 1M tokens) - Fastest
 
     Model selection persists across sessions and affects all subsequent API calls.
 
@@ -36,7 +36,7 @@ Example:
     result = handler.handle_model("")
 
     # Get full model name for API
-    model_name = handler.get_current_model()  # Returns "claude-opus-4-5-20251101"
+    model_name = handler.get_current_model()  # Returns "anthropic/claude-opus-4-5"
 
 See Also:
     - Tools.command_handlers.base: Base handler infrastructure
@@ -76,9 +76,9 @@ class ModelHandler(BaseHandler):
 
         # Available models (from config/api.json)
         self._available_models = {
-            "opus": "claude-opus-4-5-20251101",
-            "sonnet": "claude-sonnet-4-20250514",
-            "haiku": "claude-3-5-haiku-20241022",
+            "opus": "anthropic/claude-opus-4-5",
+            "sonnet": "anthropic/claude-sonnet-4-5",
+            "haiku": "anthropic/claude-3-5-haiku-20241022",
         }
         self._default_model = "opus"
 
@@ -142,16 +142,16 @@ class ModelHandler(BaseHandler):
         not the short alias. Falls back to default model if none is set.
 
         Returns:
-            Full model name (e.g., "claude-opus-4-5-20251101")
+            Full model name (e.g., "anthropic/claude-opus-4-5")
 
         Examples:
             >>> handler.current_model = "opus"
             >>> handler.get_current_model()
-            "claude-opus-4-5-20251101"
+            "anthropic/claude-opus-4-5"
 
             >>> handler.current_model = None
             >>> handler.get_current_model()
-            "claude-opus-4-5-20251101"  # Returns default
+            "anthropic/claude-opus-4-5"  # Returns default
         """
         model_alias = self.current_model or self._default_model
         return self._available_models.get(model_alias, self._available_models[self._default_model])
