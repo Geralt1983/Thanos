@@ -218,6 +218,14 @@ See `skills/Productivity/references/budgets.md` for category IDs.
   - ⚠️ WARNING: Category >100%, high burn rate
   - ℹ️ INFO: Impulse patterns, approaching limits
 
+### WorkOS MCP Server (Full CRUD Access) ✅ VERIFIED WORKING
+- **Location:** `/Users/jeremy/Projects/WorkOS-v3/mcp-server/`
+- **Start script:** `/Users/jeremy/Projects/WorkOS-v3/mcp-server/start.sh` (loads .env.local)
+- **Tools:** get_all_client_pipelines, search_tasks, create_task, update_task, complete_task, delete_task, promote_task, demote_task, suggest_next_task, get_avoidance_report, get_task_history
+- **Call via mcporter:** `mcporter call --stdio "/Users/jeremy/Projects/WorkOS-v3/mcp-server/start.sh" <tool_name> <args>`
+- **Example:** `mcporter call --stdio "/Users/jeremy/Projects/WorkOS-v3/mcp-server/start.sh" create_task title="Test task" client_name="Raleigh"`
+- **Synapse Integration:** When responding through OpenClaw to Synapse, I call this MCP server for full CRUD
+
 ### WorkOS Tasks (Work Management)
 - **Adapter:** `Tools/adapters/workos.py`
 - **Point System (Fibonacci-ish):**

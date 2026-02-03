@@ -48,6 +48,24 @@ Don't ask permission. Just do it.
 - Casual chat
 - **NEVER** troubleshooting/debugging
 
+### ⚠️ Haiku Does NOTHING Technical (CRITICAL)
+
+Haiku's ONLY jobs:
+- Simple confirmations and acknowledgments
+- Reading/writing simple notes
+- Calendar/task additions (no config)
+- Routing to skills
+
+**Immediate escalation to Sonnet if:**
+- Debugging or troubleshooting
+- API calls or errors
+- Installation or configuration
+- Any technical investigation
+- "set up", "configure", "automate", "integrate"
+- Error messages of any kind
+
+**Rule:** When in doubt, escalate. Haiku should never attempt technical problem-solving.
+
 ### Escalation Mechanism
 
 **Tools:**
