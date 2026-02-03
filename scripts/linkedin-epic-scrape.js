@@ -127,15 +127,9 @@ function getLookbackParam() {
     return process.env.LINKEDIN_DATE_POSTED;
   }
 
-  const cache = loadRunCache();
-  if (cache?.successAt) {
-    const hoursSince = (Date.now() - new Date(cache.successAt).getTime()) / (1000 * 60 * 60);
-    if (hoursSince > 36) return 'past-week';
-  }
-
-  // Monday backfill for weekend posts; otherwise 24h to cut volume
-  const day = new Date().getDay(); // 0=Sun, 1=Mon
-  return day === 1 ? 'past-week' : 'past-24h';
+  // Always use past-24h for URL datePosted filter (broad catch)
+  // Actual filtering will be done via scrapeUntil in Apify input
+  return 'past-24h';
 }
 
 function buildSearchUrls(lookbackParam) {
@@ -379,7 +373,23 @@ async function scrapeLinkedIn() {
     }
   }
 
-  const input = JSON.stringify({ urls });
+  // Build optimized input with cost-saving parameters
+  const inputData = {
+    urls,
+    limitPerSource: 100,  // Cap posts per search URL (reduces volume)
+    deepScrape: false     // Disable deep scraping (reduces compute)
+  };
+
+  // Incremental scraping: only fetch posts since last successful run
+  if (cache?.successAt && !FORCE_RUN) {
+    const lastRun = new Date(cache.successAt);
+    // Subtract 2 hours buffer to avoid missing posts on boundaries
+    lastRun.setHours(lastRun.getHours() - 2);
+    inputData.scrapeUntil = lastRun.toISOString();
+    console.error(`Incremental scrape: posts since ${lastRun.toISOString()}`);
+  }
+
+  const input = JSON.stringify(inputData);
   const inputFile = '/tmp/linkedin-epic-input.json';
   fs.writeFileSync(inputFile, input);
 
