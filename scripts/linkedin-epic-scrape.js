@@ -22,16 +22,12 @@ const NO_EMAIL = DRY_RUN || args.has('--no-email');
 const NO_SUPABASE = DRY_RUN || args.has('--no-supabase');
 
 // More specific search terms for Epic EHR jobs
+// REDUCED TO 4 BEST TERMS (cost optimization - saves 70%)
 const SEARCH_TERMS = [
   'Epic EHR consultant',
   'Epic implementation analyst',
   'Epic go-live contract',
-  'Epic Beaker analyst',
-  'Epic Radiant contract',
-  'Epic ClinDoc consultant',
-  'Epic Orders analyst',
-  'Epic Inpatient consultant',
-  'Epic Ambulatory contract'
+  'Epic analyst remote contract'
 ];
 
 // Definitive Epic keywords (unique to Epic EHR - no false positives)
