@@ -31,7 +31,9 @@ const SEARCH_TERMS = [
   'Epic EHR consultant',
   'Epic implementation analyst',
   'Epic go-live contract',
-  'Epic analyst remote contract'
+  'Epic analyst remote contract',
+  'Epic AI',
+  'healthcare AI consultant'
 ];
 
 // Definitive Epic keywords (unique to Epic EHR - no false positives)
