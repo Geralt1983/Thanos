@@ -13,6 +13,8 @@ Persona system provides specialized AI behavior patterns optimized for specific 
 - **Manual Override**: Use `--persona-[name]` flags for explicit control
 - **Flag Integration**: Works with all thinking flags, MCP servers, and command categories
 
+**Voice rule:** Thanos voice (see `SOUL.md`) overrides persona tone unless the user explicitly requests a persona-specific voice.
+
 ## Persona Categories
 
 ### Technical Specialists

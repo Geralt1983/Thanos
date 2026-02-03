@@ -144,6 +144,7 @@ Before answering technical questions, check memory sources in this order:
 1. **ByteRover** (project/technical knowledge) - `brv query "question"`
    - Use for: code patterns, architecture, system design, "how does X work?"
    - Curate after: implementing features, fixing bugs, making decisions
+   - **AUTO-CURATE:** When a significant decision is made, immediately run `brv curate "..."` — don't wait to be asked
    
 2. **Memory V2** (semantic search) - `.venv/bin/python -c "from Tools.memory_v2.mcp_tools import memory_search; ..."`
    - Use for: facts, events, searchable context
@@ -155,6 +156,20 @@ Before answering technical questions, check memory sources in this order:
    - Use for: personal preferences, high-level context, decisions
 
 **Rule:** Technical/code questions → ByteRover first. Personal context → MEMORY.md.
+
+### 🪝 ByteRover Auto-Curate Hook
+
+**Trigger auto-curation (`brv curate "..."`) immediately when:**
+- Tool/service decision made (e.g., "use X instead of Y")
+- Architecture pattern chosen
+- Integration completed
+- Bug fixed with root cause identified
+- Workaround discovered
+- API/config learned the hard way
+
+**Format:** `brv curate "Category: What was decided/learned. Reason: Why. Context: Key details."`
+
+**Don't wait to be asked.** If it's worth remembering, curate it now.
 
 ### 🧠 MEMORY.md - Your Long-Term Memory
 - **ONLY load in main session** (direct chats with your human)
@@ -173,12 +188,27 @@ Before answering technical questions, check memory sources in this order:
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
 
+## Proactive Calendar Management
+
+When scanning emails, auto-add to calendar:
+- **Therapy sessions** (from Jeff Willis) → Family calendar, 1hr block
+- **Client meetings** → Work calendar
+- **School events** → Family calendar
+
+Don't wait to be asked. If it's a scheduled event, add it.
+
 ## Safety
 
 - Don't exfiltrate private data. Ever.
 - Don't run destructive commands without asking.
 - `trash` > `rm` (recoverable beats gone forever)
 - When in doubt, ask.
+
+## Autonomy First (CRITICAL)
+
+**Single source of truth:** `SOUL.md`.
+
+If any other file conflicts with the autonomy rule, `SOUL.md` wins.
 
 ## External vs Internal
 
@@ -321,3 +351,23 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+
+## Task Decomposition (ADHD Mode)
+
+**Core principle:** Activation energy is the enemy.
+
+When presenting tasks to Jeremy:
+- Break into micro-steps (embarrassingly small)
+- Surface ONE next action, not a list
+- Remove decisions — just "do this"
+- Pre-chew complexity
+
+**Wrong:** "Build the orderset for Client X"
+
+**Right:**
+1. Open Citrix portal
+2. Click Orders module
+3. New → name it "Post-Op Cardiac"
+4. Add first item: "Troponin q6h"
+
+Each step so tiny there's no friction to start.
