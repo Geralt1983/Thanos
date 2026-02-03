@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import subprocess
+import shutil
 import yaml
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -47,12 +48,15 @@ def load_env():
 def run_command(cmd: List[str], timeout: int = 30, cwd: Optional[Path] = None) -> tuple[bool, str]:
     """Run a shell command and return (success, output)."""
     try:
+        env = os.environ.copy()
+        env["PATH"] = f"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:{env.get('PATH', '')}"
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd=cwd
+            cwd=cwd,
+            env=env
         )
         if result.returncode == 0:
             return True, result.stdout.strip()
@@ -151,9 +155,11 @@ class MorningBrief:
         
         events = []
         
+        gog_bin = shutil.which("gog") or "/opt/homebrew/bin/gog"
+
         # Use gog calendar events --json
         success, output = run_command([
-            "gog", "calendar", "events",
+            gog_bin, "calendar", "events",
             "--json",
             "--account", cfg.get("account", "jkimble1983@gmail.com")
         ], timeout=45)
@@ -211,6 +217,40 @@ class MorningBrief:
             if line and not line.startswith("#"):
                 events.append({"summary": line, "raw": True})
         return events
+    
+    def fetch_financial_forecast(self) -> Dict[str, Any]:
+        """Fetch financial forecasting analysis."""
+        try:
+            # Run the forecasting tool
+            result = subprocess.run(
+                [sys.executable, str(THANOS_ROOT / "Tools" / "financial_forecasting.py")],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=THANOS_ROOT
+            )
+            
+            # Parse the brief output (stdout)
+            brief_output = result.stdout.strip()
+            
+            # Parse JSON analysis from stderr (after "--- Detailed Analysis ---")
+            stderr = result.stderr
+            json_start = stderr.find('{')
+            analysis = {}
+            if json_start >= 0:
+                try:
+                    analysis = json.loads(stderr[json_start:])
+                except json.JSONDecodeError:
+                    pass
+            
+            return {
+                "status": "ok",
+                "brief": brief_output,
+                "analysis": analysis
+            }
+        except Exception as e:
+            self.errors.append(f"Financial forecast failed: {e}")
+            return {"status": "error", "message": str(e)}
     
     def fetch_budget(self) -> Dict[str, Any]:
         """Fetch budget status from Monarch Money."""
@@ -351,6 +391,7 @@ class MorningBrief:
         self.data["energy"] = self.fetch_energy()
         self.data["calendar"] = self.fetch_calendar()
         self.data["budget"] = self.fetch_budget()
+        self.data["forecast"] = self.fetch_financial_forecast()
         self.data["tasks"] = self.fetch_tasks()
         self.data["weather"] = self.fetch_weather()
         
@@ -410,27 +451,33 @@ class MorningBrief:
             output.append(f"⚠️ {calendar.get('message', 'Unable to fetch calendar')}")
         output.append("")
         
-        # Budget Section
-        output.append("💰 **FINANCES**")
-        budget = self.data["budget"]
-        if budget["status"] == "ok":
-            total_cash = budget.get("total_cash", 0)
-            total_debt = budget.get("total_debt", 0)
-            net_worth = budget.get("net_worth", 0)
-            
-            output.append(f"  💵 Cash: ${total_cash:,.2f}")
-            output.append(f"  📉 Debt: ${total_debt:,.2f}")
-            output.append(f"  📊 Net: ${net_worth:,.2f}")
-            
-            # Show cash accounts
-            accounts = budget.get("accounts", [])
-            cash_accounts = [a for a in accounts if a.get("type") == "Cash"]
-            if cash_accounts:
-                output.append("  **Cash Accounts:**")
-                for acc in cash_accounts[:4]:
-                    output.append(f"    • {acc['name']}: {acc['balance']}")
+        # Financial Forecast Section (replaces basic budget)
+        forecast = self.data.get("forecast", {})
+        if forecast.get("status") == "ok" and forecast.get("brief"):
+            # Use the formatted brief from financial_forecasting.py
+            output.append(forecast["brief"])
         else:
-            output.append(f"⚠️ {budget.get('message', 'Unable to fetch budget')}")
+            # Fallback to basic budget
+            output.append("💰 **FINANCES**")
+            budget = self.data["budget"]
+            if budget["status"] == "ok":
+                total_cash = budget.get("total_cash", 0)
+                total_debt = budget.get("total_debt", 0)
+                net_worth = budget.get("net_worth", 0)
+                
+                output.append(f"  💵 Cash: ${total_cash:,.2f}")
+                output.append(f"  📉 Debt: ${total_debt:,.2f}")
+                output.append(f"  📊 Net: ${net_worth:,.2f}")
+                
+                # Show cash accounts
+                accounts = budget.get("accounts", [])
+                cash_accounts = [a for a in accounts if a.get("type") == "Cash"]
+                if cash_accounts:
+                    output.append("  **Cash Accounts:**")
+                    for acc in cash_accounts[:4]:
+                        output.append(f"    • {acc['name']}: {acc['balance']}")
+            else:
+                output.append(f"⚠️ {budget.get('message', 'Unable to fetch budget')}")
         output.append("")
         
         # Tasks Section

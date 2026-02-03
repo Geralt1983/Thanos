@@ -8,6 +8,7 @@ Provides the Channel interface for Telegram integration.
 import os
 import asyncio
 import logging
+from pathlib import Path
 from datetime import datetime
 from typing import Optional, AsyncIterator, Dict, Any
 
@@ -341,8 +342,28 @@ async def send_telegram(
     Returns:
         True if sent successfully
     """
+    def _load_env_fallback() -> None:
+        env_path = Path(__file__).parent.parent.parent / ".env"
+        if not env_path.exists():
+            return
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key not in os.environ:
+                os.environ[key] = value
+
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = chat_id or os.getenv("TELEGRAM_DEFAULT_CHAT_ID")
+    if not token or not chat_id:
+        _load_env_fallback()
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = chat_id or os.getenv("TELEGRAM_DEFAULT_CHAT_ID")
+    if not chat_id:
+        allowed = os.getenv("TELEGRAM_ALLOWED_USERS", "")
+        if allowed:
+            chat_id = allowed.split(",")[0].strip()
 
     if not token or not chat_id:
         logger.error("Telegram not configured (missing token or chat_id)")
