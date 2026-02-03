@@ -13,6 +13,7 @@ ADHD helpers:
 """
 
 import logging
+import atexit
 import hashlib
 from datetime import datetime
 from functools import lru_cache
@@ -139,6 +140,14 @@ class MemoryService:
             conn.rollback()
             raise
         # Note: Don't close - we're reusing this connection
+
+    def close(self) -> None:
+        """Close the persistent database connection if open."""
+        if self._persistent_conn is not None and not self._persistent_conn.closed:
+            try:
+                self._persistent_conn.close()
+            finally:
+                self._persistent_conn = None
 
     def add(self, content: str, metadata: dict = None) -> Dict[str, Any]:
         """
@@ -731,13 +740,18 @@ class MemoryService:
 
 # Singleton instance
 _memory_service: Optional[MemoryService] = None
+_atexit_registered = False
 
 
 def get_memory_service() -> MemoryService:
     """Get or create the singleton MemoryService instance."""
     global _memory_service
+    global _atexit_registered
     if _memory_service is None:
         _memory_service = MemoryService()
+    if not _atexit_registered:
+        atexit.register(_memory_service.close)
+        _atexit_registered = True
     return _memory_service
 
 

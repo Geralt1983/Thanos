@@ -1,0 +1,16 @@
+{
+  "id": "thanos-harness",
+  "name": "Thanos Harness",
+  "description": "Route OpenClaw sessions through Thanos orchestration and capture learnings.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "thanosRoot": { "type": "string" },
+      "pythonBin": { "type": "string" },
+      "timeoutMs": { "type": "number" },
+      "allowLlmCapture": { "type": "boolean" }
+    }
+  },
+  "skills": ["./skills"]
+}

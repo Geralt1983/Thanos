@@ -1,29 +1,31 @@
 ## Relations
-@structure/infrastructure/web_automation/google_automation_constraints.md
+@code_style/operational_principles/codex_thanos_workflow.md
 
 ## Raw Concept
 **Task:**
-Automate therapy session scheduling for Jeff Willis
+Implement and document Multi-Agent Routing (Haiku/Sonnet/Opus)
 
 **Changes:**
-- Automated therapy session extraction from Gmail to Family calendar
+- Implemented 3-tier agent routing (main/sonnet/think)
+- Enabled model overrides in cron payloads
 
 **Flow:**
-Gmail Scan -> Detect "Jeff Willis" therapy session -> Extract time/date -> Proactively create 1hr event in Family calendar
+User Request -> Select Agent (Main/Sonnet/Think) -> Execute in shared Thanos workspace -> Optional: Override model via Cron Payload
 
-**Timestamp:** 2026-02-02
+**Timestamp:** 2026-02-03
 
 ## Narrative
 ### Structure
-- Input: Gmail scan
-- Logic: Identify 'Jeff Willis' + scheduled time
-- Output: Google Calendar entry (Family calendar)
+- Tier 1: main (Haiku) - Default/Fast
+- Tier 2: sonnet (Sonnet) - Moderate
+- Tier 3: think (Opus) - Deep reasoning
 
 ### Dependencies
-Requires read access to Gmail and write access to Google Calendar (Family calendar).
+Requires Haiku, Sonnet, and Opus model availability. All agents share the Thanos workspace.
 
 ### Features
-- Proactive scheduling: Events are added automatically without user confirmation if time/date are clear.
-- Target: Therapy sessions with 'Jeff Willis'.
-- Calendar: 'Family' calendar.
-- Duration: Default to 1-hour blocks.
+- 3-tier routing: main (Haiku), sonnet (Sonnet), think (Opus).
+- Workspace sharing: All tiers operate within the Thanos workspace.
+- Manual switching: Use `/agent <name>` to switch between tiers.
+- Task overrides: Cron job payloads can specify model overrides.
+- Configuration: Managed via `agents.list[].model` in the config file.

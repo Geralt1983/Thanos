@@ -3,33 +3,15 @@ Proactive Context Module
 
 Loads relevant memory context when entities are detected in user input.
 Searches Memory V2 for related memories and applies priority scoring.
-
-Pattern: Memory search and filtering similar to memory_router.py
 """
-import json
-from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
-
-def get_memory_service():
-    """
-    Get MemoryService instance for searching memories.
-
-    Returns:
-        MemoryService instance or None if not available
-    """
-    try:
-        # Try to import Memory V2 service
-        # This path may need adjustment based on actual Memory V2 location
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-
-        from memory_service import MemoryService
-        return MemoryService()
-    except (ImportError, ModuleNotFoundError):
-        # Memory service not available in this environment
-        # Return None - we'll handle gracefully
-        return None
+try:
+    from Tools import memory_router
+    MEMORY_ROUTER_AVAILABLE = True
+except Exception:
+    memory_router = None
+    MEMORY_ROUTER_AVAILABLE = False
 
 
 def calculate_priority_score(memory: Dict[str, Any], entity: Dict[str, Any]) -> float:
@@ -79,11 +61,8 @@ def search_memory_for_entity(entity: Dict[str, Any], limit: int = 5) -> List[Dic
     Returns:
         List of memory dicts with search results
     """
-    memory_service = get_memory_service()
-
-    if not memory_service:
+    if not MEMORY_ROUTER_AVAILABLE:
         # Memory service not available - return mock data for testing
-        # In production, this would search actual Memory V2
         entity_text = entity.get('text', '')
         entity_type = entity.get('type', 'unknown')
 
@@ -98,10 +77,9 @@ def search_memory_for_entity(entity: Dict[str, Any], limit: int = 5) -> List[Dic
             'source': 'mock'
         }]
 
-    # Real implementation: search Memory V2
     try:
         query = entity.get('text', '')
-        results = memory_service.search(query, limit=limit * 2)  # Get more than needed for filtering
+        results = memory_router.search_memory(query, limit=limit * 2)
 
         # Filter by effective_score > 0.3 as per spec
         filtered_results = [

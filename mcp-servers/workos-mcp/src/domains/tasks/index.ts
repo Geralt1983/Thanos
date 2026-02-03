@@ -2,6 +2,7 @@ import type { ToolRouter, Database, ContentResponse } from "../../shared/types.j
 import { errorResponse } from "../../shared/types.js";
 import { getTaskTools } from "./tools.js";
 import {
+  handleGetServerVersion,
   handleGetTodayMetrics,
   handleGetMetricsForDate,
   handleGetTasks,
@@ -41,6 +42,8 @@ export const handleTaskTool: ToolRouter = async (
   db: Database
 ): Promise<ContentResponse> => {
   switch (name) {
+    case "workos_get_server_version":
+      return handleGetServerVersion(args, db);
     case "workos_get_today_metrics":
       return handleGetTodayMetrics(args, db);
     case "workos_get_metrics_for_date":

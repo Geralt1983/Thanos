@@ -20,7 +20,7 @@ from typing import Optional, List, Dict, Any, TYPE_CHECKING, Union
 if TYPE_CHECKING:
     from Tools.unified_state import StateStore
     from Tools.journal import Journal
-    from Tools.adapters.workos import WorkOSAdapter
+    from Tools.core.workos_gateway import WorkOSGateway
 
 # Import ClassifiedBrainDump from classifier
 from .classifier import ClassifiedBrainDump
@@ -175,7 +175,7 @@ class BrainDumpRouter:
         self,
         state: "StateStore",
         journal: "Journal",
-        workos_adapter: Optional["WorkOSAdapter"] = None
+        workos_gateway: Optional["WorkOSGateway"] = None
     ):
         """
         Initialize the brain dump router.
@@ -183,11 +183,11 @@ class BrainDumpRouter:
         Args:
             state: StateStore for persisting tasks, commitments, notes, ideas.
             journal: Journal for logging all brain dump events.
-            workos_adapter: Optional WorkOS adapter for syncing work tasks.
+            workos_gateway: Optional WorkOS gateway for syncing work tasks.
         """
         self.state = state
         self.journal = journal
-        self.workos_adapter = workos_adapter
+        self.workos_gateway = workos_gateway
 
     async def route(self, dump: ClassifiedBrainDump) -> RoutingResult:
         """
@@ -480,7 +480,7 @@ class BrainDumpRouter:
             result.tasks_created.append(task_id)
 
             # Sync to WorkOS if adapter is available
-            if self.workos_adapter:
+            if self.workos_gateway:
                 workos_id = await self._sync_to_workos(dump)
                 result.workos_task_id = workos_id
 
@@ -678,14 +678,14 @@ class BrainDumpRouter:
 
     async def _sync_to_workos(self, dump: ClassifiedBrainDump) -> Optional[int]:
         """Sync a work task to WorkOS database."""
-        if not self.workos_adapter:
+        if not self.workos_gateway:
             return None
 
         try:
             # Get task data
             task_data = dump.task or {}
 
-            # Map priority to effort estimate
+            # Map priority to effort estimate (for value tier mapping)
             effort_map = {
                 "critical": 5,
                 "high": 4,
@@ -695,14 +695,11 @@ class BrainDumpRouter:
             priority = task_data.get('priority', 'medium')
             effort = effort_map.get(priority, 2)
 
-            result = await self.workos_adapter.call_tool(
-                "create_task",
-                {
-                    "title": task_data.get('title') or self._generate_title(dump),
-                    "description": dump.raw_text,
-                    "status": "backlog",
-                    "effort_estimate": effort
-                }
+            result = await self.workos_gateway.create_task(
+                title=task_data.get('title') or self._generate_title(dump),
+                description=dump.raw_text,
+                status="backlog",
+                effort_estimate=effort,
             )
 
             if result.success and result.data:
@@ -750,7 +747,7 @@ async def route_brain_dump(
     dump: ClassifiedBrainDump,
     state: "StateStore",
     journal: "Journal",
-    workos_adapter: Optional["WorkOSAdapter"] = None
+    workos_gateway: Optional["WorkOSGateway"] = None
 ) -> RoutingResult:
     """
     Convenience function to route a classified brain dump.
@@ -759,10 +756,10 @@ async def route_brain_dump(
         dump: The classified brain dump from BrainDumpClassifier.
         state: StateStore for persisting data.
         journal: Journal for logging.
-        workos_adapter: Optional WorkOS adapter for work tasks.
+        workos_gateway: Optional WorkOS gateway for work tasks.
 
     Returns:
         RoutingResult with all created entities.
     """
-    router = BrainDumpRouter(state, journal, workos_adapter)
+    router = BrainDumpRouter(state, journal, workos_gateway)
     return await router.route(dump)

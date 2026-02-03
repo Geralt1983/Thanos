@@ -60,6 +60,7 @@ class ModelPrefixTracker:
     MODEL_TO_PREFIX = {
         'anthropic/claude-3-5-haiku-20241022': '[H]',
         'anthropic/claude-3-5-sonnet-20241022': '[S]',
+        'anthropic/claude-sonnet-4-5': '[S]',
         'anthropic/claude-opus-4-5': '[O]',
         # Add more models as needed
     }

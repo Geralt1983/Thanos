@@ -22,10 +22,13 @@ Output:
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+
+from dotenv import load_dotenv
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -47,11 +50,21 @@ except ImportError as e:
     # Don't exit here - we'll check later if actually needed
 
 try:
-    from Tools.relationships import RelationshipStore, get_relationship_store
+    from Tools.relationships import RelationshipStore, get_relationship_store, RelationType
     RELATIONSHIPS_AVAILABLE = True
 except ImportError:
     RELATIONSHIPS_AVAILABLE = False
     print("⚠️  RelationshipStore not available")
+
+try:
+    from neo4j import GraphDatabase
+    NEO4J_AVAILABLE = True
+except ImportError:
+    NEO4J_AVAILABLE = False
+    GraphDatabase = None
+
+# Load environment variables (for Neo4j + Memory V2)
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 
 # Collection to domain mapping
@@ -331,6 +344,86 @@ class MemOSMigrator:
 
             self.migrate_chromadb_collection(collection_name)
 
+    def _map_rel_type(self, rel_type: str) -> "RelationType":
+        """Map Neo4j relationship type to RelationshipStore enum."""
+        normalized = rel_type.lower()
+        for rt in RelationType:
+            if rt.value == normalized or rt.name.lower() == normalized:
+                return rt
+        return RelationType.RELATED_TO
+
+    def migrate_neo4j_relationships(self) -> None:
+        """Migrate Neo4j relationships into RelationshipStore."""
+        if not NEO4J_AVAILABLE:
+            print("⚠️  neo4j driver not installed; skipping Neo4j migration")
+            return
+        if not RELATIONSHIPS_AVAILABLE:
+            print("⚠️  RelationshipStore not available; skipping Neo4j migration")
+            return
+
+        neo4j_uri = os.getenv("NEO4J_URI")
+        neo4j_user = os.getenv("NEO4J_USERNAME") or os.getenv("NEO4J_USER")
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
+
+        if not neo4j_uri or not neo4j_user or not neo4j_password:
+            print("⚠️  Neo4j env vars missing; skipping Neo4j migration")
+            return
+
+        print("\n" + "=" * 60)
+        print("NEO4J MIGRATION")
+        print("=" * 60)
+
+        driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+        migrated = 0
+        total = 0
+
+        query = """
+            MATCH (a)-[r]->(b)
+            RETURN
+                coalesce(a.id, a.uuid, a.name, elementId(a)) AS source_id,
+                coalesce(b.id, b.uuid, b.name, elementId(b)) AS target_id,
+                type(r) AS rel_type,
+                properties(r) AS props
+        """
+
+        with driver.session() as session:
+            for record in session.run(query):
+                total += 1
+                if self.limit and migrated >= self.limit:
+                    break
+
+                source_id = record["source_id"]
+                target_id = record["target_id"]
+                rel_type = record["rel_type"]
+                props = record.get("props") or {}
+
+                try:
+                    rel_enum = self._map_rel_type(rel_type)
+                    strength = float(props.pop("strength", props.pop("confidence", 1.0)))
+                except Exception as e:
+                    self.stats.record_error(f"Neo4j rel map failed: {e}")
+                    continue
+
+                if self.dry_run:
+                    migrated += 1
+                    continue
+
+                try:
+                    self.relationships.link_memories(
+                        source_id=source_id,
+                        target_id=target_id,
+                        rel_type=rel_enum,
+                        strength=strength,
+                        metadata=props if props else None,
+                    )
+                    migrated += 1
+                except Exception as e:
+                    self.stats.record_error(f"Neo4j link failed: {e}")
+
+        driver.close()
+        print(f"Neo4j relationships scanned: {total}")
+        print(f"Neo4j relationships migrated: {migrated}")
+
     def run(self) -> MigrationStats:
         """
         Execute full migration.
@@ -353,8 +446,8 @@ class MemOSMigrator:
         # Migrate ChromaDB collections
         self.migrate_all_collections()
 
-        # TODO: Migrate Neo4j data if available
-        # For now, Neo4j package is not installed, so we skip
+        # Migrate Neo4j relationships if available
+        self.migrate_neo4j_relationships()
 
         # Print summary
         print(self.stats.summary())

@@ -53,6 +53,7 @@
 - **MCP Server:** `mcp-servers/memory-v2-mcp/` (stdio)
 - **Python:** Uses `.venv/bin/python` (fixed 2026-02-01)
 - **Direct call:** `.venv/bin/python -c "from Tools.memory_v2.mcp_tools import memory_search; ..."`
+- **Legacy docs:** `memory/README.md` (mem0 pipeline)
 
 #### Architecture (Updated 2026-02-01)
 - **Embeddings:** Voyage AI `voyage-3` (1024 dimensions)
@@ -244,8 +245,32 @@ See `skills/Productivity/references/budgets.md` for category IDs.
 - **Logic:** Classifies tasks by complexity, matches to readiness score, defers complex tasks on low-energy days
 - **Always active:** Tasks are ALWAYS weighted against energy - no manual prioritization
 
-### ModelEscalator
-- **Location:** `Tools/model_escalator.py`, `config/model_escalator.json`
+### Model Selection Strategy (Updated 2026-02-03)
+
+**Architecture:**
+- **Default:** Haiku (cheap, fast) — `agents.defaults.model.primary`
+- **Fallbacks:** Sonnet → Opus (auto-failover)
+- **Per-task override:** Cron jobs can specify `model` in payload
+
+**Interactive (Main Session):**
+- Start on Haiku
+- Dynamic escalation via `session_status(model=X)` when complexity detected
+- Thresholds: 0-0.25 Haiku, 0.25-0.75 Sonnet, 0.75-1.0 Opus
+
+**Cron Job Model Assignments:**
+| Model | Jobs |
+|-------|------|
+| **Opus** | nightly-scaling-brainstorm (strategic thinking) |
+| **Sonnet** | linkedin-epic-digest, morning-brief, overnight-openclaw-scout, nightly-moonshot-research, weekly-analysis, weekly-cash-forecast-email, monarch-weekly-reconciliation |
+| **Haiku** | Calendar briefs, todoist tasks, memory decay, simple alerts |
+
+**Why not agents.list?**
+- `agents.list` is for multi-agent setups (named workers)
+- Single main agent with dynamic needs → model payload + session_status
+- Current approach is optimal for cost/capability tradeoff
+
+### ModelEscalator (Legacy Tool)
+- **Location:** `Tools/model_escalator_v2.py`, `config/model_escalator.json`
 - **Integration:** Self-check in AGENTS.md; AI calls session_status when needed
 - **Model hierarchy:** Haiku → Sonnet 4-5 → Opus 4-5
 - **Thresholds:** low=0.25, medium=0.5, high=0.75

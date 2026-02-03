@@ -5,21 +5,22 @@ description: Automatic model switching based on task complexity for OpenClaw age
 
 # Model Escalation
 
+**Canonical implementation:** `Tools/model_escalator_v2.py`
+
 Complexity-based model switching with prefix tracking for OpenClaw agents.
 
 ## Quick Start
 
 ```python
-from model_escalation import ModelEscalator
+from Tools.model_escalator_v2 import model_escalation_hook_v2 as model_escalation_hook
 
-escalator = ModelEscalator()
-
-# Determine model from complexity score (0-1)
-model = escalator.escalate_model(current_model, complexity=0.8)
-prefix = escalator.get_prefix(model)
-
-# Use with OpenClaw session_status
-session_status(model=model)
+# Determine model from conversation context
+result = model_escalation_hook("main-session", {
+    "messages": [],
+    "current_message": "Explain this API integration",
+    "token_count": 0,
+})
+session_status(model=result.model)
 ```
 
 ## Complexity Thresholds
@@ -44,7 +45,7 @@ session_status(model=model)
 Ensures conversation prefix matches active model:
 
 ```python
-from model_prefix_tracker import ModelPrefixTracker
+from Tools.model_prefix_tracker import ModelPrefixTracker
 
 tracker = ModelPrefixTracker()
 
@@ -86,7 +87,7 @@ Edit `scripts/config.json` to customize:
   },
   "models": {
     "haiku": "anthropic/claude-3-5-haiku-20241022",
-    "sonnet": "anthropic/claude-3-5-sonnet-20241022",
+    "sonnet": "anthropic/claude-sonnet-4-5",
     "opus": "anthropic/claude-opus-4-5"
   },
   "cooldown_minutes": 5

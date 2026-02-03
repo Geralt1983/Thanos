@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 """
+LEGACY: Simple Model Escalation Helper
+
+Retained for lightweight use-cases. Canonical implementation is
+Tools/model_escalator_v2.py.
+
 Model Escalation Management
 
 Handles complexity-based model switching and prefix tracking.

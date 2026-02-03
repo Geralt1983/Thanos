@@ -8,6 +8,7 @@ Manages terminal wallpaper based on workflow state:
 - BALANCE: Daily goals achieved (farm_sunrise.png)
 """
 
+import asyncio
 import json
 import subprocess
 import sys
@@ -104,13 +105,11 @@ class WallpaperManager:
     def get_workos_metrics(self) -> Optional[Dict]:
         """Get current WorkOS metrics via MCP."""
         try:
-            # Import MCP adapter
-            sys.path.insert(0, str(self.thanos_root / "Tools"))
-            from adapters.mcp_adapter import get_mcp_client
+            sys.path.insert(0, str(self.thanos_root))
+            from Tools.core.workos_gateway import WorkOSGateway
 
-            client = get_mcp_client()
-            result = client.call_tool("workos_get_today_metrics", {})
-            return result if isinstance(result, dict) else None
+            gateway = WorkOSGateway(project_root=self.thanos_root)
+            return asyncio.run(gateway.get_today_metrics())
         except Exception:
             return None
 
@@ -146,7 +145,7 @@ class WallpaperManager:
 
         # If we have active tasks, still in CHAOS
         if workos_metrics:
-            active_count = workos_metrics.get('active_tasks', 0)
+            active_count = workos_metrics.get('active_count', 0)
             if active_count > 3:
                 return "chaos"
 

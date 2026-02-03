@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# LEGACY: Transcript-based escalator retained for historical use.
+# Canonical escalation logic lives in Tools/model_escalator_v2.py.
 import os
 import json
 import time

@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
 """
-Session-end hook: Capture learnings from Claude Code sessions.
-Extracts decisions, patterns, and learnings from session transcript.
+Session-end hook: Unified memory capture for Claude Code sessions.
 
-Also integrates with the checkpoint system for crash-resilient memory capture.
+Routes learnings to:
+- Memory V2 + Graphiti (via unified capture)
+- ByteRover (technical knowledge)
 
-Receives hook event data via stdin:
-{
-  "session_id": "abc123",
-  "transcript_path": "~/.claude/projects/.../session.jsonl",
-  "cwd": "/path/to/project",
-  "reason": "exit"
-}
-
-Extracts and stores:
-- Checkpoint data (accumulated during session)
-- Decisions made (architecture, design choices)
-- Bugs fixed (what went wrong, how it was solved)
-- Patterns discovered (reusable approaches)
+Also integrates with checkpoint system for crash-resilient capture.
 """
 import sys
 import json
-import re
 import os
 from pathlib import Path
 from datetime import datetime
@@ -46,49 +34,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-
-# Learning extraction patterns
-DECISION_PATTERNS = [
-    r"(?:decided to|chose to|going with|will use|opted for|selected)\s+(.{20,200})",
-    r"(?:the approach is|solution is|best option is|implemented)\s+(.{20,200})",
-    r"(?:architecture|design):?\s*(.{20,200})",
-]
-
-BUG_FIX_PATTERNS = [
-    r"(?:fixed|resolved|solved|patched)\s+(?:the\s+)?(?:bug|issue|problem|error)\s*(?:by|with|:)?\s*(.{20,200})",
-    r"(?:the issue was|problem was|root cause was|caused by)\s+(.{20,200})",
-    r"(?:bug|error|issue):\s*(.{20,200})",
-]
-
-PATTERN_PATTERNS = [
-    r"(?:pattern|approach|technique|method):\s*(.{20,200})",
-    r"(?:always|never|should)\s+(.{20,200})",
-    r"(?:lesson learned|takeaway|insight):\s*(.{20,200})",
-    r"(?:this works because|key insight is|remember that)\s+(.{20,200})",
-]
-
-# PLANS - Weekend, tomorrow, scheduling
-PLAN_PATTERNS = [
-    r"(?:this weekend|tomorrow|tonight|saturday|sunday)(?:'s plan|,)?\s*(?:we'll|I'll|let's|going to|plan to|will)\s+(.{20,300})",
-    r"(?:plan for|scheduled for|agenda for)\s+(?:this weekend|tomorrow|tonight|saturday|sunday)\s*[:\-]?\s*(.{20,300})",
-    r"(?:weekend tasks?|tomorrow's tasks?|chill tasks?)[:\-]?\s*(.{20,500})",
-    r"(?:let's do|we should do|I should do|need to do)\s+(?:this weekend|tomorrow)?\s*[:\-]?\s*(.{20,300})",
-]
-
-# COMMITMENTS - Promises, intentions
-COMMITMENT_PATTERNS = [
-    r"(?:I'll|we'll|I will|we will|going to|plan to|committed to)\s+(.{20,200})",
-    r"(?:need to|have to|must|should)\s+(?:finish|complete|do|handle|take care of)\s+(.{20,200})",
-    r"(?:don't forget|remember to|make sure to)\s+(.{20,200})",
-]
-
-# COMPLETED - Already done items
-COMPLETED_PATTERNS = [
-    r"(?:already done|already finished|completed|done with|finished)\s+(.{20,200})",
-    r"(?:passport forms?|forms?)\s+(?:are|were|is)\s+(?:done|completed|finished|submitted)",
-    r"(?:checked off|crossed off|marked as done)\s+(.{20,200})",
-]
 
 
 def extract_project_context(cwd: str) -> dict:
@@ -152,121 +97,6 @@ def extract_text_content(messages: list) -> str:
     return '\n\n'.join(text_parts)
 
 
-def extract_learnings(content: str) -> list:
-    learnings = []
-    seen = set()
-
-    # Technical learnings
-    for pattern in DECISION_PATTERNS:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            text = match.group(1).strip()
-            if text and text not in seen and len(text) > 30:
-                learnings.append({"type": "decision", "content": _clean_learning(text), "confidence": 0.7})
-                seen.add(text)
-    for pattern in BUG_FIX_PATTERNS:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            text = match.group(1).strip()
-            if text and text not in seen and len(text) > 30:
-                learnings.append({"type": "bug_fix", "content": _clean_learning(text), "confidence": 0.8})
-                seen.add(text)
-    for pattern in PATTERN_PATTERNS:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            text = match.group(1).strip()
-            if text and text not in seen and len(text) > 30:
-                learnings.append({"type": "pattern", "content": _clean_learning(text), "confidence": 0.6})
-                seen.add(text)
-
-    # LIFE PLANS - High confidence, important for recall
-    for pattern in PLAN_PATTERNS:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            text = match.group(1).strip()
-            if text and text not in seen and len(text) > 20:
-                learnings.append({"type": "plan", "content": _clean_learning(text), "confidence": 0.9})
-                seen.add(text)
-
-    # COMMITMENTS - What we said we'd do
-    for pattern in COMMITMENT_PATTERNS:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            text = match.group(1).strip()
-            if text and text not in seen and len(text) > 20:
-                learnings.append({"type": "commitment", "content": _clean_learning(text), "confidence": 0.85})
-                seen.add(text)
-
-    # COMPLETED items - Update status on things done
-    for pattern in COMPLETED_PATTERNS:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            text = match.group(0).strip() if match.lastindex is None else match.group(1).strip()
-            if text and text not in seen and len(text) > 15:
-                learnings.append({"type": "completed", "content": _clean_learning(text), "confidence": 0.95})
-                seen.add(text)
-
-    learnings.sort(key=lambda x: x['confidence'], reverse=True)
-    return learnings[:20]  # Increased limit for life items
-
-
-def _clean_learning(text: str) -> str:
-    text = re.sub(r'[.,:;]+$', '', text)
-    text = ' '.join(text.split())
-    if text:
-        text = text[0].upper() + text[1:]
-    return text
-
-
-def store_learnings(learnings: list, context: dict, session_id: str) -> int:
-    stored = 0
-    try:
-        from Tools.memory_v2.service import MemoryService
-        service = MemoryService()
-        for learning in learnings:
-            if learning['confidence'] < 0.5:
-                continue
-            # Map types to memory categories
-            memory_type = {
-                'decision': 'decision',
-                'bug_fix': 'learning',
-                'pattern': 'pattern',
-                'plan': 'plan',           # Weekend plans, future tasks
-                'commitment': 'goal',      # What we said we'd do
-                'completed': 'fact',       # Status updates
-            }.get(learning['type'], 'learning')
-
-            # Life items get higher importance for heat ranking
-            importance = 1.0
-            if learning['type'] in ('plan', 'commitment'):
-                importance = 1.5  # Boost plans and commitments
-            elif learning['type'] == 'completed':
-                importance = 1.2  # Completed items are noteworthy
-
-            metadata = {
-                "source": "claude_code",
-                "memory_type": memory_type,
-                "session_id": session_id,
-                "extracted_at": datetime.now().isoformat(),
-                "confidence": learning['confidence'],
-                "importance": importance,
-                "extraction_type": learning['type'],  # Original type for debugging
-            }
-            if context.get('client'):
-                metadata['client'] = context['client']
-            if context.get('project'):
-                metadata['project'] = context['project']
-
-            # Format content with type prefix
-            type_label = learning['type'].upper().replace('_', ' ')
-            content = f"[{type_label}] {learning['content']}"
-            try:
-                service.add(content, metadata)
-                stored += 1
-                logger.info(f"Stored {learning['type']}: {content[:100]}...")
-            except Exception as e:
-                logger.error(f"Failed to store learning: {e}")
-    except ImportError as e:
-        logger.error(f"Memory V2 not available: {e}")
-    except Exception as e:
-        logger.error(f"Error storing learnings: {e}")
-    return stored
-
-
 def finalize_checkpoint(session_id: str) -> Optional[dict]:
     """Finalize session checkpoint if it exists."""
     try:
@@ -285,44 +115,10 @@ def finalize_checkpoint(session_id: str) -> Optional[dict]:
 
 
 def store_checkpoint_to_memory(extraction: dict) -> bool:
-    """Store checkpoint extraction data to Memory V2."""
+    """Store checkpoint extraction data via unified capture router."""
     try:
-        from Tools.memory_v2.service import MemoryService
-        service = MemoryService()
-        session_id = extraction["session_id"]
-        duration = extraction.get("duration_minutes", 0)
-        prompt_count = extraction.get("prompt_count", 0)
-        project = extraction.get("project", "unknown")
-        client = extraction.get("client")
-        summary = extraction.get("cumulative_summary", "")
-        facts = extraction.get("all_facts", [])
-        files = extraction.get("all_files_modified", [])
-        content_parts = [
-            f"Session {session_id}: {duration}min, {prompt_count} prompts",
-            f"Project: {project}" + (f" (Client: {client})" if client else ""),
-        ]
-        if summary:
-            content_parts.append(f"\nSummary:\n{summary}")
-        if facts:
-            content_parts.append(f"\nKey facts:\n- " + "\n- ".join(facts[:10]))
-        if files:
-            content_parts.append(f"\nFiles:\n- " + "\n- ".join(files[:10]))
-        content = "\n".join(content_parts)
-        result = service.add(
-            content=content,
-            metadata={
-                "type": "session_summary",
-                "session_id": session_id,
-                "project": project,
-                "client": client,
-                "duration_minutes": duration,
-                "prompt_count": prompt_count,
-                "source": "session_end_hook",
-                "extracted_at": datetime.now().isoformat()
-            }
-        )
-        logger.info(f"Stored checkpoint to Memory V2: {result}")
-        return True
+        from Tools.memory_capture_router import capture_checkpoint_extraction
+        return capture_checkpoint_extraction(extraction, source="session_end_hook")
     except Exception as e:
         logger.error(f"Failed to store checkpoint to Memory V2: {e}")
         return False
@@ -363,17 +159,19 @@ def main():
             logger.warning("No messages in transcript")
             return
         logger.info(f"Read {len(messages)} messages from transcript")
-        content = extract_text_content(messages)
-        if not content:
-            logger.warning("No text content extracted")
-            return
-        learnings = extract_learnings(content)
-        logger.info(f"Extracted {len(learnings)} learnings")
-        if not learnings:
-            logger.info("No learnings to store")
-            return
-        stored = store_learnings(learnings, context, session_id)
-        logger.info(f"Stored {stored} learnings in Memory V2")
+        allow_llm = os.environ.get("MEMORY_CAPTURE_LLM", "1").lower() in ("1", "true", "yes")
+        try:
+            from Tools.memory_capture_router import capture_from_transcript
+            results = capture_from_transcript(
+                transcript_path=transcript_path,
+                context=context,
+                session_id=session_id,
+                source="claude_code",
+                allow_llm=allow_llm
+            )
+            logger.info(f"Captured learnings: {results}")
+        except Exception as e:
+            logger.error(f"Unified capture failed: {e}")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
 

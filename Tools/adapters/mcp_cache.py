@@ -150,6 +150,20 @@ class CacheEntry:
     size_bytes: int = 0
     """Estimated size of entry in bytes"""
 
+    tool_name: Optional[str] = None
+    """Tool name for invalidation and diagnostics"""
+
+    server_name: Optional[str] = None
+    """Server name for invalidation and diagnostics"""
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Ensure new fields exist when unpickling older entries."""
+        self.__dict__.update(state)
+        if "tool_name" not in state:
+            self.tool_name = None
+        if "server_name" not in state:
+            self.server_name = None
+
     def is_expired(self) -> bool:
         """
         Check if cache entry has expired.
@@ -500,6 +514,8 @@ class MCPCache:
         self.config = config or CacheConfig()
         self._stats = CacheStats() if self.config.enable_stats else None
         self._lock = Lock()
+        self._server_index: dict[str, set[str]] = {}
+        self._tool_index: dict[str, set[str]] = {}
 
         # Initialize backend
         if self.config.backend == CacheBackend.MEMORY:
@@ -578,6 +594,7 @@ class MCPCache:
                 if self._stats:
                     self._stats.misses += 1
                 logger.debug(f"Cache miss for {key}")
+                self._index_remove(key)
                 return None
 
             # Update access metadata
@@ -638,10 +655,13 @@ class MCPCache:
                 value=result,
                 expires_at=expires_at,
                 size_bytes=size_bytes,
+                tool_name=tool_name,
+                server_name=server_name,
             )
 
             # Store entry
             self._backend.set(key, entry)
+            self._index_add(entry)
 
             if self._stats:
                 self._stats.sets += 1
@@ -678,6 +698,8 @@ class MCPCache:
             deleted = self._backend.delete(key)
             if deleted and self._stats:
                 self._stats.deletes += 1
+            if deleted:
+                self._index_remove(key)
             return deleted
         except Exception as e:
             if self._stats:
@@ -689,11 +711,29 @@ class MCPCache:
         """Clear all cache entries."""
         try:
             self._backend.clear()
+            self._server_index.clear()
+            self._tool_index.clear()
             logger.info("Cache cleared")
         except Exception as e:
             if self._stats:
                 self._stats.errors += 1
             logger.error(f"Cache clear error: {e}")
+
+    def _index_add(self, entry: CacheEntry) -> None:
+        """Index cache key by tool and server name."""
+        if entry.tool_name:
+            self._tool_index.setdefault(entry.tool_name, set()).add(entry.key)
+        if entry.server_name:
+            self._server_index.setdefault(entry.server_name, set()).add(entry.key)
+
+    def _index_remove(self, key: str) -> None:
+        """Remove cache key from indexes."""
+        for index in (self._tool_index, self._server_index):
+            for name in list(index.keys()):
+                if key in index[name]:
+                    index[name].discard(key)
+                    if not index[name]:
+                        del index[name]
 
     def clear_expired(self) -> int:
         """
@@ -714,6 +754,7 @@ class MCPCache:
                 if entry and entry.is_expired():
                     if self._backend.delete(key):
                         removed += 1
+                        self._index_remove(key)
 
             if self._stats:
                 self._stats.expirations += removed
@@ -768,7 +809,8 @@ class MCPCache:
                 victim = min(entries, key=lambda x: x[1].created_at)
 
             # Evict the victim
-            self._backend.delete(victim[0])
+            if self._backend.delete(victim[0]):
+                self._index_remove(victim[0])
             if self._stats:
                 self._stats.evictions += 1
 
@@ -800,11 +842,13 @@ class MCPCache:
         """
         invalidated = 0
         try:
-            # Get all keys and check for tool name prefix
-            for key in self._backend.keys():
-                if f":{tool_name}:" in key:
-                    self._backend.delete(key)
+            keys = self._tool_index.get(tool_name)
+            if not keys:
+                keys = self._scan_keys_for_tool(tool_name)
+            for key in list(keys):
+                if self._backend.delete(key):
                     invalidated += 1
+                    self._index_remove(key)
 
             if invalidated > 0:
                 logger.info(f"Invalidated {invalidated} cache entries for tool {tool_name}")
@@ -828,19 +872,42 @@ class MCPCache:
         """
         invalidated = 0
         try:
-            # This is tricky since server name is hashed into the key
-            # We'd need to store metadata separately for this to work efficiently
-            # For now, clear all entries (not ideal but simple)
-            logger.warning(
-                f"Server-specific invalidation not fully implemented, "
-                f"clearing all cache for server {server_name}"
-            )
-            # TODO: Implement proper server-specific invalidation with metadata
+            keys = self._server_index.get(server_name)
+            if not keys:
+                keys = self._scan_keys_for_server(server_name)
+            for key in list(keys):
+                if self._backend.delete(key):
+                    invalidated += 1
+                    self._index_remove(key)
 
         except Exception as e:
             logger.error(f"Error invalidating cache for server {server_name}: {e}")
 
         return invalidated
+
+    def _get_entry_for_key(self, key: str) -> Optional[CacheEntry]:
+        """Get cache entry without triggering eviction."""
+        if hasattr(self._backend, "peek"):
+            return self._backend.peek(key)  # type: ignore[no-any-return]
+        return self._backend.get(key)
+
+    def _scan_keys_for_tool(self, tool_name: str) -> set[str]:
+        """Scan cache entries to find keys for a tool."""
+        keys: set[str] = set()
+        for key in self._backend.keys():
+            entry = self._get_entry_for_key(key)
+            if entry and entry.tool_name == tool_name:
+                keys.add(key)
+        return keys
+
+    def _scan_keys_for_server(self, server_name: str) -> set[str]:
+        """Scan cache entries to find keys for a server."""
+        keys: set[str] = set()
+        for key in self._backend.keys():
+            entry = self._get_entry_for_key(key)
+            if entry and entry.server_name == server_name:
+                keys.add(key)
+        return keys
 
 
 # Global cache instance

@@ -4,7 +4,26 @@
 
 ## Core
 
-**⚠️ FIRST: Model self-check.** Before responding, assess complexity. Medium? → `session_status(model="anthropic/claude-sonnet-4-5")`. High? → `session_status(model="anthropic/claude-opus-4-5")`. Simple? → Stay put. Do this EVERY message.
+**⚠️ FIRST: Auto-escalate on keywords.** Before responding, scan the user message:
+
+**OPUS triggers** (call `session_status(model="anthropic/claude-opus-4-5")` immediately):
+- "analyze", "architecture", "design", "strategic", "deep dive"
+- "think hard", "really think", "complex", "thorough"
+- "system design", "trade-offs", "evaluate options"
+- Multi-paragraph technical questions
+- Anything requiring multi-step reasoning or planning
+
+**SONNET triggers** (call `session_status(model="anthropic/claude-sonnet-4-0")`):
+- Code writing, debugging, refactoring
+- "explain", "how does", "implement"
+- Technical questions requiring context
+
+**Stay HAIKU** (no escalation):
+- Quick questions, confirmations, simple lookups
+- "yes/no", "quick", "just", "simple"
+- Casual chat, status checks
+
+**Rule:** If ANY Opus trigger word appears, escalate. Don't assess - just match.
 
 **Voice authority.** This file overrides any other tone or voice guidance.
 

@@ -15,7 +15,7 @@ This document describes the major architecture improvements implemented for Than
 - 38,000 memories stored with OpenAI embeddings (1536 dimensions)
 - Voyage AI embeddings are 1024 dimensions
 
-**Decision:** Stay on OpenAI embeddings until a re-embedding script is developed.
+**Decision:** Stay on OpenAI embeddings until a re-embedding script is run.
 
 **Rationale:**
 - Dimension mismatch (1536 vs 1024)
@@ -23,11 +23,9 @@ This document describes the major architecture improvements implemented for Than
 - Performance overhead of full re-embedding
 - Existing memories continue to work with current approach
 
-**Future Action:** 
-Develop a dimension-preserving re-embedding script that can:
-1. Maintain semantic equivalence 
-2. Handle large memory corpus (38k+ entries)
-3. Minimize computational and storage overhead
+**Future Action:**
+Use the re-embedding script to create a Voyage-compatible table and
+switch usage only after the re-embed completes.
 
 ## 1. Voyage AI Embeddings
 
@@ -57,22 +55,21 @@ The system automatically falls back to OpenAI if:
 
 **Migration Options:**
 
-1. **Fresh Start** (Recommended for new systems):
-   - New embeddings will use Voyage automatically
-   - Old memories will continue to work (cosine distance is dimension-agnostic)
+1. **Stay on OpenAI (Current default)**:
+   - Keeps 1536-dim embeddings in `thanos_memories`
+   - Zero migration risk
 
-2. **Gradual Migration**:
-   - Old memories (1536-dim) and new memories (1024-dim) coexist
-   - pgvector handles different dimensions gracefully
-   - Re-embed old memories if needed:
-     ```bash
-     python Tools/memory_v2/migrate_embeddings.py
-     ```
+2. **Re-embed into Voyage table** (Recommended if you want Voyage):
+   - Create `thanos_memories_voyage` with vector(1024)
+   - Re-embed content using Voyage
+   - Switch reads/writes only after migration completes
+   ```bash
+   python Tools/memory_v2/migrate_embeddings.py --dry-run
+   python Tools/memory_v2/migrate_embeddings.py --confirm
+   ```
 
-3. **Full Re-embedding** (Optional):
-   - If you want consistency, re-embed all memories
-   - This is **not required** - mixed dimensions work fine
-   - Only needed for perfect consistency
+**Important:** pgvector columns require a fixed dimension. You cannot mix
+1536-dim and 1024-dim vectors in the same table.
 
 ### Usage
 

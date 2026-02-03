@@ -51,12 +51,12 @@ Don't ask permission. Just do it.
 ### Escalation Mechanism
 
 **Tools:**
-- `Tools/model_escalation.py`: Complexity-based model selection
-- `Tools/model_prefix_tracker.py`: Prefix correction
+- `Tools/model_escalator_v2.py`: Complexity-based model selection (canonical)
+- `Tools/model_feedback.py`: Feedback recording (wrapper)
 
 **Usage:**
 ```python
-from Tools.model_escalation import ModelEscalator
+from Tools.model_escalator_v2 import ModelEscalatorV2
 
 escalator = ModelEscalator()
 new_model = escalator.escalate_model(current_model, complexity_score)

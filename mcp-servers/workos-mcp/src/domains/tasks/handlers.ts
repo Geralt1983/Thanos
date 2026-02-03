@@ -1,5 +1,6 @@
 import type { Database, ToolHandler, ContentResponse } from "../../shared/types.js";
 import { successResponse, errorResponse } from "../../shared/types.js";
+import { readFile } from "node:fs/promises";
 import {
   getESTNow,
   getESTTodayStart,
@@ -28,6 +29,7 @@ import {
   GetTodayMetricsSchema,
   GetMetricsForDateSchema,
   GetTasksSchema,
+  GetServerVersionSchema,
   GetClientsSchema,
   CreateTaskSchema,
   CompleteTaskSchema,
@@ -47,6 +49,7 @@ import { notifyTaskComplete, notifyMilestone } from "../../services/notification
 
 // Track cache initialization for write-through operations
 let cacheInitialized = false;
+let cachedServerVersion: Record<string, any> | null = null;
 
 /**
  * Ensure cache is initialized for write-through operations
@@ -77,6 +80,45 @@ async function ensureCache(): Promise<boolean> {
     }
   }
   return true;
+}
+
+async function loadServerVersion(): Promise<Record<string, any>> {
+  if (cachedServerVersion) {
+    return cachedServerVersion;
+  }
+
+  const packageUrl = new URL("../../../package.json", import.meta.url);
+  const raw = await readFile(packageUrl, "utf-8");
+  const pkg = JSON.parse(raw) as { name?: string; version?: string };
+
+  cachedServerVersion = {
+    name: pkg.name ?? "workos-mcp",
+    version: pkg.version ?? "0.0.0",
+    schemaVersion: "1",
+  };
+  return cachedServerVersion;
+}
+
+export async function handleGetServerVersion(
+  args: Record<string, any>,
+  _db: Database
+): Promise<ContentResponse> {
+  const validation = validateAndSanitize(GetServerVersionSchema, args);
+  if (!validation.success) {
+    return {
+      content: [{ type: "text", text: `Error: ${validation.error}` }],
+      isError: true,
+    };
+  }
+
+  try {
+    const version = await loadServerVersion();
+    return successResponse(version);
+  } catch (error) {
+    return errorResponse("Failed to load server version", {
+      error: String(error),
+    });
+  }
 }
 
 /**

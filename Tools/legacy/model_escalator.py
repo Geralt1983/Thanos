@@ -1,4 +1,9 @@
 """
+LEGACY: ModelEscalator V1
+
+This implementation is retained for backward compatibility.
+Canonical implementation: Tools/model_escalator_v2.py
+
 ModelEscalator - Dynamic model switching based on conversation complexity.
 
 Integrates with OpenClaw via session_status to automatically escalate

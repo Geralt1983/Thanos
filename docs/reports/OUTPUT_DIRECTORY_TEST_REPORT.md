@@ -231,7 +231,7 @@ def get_output_directory(custom_path: Optional[str] = None) -> Path:
 
 ### Created Files
 - `test_output_directory.py` - Comprehensive test suite (8 tests)
-- `OUTPUT_DIRECTORY_TEST_REPORT.md` - This report
+- `docs/reports/OUTPUT_DIRECTORY_TEST_REPORT.md` - This report
 
 ### Test Data
 - Mock tasks and habits used for file creation tests

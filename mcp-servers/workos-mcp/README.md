@@ -2,7 +2,7 @@
 
 A high-performance [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that provides AI assistants with comprehensive task management, habit tracking, and productivity tools integrated with Life OS.
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-1.0-green.svg)](https://github.com/modelcontextprotocol/sdk)
 
@@ -111,7 +111,8 @@ export RATE_LIMIT_READ_PER_MINUTE=120
 
 ## 🛠️ Available Tools
 
-### Task Management (11 tools)
+### Task Management (12 tools)
+- `workos_get_server_version` - WorkOS MCP server version and compatibility metadata
 - `workos_get_today_metrics` - Daily task completion metrics
 - `workos_get_tasks` - Retrieve tasks with filtering
 - `workos_get_clients` - List clients and projects

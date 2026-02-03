@@ -22,6 +22,11 @@ hot = hs.whats_hot(limit=10)    # What's top of mind?
 cold = hs.whats_cold(limit=10)  # What am I forgetting?
 ```
 
+## Notes
+
+- `USE_VOYAGE=true` uses `voyage-3` (1024 dims). Set `USE_VOYAGE=false` to use OpenAI `text-embedding-3-small` (1536 dims).
+- mem0 is used for **fact extraction only** and always uses OpenAI embeddings internally.
+
 ## Architecture
 
 ```
@@ -30,6 +35,7 @@ Memory V2 Architecture
 ├── Embeddings (Voyage voyage-3, 1024 dims)
 │   ├── Query embeddings (cached)
 │   └── Document embeddings (on-demand)
+│   └── Fallback to OpenAI text-embedding-3-small when USE_VOYAGE=false
 │
 ├── Storage (Neon PostgreSQL + pgvector)
 │   ├── Vector search (cosine similarity)

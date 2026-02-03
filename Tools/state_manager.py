@@ -4,7 +4,7 @@ State Manager for PAI v2.0
 
 Manages and refreshes the current_state.md file with real data from:
 - Oura MCP for readiness scores and health metrics
-- WorkOS MCP for pending tasks and productivity metrics
+- WorkOS gateway (MCP-first) for tasks and productivity metrics
 
 Usage:
     python tools/state_manager.py refresh          # Update current_state.md
@@ -121,7 +121,7 @@ class StateManager:
     async def get_workos_data(self) -> dict[str, Any]:
         """
         Fetch task and productivity data from WorkOS.
-        Uses direct database access as primary method.
+        Uses WorkOS gateway (MCP-first) with cache fallback.
 
         Returns:
             Dict with top_tasks, active_count, today_metrics
@@ -135,59 +135,16 @@ class StateManager:
             "target_points": 18,
         }
 
-        if not HAS_SQLITE:
-            return default_data
-
-        # Try direct database access to WorkOS cache
-        db_path = PROJECT_ROOT / "mcp-servers" / "workos-mcp" / "data" / "workos.db"
-        if not db_path.exists():
-            # Try alternate location
-            db_path = Path.home() / ".workos-cache" / "workos.db"
-
-        if not db_path.exists():
-            return default_data
-
         try:
-            conn = sqlite3.connect(str(db_path))
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            from Tools.core.workos_gateway import WorkOSGateway
 
-            # Get active tasks
-            cursor.execute("""
-                SELECT title FROM tasks
-                WHERE status = 'active'
-                ORDER BY created_at DESC
-                LIMIT 3
-            """)
-            rows = cursor.fetchall()
-            top_tasks = [row["title"] for row in rows]
-
-            # Get today's metrics
-            today = datetime.now().strftime("%Y-%m-%d")
-            cursor.execute("""
-                SELECT
-                    COALESCE(SUM(points_earned), 0) as points,
-                    COUNT(*) as completed_count
-                FROM task_completions
-                WHERE date(completed_at) = ?
-            """, (today,))
-            metrics_row = cursor.fetchone()
-
-            points_earned = metrics_row["points"] if metrics_row else 0
-
-            conn.close()
-
-            return {
-                "available": True,
-                "top_tasks": top_tasks,
-                "active_count": len(top_tasks),
-                "today_focus": top_tasks[0] if top_tasks else None,
-                "points_earned": points_earned,
-                "target_points": 18,
-            }
-
+            gateway = WorkOSGateway(project_root=PROJECT_ROOT)
+            snapshot = await gateway.get_state_snapshot()
+            if snapshot.get("available"):
+                return snapshot
+            return default_data
         except Exception as e:
-            print(f"[StateManager] WorkOS DB error: {e}", file=sys.stderr)
+            print(f"[StateManager] WorkOS gateway error: {e}", file=sys.stderr)
             return default_data
 
     def format_state_markdown(

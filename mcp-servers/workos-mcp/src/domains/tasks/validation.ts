@@ -50,6 +50,12 @@ export const GetTasksSchema = z.object({
 });
 
 /**
+ * Schema for workos_get_server_version tool
+ * No inputs required
+ */
+export const GetServerVersionSchema = z.object({});
+
+/**
  * Schema for workos_create_task tool
  * Validates all fields for task creation with comprehensive bounds
  *
@@ -198,6 +204,7 @@ export const DailySummarySchema = z.object({});
  * const result = validateToolInput(schema, args);
  */
 export const TASK_SCHEMAS = {
+  workos_get_server_version: GetServerVersionSchema,
   workos_get_today_metrics: GetTodayMetricsSchema,
   workos_get_metrics_for_date: GetMetricsForDateSchema,
   workos_get_tasks: GetTasksSchema,

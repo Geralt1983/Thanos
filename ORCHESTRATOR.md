@@ -1,6 +1,6 @@
-# ORCHESTRATOR.md - SuperClaude Intelligent Routing System
+# ORCHESTRATOR.md - OpenClaw Intelligent Routing System
 
-Intelligent routing system for Claude Code SuperClaude framework.
+Intelligent routing system used by OpenClaw to route and execute Thanos workflows.
 
 ## 🧠 Detection Engine
 

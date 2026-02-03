@@ -6,7 +6,8 @@ import type { ToolDefinition } from "../../shared/types.js";
 
 /**
  * Task tool definitions will be added in subtask-2.2
- * This file contains MCP tool definitions for the 11 task-related tools:
+ * This file contains MCP tool definitions for the 12 task-related tools:
+ * - workos_get_server_version
  * - workos_get_today_metrics
  * - workos_get_tasks
  * - workos_get_clients
@@ -26,6 +27,15 @@ import type { ToolDefinition } from "../../shared/types.js";
  */
 export function getTaskTools(): ToolDefinition[] {
   return [
+    {
+      name: "workos_get_server_version",
+      description: "Get WorkOS MCP server version and compatibility metadata",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
     {
       name: "workos_get_today_metrics",
       description: "Get today's work progress: points earned, target, pace status, streak, and clients touched",

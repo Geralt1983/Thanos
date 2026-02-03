@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -42,18 +43,37 @@ class WorkOSGateway:
     """MCP-first gateway for WorkOS access with fallbacks."""
 
     CACHE_TTL = 300  # seconds
+    EXPECTED_MAJOR = 1
+    MIN_SERVER_VERSION = "1.1.1"
 
-    def __init__(self, project_root: Optional[Path] = None, prefer_mcp: bool = True):
+    def __init__(
+        self,
+        project_root: Optional[Path] = None,
+        prefer_mcp: bool = True,
+        require_mcp: Optional[bool] = None,
+    ):
         self.project_root = (
             Path(project_root).resolve()
             if project_root
             else Path(__file__).parent.parent.parent.resolve()
         )
         self.prefer_mcp = prefer_mcp
+        if require_mcp is None:
+            self.require_mcp = os.getenv("WORKOS_REQUIRE_MCP", "false").lower() in {
+                "1",
+                "true",
+                "yes",
+                "y",
+            }
+        else:
+            self.require_mcp = require_mcp
         self._mcp_bridge: Optional[MCPBridge] = None
         self._direct_adapter = None
         self._cache: dict[str, Any] = {}
         self._cache_time: dict[str, datetime] = {}
+        self._version_checked = False
+        self._version_ok = True
+        self._server_version: Optional[str] = None
 
     # ---------------------------------------------------------------------
     # Internal helpers
@@ -132,6 +152,13 @@ class WorkOSGateway:
         )
 
     async def _call_mcp(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
+        if not await self._ensure_mcp_compatibility():
+            return ToolResult.fail(
+                f"Incompatible WorkOS MCP server version: {self._server_version or 'unknown'}"
+            )
+        return await self._call_mcp_raw(tool_name, arguments)
+
+    async def _call_mcp_raw(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
         bridge = self._get_mcp_bridge()
         if bridge is None:
             return ToolResult.fail("WorkOS MCP not configured")
@@ -141,6 +168,8 @@ class WorkOSGateway:
             return ToolResult.fail(str(exc))
 
     async def _call_adapter(self, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
+        if self.require_mcp:
+            return ToolResult.fail("WorkOS MCP required (adapter fallback disabled)")
         adapter = self._get_direct_adapter()
         if adapter is None:
             return ToolResult.fail("WorkOS adapter unavailable")
@@ -148,6 +177,47 @@ class WorkOSGateway:
             return await adapter.call_tool(tool_name, arguments)
         except Exception as exc:
             return ToolResult.fail(str(exc))
+
+    @classmethod
+    def _parse_version(cls, version: str) -> tuple[int, int, int]:
+        parts = version.split(".")
+        major = int(parts[0]) if len(parts) > 0 and parts[0].isdigit() else 0
+        minor = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+        patch = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+        return (major, minor, patch)
+
+    async def _ensure_mcp_compatibility(self) -> bool:
+        if not self.prefer_mcp:
+            return False
+        if self._version_checked:
+            return self._version_ok
+        self._version_checked = True
+
+        result = await self._call_mcp_raw("workos_get_server_version", {})
+        if not result.success or not isinstance(result.data, dict):
+            self._version_ok = False
+            return False
+
+        version = result.data.get("version")
+        self._server_version = version if isinstance(version, str) else None
+        if not self._server_version:
+            self._version_ok = False
+            return False
+
+        major, _, _ = self._parse_version(self._server_version)
+        min_major, min_minor, min_patch = self._parse_version(self.MIN_SERVER_VERSION)
+
+        if major != self.EXPECTED_MAJOR:
+            self._version_ok = False
+            return False
+
+        # Enforce minimum version
+        if self._parse_version(self._server_version) < (min_major, min_minor, min_patch):
+            self._version_ok = False
+            return False
+
+        self._version_ok = True
+        return True
 
     @staticmethod
     def _effort_to_value_tier(effort_estimate: Optional[int]) -> Optional[str]:
@@ -178,6 +248,9 @@ class WorkOSGateway:
             self._cache_set(cache_key, result.data)
             return result.data
 
+        if self.require_mcp:
+            return None
+
         # Fallback: direct adapter
         result = await self._call_adapter("daily_summary", {})
         if result.success and isinstance(result.data, dict):
@@ -190,7 +263,7 @@ class WorkOSGateway:
         result = await self._call_mcp("workos_get_today_metrics", {})
         data = result.data if result.success else None
 
-        if data is None:
+        if data is None and not self.require_mcp:
             adapter_result = await self._call_adapter("get_today_metrics", {})
             data = adapter_result.data if adapter_result.success else None
 
@@ -227,7 +300,7 @@ class WorkOSGateway:
         result = await self._call_mcp("workos_get_tasks", args)
         data = result.data if result.success else None
 
-        if data is None:
+        if data is None and not self.require_mcp:
             # Adapter supports status + limit only
             adapter_args: dict[str, Any] = {}
             if status:
@@ -272,6 +345,9 @@ class WorkOSGateway:
         if result.success:
             return result
 
+        if self.require_mcp:
+            return result
+
         # Fallback to direct adapter (supports effort_estimate)
         adapter_args: dict[str, Any] = {
             "title": title,
@@ -286,6 +362,8 @@ class WorkOSGateway:
         result = await self._call_mcp("workos_complete_task", {"taskId": task_id})
         if result.success:
             return result
+        if self.require_mcp:
+            return result
         return await self._call_adapter("complete_task", {"task_id": task_id})
 
     async def get_state_snapshot(self) -> dict[str, Any]:
@@ -293,6 +371,15 @@ class WorkOSGateway:
         Minimal WorkOS snapshot for UI/state use.
         Returns a consistent dict matching StateManager expectations.
         """
+        if self.require_mcp and not await self._ensure_mcp_compatibility():
+            return {
+                "available": False,
+                "top_tasks": [],
+                "active_count": 0,
+                "today_focus": None,
+                "points_earned": 0,
+                "target_points": 18,
+            }
         tasks = await self.get_tasks(status="active", limit=3)
         metrics = await self.get_today_metrics()
 
@@ -376,6 +463,11 @@ class WorkOSGateway:
         )
 
     async def close(self) -> None:
+        if self._mcp_bridge is not None:
+            try:
+                await self._mcp_bridge.close()
+            except Exception:
+                pass
         if self._direct_adapter is not None:
             try:
                 await self._direct_adapter.close()

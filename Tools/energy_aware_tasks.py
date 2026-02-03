@@ -188,7 +188,7 @@ class EnergyAwareTaskSystem:
     
     async def get_work_tasks(self) -> List[Task]:
         """Get tasks from WorkOS."""
-        from Tools.adapters.workos import WorkOSAdapter
+        from Tools.core.workos_gateway import WorkOSGateway
         
         # Load env from .env file
         env_file = Path('.env')
@@ -198,29 +198,39 @@ class EnergyAwareTaskSystem:
                     key, value = line.split('=', 1)
                     os.environ[key.strip()] = value.strip()
         
-        adapter = WorkOSAdapter()
-        result = await adapter.call_tool("get_tasks", {"status": "active", "limit": 50})
-        await adapter.close()
-        
+        gateway = WorkOSGateway()
+        work_tasks = await gateway.get_tasks(status="active", limit=50) or []
+
         tasks = []
-        if result.success:
-            work_tasks = result.data if isinstance(result.data, list) else result.data.get('tasks', [])
-            for task in work_tasks:
-                title = task.get('title', 'Untitled')
-                points = task.get('points', 0)
-                complexity = self.classify_task_complexity(title, points)
-                
+        for task in work_tasks:
+            title = task.get('title', 'Untitled')
+
+            # Normalize points across MCP/DB shapes
+            points = (
+                task.get('points')
+                or task.get('pointsFinal')
+                or task.get('pointsAiGuess')
+                or task.get('effortEstimate')
+                or task.get('effort_estimate')
+                or 0
+            )
+
+            complexity = self.classify_task_complexity(title, points)
+
+            client_name = task.get('clientName')
+            if not client_name:
                 client = task.get('client', {})
-                client_name = client.get('name') if isinstance(client, dict) else None
-                
-                tasks.append(Task(
-                    title=title,
-                    source='workos',
-                    complexity=complexity,
-                    points=points,
-                    client=client_name,
-                    task_id=str(task.get('id', ''))
-                ))
+                if isinstance(client, dict):
+                    client_name = client.get('name')
+
+            tasks.append(Task(
+                title=title,
+                source='workos',
+                complexity=complexity,
+                points=points,
+                client=client_name,
+                task_id=str(task.get('id', ''))
+            ))
         
         return tasks
     

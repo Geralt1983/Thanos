@@ -19,7 +19,14 @@ session:
     hysteresis:
       cooldownSeconds: 300
       stabilityWindow: 60
+  memoryCapture:
+    enabled: true
+    minChars: 200
+    minIntervalSeconds: 120
+    allowLLM: false
+    source: openclaw_plugin
 
 # Other OpenClaw configurations can be added here
 plugins:
   - model-escalator
+  - memory-capture

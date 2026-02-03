@@ -2,7 +2,7 @@
 Unified Memory Router for Thanos.
 
 Routes ALL memory operations through Memory V2 (mem0 + Neon + heat) as the primary backend.
-Legacy systems (Tools/memory, MemOS) are available as explicit fallbacks only.
+Legacy systems (Tools/memory, MemOS) are disabled to avoid split-brain storage.
 
 Usage:
     from Tools.memory_router import get_memory, add_memory, search_memory
@@ -18,7 +18,7 @@ Usage:
 
 Architecture Decision:
     - Memory V2 is the canonical source of truth
-    - Legacy backends are fallback-only (opt-in)
+    - Legacy backends are disabled to prevent split-brain writes
     - All new integrations should use this router
     - See: docs/adr/012-memory-v2-voyage-neon-heat.md
 """
@@ -39,8 +39,6 @@ class MemoryBackend(Enum):
 
 # Singleton instances
 _v2_service = None
-_legacy_service = None
-_memos_service = None
 
 
 def _get_v2_service():
@@ -57,30 +55,12 @@ def _get_v2_service():
     return _v2_service
 
 
-def _get_legacy_service():
-    """Get legacy SQLite+ChromaDB service (fallback only)."""
-    global _legacy_service
-    if _legacy_service is None:
-        try:
-            from Tools.memory.service import get_memory_service
-            _legacy_service = get_memory_service()
-            logger.info("Legacy memory service initialized (fallback)")
-        except Exception as e:
-            logger.warning(f"Legacy service unavailable: {e}")
-    return _legacy_service
-
-
-def _get_memos_service():
-    """Get MemOS service (fallback only)."""
-    global _memos_service
-    if _memos_service is None:
-        try:
-            from memory.services.memory_service import memory_service
-            _memos_service = memory_service
-            logger.info("MemOS service initialized (fallback)")
-        except Exception as e:
-            logger.warning(f"MemOS service unavailable: {e}")
-    return _memos_service
+def _warn_legacy(backend: MemoryBackend) -> None:
+    """Warn when legacy backends are requested."""
+    logger.warning(
+        "Legacy memory backend '%s' is disabled; routing to Memory V2.",
+        backend.value,
+    )
 
 
 # =============================================================================
@@ -111,25 +91,11 @@ def add_memory(
     if backend == MemoryBackend.V2:
         service = _get_v2_service()
         return service.add(content, metadata)
-    elif backend == MemoryBackend.LEGACY_CHROMA:
-        service = _get_legacy_service()
-        if service:
-            import asyncio
-            return asyncio.run(service.capture_activity(
-                activity_type="memory",
-                title=content[:100],
-                content=content,
-                source=metadata.get("source", "manual") if metadata else "manual",
-                metadata=metadata
-            ))
-        raise RuntimeError("Legacy service unavailable")
-    elif backend == MemoryBackend.MEMOS:
-        service = _get_memos_service()
-        if service:
-            return service.add(content, metadata)
-        raise RuntimeError("MemOS service unavailable")
-    else:
-        raise ValueError(f"Unknown backend: {backend}")
+    if backend in (MemoryBackend.LEGACY_CHROMA, MemoryBackend.MEMOS):
+        _warn_legacy(backend)
+        service = _get_v2_service()
+        return service.add(content, metadata)
+    raise ValueError(f"Unknown backend: {backend}")
 
 
 def search_memory(
@@ -158,31 +124,11 @@ def search_memory(
     if backend == MemoryBackend.V2:
         service = _get_v2_service()
         return service.search(query, limit, filters)
-    elif backend == MemoryBackend.LEGACY_CHROMA:
-        service = _get_legacy_service()
-        if service:
-            import asyncio
-            results = asyncio.run(service.search(query, limit=limit))
-            # Convert MemoryResult to dict
-            return [
-                {
-                    "id": r.id,
-                    "content": r.content,
-                    "score": r.relevance_score,
-                    "effective_score": r.relevance_score,
-                    "source": r.source_type,
-                    "metadata": r.metadata
-                }
-                for r in results
-            ]
-        return []
-    elif backend == MemoryBackend.MEMOS:
-        service = _get_memos_service()
-        if service:
-            return service.search(query, limit, filters)
-        return []
-    else:
-        raise ValueError(f"Unknown backend: {backend}")
+    if backend in (MemoryBackend.LEGACY_CHROMA, MemoryBackend.MEMOS):
+        _warn_legacy(backend)
+        service = _get_v2_service()
+        return service.search(query, limit, filters)
+    raise ValueError(f"Unknown backend: {backend}")
 
 
 def get_context(
@@ -204,14 +150,10 @@ def get_context(
     if backend == MemoryBackend.V2:
         service = _get_v2_service()
         return service.get_context_for_query(query, limit)
-    elif backend == MemoryBackend.MEMOS:
-        service = _get_memos_service()
-        if service:
-            return service.get_context_for_query(query, limit)
-        return "Memory service unavailable."
-    else:
-        # Legacy doesn't have this method - use V2
+    if backend in (MemoryBackend.LEGACY_CHROMA, MemoryBackend.MEMOS):
+        _warn_legacy(backend)
         return _get_v2_service().get_context_for_query(query, limit)
+    raise ValueError(f"Unknown backend: {backend}")
 
 
 # =============================================================================
@@ -256,39 +198,30 @@ def get_stats(backend: MemoryBackend = MemoryBackend.V2) -> Dict[str, Any]:
     """Get memory system statistics."""
     if backend == MemoryBackend.V2:
         return _get_v2_service().stats()
-    elif backend == MemoryBackend.MEMOS:
-        service = _get_memos_service()
-        if service:
-            return service.get_stats()
-        return {"error": "MemOS unavailable"}
-    else:
-        return {"error": "Stats not available for this backend"}
+    if backend in (MemoryBackend.LEGACY_CHROMA, MemoryBackend.MEMOS):
+        _warn_legacy(backend)
+        return _get_v2_service().stats()
+    return {"error": "Stats not available for this backend"}
 
 
 def get_all_memories(limit: int = 100, backend: MemoryBackend = MemoryBackend.V2) -> List[Dict[str, Any]]:
     """Get all memories for migration/export."""
     if backend == MemoryBackend.V2:
         return _get_v2_service().get_all(limit)
-    elif backend == MemoryBackend.MEMOS:
-        service = _get_memos_service()
-        if service:
-            return service.get_all(limit)
-        return []
-    else:
-        return []
+    if backend in (MemoryBackend.LEGACY_CHROMA, MemoryBackend.MEMOS):
+        _warn_legacy(backend)
+        return _get_v2_service().get_all(limit)
+    return []
 
 
 def delete_memory(memory_id: str, backend: MemoryBackend = MemoryBackend.V2) -> bool:
     """Delete a memory."""
     if backend == MemoryBackend.V2:
         return _get_v2_service().delete(memory_id)
-    elif backend == MemoryBackend.MEMOS:
-        service = _get_memos_service()
-        if service:
-            return service.delete(memory_id)
-        return False
-    else:
-        return False
+    if backend in (MemoryBackend.LEGACY_CHROMA, MemoryBackend.MEMOS):
+        _warn_legacy(backend)
+        return _get_v2_service().delete(memory_id)
+    return False
 
 
 # =============================================================================
@@ -306,8 +239,8 @@ def get_v2():
     return _get_v2_service()
 
 def get_legacy():
-    """Get raw legacy service (fallback only)."""
-    return _get_legacy_service()
+    """Legacy backends are disabled."""
+    raise RuntimeError("Legacy memory backends are disabled. Use Memory V2.")
 
 
 if __name__ == "__main__":

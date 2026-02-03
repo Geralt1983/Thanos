@@ -35,9 +35,7 @@ V2 is drop-in compatible with V1. No config changes needed.
 
 ```bash
 # Optional: Switch to V2 in your code
-# Replace:
-from Tools.model_escalator import model_escalation_hook
-# With:
+# Canonical:
 from Tools.model_escalator_v2 import model_escalation_hook_v2 as model_escalation_hook
 ```
 

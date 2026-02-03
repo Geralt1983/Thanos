@@ -1,0 +1,11 @@
+[Tue Feb  3 12:53:55 EST 2026] ByteRover headless status: not logged in; trying TTY shim
+[Tue Feb  3 12:53:55 EST 2026] ByteRover headless status: unexpected output; falling back to TTY shim
+[Tue Feb  3 12:53:55 EST 2026] Headless status failed; falling back to TTY shim
+[Tue Feb  3 12:53:59 EST 2026] Failed to start ByteRover MCP
+[Tue Feb  3 12:54:59 EST 2026] ByteRover headless status: not logged in; trying TTY shim
+[Tue Feb  3 12:54:59 EST 2026] ByteRover headless status: unexpected output; falling back to TTY shim
+[Tue Feb  3 12:54:59 EST 2026] Headless status failed; falling back to TTY shim
+[Tue Feb  3 12:58:34 EST 2026] ByteRover headless status: not logged in; trying TTY shim
+[Tue Feb  3 12:58:34 EST 2026] ByteRover headless status: unexpected output; falling back to TTY shim
+[Tue Feb  3 12:58:34 EST 2026] Headless status failed; falling back to TTY shim
+[Tue Feb  3 12:58:38 EST 2026] Failed to start ByteRover MCP

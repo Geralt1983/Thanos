@@ -2,13 +2,13 @@
 
 ## Overview
 
-Thanos is a **backend service** designed to provide AI-powered orchestration capabilities for personal productivity, task management, and life optimization. It is explicitly **NOT** a user-facing application or chatbot.
+Thanos is a **backend service** designed to provide AI-powered orchestration capabilities for personal productivity, task management, and life optimization. It is explicitly **NOT** a user-facing application or chatbot. Thanos sits between **OpenClaw (orchestrator)** and **WorkOS (Epic consult task storage)** as the architecture layer that unifies context, state, and integrations.
 
 ## Core Architectural Principle
 
-**Claude Code is the sole orchestrator** of all Thanos capabilities.
+**OpenClaw is the sole orchestrator** of all Thanos capabilities.
 
-Users do not interact directly with Thanos. Instead, all user interaction flows through Claude Code (claude.ai/code or Claude desktop app), which consumes Thanos as a backend service through well-defined interfaces.
+Users do not interact directly with Thanos. Instead, all user interaction flows through OpenClaw (Codex/Claude front-ends), which consumes Thanos as a backend service through well-defined interfaces.
 
 ## Architecture Layers
 
@@ -22,7 +22,7 @@ Users do not interact directly with Thanos. Instead, all user interaction flows 
              │
              ▼
 ┌─────────────────────────────────────────┐
-│   Claude Code (Primary Orchestrator)    │
+│   OpenClaw (Primary Orchestrator)       │
 │                                         │
 │  - Natural language interface           │
 │  - Personality layer (Thanos persona)   │
@@ -34,13 +34,21 @@ Users do not interact directly with Thanos. Instead, all user interaction flows 
          │
          ▼
 ┌─────────────────────────────────────────┐
-│      Thanos (Backend Service)           │
+│      Thanos (Architecture Layer)        │
 │                                         │
 │  - State management (State/)            │
 │  - Memory storage (memory/)             │
 │  - External API integrations            │
 │  - MCP server implementations           │
 │  - Business logic                       │
+└────────┬────────────────────────────────┘
+         │
+         │ MCP / DB Integration
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│      WorkOS (Task Storage)              │
+│      Epic Consult Work Tasks            │
 └─────────────────────────────────────────┘
 ```
 
@@ -61,7 +69,7 @@ Thanos capabilities are exposed through MCP servers located in `mcp-servers/`:
 
 ### State and Memory Files
 
-Claude Code reads directly from Thanos state files:
+OpenClaw reads directly from Thanos state files:
 
 | Directory | Contents |
 |-----------|----------|
@@ -76,19 +84,19 @@ Claude Code reads directly from Thanos state files:
 ❌ **Chat interfaces** - No chatbot functionality in Thanos itself
 ❌ **Interactive loops** - No REPL-style interfaces
 
-All user interaction must flow through Claude Code as the orchestrator.
+All user interaction must flow through OpenClaw as the orchestrator.
 
 ## Why This Architecture?
 
 ### 1. Single Responsibility Principle
 
-- **Claude Code**: Handles natural language understanding, personality, user interaction
+- **OpenClaw**: Handles natural language understanding, personality, user interaction
 - **Thanos**: Handles state management, external integrations, business logic
 
 ### 2. ADHD-Optimized Workflows
 
 - Natural language is more accessible than CLI commands for ADHD users
-- Claude Code can adapt tone, pacing, and suggestions based on context
+- OpenClaw can adapt tone, pacing, and suggestions based on context
 - File-based state provides external working memory
 
 ### 3. Maintainability
@@ -100,8 +108,8 @@ All user interaction must flow through Claude Code as the orchestrator.
 ### 4. Extensibility
 
 - New capabilities are added as MCP tools
-- Claude Code can compose tools in intelligent ways
-- State files can be read by any system (not just Claude Code)
+- OpenClaw can compose tools in intelligent ways
+- State files can be read by any system (not just OpenClaw)
 
 ## Historical Context: The Interactive Mode Experiment
 
@@ -109,7 +117,7 @@ An earlier version of Thanos included an "interactive mode" (`thanos.py interact
 
 ### Why It Failed
 
-1. **Duplicated Orchestration Logic**: Created parallel command routing outside Claude Code
+1. **Duplicated Orchestration Logic**: Created parallel command routing outside OpenClaw
 2. **Poor User Experience**: CLI commands less natural than conversational AI
 3. **Maintenance Burden**: Two interfaces to maintain instead of one
 4. **Violated Single Responsibility**: Thanos became both backend AND frontend
@@ -119,8 +127,8 @@ An earlier version of Thanos included an "interactive mode" (`thanos.py interact
 Instead of building user-facing interfaces into Thanos:
 
 1. ✅ Expose capabilities as **MCP tools**
-2. ✅ Write state to **files** that Claude Code reads
-3. ✅ Let **Claude Code orchestrator** handle all user interaction
+2. ✅ Write state to **files** that OpenClaw reads
+3. ✅ Let **OpenClaw orchestrator** handle all user interaction
 4. ✅ Keep Thanos as a **backend service** focused on business logic
 
 ## Developer Guidelines
@@ -131,14 +139,14 @@ When adding new functionality to Thanos:
 
 1. **Create an MCP tool** in the appropriate server (or create new server)
 2. **Write state to files** in `State/` directory if needed
-3. **Update CLAUDE.md** to teach Claude Code how to use the new tool
+3. **Update CLAUDE.md** to teach OpenClaw how to use the new tool
 4. **Do NOT** create new CLI commands that interact directly with users
 
 ### Testing
 
 - Unit tests: Test business logic in isolation
 - Integration tests: Test MCP tool interfaces
-- End-to-end tests: Use Claude Code to verify full workflow
+- End-to-end tests: Use OpenClaw to verify full workflow
 
 ### Documentation
 
@@ -151,19 +159,19 @@ When adding new functionality to Thanos:
 If you're working on code that violates this architecture:
 
 1. Identify direct user interaction (e.g., `input()`, interactive loops)
-2. Convert to MCP tool that returns data to Claude Code
-3. Let Claude Code handle user prompts and responses
+2. Convert to MCP tool that returns data to OpenClaw
+3. Let OpenClaw handle user prompts and responses
 4. Remove interactive code from Thanos
 
 ## Questions?
 
 If you're unsure whether something violates this architecture, ask:
 
-- **Does this code prompt the user for input?** → ❌ Belongs in Claude Code
-- **Does this code present information to the user?** → ❌ Return data; let Claude Code present it
-- **Does this code make decisions about user experience?** → ❌ Belongs in Claude Code
+- **Does this code prompt the user for input?** → ❌ Belongs in OpenClaw
+- **Does this code present information to the user?** → ❌ Return data; let OpenClaw present it
+- **Does this code make decisions about user experience?** → ❌ Belongs in OpenClaw
 - **Does this code manage state or call external APIs?** → ✅ Belongs in Thanos
 
 ---
 
-**Remember: Claude Code is the orchestrator. Thanos is the backend service. MCP is the interface.**
+**Remember: OpenClaw is the orchestrator. Thanos is the architecture layer. WorkOS is the task store. MCP is the interface.**

@@ -38,7 +38,7 @@ from Tools.state_reader import StateReader
 from Tools.state_store import SQLiteStateStore
 from Tools.state_store.summary_builder import SummaryBuilder
 from Tools.router_executor import Router, Executor, get_tool_catalog_text
-from Tools.model_escalator import model_escalation_hook, EscalationResult
+from Tools.model_escalator_v2 import model_escalation_hook_v2 as model_escalation_hook, EscalationResult
 
 # Lazy import for API client - only needed for chat/run, not hooks
 if TYPE_CHECKING:
@@ -195,8 +195,8 @@ class ThanosOrchestrator:
         self._calendar_context_cache: Optional[Dict[str, Any]] = None
         self._calendar_cache_time: Optional[datetime] = None
 
-        # Lazy initialization for WorkOS adapter
-        self._workos_adapter = None
+        # Lazy initialization for WorkOS gateway (MCP-first)
+        self._workos_gateway = None
         self._workos_context_cache: Optional[Dict[str, Any]] = None
         self._workos_cache_time: Optional[datetime] = None
 
@@ -307,16 +307,16 @@ class ThanosOrchestrator:
             response_bytes=response_bytes,
         )
 
-    def _get_workos_adapter(self):
-        """Lazy load the WorkOS adapter."""
-        if self._workos_adapter is None:
+    def _get_workos_gateway(self):
+        """Lazy load the WorkOS gateway."""
+        if self._workos_gateway is None:
             try:
-                from Tools.adapters.workos import WorkOSAdapter
-                self._workos_adapter = WorkOSAdapter()
+                from Tools.core.workos_gateway import WorkOSGateway
+                self._workos_gateway = WorkOSGateway()
             except Exception as e:
-                log_error("thanos_orchestrator", e, "Failed to initialize WorkOS adapter")
+                log_error("thanos_orchestrator", e, "Failed to initialize WorkOS gateway")
                 return None
-        return self._workos_adapter
+        return self._workos_gateway
 
     async def _fetch_workos_context_async(self, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
         """Fetch WorkOS context asynchronously with caching."""
@@ -324,17 +324,14 @@ class ThanosOrchestrator:
             if self._workos_cache_time and (datetime.now() - self._workos_cache_time).seconds < 300:
                 return self._workos_context_cache
 
-        adapter = self._get_workos_adapter()
-        if adapter is None:
+        gateway = self._get_workos_gateway()
+        if gateway is None:
             return None
 
         try:
-            # Fetch daily summary
-            result = await adapter.call_tool("daily_summary", {})
-            if not result.success:
+            context = await gateway.get_daily_summary(force_refresh=force_refresh)
+            if context is None:
                 return None
-
-            context = result.data
             self._workos_context_cache = context
             self._workos_cache_time = datetime.now()
             return context
@@ -1366,23 +1363,20 @@ You maintain a compact daily plan and a scoreboard.
         """
         # 1. Refresh WorkOS Summary
         try:
-            adapter = self._get_workos_adapter()
-            if adapter:
+            gateway = self._get_workos_gateway()
+            if gateway:
                 # Run async call synchronously
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    result = loop.run_until_complete(adapter.call_tool("daily_summary", {}))
-                    if result.success:
-                        payload = result.data
+                    payload = loop.run_until_complete(gateway.get_daily_summary(force_refresh=True))
+                    if payload:
                         # Generate summary if needed, for now just store the text representation
-                        # Ideally we use the summary_builder, but a simple dump works for context
                         summary_text = json.dumps(payload, indent=2)
-                        
+
                         # Store in state_store
-                        # We use a fixed key so it's always the latest
                         self.state_store.set_state("workos_summary", summary_text)
-                        
+
                         # Also record as a tool output for history
                         self.state_store.add_tool_output_with_summary(
                             "workos.daily_summary", payload, "Refreshed via startup sync", "workos"
