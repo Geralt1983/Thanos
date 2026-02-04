@@ -14,8 +14,8 @@ session:
       medium: 60
       high: 90
     tokenThresholds:
-      soft: 3000
-      hard: 6000
+      soft: 50000
+      hard: 150000
     costThresholds:
       soft: 0.05
       hard: 0.10
