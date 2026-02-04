@@ -12,6 +12,7 @@ Usage:
 
 import json
 import random
+import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -20,6 +21,12 @@ from typing import Dict, List, Optional, Tuple
 SKILL_DIR = Path(__file__).parent.parent
 STATE_FILE = SKILL_DIR / "references" / "learning-state.json"
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from openai_rag_crossref import OpenAIRagCrossRef
+
 
 class QuestionAsker:
     """Handles context-aware question generation and timing."""
@@ -27,6 +34,7 @@ class QuestionAsker:
     def __init__(self):
         self.state = self.load_state()
         self.question_bank = self.load_question_bank()
+        self.crossref = OpenAIRagCrossRef()
 
     def load_state(self) -> Dict:
         """Load current learning state."""
@@ -263,7 +271,7 @@ class QuestionAsker:
         # Return top question
         return scored_questions[0][1] if scored_questions else None
 
-    def generate_question_prompt(self, question_obj: Dict) -> str:
+    def generate_question_prompt(self, question_obj: Dict, notebook_summary: Optional[str] = None) -> str:
         """
         Generate natural question prompt for the agent to ask.
         
@@ -272,7 +280,14 @@ class QuestionAsker:
         permission = "Mind if I ask a quick question to learn?"
         question = question_obj["question"]
 
-        return f"{permission}\n\n{question}"
+        summary_block = ""
+        if notebook_summary:
+            summary_block = (
+                f"{notebook_summary}\n\n"
+                "Is that accurate for our build? If not, what’s the real rule?\n\n"
+            )
+
+        return f"{permission}\n\n{summary_block}{question}"
 
     def record_question_asked(self, domain: str, question_obj: Dict):
         """Update learning state after asking a question."""
@@ -396,8 +411,15 @@ def main():
             print(f"❌ No questions available for domain: {domain}")
             return
 
+        # Pull NotebookLM cross-reference before asking
+        notebook_summary = asker.crossref.summarize_for_question(
+            domain=domain,
+            question=question_obj["question"],
+            timeout=120,
+        )
+
         # Generate prompt
-        prompt = asker.generate_question_prompt(question_obj)
+        prompt = asker.generate_question_prompt(question_obj, notebook_summary=notebook_summary)
         print(f"\n📝 Suggested question for {domain}:\n")
         print(prompt)
         print(f"\nPriority: {question_obj['priority']}/5")

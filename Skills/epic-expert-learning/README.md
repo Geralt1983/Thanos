@@ -32,6 +32,7 @@ Agent: [Generates daily summary with domain progress]
 
 Monitors WorkOS for task completions and automatically captures learnings:
 - Detects Epic context from task title, description, tags
+- Cross-references OpenAI RAG before prompting
 - Makes educated guess (high confidence >70%) or asks directly (low confidence <70%)
 - Auto-captures high-confidence solutions
 - Prompts user for low-confidence tasks
@@ -136,11 +137,12 @@ skills/epic-expert-learning/
 
 **Process:**
 1. Detects Epic context from task data (90%+ accuracy)
-2. Assesses solution confidence:
+2. Cross-references OpenAI RAG for the domain
+3. Assesses solution confidence:
    - High (>70%): "You solved this by doing X, right?"
    - Low (<70%): "How'd you solve this one?"
-3. Captures validated solution with domain tagging
-4. Stores in Memory V2 + Graphiti + learning state
+4. Captures validated solution with domain tagging
+5. Stores in Memory V2 + Graphiti + learning state
 
 **Confidence Patterns:**
 - "Fix provider matching" → 90% → "Used NPI instead of internal ID"
@@ -174,10 +176,11 @@ skills/epic-expert-learning/
 **Process:**
 1. Detect work context from messages or tasks
 2. Check learning state for knowledge gaps in relevant domain
-3. Ask permission: "Mind if I ask a quick question to learn?"
-4. Ask 1-2 targeted questions focused on "why" and "how"
-5. Capture response → Memory V2 + Graphiti
-6. Update learning state
+3. Cross-reference OpenAI RAG for the domain to surface existing guidance
+4. Ask permission: "Mind if I ask a quick question to learn?"
+5. Ask 1-2 targeted questions focused on "why" and "how"
+6. Capture response → Memory V2 + Graphiti
+7. Update learning state
 
 **Constraints:**
 - Max 2 questions per session
@@ -255,7 +258,7 @@ Stores decision patterns and relationships:
 → Returns pattern: "When external system lacks Epic IDs"
 ```
 
-### NotebookLM (Epic Notebooks)
+### OpenAI RAG (Vector Stores)
 Cross-references learned concepts with documented patterns:
 ```
 Query Epic Orders HOD guide for "phantom defaults"

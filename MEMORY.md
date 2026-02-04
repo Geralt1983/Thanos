@@ -104,6 +104,10 @@ Email Digest
 - `data/linkedin-seen-posts.json` - Persistent dedup (auto-prunes 30 days)
 - `docs/linkedin-epic-scraper.md` - Full documentation
 
+**Email sending:**
+- Uses `gog gmail send --account jkimble1983@gmail.com`
+- Account parameter required (fixed 2026-02-04)
+
 **Filtering Logic:**
 
 1. **Recency:** ≤7 days only (rejects "2w", "1mo", etc.)
@@ -178,6 +182,13 @@ Email Digest
 - `memory-deduplication` - 3am ET Sunday - Merge similar memories (>0.95 cosine)
 - `monarch-weekly-reconciliation` - 9am ET Sunday - Review uncategorized transactions
 - `amazon-weekly-reconciliation` - 8pm ET Sunday - Match Amazon orders to Monarch transactions
+
+### Calendar Management
+- **Work Calendar ID:** `6138b022643cdc3f3c35656282ef4b2bc67e76bf3be77e403fe12f42524724aa@group.calendar.google.com`
+- **Correct gog Calendar CLI Syntax:**
+  - List events: `gog calendar events list --account jeremy@kimbleconsultancy.com`
+  - Add event: TO BE CONFIRMED (current method unknown)
+- **Critical Rule:** Always add work meetings to the work calendar
 
 ### Credentials
 - Apify: user `knightly_issue`, ID `XzsBgZyeigzCTboMd` (paid plan)

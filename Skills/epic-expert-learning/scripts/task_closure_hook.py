@@ -19,6 +19,7 @@ Usage:
 import json
 import os
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -27,6 +28,12 @@ from typing import Dict, List, Optional, Tuple
 SKILL_DIR = Path(__file__).parent.parent
 STATE_FILE = SKILL_DIR / "references" / "learning-state.json"
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from openai_rag_crossref import OpenAIRagCrossRef
+
 
 class TaskClosureHook:
     """Handles automatic learning capture from WorkOS task closures."""
@@ -34,6 +41,7 @@ class TaskClosureHook:
     def __init__(self):
         self.state = self.load_state()
         self.epic_indicators = self.load_epic_indicators()
+        self.crossref = OpenAIRagCrossRef()
 
     def load_state(self) -> Dict:
         """Load current learning state."""
@@ -231,8 +239,14 @@ class TaskClosureHook:
         # Low confidence default
         return 0.4, None
 
-    def generate_capture_prompt(self, task: Dict, domain: str, 
-                                confidence: float, educated_guess: Optional[str]) -> str:
+    def generate_capture_prompt(
+        self,
+        task: Dict,
+        domain: str,
+        confidence: float,
+        educated_guess: Optional[str],
+        notebook_summary: Optional[str] = None,
+    ) -> str:
         """
         Generate appropriate capture prompt based on confidence level.
         
@@ -240,18 +254,22 @@ class TaskClosureHook:
         Low confidence: "How'd you solve this one?"
         """
         title = task.get("title", "Unknown task")
+        summary_block = f"{notebook_summary}\n\n" if notebook_summary else ""
 
         if confidence > 0.7 and educated_guess:
             # High confidence - validate guess
             return (
                 f"📋 Task closed: \"{title}\"\n\n"
-                f"Let me capture this for learning. {educated_guess}, right?\n\n"
+                f"Let me capture this for learning.\n\n"
+                f"{summary_block}"
+                f"{educated_guess}, right?\n\n"
                 f"(Or tell me what you actually did)"
             )
         else:
             # Low confidence - ask directly
             return (
                 f"📋 Task closed: \"{title}\"\n\n"
+                f"{summary_block}"
                 f"How'd you solve this one?"
             )
 
@@ -543,8 +561,23 @@ def main():
     if educated_guess:
         print(f"   Educated guess: {educated_guess}")
 
+    # NotebookLM cross-reference before prompting
+    notebook_summary = None
+    if args.interactive or solution_confidence <= 0.7:
+        notebook_summary = hook.crossref.summarize_for_task(
+            task=task,
+            domain=domain,
+            timeout=120,
+        )
+
     # Generate prompt
-    prompt = hook.generate_capture_prompt(task, domain, solution_confidence, educated_guess)
+    prompt = hook.generate_capture_prompt(
+        task,
+        domain,
+        solution_confidence,
+        educated_guess,
+        notebook_summary=notebook_summary,
+    )
     print(f"\n{prompt}")
 
     if args.interactive:

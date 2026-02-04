@@ -30,6 +30,7 @@ def get_tool_catalog_text() -> str:
 - memory_whats_hot: See what's top of mind (high heat memories)
 - memory_whats_cold: Find neglected items that need attention
 - memory_add: Store new information to memory
+- rag_ingest: Sync Drive PDFs into OpenAI RAG vector store (default inbox)
 """
 
 
@@ -149,7 +150,7 @@ class Router:
             return RoutingResult(
                 tool_name="memory_search",
                 confidence=0.8,
-                parameters={"action": "search", "query": query or message}
+                parameters={"action": "search", "query": query or user_message}
             )
 
         if any(kw in message_lower for kw in ["what's hot", "whats hot", "top of mind", "focused on", "current priorities"]):
@@ -170,7 +171,61 @@ class Router:
             return RoutingResult(
                 tool_name="memory_add",
                 confidence=0.8,
-                parameters={"action": "add", "content": message}
+                parameters={"action": "add", "content": user_message}
+            )
+
+        drive_intent = any(
+            kw in message_lower
+            for kw in [
+                "ingest",
+                "sync",
+                "refresh",
+                "update",
+                "scan",
+                "check",
+                "look",
+            ]
+        )
+        drive_target = any(
+            kw in message_lower
+            for kw in [
+                "drive",
+                "google drive",
+                "gdrive",
+                "drive folder",
+                "drive pdf",
+                "pdfs",
+                "docs",
+                "documents",
+                "openai rag",
+                "rag",
+                "openai responses",
+                "responses",
+            ]
+        )
+        if drive_intent and drive_target:
+            key = None
+            if any(kw in message_lower for kw in ["versacare", "scottcare"]):
+                key = "versacare"
+            elif any(kw in message_lower for kw in ["orderset", "order set", "hod", "orders"]):
+                key = "orders_hod"
+            elif "inbox" in message_lower:
+                key = "drive_inbox"
+            else:
+                import re
+                match = re.search(r"(?:into|to)\s+([a-z0-9 _-]{2,})", message_lower)
+                if match:
+                    candidate = match.group(1)
+                    for stop in ["folder", "drive", "rag", "responses", "vector", "store"]:
+                        if stop in candidate:
+                            candidate = candidate.split(stop)[0]
+                    candidate = candidate.strip()
+                    if candidate:
+                        key = candidate
+            return RoutingResult(
+                tool_name="rag_ingest",
+                confidence=0.8,
+                parameters={"action": "sync", "key": key},
             )
 
         # Client/project context triggers memory search
@@ -179,7 +234,7 @@ class Router:
             return RoutingResult(
                 tool_name="memory_context",
                 confidence=0.7,
-                parameters={"action": "context", "query": message}
+                parameters={"action": "context", "query": user_message}
             )
 
         # No clear routing - return fallback
@@ -259,6 +314,8 @@ class Executor:
                 return self._execute_memory_whats_cold(action, parameters)
             elif tool_name == "memory_add":
                 return self._execute_memory_add(action, parameters)
+            elif tool_name == "rag_ingest":
+                return self._execute_rag_ingest(action, parameters)
             else:
                 return ExecutionResult(
                     success=False,
@@ -727,4 +784,62 @@ class Executor:
                 output=str(e),
                 tool_name="memory_add",
                 error=str(e)
+            )
+
+    def _execute_rag_ingest(
+        self,
+        action: str,
+        parameters: Dict[str, Any]
+    ) -> ExecutionResult:
+        """Sync Drive PDFs into OpenAI RAG vector store."""
+        if action not in {"sync", "ingest", "update"}:
+            return ExecutionResult(
+                success=False,
+                output=f"Unknown action: {action}",
+                tool_name="rag_ingest",
+                error=f"Unknown action: {action}",
+            )
+
+        key = parameters.get("key")
+        account = parameters.get("account")
+        ensure_folders = parameters.get("ensure_folders", True)
+
+        try:
+            import sys
+            from pathlib import Path
+            import subprocess
+
+            project_root = Path(__file__).resolve().parents[1]
+            script_path = project_root / "Tools" / "openai_file_search.py"
+            cmd = [sys.executable, str(script_path), "sync-drive"]
+            if key:
+                cmd += ["--key", key]
+            if account:
+                cmd += ["--account", account]
+            if ensure_folders:
+                cmd += ["--ensure-folders"]
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                output = (result.stderr or result.stdout or "RAG ingest failed").strip()
+                return ExecutionResult(
+                    success=False,
+                    output=output,
+                    tool_name="rag_ingest",
+                    error=output,
+                )
+
+            output = (result.stdout or "Drive sync complete.").strip()
+            return ExecutionResult(
+                success=True,
+                output=output,
+                tool_name="rag_ingest",
+                summary="Synced Drive PDFs into OpenAI RAG",
+            )
+        except Exception as e:
+            return ExecutionResult(
+                success=False,
+                output=str(e),
+                tool_name="rag_ingest",
+                error=str(e),
             )

@@ -33,7 +33,7 @@ HAIKU_TRIGGERS = [
 
 MODEL_MAP = {
     'haiku': 'anthropic/claude-3-5-haiku-20241022',
-    'sonnet': 'anthropic/claude-sonnet-4-0',
+    'sonnet': 'anthropic/claude-sonnet-4-5',
     'opus': 'anthropic/claude-opus-4-5'
 }
 

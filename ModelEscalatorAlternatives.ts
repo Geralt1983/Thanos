@@ -8,7 +8,7 @@ const execAsync = promisify(exec);
 // Original Enum for Model Tiers
 enum ModelTier {
   HAIKU = 'anthropic/claude-3-5-haiku-20241022',
-  SONNET = 'anthropic/claude-sonnet-4-0',
+  SONNET = 'anthropic/claude-sonnet-4-5',
   OPUS = 'anthropic/claude-opus-4-5'
 }
 

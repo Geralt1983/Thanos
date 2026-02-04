@@ -16,7 +16,8 @@ Heat Score:
 """
 
 import logging
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 
@@ -46,7 +47,15 @@ class HeatService:
     @contextmanager
     def _get_connection(self):
         """Get database connection with context manager."""
-        conn = psycopg2.connect(self.database_url)
+        connect_timeout = int(os.getenv("MEMORY_DB_CONNECT_TIMEOUT", "10"))
+        statement_timeout_ms = int(os.getenv("MEMORY_DB_STATEMENT_TIMEOUT_MS", "60000"))
+        conn = psycopg2.connect(
+            self.database_url,
+            connect_timeout=connect_timeout,
+        )
+        if statement_timeout_ms > 0:
+            with conn.cursor() as cur:
+                cur.execute("SET statement_timeout = %s", (statement_timeout_ms,))
         try:
             yield conn
             conn.commit()
@@ -78,30 +87,86 @@ class HeatService:
         """
         with self._get_connection() as conn:
             with conn.cursor() as cur:
+                partition_count = int(os.getenv("MEMORY_DB_DECAY_PARTITIONS", "1"))
+                if partition_count < 1:
+                    partition_count = 1
+                partition_idx = int(
+                    os.getenv(
+                        "MEMORY_DB_DECAY_PARTITION",
+                        str(datetime.now(timezone.utc).timetuple().tm_yday % partition_count)
+                    )
+                ) if partition_count > 1 else 0
+                partition_filter = ""
+                if partition_count > 1:
+                    partition_filter = """
+                      AND MOD(ABS(hashtext(id::text)), %(partition_count)s) = %(partition_idx)s
+                    """
+
                 if use_advanced_formula:
                     # Advanced formula: heat = base_score * decay_factor^days * log(access_count + 1)
-                    # This favors frequently accessed memories even if old
-                    cur.execute("""
-                        UPDATE thanos_memories
-                        SET payload = payload
-                            || jsonb_build_object(
-                                'heat', GREATEST(%(min_heat)s,
-                                    COALESCE((payload->>'importance')::float, 1.0) *
-                                    POWER(%(decay_rate)s, 
-                                        EXTRACT(EPOCH FROM (NOW() - COALESCE((payload->>'created_at')::timestamp, NOW()))) / 86400
-                                    ) *
-                                    LOG(COALESCE((payload->>'access_count')::int, 0) + 2)
+                    # Batch to avoid long-running full-table updates.
+                    batch_size = int(os.getenv("MEMORY_DB_DECAY_BATCH_SIZE", "2000"))
+                    affected = 0
+                    last_id = None
+                    while True:
+                        if last_id:
+                            cur.execute(f"""
+                                SELECT id
+                                FROM thanos_memories
+                                WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                                  AND id > %(last_id)s
+                                  {partition_filter}
+                                ORDER BY id
+                                LIMIT %(batch_size)s
+                            """, {
+                                "last_id": last_id,
+                                "batch_size": batch_size,
+                                "partition_count": partition_count,
+                                "partition_idx": partition_idx,
+                            })
+                        else:
+                            cur.execute(f"""
+                                SELECT id
+                                FROM thanos_memories
+                                WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
+                                {partition_filter}
+                                ORDER BY id
+                                LIMIT %(batch_size)s
+                            """, {
+                                "batch_size": batch_size,
+                                "partition_count": partition_count,
+                                "partition_idx": partition_idx,
+                            })
+
+                        ids = [row[0] for row in cur.fetchall()]
+                        if not ids:
+                            break
+
+                        cur.execute("""
+                            UPDATE thanos_memories
+                            SET payload = payload
+                                || jsonb_build_object(
+                                    'heat', GREATEST(%(min_heat)s,
+                                        COALESCE((payload->>'importance')::float, 1.0) *
+                                        POWER(%(decay_rate)s,
+                                            EXTRACT(EPOCH FROM (NOW() - COALESCE((payload->>'created_at')::timestamp, NOW()))) / 86400
+                                        ) *
+                                        LOG(COALESCE((payload->>'access_count')::int, 0) + 2)
+                                    )
                                 )
-                            )
-                        WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
-                        RETURNING id
-                    """, {
-                        "min_heat": self.config["min_heat"],
-                        "decay_rate": self.config["decay_rate"]
-                    })
+                            WHERE id = ANY(%(ids)s::uuid[])
+                            RETURNING id
+                        """, {
+                            "min_heat": self.config["min_heat"],
+                            "decay_rate": self.config["decay_rate"],
+                            "ids": ids,
+                        })
+                        affected += cur.rowcount
+                        last_id = ids[-1]
+                        conn.commit()
                 else:
                     # Simple formula: heat *= decay_rate
-                    cur.execute("""
+                    cur.execute(f"""
                         UPDATE thanos_memories
                         SET payload = payload
                             || jsonb_build_object(
@@ -111,13 +176,17 @@ class HeatService:
                             )
                         WHERE COALESCE((payload->>'pinned')::boolean, FALSE) = FALSE
                           AND (payload->>'last_accessed')::timestamp < NOW() - INTERVAL '24 hours'
+                          {partition_filter}
                         RETURNING id
                     """, {
                         "min_heat": self.config["min_heat"],
-                        "decay_rate": self.config["decay_rate"]
+                        "decay_rate": self.config["decay_rate"],
+                        "partition_count": partition_count,
+                        "partition_idx": partition_idx
                     })
 
-                affected = cur.rowcount
+                if not use_advanced_formula:
+                    affected = cur.rowcount
                 formula = "advanced (time+access)" if use_advanced_formula else "simple"
                 logger.info(f"Applied {formula} decay to {affected} memories")
                 return affected

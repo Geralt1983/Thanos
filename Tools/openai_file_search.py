@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -178,6 +179,30 @@ def _load_config() -> Dict[str, Any]:
         raise FileNotFoundError(f"Missing config: {CONFIG_PATH}")
     with open(CONFIG_PATH, "r") as f:
         return json.load(f)
+
+
+def _normalize_key(raw: str) -> str:
+    key = raw.strip().lower()
+    key = re.sub(r"[^a-z0-9_-]+", "_", key)
+    return key.strip("_") or "drive_inbox"
+
+
+def _ensure_notebook_config(config: Dict[str, Any], raw_key: str) -> str:
+    notebooks = config.setdefault("notebooks", {})
+    key = _normalize_key(raw_key)
+    if key in notebooks:
+        return key
+
+    title = raw_key.strip() or key.replace("_", " ").title()
+    local_cache = PROJECT_ROOT / "data" / "galaxy_docs" / key
+    notebooks[key] = {
+        "title": title if title else key.replace("_", " ").title(),
+        "drive_folder_name": key,
+        "local_cache_dir": str(local_cache),
+        "source_paths": [str(local_cache)],
+    }
+    _save_config(config)
+    return key
 
 
 def _save_config(config: Dict[str, Any]) -> None:
@@ -483,7 +508,8 @@ def _sync_drive_notebook(
 ) -> None:
     vector_store_id = data.get("vector_store_id")
     if not vector_store_id:
-        raise ValueError(f"Missing vector_store_id for {notebook_key}")
+        vector_store_id = _create_store(config, notebook_key, None, timeout)
+        data["vector_store_id"] = vector_store_id
 
     drive_folder_id = data.get("drive_folder_id")
     if not drive_folder_id:
@@ -688,15 +714,28 @@ def main() -> None:
         if not account:
             raise ValueError("Missing Drive account. Set config.drive.account or pass --account.")
 
-        keys = args.key or list(config.get("notebooks", {}).keys())
+        keys = args.key
+        if not keys:
+            default_key = drive_config.get("default_notebook")
+            if default_key:
+                keys = [default_key]
+            else:
+                keys = list(config.get("notebooks", {}).keys())
         for key in keys:
-            notebook = config.get("notebooks", {}).get(key)
+            raw_key = key
+            normalized_key = _ensure_notebook_config(config, key)
+            if raw_key != normalized_key:
+                notebook = config.get("notebooks", {}).get(normalized_key, {})
+                notebook["title"] = raw_key.strip() or notebook.get("title", normalized_key)
+                config["notebooks"][normalized_key] = notebook
+                _save_config(config)
+            notebook = config.get("notebooks", {}).get(normalized_key)
             if not notebook:
-                print(f"Unknown notebook key: {key}")
+                print(f"Unknown notebook key: {normalized_key}")
                 continue
             _sync_drive_notebook(
                 config=config,
-                notebook_key=key,
+                notebook_key=normalized_key,
                 data=notebook,
                 account=account,
                 ensure_folders=args.ensure_folders,

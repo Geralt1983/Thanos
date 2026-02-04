@@ -87,15 +87,16 @@ Activate when:
 **Process:**
 1. Detect active work context (task mentions, tool usage, frustration signals)
 2. Check learning state for knowledge gaps in relevant domain
-3. Ask permission: *"Mind if I ask a quick question to learn?"*
-4. Ask 1-2 targeted questions (not more):
+3. Cross-reference OpenAI RAG for the domain to surface existing guidance
+4. Ask permission: *"Mind if I ask a quick question to learn?"*
+5. Ask 1-2 targeted questions (not more), prefaced with OpenAI RAG context:
    - Focus on "why" and "how" over "what"
    - Examples:
      - "Why does provider matching fail so often?"
      - "What's the difference between SmartSet and Quick List?"
      - "When do you use redirector sections vs direct ordering?"
-5. Capture response → Memory V2 + Graphiti
-6. Update learning state
+6. Capture response → Memory V2 + Graphiti
+7. Update learning state
 
 **Constraints:**
 - Max 2 questions per work session
@@ -119,19 +120,20 @@ Activate when:
    - Description content
    - Confidence scoring (0-100%)
 2. If Epic-related, identify domain from keywords
-3. Assess solution confidence:
+3. Cross-reference OpenAI RAG for the domain before prompting
+4. Assess solution confidence:
    - **High confidence (>70%)**: Make educated guess based on task patterns
    - **Low confidence (<70%)**: Ask directly for solution
-4. Generate appropriate prompt:
+5. Generate appropriate prompt:
    - High: "You solved this by doing X, right?"
    - Low: "How'd you solve this one?"
-5. Capture validated solution:
+6. Capture validated solution:
    - Problem statement from task
    - Solution approach (validated guess or user explanation)
    - Reasoning behind approach
    - Domain/subdomain tags
    - Complexity inference
-6. Store in:
+7. Store in:
    - **Memory V2**: Searchable task solutions
    - **Graphiti**: Task completion patterns
    - **learning-state.json**: Task closure metrics
@@ -225,7 +227,7 @@ See `MONITOR_INTEGRATION.md` for complete setup.
 1. Parse query for domain/concept
 2. Search Memory V2 for relevant facts
 3. Query Graphiti for related decision patterns
-4. Cross-reference NotebookLM for documented patterns
+4. Cross-reference OpenAI RAG for documented patterns
 5. Present answer with:
    - Learned fact/pattern
    - Source (which solution/conversation)
@@ -297,18 +299,16 @@ add_relationship(
 patterns = query_patterns("When does Jeremy use NPI for provider matching?")
 ```
 
-### NotebookLM (Epic Notebooks)
+### OpenAI RAG (Vector Stores)
 ```python
-from notebooklm import query_notebook
+from Tools.openai_file_search import OpenAIFileSearchClient
 
-# Cross-reference learned concept
-docs = query_notebook(
-    notebook="Epic Orders HOD",
-    query="phantom defaults in OCC"
+client = OpenAIFileSearchClient()
+ok, response, _ = client.query(
+    prompt="phantom defaults in OCC",
+    vector_store_id="vs_...",
+    max_results=12,
 )
-
-# Compare Jeremy's explanation vs documentation
-compare_understanding(jeremy_explanation, docs)
 ```
 
 ## Learning State
@@ -407,7 +407,7 @@ Agent runs daily_review.py and generates summary (see format above)
 - `scripts/test_monitor.sh` — Test suite for monitor
 - `scripts/test_task_closure.sh` — Test suite for hook
 
-All scripts integrate with Memory V2, Graphiti, and NotebookLM.
+All scripts integrate with Memory V2, Graphiti, and OpenAI RAG.
 
 ## Constraints & Guidelines
 

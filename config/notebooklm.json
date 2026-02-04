@@ -2,7 +2,8 @@
   "drive": {
     "account": "jeremy@kimbleconsultancy.com",
     "root_folder": "Thanos",
-    "base_folder": "GalaxyDocs"
+    "base_folder": "GalaxyDocs",
+    "default_notebook": "drive_inbox"
   },
   "file_search_defaults": {
     "max_results": 20,
@@ -54,6 +55,36 @@
       "source_paths": [
         "/Users/jeremy/Projects/Thanos/data/galaxy_docs/versacare"
       ]
+    },
+    "drive_inbox": {
+      "title": "Drive Ingest Inbox",
+      "drive_folder_name": "inbox",
+      "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/drive_inbox",
+      "source_paths": [
+        "/Users/jeremy/Projects/Thanos/data/galaxy_docs/drive_inbox"
+      ],
+      "vector_store_id": "vs_698399f369d08191914b2d8c1c83606a",
+      "drive_folder_id": "13PXpuU2bF6hoYS8kln7vzmnDH4lXqZ27"
+    },
+    "harry": {
+      "title": "harry",
+      "drive_folder_name": "harry",
+      "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/harry",
+      "source_paths": [
+        "/Users/jeremy/Projects/Thanos/data/galaxy_docs/harry"
+      ],
+      "vector_store_id": "vs_69839c1fdf3881919ebb1aea20c1e3ae",
+      "drive_folder_id": "15xm_YmcR_ph3US4lZuWzsHK8qTwFE_Rx"
+    },
+    "ncdhhs_radiology": {
+      "title": "ncdhhs radiology",
+      "drive_folder_name": "ncdhhs_radiology",
+      "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/ncdhhs_radiology",
+      "source_paths": [
+        "/Users/jeremy/Projects/Thanos/data/galaxy_docs/ncdhhs_radiology"
+      ],
+      "vector_store_id": "vs_69839cb57fa08191b8c04088bda9c684",
+      "drive_folder_id": "1HEh2OlwGXH9nMAgvi_JbzpKXaYDxyrSu"
     }
   },
   "matching": {
@@ -74,5 +105,13 @@
       "telemonitoring",
       "rehab"
     ]
+  },
+  "domain_notebooks": {
+    "orderset_builds": "orders_hod",
+    "interfaces": "versacare",
+    "cardiac_rehab_integrations": "versacare",
+    "clindoc_configuration": "orders_hod",
+    "workflow_optimization": "orders_hod",
+    "cutover_procedures": "orders_hod"
   }
 }

@@ -13,6 +13,7 @@ import asyncio
 import tempfile
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
@@ -133,6 +134,16 @@ class TelegramBrainDumpBot:
             r'\bhow.*(sleep|rested|energy)',
             r'\bmy (readiness|hrv|heart rate)',
             r'\bcheck.*oura',
+        ],
+        'rag_ingest': [
+            r'\bingest\b.*\bdrive\b',
+            r'\bsync\b.*\bdrive\b',
+            r'\bdrive\b.*\bingest\b',
+            r'\bdrive\b.*\bsync\b',
+            r'\brefresh\b.*\brag\b',
+            r'\bupdate\b.*\brag\b',
+            r'\bopenai\b.*\brag\b',
+            r'\bopenai\b.*\bresponses\b',
         ],
     }
 
@@ -488,6 +499,14 @@ class TelegramBrainDumpBot:
                     elif 'all' in content_lower:
                         params['timeframe'] = 'all'
 
+                    if command_type == "rag_ingest":
+                        match = re.search(r"(?:into|to)\s+(.+)$", content_lower)
+                        if match:
+                            target = match.group(1).strip()
+                            target = re.sub(r"[^\w\s-]+$", "", target).strip()
+                            if target:
+                                params["target"] = target
+
                     logger.info(f"Detected command: {command_type} with params {params}")
                     return command_type, params
 
@@ -513,11 +532,35 @@ class TelegramBrainDumpBot:
                 return await self._get_status_response()
             elif command_type == 'health':
                 return await self._get_health_response()
+            elif command_type == 'rag_ingest':
+                return await self._handle_rag_ingest(params)
             else:
                 return "I didn't understand that command. Try asking about tasks, habits, health, or status."
         except Exception as e:
             logger.error(f"Command handling failed: {e}")
             return f"Sorry, I couldn't fetch that information: {e}"
+
+    async def _handle_rag_ingest(self, params: dict) -> str:
+        """Sync Google Drive PDFs into OpenAI RAG vector store."""
+        import sys
+        import subprocess
+        from pathlib import Path
+
+        target = (params or {}).get("target")
+        project_root = Path(__file__).resolve().parents[1]
+        script_path = project_root / "Tools" / "openai_file_search.py"
+
+        cmd = [sys.executable, str(script_path), "sync-drive", "--ensure-folders"]
+        if target:
+            cmd += ["--key", target]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            output = (result.stderr or result.stdout or "RAG ingest failed").strip()
+            return f"❌ Drive ingest failed.\n{output}"
+
+        output = (result.stdout or "Drive sync complete.").strip()
+        return f"✅ {output}"
 
     def _classify_photo(self, caption: str) -> str:
         """
@@ -1741,6 +1784,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 "• 📕 PDF documents\n\n"
                 "I'll capture it, parse it, and add it to your brain dump queue.\n\n"
                 "*Commands:*\n"
+                "/help - Quick help + Drive ingest\n"
                 "/menu - Quick action buttons\n"
                 "/status - Quick status overview\n"
                 "/health - Oura Ring health metrics\n"
@@ -1750,7 +1794,28 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 "/chat - Toggle chat mode (AI conversation)\n"
                 "/ask <question> - One-shot AI query\n\n"
                 "*Natural Language:*\n"
-                "Ask \"what tasks do I have?\" or \"show my habits\"",
+                "Ask \"what tasks do I have?\" or \"show my habits\"\n\n"
+                "*Drive RAG Ingest:*\n"
+                "Say \"ingest drive\" (default inbox)\n"
+                "Or \"ingest drive into <name>\" to create/use a new folder/store",
+                parse_mode='Markdown'
+            )
+
+        async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            if not is_allowed(update.effective_user.id):
+                await update.message.reply_text("⛔ You are not authorized to use this bot.")
+                return
+
+            await update.message.reply_text(
+                "🧭 *Thanos Help*\n\n"
+                "*Drive RAG Ingest*\n"
+                "• \"ingest drive\" → syncs default inbox\n"
+                "• \"ingest drive into <name>\" → creates/uses a folder + store\n\n"
+                "*Examples*\n"
+                "ingest drive\n"
+                "ingest drive into NCDHHS radiology\n\n"
+                "*Other commands*\n"
+                "/menu /status /health /tasks /habits /dumps /chat /ask",
                 parse_mode='Markdown'
             )
 
@@ -2221,7 +2286,84 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 adapter = GoogleCalendarAdapter()
 
                 created_count = 0
+                duplicate_skipped = 0
+                duplicate_check_failed = 0
+                duplicate_cache: Dict[tuple[str, str, str], Optional[List[Dict[str, Any]]]] = {}
                 events = stored['events']
+
+                def _normalize_summary(text: str) -> str:
+                    cleaned = re.sub(r'[^a-z0-9\\s]+', ' ', (text or "").lower())
+                    return re.sub(r'\\s+', ' ', cleaned).strip()
+
+                def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+                    if not value or "T" not in value:
+                        return None
+                    try:
+                        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    except ValueError:
+                        return None
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=ZoneInfo("America/New_York"))
+                    return dt.astimezone(ZoneInfo("America/New_York"))
+
+                def _parse_date(value: Optional[str]):
+                    if not value or "T" in value:
+                        return None
+                    try:
+                        return datetime.fromisoformat(value).date()
+                    except ValueError:
+                        return None
+
+                async def _get_existing_events(start_date: str, end_date: str) -> Optional[List[Dict[str, Any]]]:
+                    cache_key = (calendar_id, start_date, end_date)
+                    if cache_key in duplicate_cache:
+                        return duplicate_cache[cache_key]
+                    result = await adapter._tool_get_events({
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "calendar_id": calendar_id,
+                        "include_cancelled": False,
+                        "max_results": 50,
+                        "single_events": True
+                    })
+                    if not result.success:
+                        logger.warning(f"Duplicate check failed: {result.error}")
+                        duplicate_cache[cache_key] = None
+                        return None
+                    events_list = result.data.get("events", []) if result.data else []
+                    duplicate_cache[cache_key] = events_list
+                    return events_list
+
+                def _is_duplicate(existing_events: List[Dict[str, Any]], new_summary: str, new_start: str, new_all_day: bool) -> bool:
+                    norm_new = _normalize_summary(new_summary)
+                    if not norm_new:
+                        return False
+                    if new_all_day:
+                        new_date = _parse_date(new_start)
+                        if not new_date:
+                            return False
+                        for existing in existing_events:
+                            if not existing.get("is_all_day"):
+                                continue
+                            if _normalize_summary(existing.get("summary", "")) != norm_new:
+                                continue
+                            existing_date = _parse_date(existing.get("start"))
+                            if existing_date and existing_date == new_date:
+                                return True
+                        return False
+
+                    new_dt = _parse_dt(new_start)
+                    if not new_dt:
+                        return False
+                    for existing in existing_events:
+                        if existing.get("is_all_day"):
+                            continue
+                        if _normalize_summary(existing.get("summary", "")) != norm_new:
+                            continue
+                        existing_dt = _parse_dt(existing.get("start"))
+                        if existing_dt and abs((existing_dt - new_dt).total_seconds()) <= 300:
+                            return True
+                    return False
 
                 for event_data in events:
                     try:
@@ -2231,10 +2373,22 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                         gcal_event = event.to_gcal_format()
 
                         # Create the event
+                        start_value = gcal_event["start"].get("dateTime", gcal_event["start"].get("date"))
+                        end_value = gcal_event["end"].get("dateTime", gcal_event["end"].get("date"))
+                        if action == "work" and start_value and end_value:
+                            existing = await _get_existing_events(start_value, end_value)
+                            if existing is None:
+                                duplicate_check_failed += 1
+                                continue
+                            is_all_day = "date" in gcal_event.get("start", {}) and "dateTime" not in gcal_event.get("start", {})
+                            if _is_duplicate(existing, gcal_event.get("summary", ""), start_value, is_all_day):
+                                duplicate_skipped += 1
+                                continue
+
                         result = await adapter._tool_create_event({
                             "summary": gcal_event["summary"],
-                            "start_time": gcal_event["start"].get("dateTime", gcal_event["start"].get("date")),
-                            "end_time": gcal_event["end"].get("dateTime", gcal_event["end"].get("date")),
+                            "start_time": start_value,
+                            "end_time": end_value,
                             "calendar_id": calendar_id,
                             "description": gcal_event.get("description", ""),
                             "location": gcal_event.get("location", "")
@@ -2252,13 +2406,27 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
                 del context.bot_data[events_key]
 
                 if created_count > 0:
+                    extra = []
+                    if duplicate_skipped > 0:
+                        extra.append(f"⏭️ Skipped {duplicate_skipped} duplicate(s)")
+                    if duplicate_check_failed > 0:
+                        extra.append(f"⚠️ Skipped {duplicate_check_failed} event(s) (duplicate check failed)")
+                    suffix = "\n" + "\n".join(extra) if extra else ""
                     await query.edit_message_text(
-                        f"✅ Added {created_count} event(s) to {calendar_name} calendar!"
+                        f"✅ Added {created_count} event(s) to {calendar_name} calendar!{suffix}"
                     )
                 else:
-                    await query.edit_message_text(
-                        f"⚠️ Could not add events to calendar. Please add them manually."
-                    )
+                    if duplicate_skipped > 0 or duplicate_check_failed > 0:
+                        parts = []
+                        if duplicate_skipped > 0:
+                            parts.append(f"⏭️ Skipped {duplicate_skipped} duplicate(s)")
+                        if duplicate_check_failed > 0:
+                            parts.append(f"⚠️ Skipped {duplicate_check_failed} event(s) (duplicate check failed)")
+                        await query.edit_message_text("\n".join(parts))
+                    else:
+                        await query.edit_message_text(
+                            f"⚠️ Could not add events to calendar. Please add them manually."
+                        )
 
             except ImportError:
                 await query.edit_message_text("❌ Google Calendar adapter not available.")
@@ -2530,6 +2698,7 @@ For "context": Use "personal" for family, health, errands, hobbies, relationship
 
         # Register handlers
         self.application.add_handler(CommandHandler("start", start_command))
+        self.application.add_handler(CommandHandler("help", help_command))
         self.application.add_handler(CommandHandler("status", status_command))
         self.application.add_handler(CommandHandler("menu", menu_command))
         self.application.add_handler(CommandHandler("tasks", tasks_command))

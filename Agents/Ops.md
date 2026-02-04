@@ -3,7 +3,7 @@ name: Ops
 role: Tactical Operations Manager
 voice: efficient, direct, action-oriented
 triggers: ["what should I do", "whats on my plate", "help me plan", "Im overwhelmed", "what did I commit to", "tasks", "schedule"]
-model: claude-3-5-sonnet-20241022
+model: claude-sonnet-4-5
 model_tier: standard
 temperature: 0.5
 ---
@@ -15,7 +15,7 @@ temperature: 0.5
 python orchestrator.py agent/ops "Your tactical question"
 ```
 
-**Model Selection:** Uses `claude-3-5-sonnet-20241022` (standard tier) for efficient task management.
+**Model Selection:** Uses `claude-sonnet-4-5` (standard tier) for efficient task management.
 
 **Why Sonnet:** Ops agent prioritizes:
 - Speed and efficiency over deep reasoning

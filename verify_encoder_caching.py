@@ -86,7 +86,7 @@ else:
 # Test 5: Third instantiation also reuses cached encoder
 print("\n✓ Test 5: Third ContextManager instantiation reuses encoder")
 start = time.time()
-cm3 = ContextManager(model="claude-3-5-sonnet-20241022")
+cm3 = ContextManager(model="claude-sonnet-4-5")
 third_init_time = (time.time() - start) * 1000
 print(f"  Third instantiation time: {third_init_time:.2f}ms")
 
@@ -170,7 +170,7 @@ managers = []
 for i, model in enumerate([
     "anthropic/claude-opus-4-5",
     "anthropic/claude-sonnet-4-5",
-    "claude-3-5-sonnet-20241022",
+    "claude-sonnet-4-5",
     "unknown-model-falls-back-to-default"
 ]):
     cm = ContextManager(model=model)

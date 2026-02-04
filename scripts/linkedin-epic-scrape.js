@@ -635,6 +635,7 @@ function sendEmail(body) {
     gogBin,
     [
       'gmail', 'send',
+      '--account', 'jkimble1983@gmail.com',
       '--to', 'jkimble1983@gmail.com',
       '--subject', subject,
       '--body-file', '-'

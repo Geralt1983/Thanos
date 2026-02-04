@@ -216,6 +216,12 @@ try:
 except Exception:
     PydanticSerializationUnexpectedValue = None
 
+# Optional dotenv support for local .env loading
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - optional dependency
+    load_dotenv = None
+
 # ... (rest of imports)
 
 # Export constants and classes
@@ -241,6 +247,11 @@ class LiteLLMClient:
             config_path = Path(config_path)
 
         self.base_dir = Path(__file__).parent.parent.parent
+        # Load .env if present so fallback clients can pick up API keys.
+        if load_dotenv:
+            env_path = self.base_dir / ".env"
+            if env_path.exists():
+                load_dotenv(env_path, override=False)
         self.config = self._load_config(config_path)
         self.allow_fallback_client = bool(
             self.config.get("litellm", {}).get("allow_fallback_client", False)

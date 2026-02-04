@@ -31,12 +31,17 @@ import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-import subprocess
 
 # Paths
 SKILL_DIR = Path(__file__).parent.parent
 STATE_FILE = SKILL_DIR / "references" / "learning-state.json"
 CAPTURE_SCRIPT = SKILL_DIR / "scripts" / "capture_solution.py"
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from openai_rag_crossref import OpenAIRagCrossRef
 
 
 class TaskClosureMonitor:
@@ -46,6 +51,7 @@ class TaskClosureMonitor:
         self.state = self.load_state()
         self.epic_patterns = self.build_epic_patterns()
         self.solution_patterns = self.build_solution_patterns()
+        self.crossref = OpenAIRagCrossRef()
         
     def load_state(self) -> Dict:
         """Load learning state."""
@@ -372,8 +378,13 @@ class TaskClosureMonitor:
         # No pattern match
         return None, 0.0, None
 
-    def format_capture_prompt(self, task: Dict, solution_guess: Optional[str], 
-                              confidence: float) -> str:
+    def format_capture_prompt(
+        self,
+        task: Dict,
+        solution_guess: Optional[str],
+        confidence: float,
+        notebook_summary: Optional[str] = None,
+    ) -> str:
         """
         Format prompt for Jeremy based on confidence level.
         
@@ -381,17 +392,20 @@ class TaskClosureMonitor:
         Low confidence: "How'd you solve this?"
         """
         title = task.get("title", "")
+        summary_block = f"{notebook_summary}\n\n" if notebook_summary else ""
         
         if confidence > 0.7 and solution_guess:
             return (
                 f"📋 Task closed: \"{title}\"\n\n"
                 f"Let me capture this for learning.\n\n"
+                f"{summary_block}"
                 f"{solution_guess}, right?\n\n"
                 f"(Or tell me what you actually did)"
             )
         else:
             return (
                 f"📋 Task closed: \"{title}\"\n\n"
+                f"{summary_block}"
                 f"How'd you solve this one?"
             )
 
@@ -574,16 +588,30 @@ class TaskClosureMonitor:
         
         # Use solution domain if available, otherwise use classified domain
         capture_domain = solution_domain or domain or "workflow_optimization"
-        
+
         if solution_confidence > 0.7 and solution_guess:
             print(f"   Solution confidence: {solution_confidence:.0%} (HIGH)")
             print(f"   Educated guess: {solution_guess}")
         else:
             print(f"   Solution confidence: {solution_confidence:.0%} (LOW)")
             print(f"   Will ask directly")
-        
+
+        # NotebookLM cross-reference before asking
+        notebook_summary = None
+        if interactive or solution_confidence <= 0.7:
+            notebook_summary = self.crossref.summarize_for_task(
+                task=task,
+                domain=capture_domain,
+                timeout=120,
+            )
+
         # Format prompt
-        prompt = self.format_capture_prompt(task, solution_guess, solution_confidence)
+        prompt = self.format_capture_prompt(
+            task,
+            solution_guess,
+            solution_confidence,
+            notebook_summary=notebook_summary,
+        )
         result["prompt"] = prompt
         
         print(f"\n{prompt}\n")

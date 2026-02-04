@@ -1308,12 +1308,67 @@ You maintain a compact daily plan and a scoreboard.
                 router_result.tool_name,
                 router_result.parameters
             )
-            return {"content": exec_result.output, "usage": None}
+            content = exec_result.output
+            if isinstance(content, str):
+                content = self._maybe_append_epic_learning(message, content)
+            return {"content": content, "usage": None}
         
         # If router has a fallback response (low confidence), use chat instead
         # for a more natural conversational response
         # Pass agent="default" to prevent chat() from recursing back to route()
-        return self.chat(message, agent="default", model=model)
+        chat_result = self.chat(message, agent="default", model=model)
+        if isinstance(chat_result, dict):
+            chat_result["content"] = self._maybe_append_epic_learning(
+                message, chat_result.get("content", "")
+            )
+            return chat_result
+        return {
+            "content": self._maybe_append_epic_learning(message, str(chat_result)),
+            "usage": None,
+        }
+
+    def _maybe_append_epic_learning(self, message: str, reply: str) -> str:
+        """Optionally append Epic learning prompt when Epic context detected."""
+        if not message or not reply:
+            return reply
+        try:
+            epic_scripts = self.base_dir / "Skills" / "epic-expert-learning" / "scripts"
+            if not epic_scripts.exists():
+                return reply
+            if str(epic_scripts) not in sys.path:
+                sys.path.insert(0, str(epic_scripts))
+
+            from ask_question import QuestionAsker  # type: ignore
+        except Exception:
+            return reply
+
+        try:
+            asker = QuestionAsker()
+            domain = asker.detect_work_context(message)
+            if not domain:
+                return reply
+
+            should_ask, _reason = asker.should_ask_question()
+            if not should_ask:
+                return reply
+
+            question_obj = asker.select_question(domain)
+            if not question_obj:
+                return reply
+
+            notebook_summary = asker.crossref.summarize_for_question(
+                domain=domain,
+                question=question_obj["question"],
+                timeout=120,
+            )
+            prompt = asker.generate_question_prompt(
+                question_obj, notebook_summary=notebook_summary
+            )
+            asker.record_question_asked(domain, question_obj)
+
+            return f"{reply}\n\n---\nEpic Learning Check:\n{prompt}"
+        except Exception:
+            return reply
 
     def list_commands(self) -> List[str]:
         """List all available commands."""

@@ -124,3 +124,12 @@ output/
 # Local model state DBs
 model_escalator_state.db
 model_prefix_state.db
+
+# Local secrets
+.secrets/
+Tools/credentials_work.json
+Tools/token_jeremy_kimbleconsultancy_com.json
+
+# Local ingestion artifacts
+eml_to_pdf_temp/
+ncdhhs_ingest_log.txt

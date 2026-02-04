@@ -66,7 +66,9 @@ class MemoryDeduplicator:
         self,
         similarity_threshold: float = 0.95,
         min_created_days_apart: int = 0,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        recent_days: Optional[int] = None,
+        recent_limit: Optional[int] = None
     ) -> List[Tuple[Dict[str, Any], Dict[str, Any], float]]:
         """
         Find pairs of highly similar memories.
@@ -98,8 +100,28 @@ class MemoryDeduplicator:
                         )) / 86400) >= {min_created_days_apart}
                     """
                 
+                m1_filter = ""
+                m1_limit = ""
+                params = {"distance_threshold": distance_threshold}
+                if recent_days is not None:
+                    m1_filter = """
+                        WHERE COALESCE((payload->>'created_at')::timestamp, NOW())
+                              >= NOW() - (%(recent_days)s || ' days')::interval
+                    """
+                    params["recent_days"] = recent_days
+                if recent_limit:
+                    m1_limit = "LIMIT %(recent_limit)s"
+                    params["recent_limit"] = recent_limit
+
+                m1_source = f"""
+                    (SELECT * FROM thanos_memories
+                     {m1_filter}
+                     ORDER BY COALESCE((payload->>'created_at')::timestamp, NOW()) DESC
+                     {m1_limit}) m1
+                """
+
                 query = f"""
-                    SELECT 
+                    SELECT
                         m1.id as id1,
                         m1.payload->>'data' as content1,
                         COALESCE((m1.payload->>'created_at')::timestamp, NOW()) as created1,
@@ -120,7 +142,7 @@ class MemoryDeduplicator:
                         
                         (m1.vector <=> m2.vector) as distance,
                         (1 - (m1.vector <=> m2.vector)) as similarity
-                    FROM thanos_memories m1
+                    FROM {m1_source}
                     CROSS JOIN thanos_memories m2
                     WHERE m1.id < m2.id  -- Avoid duplicates and self-comparisons
                       AND (m1.vector <=> m2.vector) <= %(distance_threshold)s
@@ -128,8 +150,7 @@ class MemoryDeduplicator:
                     ORDER BY similarity DESC
                     {'LIMIT %(limit)s' if limit else ''}
                 """
-                
-                params = {"distance_threshold": distance_threshold}
+
                 if limit:
                     params["limit"] = limit
                 
@@ -304,7 +325,9 @@ class MemoryDeduplicator:
         self,
         similarity_threshold: float = 0.95,
         dry_run: bool = False,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        recent_days: Optional[int] = None,
+        recent_limit: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Find and merge duplicate memories.
@@ -319,7 +342,9 @@ class MemoryDeduplicator:
         """
         duplicates = self.find_duplicates(
             similarity_threshold=similarity_threshold,
-            limit=limit
+            limit=limit,
+            recent_days=recent_days,
+            recent_limit=recent_limit
         )
         
         if not duplicates:
@@ -392,7 +417,9 @@ def get_deduplicator() -> MemoryDeduplicator:
 def deduplicate_memories(
     similarity_threshold: float = 0.95,
     dry_run: bool = False,
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
+    recent_days: Optional[int] = None,
+    recent_limit: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Convenience function to deduplicate memories.
@@ -401,6 +428,8 @@ def deduplicate_memories(
         similarity_threshold: Cosine similarity threshold (0.95 = 95% similar)
         dry_run: If True, find duplicates but don't merge
         limit: Maximum pairs to process
+        recent_days: Only compare memories created within last N days
+        recent_limit: Cap recent memory set size (when recent_days is set)
     
     Returns:
         Summary of deduplication results
@@ -419,7 +448,9 @@ def deduplicate_memories(
     return dedup.deduplicate(
         similarity_threshold=similarity_threshold,
         dry_run=dry_run,
-        limit=limit
+        limit=limit,
+        recent_days=recent_days,
+        recent_limit=recent_limit
     )
 
 
@@ -445,6 +476,16 @@ if __name__ == "__main__":
         help="Maximum pairs to process"
     )
     parser.add_argument(
+        "--recent-days",
+        type=int,
+        help="Only compare memories created within the last N days"
+    )
+    parser.add_argument(
+        "--recent-limit",
+        type=int,
+        help="Cap the recent memory set size (when --recent-days is used)"
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Show detailed merge log"
@@ -467,7 +508,9 @@ if __name__ == "__main__":
     results = deduplicate_memories(
         similarity_threshold=args.threshold,
         dry_run=args.dry_run,
-        limit=args.limit
+        limit=args.limit,
+        recent_days=args.recent_days,
+        recent_limit=args.recent_limit
     )
     
     print("Results:")

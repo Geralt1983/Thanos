@@ -13,7 +13,7 @@
 - Multi-paragraph technical questions
 - Anything requiring multi-step reasoning or planning
 
-**SONNET triggers** (call `session_status(model="anthropic/claude-sonnet-4-0")`):
+**SONNET triggers** (call `session_status(model="anthropic/claude-sonnet-4-5")`):
 - Code writing, debugging, refactoring
 - "explain", "how does", "implement"
 - Technical questions requiring context
