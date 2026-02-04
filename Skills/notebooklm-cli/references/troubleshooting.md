@@ -1,4 +1,4 @@
-# Troubleshooting Guide
+# Troubleshooting Guide (NotebookLM CLI v0.3+)
 
 ## Authentication Issues
 
@@ -11,7 +11,7 @@
 nlm login
 ```
 
-NotebookLM sessions typically last ~20 minutes. Re-authenticate when commands start failing.
+NotebookLM sessions can expire. Re-authenticate when commands start failing.
 
 ### Chrome Not Found
 
@@ -19,17 +19,22 @@ NotebookLM sessions typically last ~20 minutes. Re-authenticate when commands st
 
 **Solution:**
 - Ensure Google Chrome is installed
-- Check that Chrome is in your PATH
-- On Linux, you may need to specify the Chrome binary path
+- Verify Chrome is available in PATH
 
 ### Cookie Extraction Failed
 
 **Problem:** Authentication fails during cookie extraction.
 
 **Solution:**
-- Ensure Chrome is closed before running `nlm login`
-- Check that Chrome is not running in headless mode
-- Try logging into NotebookLM manually in Chrome first
+- Close Chrome before running `nlm login`
+- Log into NotebookLM manually in Chrome first
+
+### Auth Validation
+
+```bash
+nlm auth check
+nlm auth check --test
+```
 
 ## Network Issues
 
@@ -40,28 +45,26 @@ NotebookLM sessions typically last ~20 minutes. Re-authenticate when commands st
 **Solution:**
 - Check internet connection
 - Verify NotebookLM is accessible (notebooklm.google.com)
-- Try again in a few moments
-- Check if there are firewall restrictions
+- Retry after a short delay
 
 ### Rate Limiting
 
-**Problem:** "Too many requests" error.
+**Problem:** "Too many requests" errors.
 
 **Solution:**
-- NotebookLM free tier has ~50 queries/day limit
-- Wait before making more requests
-- Consider batching operations
+- Slow down requests
+- Batch queries when possible
 
 ## Source Issues
 
-### Drive Source Not Syncing
+### Drive/URL Source Not Updating
 
-**Problem:** Google Drive sources show outdated content.
+**Problem:** Source content is outdated.
 
 **Solution:**
 ```bash
-nlm source stale <notebook-id>
-nlm source sync <notebook-id> --confirm
+nlm source stale <source-id>
+nlm source refresh <source-id>
 ```
 
 ### URL Source Fails
@@ -70,38 +73,19 @@ nlm source sync <notebook-id> --confirm
 
 **Solution:**
 - Verify URL is accessible
-- Some websites block automated access
-- Try using `--text` option instead with copied content
-
-### YouTube Source Issues
-
-**Problem:** YouTube video fails to add as source.
-
-**Solution:**
-- Ensure video is public
-- Check if video has restrictions
-- Some videos may be unavailable due to region locks
+- Some sites block automated access
+- Use `--text` with copied content instead
 
 ## Content Generation Issues
 
 ### Generation Timeout
 
-**Problem:** Content generation (audio, quiz, etc.) times out.
+**Problem:** Content generation times out.
 
 **Solution:**
-- Large notebooks take longer to process
-- Reduce number of sources
-- Try again with fewer sources
-
-### Generation Fails
-
-**Problem:** Content generation fails with error.
-
-**Solution:**
-- Check that notebook has sources
-- Verify sources have been processed
-- Try creating the content again
-- Check studio status for existing failed artifacts
+- Large notebooks take longer
+- Reduce sources or scope
+- Use `--wait` only when needed
 
 ### Artifact Not Found
 
@@ -109,62 +93,28 @@ nlm source sync <notebook-id> --confirm
 
 **Solution:**
 ```bash
-nlm studio status <notebook-id>
+nlm artifact list -n <notebook-id>
 ```
-List all artifacts to find the correct ID.
-
-## Profile Issues
-
-### Profile Not Found
-
-**Problem:** Specified profile doesn't exist.
-
-**Solution:**
-```bash
-nlm auth list
-```
-List all available profiles.
-
-### Profile Conflicts
-
-**Problem:** Unexpected behavior with multiple profiles.
-
-**Solution:**
-- Always specify `--profile` when using multiple accounts
-- Use `nlm auth delete` to remove unused profiles
-- Switch profiles with `nlm login --profile <name>`
 
 ## Output Format Issues
 
 ### JSON Parse Error
 
-**Problem:** JSON output is invalid.
+**Problem:** `--json` output is invalid.
 
 **Solution:**
-- Check for rate limiting or auth errors
-- Some commands don't support JSON output
-- Try without `--json` flag
-
-### Quiet Mode Returns Empty
-
-**Problem:** `--quiet` mode returns no output.
-
-**Solution:**
-- Check if the underlying query succeeded
-- Some resources may not exist
-- Verify the resource ID is correct
+- Check for auth errors in stderr
+- Retry without `--json` to inspect output
 
 ## Research Issues
 
 ### Research Timeout
 
-**Problem:** Research takes too long or times out.
+**Problem:** Research takes too long.
 
 **Solution:**
-- Standard research takes ~30 seconds
-- Deep research takes ~5 minutes
-- Use `--mode deep` for comprehensive results
-- Check status with `nlm research status`
+- Deep research can take several minutes
+- Use `--no-wait` and then `nlm research status` / `nlm research wait`
 
 ### No Sources Found
 
@@ -173,27 +123,7 @@ List all available profiles.
 **Solution:**
 - Try different search queries
 - Use more specific terms
-- Try `--source drive` for Google Drive search
-
-## Chrome/Headless Issues
-
-### Chrome Crashes
-
-**Problem:** Chrome crashes during authentication.
-
-**Solution:**
-- Ensure Chrome is fully updated
-- Close all Chrome processes before running
-- Try restarting your system
-
-### Headless Mode Required
-
-**Problem:** Chrome cannot run in headless environment.
-
-**Solution:**
-- Set environment variable for headless mode
-- Check Chrome flags and permissions
-- Consider using a virtual display (Xvfb)
+- Try `--from drive` for Google Drive search
 
 ## Common Error Messages
 
@@ -204,53 +134,10 @@ Run `nlm login` to authenticate.
 Run `nlm login` to refresh session.
 
 ### "Notebook not found"
-Verify the notebook ID is correct using `nlm notebook list`.
+Verify notebook IDs with `nlm list`.
 
 ### "Source not found"
-Verify the source ID is correct using `nlm source list <notebook-id>`.
+Verify source IDs with `nlm source list -n <notebook-id>`.
 
 ### "Rate limit exceeded"
 Wait before making more requests.
-
-### "Chrome not found"
-Ensure Google Chrome is installed and in PATH.
-
-### "Profile not found"
-Run `nlm auth list` to see available profiles.
-
-## Debugging Tips
-
-### Enable Verbose Output
-Some commands support verbose flags. Check command help.
-
-### Check Logs
-Look for error details in command output.
-
-### Verify Resources First
-Before generating content, verify notebook has sources:
-```bash
-nlm notebook get <id>
-nlm source list <id>
-```
-
-### Use --json for Parsing
-```bash
-nlm notebook list --json | jq '.'
-```
-
-## Environment-Specific Issues
-
-### WSL (Windows Subsystem for Linux)
-- Ensure Chrome is accessible from WSL
-- May need to use Windows Chrome path
-- Firewall may block connections
-
-### Docker/Containers
-- Chrome must be installed in container
-- May need `--cap-add=SYS_ADMIN`
-- DISPLAY environment variable must be set
-
-### Remote Servers
-- Headless Chrome configuration required
-- Xvfb may be needed for display
-- Firewall/network restrictions apply

@@ -38,14 +38,14 @@ gemini -i "Start researching topic X"
 For deep research with source synthesis:
 
 ```bash
-# Quick search (~30s)
-nlm research start "your query" --notebook-id <id>
+# Quick search (adds sources to notebook)
+nlm source add-research "your query" --notebook <id>
 
-# Deep research (~5min)
-nlm research start "your query" --notebook-id <id> --mode deep
+# Deep research (adds sources to notebook)
+nlm source add-research "your query" --notebook <id> --mode deep
 
-# Query synthesized sources
-nlm notebook query <id> "your question"
+# Query notebook sources
+nlm ask -n <id> --new "your question"
 ```
 
 ## When to Use What
@@ -54,9 +54,9 @@ nlm notebook query <id> "your question"
 |------|------|
 | Quick web search | `gemini "query"` |
 | One-shot Q&A | `gemini "question"` |
-| Deep research with sources | `nlm research start --mode deep` |
-| Query documents/sources | `nlm notebook query` |
-| Generate podcast | `nlm audio create` |
+| Deep research with sources | `nlm source add-research --mode deep` |
+| Query documents/sources | `nlm ask -n <id>` |
+| Generate podcast | `nlm generate audio` |
 
 ## No API Keys Needed
 

@@ -1,0 +1,78 @@
+{
+  "drive": {
+    "account": "jeremy@kimbleconsultancy.com",
+    "root_folder": "Thanos",
+    "base_folder": "GalaxyDocs"
+  },
+  "file_search_defaults": {
+    "max_results": 20,
+    "include_results": true,
+    "strict": true,
+    "score_threshold": 0.25,
+    "context_results": 3,
+    "context_chars": 4000,
+    "ranking_options": {
+      "ranker": "auto",
+      "score_threshold": 0.25
+    }
+  },
+  "notebooks": {
+    "orders_hod": {
+      "title": "Epic Orders / HOD guide",
+      "vector_store_id": "vs_6982ceae14188191a6960330094e2b07",
+      "notebooklm_id": "c5cb5306-b41e-41be-b7ba-451b5527ecf3",
+      "drive_folder_name": "orders_hod",
+      "drive_folder_id": "1ctFNpALb31QY6FeuPMnR16P68vRpl7f-",
+      "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/orders_hod",
+      "query_hints": [
+        "Order Set",
+        "SmartSet",
+        "SmartGroup",
+        "Order Composer",
+        "Order Template",
+        "Order-Specific Questions",
+        "Preference List",
+        "Panels"
+      ],
+      "source_paths": [
+        "/Users/jeremy/Projects/Thanos/data/galaxy_docs/orders_hod"
+      ]
+    },
+    "versacare": {
+      "title": "KY - ScottCare Integration Versacare",
+      "vector_store_id": "vs_6982ceb395e48191980c6a3f52da7094",
+      "notebooklm_id": "9e3f2c1f-4490-424c-9d2d-21497ea1958c",
+      "drive_folder_name": "versacare",
+      "drive_folder_id": "1z0QfsbaMIBSwjC4GhmB1HRscCU8QCFhy",
+      "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/versacare",
+      "query_hints": [
+        "VersaCare",
+        "ScottCare",
+        "Cardiac Rehab",
+        "Telemonitoring"
+      ],
+      "source_paths": [
+        "/Users/jeremy/Projects/Thanos/data/galaxy_docs/versacare"
+      ]
+    }
+  },
+  "matching": {
+    "orders_hod": [
+      "orderset",
+      "order set",
+      "order sets",
+      "smartset",
+      "osq",
+      "hod",
+      "order composer",
+      "smartgroup"
+    ],
+    "versacare": [
+      "versacare",
+      "scottcare",
+      "cardiac rehab",
+      "telemonitoring",
+      "rehab"
+    ]
+  }
+}

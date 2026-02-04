@@ -218,6 +218,20 @@ See `skills/Productivity/references/budgets.md` for category IDs.
   - ⚠️ WARNING: Category >100%, high burn rate
   - ℹ️ INFO: Impulse patterns, approaching limits
 
+### Synapse OpenClaw Integration ✅ WORKING
+- **Agent:** `synapse` (separate from main, think, sonnet)
+- **Workspace:** `~/.openclaw/workspaces/synapse` (minimal, no Thanos files)
+- **Model:** Haiku with Sonnet fallback
+- **Key fix:** The `main` agent's workspace (AGENTS.md, SOUL.md, HEARTBEAT.md) contains "reply HEARTBEAT_OK" instructions that were overriding Synapse's system prompt
+- **Solution:** Created dedicated synapse agent with empty workspace
+- **Fallback:** HEARTBEAT_OK detection in Synapse converts heartbeat responses to friendly chat
+
+### Synapse Workspace Files (Critical)
+The synapse workspace must explicitly override OpenClaw's silent reply behavior:
+- **AGENTS.md:** "NEVER use NO_REPLY or HEARTBEAT_OK, ALWAYS respond"
+- **HEARTBEAT.md:** "This is a CHAT interface, you MUST respond to every message"
+- Without these overrides, OpenClaw's base system prompt causes NO_REPLY → "No response from OpenClaw."
+
 ### WorkOS MCP Server (Full CRUD Access) ✅ VERIFIED WORKING
 - **Location:** `/Users/jeremy/Projects/WorkOS-v3/mcp-server/`
 - **Start script:** `/Users/jeremy/Projects/WorkOS-v3/mcp-server/start.sh` (loads .env.local)
