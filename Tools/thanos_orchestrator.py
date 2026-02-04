@@ -1266,7 +1266,11 @@ You maintain a compact daily plan and a scoreboard.
             return {"content": "", "usage": None}
 
     def route(self, message: str, stream: bool = False, model: Optional[str] = None) -> Union[str, Dict]:
-        """Route a message through the Operator router and executor."""
+        """Route a message through the Operator router and executor.
+        
+        Uses simple keyword-based routing first, then falls back to chat() for 
+        conversational responses.
+        """
         
         # Model Escalation: Check if we should switch models based on complexity
         if model is None:  # Only auto-escalate if no model override specified
@@ -1286,57 +1290,30 @@ You maintain a compact daily plan and a scoreboard.
                 log_error("model_escalator", e, "Model escalation check failed")
         
         self._update_plan_and_scoreboard(message)
-        state_summary = self._build_state_summary()
-        tool_catalog = get_tool_catalog_text()
 
+        # Check for command pattern (e.g., /pa:daily or pa:daily)
         cmd_match = re.match(r'^/?(\w+:\w+)\s*(.*)?$', message)
         if cmd_match:
-            action = self.router._parse_action(json.dumps({
-                "respond": "",
-                "tool_calls": [
-                    {
-                        "name": "command.run",
-                        "arguments": {"command": cmd_match.group(1), "args": cmd_match.group(2) or ""}
-                    }
-                ],
-                "escalate": False,
-                "escalate_reason": "",
-                "escalate_task": ""
-            }))
-            exec_result = self.executor.execute(message, action, state_summary, model_override=model)
-            self._record_turn_log(
-                model=exec_result.model,
-                usage_entry=exec_result.usage_entry,
-                latency_ms=exec_result.latency_ms,
-                tool_call_count=exec_result.tool_call_count,
-                prompt_bytes=exec_result.prompt_bytes,
-                response_bytes=exec_result.response_bytes,
+            cmd_name = cmd_match.group(1)
+            cmd_args = cmd_match.group(2) or ""
+            result = self.run_command(cmd_name, cmd_args)
+            return {"content": result, "usage": None}
+
+        # Try keyword-based routing
+        router_result = self.router.route(message)
+        
+        # If keyword router found a good match with tool, execute it
+        if router_result.tool_name and router_result.confidence >= 0.7:
+            exec_result = self.executor.execute(
+                router_result.tool_name,
+                router_result.parameters
             )
-            return {"content": exec_result.text, "usage": exec_result.usage_entry}
-
-        router_result = self.router.route(message, state_summary, tool_catalog)
-        self._record_turn_log(
-            model=router_result.model,
-            usage_entry=router_result.usage_entry,
-            latency_ms=router_result.latency_ms,
-            tool_call_count=len(router_result.action.tool_calls),
-            prompt_bytes=router_result.prompt_bytes,
-            response_bytes=router_result.response_bytes,
-        )
-
-        if router_result.action.respond and not router_result.action.tool_calls and not router_result.action.escalate:
-            return {"content": router_result.action.respond, "usage": router_result.usage_entry}
-
-        exec_result = self.executor.execute(message, router_result.action, state_summary, model_override=model)
-        self._record_turn_log(
-            model=exec_result.model,
-            usage_entry=exec_result.usage_entry,
-            latency_ms=exec_result.latency_ms,
-            tool_call_count=exec_result.tool_call_count,
-            prompt_bytes=exec_result.prompt_bytes,
-            response_bytes=exec_result.response_bytes,
-        )
-        return {"content": exec_result.text, "usage": exec_result.usage_entry}
+            return {"content": exec_result.output, "usage": None}
+        
+        # If router has a fallback response (low confidence), use chat instead
+        # for a more natural conversational response
+        # Pass agent="default" to prevent chat() from recursing back to route()
+        return self.chat(message, agent="default", model=model)
 
     def list_commands(self) -> List[str]:
         """List all available commands."""
