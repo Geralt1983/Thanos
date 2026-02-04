@@ -9,6 +9,7 @@ entrypoint so OpenClaw always routes through Thanos architecture and tools.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +18,11 @@ from Tools import memory_capture_router
 
 
 logger = logging.getLogger(__name__)
+
+# Output control via environment variables
+QUIET_MODE = os.environ.get("THANOS_QUIET_MODE", "1") == "1"
+STREAMING_ENABLED = os.environ.get("THANOS_STREAMING", "0") == "1"
+SHOW_THINKING = os.environ.get("THANOS_SHOW_THINKING", "0") == "1"
 
 
 class OpenClawHarness:

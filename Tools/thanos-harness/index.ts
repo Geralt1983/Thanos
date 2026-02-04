@@ -5,6 +5,8 @@ type PluginCfg = {
   pythonBin?: string;
   timeoutMs?: number;
   allowLlmCapture?: boolean;
+  quietMode?: boolean;
+  streaming?: boolean;
 };
 
 function resolveThanosRoot(api: any, cfg: PluginCfg): string {
@@ -44,6 +46,8 @@ function runThanosRoute(
   };
 
   const scriptPath = path.join(thanosRoot, "Tools", "openclaw_cli.py");
+  const quietMode = pluginCfg.quietMode !== false; // Default to quiet
+  const streaming = pluginCfg.streaming === true; // Default to no streaming
   const stdout = execFileSync(pythonBin, [scriptPath, "route"], {
     cwd: thanosRoot,
     timeout: timeoutMs,
@@ -52,6 +56,9 @@ function runThanosRoute(
     env: {
       ...process.env,
       PATH: process.env.PATH ?? "",
+      THANOS_QUIET_MODE: quietMode ? "1" : "0",
+      THANOS_STREAMING: streaming ? "1" : "0",
+      THANOS_SHOW_THINKING: "0",
     },
   });
 

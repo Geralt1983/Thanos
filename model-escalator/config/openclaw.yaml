@@ -1,3 +1,10 @@
+# OpenClaw Output Control - Disable verbose/streaming output
+output:
+  streaming: false
+  show_thinking: false
+  verbose: false
+  quiet_mode: true
+
 model_escalator:
   enabled: true
   default_model: anthropic/claude-3-5-haiku-20241022

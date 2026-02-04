@@ -9,7 +9,9 @@
       "thanosRoot": { "type": "string" },
       "pythonBin": { "type": "string" },
       "timeoutMs": { "type": "number" },
-      "allowLlmCapture": { "type": "boolean" }
+      "allowLlmCapture": { "type": "boolean" },
+      "quietMode": { "type": "boolean", "default": true },
+      "streaming": { "type": "boolean", "default": false }
     }
   },
   "skills": ["./skills"]

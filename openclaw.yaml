@@ -1,4 +1,11 @@
 session:
+  # Output Control - Disable streaming/verbose output in TUI
+  output:
+    streaming: false
+    showThinking: false
+    verboseMode: false
+    quietMode: true
+
   # Model Escalator Plugin Configuration
   modelEscalator:
     enabled: true
