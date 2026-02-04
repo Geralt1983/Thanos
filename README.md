@@ -14,6 +14,10 @@ Thanos is an AI-powered orchestration system that enables seamless integration w
 
 ## Quick Start
 
+## ByteRover Context
+
+ByteRover stores its local context and logs under `.brv/`. This data is managed and synced through ByteRover tooling, not git, and should remain uncommitted. The repo’s `.gitignore` excludes `.brv/` and local logs accordingly.
+
 ### Installation
 
 ```bash
