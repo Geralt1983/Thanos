@@ -1,9 +1,9 @@
-# Workflows
+# Workflows (NotebookLM CLI v0.3+)
 
 ## Workflow 1: Create Audio Podcast from Research Sources
 
 ### Goal
-Generate an audio podcast overview from notebook sources.
+Generate an audio overview from notebook sources.
 
 ### Steps
 
@@ -14,403 +14,152 @@ Generate an audio podcast overview from notebook sources.
 
 2. **Create Notebook**
    ```bash
-   nlm notebook create "Podcast Project"
+   nlm create "Podcast Project"
    ```
-   Note the notebook ID from output.
 
 3. **Add Sources**
    ```bash
-   nlm source add <notebook-id> --url "https://example.com/article1"
-   nlm source add <notebook-id> --url "https://example.com/article2"
-   nlm source add <notebook-id> --text "Additional notes here" --title "My Notes"
+   nlm source add -n <notebook-id> --url "https://example.com/article1"
+   nlm source add -n <notebook-id> --url "https://example.com/article2"
+   nlm source add -n <notebook-id> --text "Additional notes here" --title "My Notes"
    ```
 
 4. **Verify Sources**
    ```bash
-   nlm source list <notebook-id>
+   nlm source list -n <notebook-id>
    ```
 
 5. **Generate Audio**
    ```bash
-   nlm audio create <notebook-id> --confirm
+   nlm generate audio -n <notebook-id> "brief overview" --wait
    ```
 
-6. **Check Status**
+6. **Check Artifacts**
    ```bash
-   nlm studio status <notebook-id>
+   nlm artifact list -n <notebook-id>
    ```
-
-### Complete One-Liner (After Setup)
-```bash
-nlm audio create <notebook-id> --confirm && nlm studio status <notebook-id>
-```
 
 ---
 
 ## Workflow 2: Create Study Materials from Documents
 
 ### Goal
-Generate quizzes, flashcards, and reports from notebook sources for studying.
+Generate quizzes, flashcards, and reports for studying.
 
 ### Steps
 
 1. **Setup Notebook**
    ```bash
-   nlm notebook create "Study Materials"
-   nlm source add <notebook-id> --url "https://lecture-notes.edu/course1"
-   nlm source add <notebook-id> --drive <doc-id>
+   nlm create "Study Materials"
+   nlm source add -n <notebook-id> --url "https://lecture-notes.edu/course1"
+   nlm source add-drive -n <notebook-id> --doc <doc-id>
    ```
 
-2. **Generate All Study Materials**
+2. **Generate Materials**
    ```bash
-   nlm quiz create <notebook-id> --confirm
-   nlm flashcards create <notebook-id> --confirm
-   nlm report create <notebook-id> --confirm
+   nlm generate quiz -n <notebook-id> "focus on key definitions" --wait
+   nlm generate flashcards -n <notebook-id> "key terms" --wait
+   nlm generate report -n <notebook-id> "study guide" --wait
    ```
 
-3. **Review Generated Content**
+3. **Review Outputs**
    ```bash
-   nlm studio status <notebook-id>
+   nlm artifact list -n <notebook-id>
    ```
-
-### Alternative: Interactive Chat
-```bash
-nlm notebook query <notebook-id> "What are the key concepts in these sources?"
-```
 
 ---
 
 ## Workflow 3: Create Presentation from Research
 
 ### Goal
-Generate slides and infographics for presenting notebook content.
+Generate slides and infographics from sources.
 
 ### Steps
 
 1. **Prepare Notebook**
    ```bash
-   nlm notebook create "Q4 Report"
-   nlm source add <notebook-id> --url "https://company-reports.com/q4-summary"
+   nlm create "Q4 Report"
+   nlm source add -n <notebook-id> --url "https://company-reports.com/q4-summary"
    ```
 
 2. **Generate Visual Content**
    ```bash
-   nlm slides create <notebook-id> --confirm
-   nlm infographic create <notebook-id> --confirm
+   nlm generate slide-deck -n <notebook-id> "stakeholder deck" --wait
+   nlm generate infographic -n <notebook-id> "visual summary" --wait
    ```
 
 3. **Check Outputs**
    ```bash
-   nlm studio status <notebook-id>
+   nlm artifact list -n <notebook-id>
    ```
-
-### For Multiple Presentation Types
-```bash
-nlm mindmap create <notebook-id> --confirm
-nlm video create <notebook-id> --confirm
-```
 
 ---
 
 ## Workflow 4: Research and Import Sources
 
 ### Goal
-Automatically discover and import relevant sources for a notebook.
+Discover and import sources automatically.
 
 ### Steps
 
 1. **Create Notebook**
    ```bash
-   nlm notebook create "AI Research"
+   nlm create "AI Research"
    ```
 
 2. **Start Research**
    ```bash
-   nlm research start "large language model prompting techniques" --notebook-id <id>
+   nlm source add-research -n <notebook-id> "large language model prompting techniques" --mode deep --no-wait
    ```
 
 3. **Check Progress**
    ```bash
-   nlm research status <notebook-id>
+   nlm research status
+   nlm research wait
    ```
-
-4. **Import Results**
-   Once research completes:
-   ```bash
-   nlm research import <notebook-id> <task-id>
-   ```
-
-### Deep Research (More Thorough)
-```bash
-nlm research start "machine learning transformers architecture" --notebook-id <id> --mode deep
-```
 
 ---
 
 ## Workflow 5: Interactive Q&A Session
 
 ### Goal
-Have an interactive conversation with notebook sources.
+Ask questions of notebook sources.
 
 ### Steps
 
-1. **Start Chat Session**
+1. **Ask Questions**
    ```bash
-   nlm chat start <notebook-id>
+   nlm ask -n <notebook-id> --new "What are the main arguments?"
+   nlm ask -n <notebook-id> "Summarize the key points."
    ```
 
-2. **Ask Questions**
-   ```
-   /sources
-   "What are the main arguments in these documents?"
-   "Can you summarize the key points?"
-   "What evidence supports claim X?"
+2. **Configure Persona (Optional)**
+   ```bash
+   nlm configure -n <notebook-id>
    ```
 
-3. **End Session**
-   ```
-   /exit
+3. **Review History (Optional)**
+   ```bash
+   nlm history -n <notebook-id>
    ```
 
-### One-Shot Query (No Session)
+---
+
+## Workflow 6: Export Artifacts
+
+### Goal
+Export generated artifacts to Google Docs/Sheets.
+
+### Steps
+
 ```bash
-nlm notebook query <notebook-id> "Summarize the main conclusions from these sources."
+nlm artifact list -n <notebook-id>
+nlm artifact export <artifact-id>
 ```
 
 ---
 
-## Workflow 6: Manage Multiple Google Accounts
+## Notes
 
-### Goal
-Work with different Google accounts for different notebooks.
-
-### Steps
-
-1. **Login to Work Account**
-   ```bash
-   nlm login --profile work
-   ```
-
-2. **Create Work Notebook**
-   ```bash
-   nlm notebook create "Work Project"
-   ```
-
-3. **Switch to Personal Account**
-   ```bash
-   nlm login --profile personal
-   ```
-
-4. **Create Personal Notebook**
-   ```bash
-   nlm notebook create "Personal Research"
-   ```
-
-5. **List Profiles**
-   ```bash
-   nlm auth list
-   ```
-
-### Using Specific Profile
-```bash
-nlm notebook list --profile work
-nlm audio create <id> --profile work --confirm
-```
-
----
-
-## Workflow 7: Sync Google Drive Sources
-
-### Goal
-Keep Drive sources up to date with latest changes.
-
-### Steps
-
-1. **List Notebook**
-   ```bash
-   nlm notebook list
-   ```
-
-2. **Check Stale Sources**
-   ```bash
-   nlm source stale <notebook-id>
-   ```
-
-3. **Sync Sources**
-   ```bash
-   nlm source sync <notebook-id> --confirm
-   ```
-
-### Quick Sync with Drive-Only Listing
-```bash
-nlm source list <notebook-id> --drive -S
-```
-
----
-
-## Workflow 8: Create Data Tables from Sources
-
-### Goal
-Extract structured data tables from notebook sources.
-
-### Steps
-
-1. **Create Notebook with Data Sources**
-   ```bash
-   nlm notebook create "Data Analysis"
-   nlm source add <notebook-id> --url "https://data-report.com/statistics"
-   ```
-
-2. **Generate Data Table**
-   ```bash
-   nlm data-table create <notebook-id> "quarterly revenue by region" --confirm
-   ```
-
-3. **View Results**
-   ```bash
-   nlm studio status <notebook-id>
-   ```
-
-### Multiple Data Extractions
-```bash
-nlm data-table create <notebook-id> "customer demographics breakdown" --confirm
-nlm data-table create <notebook-id> "sales performance metrics" --confirm
-```
-
----
-
-## Workflow 9: Use Aliases for Frequently Accessed Notebooks
-
-### Goal
-Create memorable shortcuts for long notebook UUIDs.
-
-### Steps
-
-1. **List Notebooks**
-   ```bash
-   nlm notebook list
-   ```
-
-2. **Create Alias**
-   ```bash
-   nlm alias set myproject abc123-def456-7890-...
-   ```
-
-3. **Use Alias Everywhere**
-   ```bash
-   nlm notebook get myproject
-   nlm source list myproject
-   nlm audio create myproject --confirm
-   ```
-
-4. **Manage Aliases**
-   ```bash
-   nlm alias list
-   nlm alias get myproject
-   nlm alias delete myproject
-   ```
-
----
-
-## Workflow 10: Complete Project Setup to Generation
-
-### Goal
-Full workflow: authenticate, create notebook, add sources, generate multiple content types.
-
-### Steps
-
-1. **Authenticate**
-   ```bash
-   nlm login
-   ```
-
-2. **Create Project Notebook**
-   ```bash
-   nlm notebook create "Complete Project"
-   ```
-
-3. **Add Multiple Sources**
-   ```bash
-   nlm source add <id> --url "https://article1.com"
-   nlm source add <id> --url "https://article2.com"
-   nlm source add <id> --text "Additional context" --title "Context Notes"
-   ```
-
-4. **Generate All Content Types**
-   ```bash
-   nlm audio create <id> --confirm
-   nlm report create <id> --confirm
-   nlm quiz create <id> --confirm
-   nlm flashcards create <id> --confirm
-   nlm slides create <id> --confirm
-   nlm mindmap create <id> --confirm
-   ```
-
-5. **Review All Artifacts**
-   ```bash
-   nlm studio status <id>
-   ```
-
----
-
-## Workflow 11: Batch Operations with JSON Output
-
-### Goal
-Script multiple operations using JSON output for parsing.
-
-### Steps
-
-1. **List All Notebooks as JSON**
-   ```bash
-   nlm notebook list --json > notebooks.json
-   ```
-
-2. **Extract Notebook IDs**
-   ```bash
-   cat notebooks.json | jq -r '.[].id' | while read id; do
-     nlm audio create "$id" --confirm
-   done
-   ```
-
-3. **Check Status in Batch**
-   ```bash
-   for id in $(cat notebooks.json | jq -r '.[].id'); do
-     echo "Notebook: $id"
-     nlm studio status "$id"
-   done
-   ```
-
-### Quiet Mode for Scripting
-```bash
-nlm notebook list --quiet | xargs -I {} nlm audio create {} --confirm
-```
-
----
-
-## Workflow 12: Use AI Documentation for Learning
-
-### Goal
-Get comprehensive documentation for AI assistant consumption.
-
-### Steps
-
-1. **Generate AI Documentation**
-   ```bash
-   nlm --ai > nlm-ai-docs.md
-   ```
-
-2. **Use in Claude/GPT Context**
-   Paste the output to teach AI assistants about nlm usage.
-
-3. **Quick Reference**
-   ```bash
-   nlm --ai | head -100
-   ```
-
-### Include in Skill Documentation
-The `--ai` output includes:
-- All command signatures
-- Authentication flow
-- Error handling procedures
-- Task sequences
-- AI automation tips
+- Use partial IDs (prefixes) for notebooks, sources, and artifacts.
+- Add `--wait` to generation commands when you need blocking output.

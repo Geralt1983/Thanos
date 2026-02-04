@@ -113,3 +113,14 @@ mcp-servers/aiswarm/
 .worktrees/
 .security-key
 logs/security/
+
+# ByteRover local state
+.brv/
+
+# Local logs/output
+logs/
+output/
+
+# Local model state DBs
+model_escalator_state.db
+model_prefix_state.db

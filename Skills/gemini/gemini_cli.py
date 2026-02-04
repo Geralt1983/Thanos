@@ -3,15 +3,15 @@
 Gemini CLI - Unified interface for Gemini + NotebookLM research.
 
 Usage:
-    # Web search via NotebookLM
+    # Web search via NotebookLM research (adds sources)
     ./gemini_cli.py search "query" --notebook <id>
-    
-    # Deep research via NotebookLM
-    ./gemini_cli.py research "query" --notebook <id> --deep
-    
+
+    # Deep research via NotebookLM (adds sources, deeper search)
+    ./gemini_cli.py search "query" --notebook <id> --deep
+
     # One-shot generation via Gemini API
     ./gemini_cli.py generate "prompt"
-    
+
     # Query NotebookLM sources
     ./gemini_cli.py query "question" --notebook <id>
 """
@@ -50,7 +50,7 @@ class GeminiCLI:
         Returns:
             Research results
         """
-        cmd = ['nlm', 'research', 'start', query, '--notebook-id', notebook_id]
+        cmd = ['nlm', 'source', 'add-research', query, '--notebook', notebook_id]
         if deep:
             cmd.extend(['--mode', 'deep'])
         
@@ -77,7 +77,7 @@ class GeminiCLI:
         Returns:
             Query response
         """
-        cmd = ['nlm', 'notebook', 'query', notebook_id, question]
+        cmd = ['nlm', 'ask', '-n', notebook_id, '--new', question]
         
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -120,7 +120,7 @@ class GeminiCLI:
         """List available NotebookLM notebooks."""
         try:
             result = subprocess.run(
-                ['nlm', 'notebook', 'list', '--json'],
+                ['nlm', 'list', '--json'],
                 capture_output=True, text=True, timeout=30
             )
             if result.returncode == 0:

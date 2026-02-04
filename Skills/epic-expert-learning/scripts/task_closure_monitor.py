@@ -22,6 +22,7 @@ Usage:
     python task_closure_monitor.py --task-id <id> --interactive
 """
 
+import asyncio
 import json
 import os
 import sys
@@ -642,11 +643,63 @@ class TaskClosureMonitor:
         Returns:
             List of task dicts
         """
-        # TODO: Implement actual WorkOS API integration
-        # For now, return empty list (placeholder)
-        print("⚠️  WorkOS API integration not implemented yet")
-        print("   Use --task-id or --task-json for manual processing")
-        return []
+        try:
+            from Tools.core.workos_gateway import WorkOSGateway
+        except Exception as exc:  # pragma: no cover - dependency guard
+            print(f"⚠️  WorkOS gateway unavailable: {exc}")
+            print("   Run with the repo virtualenv to enable WorkOS sync.")
+            return []
+
+        async def _fetch() -> List[Dict]:
+            gateway = WorkOSGateway()
+            tasks: List[Dict] = []
+            try:
+                for status in ("done", "complete", "completed"):
+                    result = await gateway.get_tasks(status=status, limit=100)
+                    if isinstance(result, list):
+                        tasks.extend(result)
+            finally:
+                await gateway.close()
+
+            # Deduplicate by task id
+            seen = set()
+            unique_tasks = []
+            for task in tasks:
+                task_id = task.get("id")
+                if task_id in seen:
+                    continue
+                seen.add(task_id)
+                unique_tasks.append(task)
+            return unique_tasks
+
+        try:
+            tasks = asyncio.run(_fetch())
+        except RuntimeError:
+            # Fallback if already in an event loop
+            loop = asyncio.new_event_loop()
+            try:
+                tasks = loop.run_until_complete(_fetch())
+            finally:
+                loop.close()
+
+        if since is None:
+            return tasks
+
+        filtered = []
+        for task in tasks:
+            completed_at = task.get("completed_at")
+            if not completed_at:
+                continue
+            try:
+                parsed = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            if parsed > since:
+                filtered.append(task)
+
+        return filtered
 
     def monitor_loop(self, interval: int = 300):
         """
