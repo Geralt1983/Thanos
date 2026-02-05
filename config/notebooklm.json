@@ -84,7 +84,15 @@
         "/Users/jeremy/Projects/Thanos/data/galaxy_docs/ncdhhs_radiology"
       ],
       "vector_store_id": "vs_69839cb57fa08191b8c04088bda9c684",
-      "drive_folder_id": "1HEh2OlwGXH9nMAgvi_JbzpKXaYDxyrSu"
+      "drive_folder_id": "1t00PS76NuT5aM_CtAV1wLJQ1i8fsDXm9"
+    },
+    "ncdhhs_radiology_pdf": {
+      "title": "NCDHHS Radiology PDFs",
+      "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/ncdhhs_radiology_pdf",
+      "source_paths": [
+        "/Users/jeremy/Projects/Thanos/eml_to_pdf_temp/ncdhhs_output"
+      ],
+      "vector_store_id": "vs_6983e6aa31b481919cf6ef1327f7d889"
     }
   },
   "matching": {

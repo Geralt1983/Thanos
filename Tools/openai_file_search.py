@@ -33,6 +33,41 @@ DEFAULT_CONTEXT_CHARS = 4000
 DEFAULT_STRICT = True
 DEFAULT_INCLUDE_RESULTS = True
 
+# Notebook alias mappings - shorthand names to canonical notebook keys
+NOTEBOOK_ALIASES = {
+    # NCDHHS Radiology aliases - point to ncdhhs_radiology_pdf which has actual documents
+    "ncdhhs": "ncdhhs_radiology_pdf",
+    "nc dhhs": "ncdhhs_radiology_pdf",
+    "nc_dhhs": "ncdhhs_radiology_pdf",
+    "radiology": "ncdhhs_radiology_pdf",
+    "ncdhhs_radiology": "ncdhhs_radiology_pdf",  # Redirect old key to new
+    "ncdhhs_pdf": "ncdhhs_radiology_pdf",
+
+    # Orders/HOD aliases
+    "orders": "orders_hod",
+    "hod": "orders_hod",
+    "epic": "orders_hod",
+    "epic orders": "orders_hod",
+    "epic_orders": "orders_hod",
+    "orderset": "orders_hod",
+    "ordersets": "orders_hod",
+    "smartset": "orders_hod",
+    "smartsets": "orders_hod",
+
+    # VersaCare aliases
+    "scottcare": "versacare",
+    "scott_care": "versacare",
+    "kentucky": "versacare",
+    "ky": "versacare",
+    "cardiac": "versacare",
+    "cardiac_rehab": "versacare",
+
+    # Drive inbox aliases
+    "inbox": "drive_inbox",
+    "drive": "drive_inbox",
+    "drive inbox": "drive_inbox",
+}
+
 try:
     import openai
 except ImportError:  # pragma: no cover - optional dependency
@@ -259,18 +294,51 @@ def _get_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _resolve_alias(key: str) -> str:
+    """Resolve a notebook alias to its canonical key."""
+    # Normalize: lowercase and strip
+    normalized = key.lower().strip()
+
+    # Check direct alias match
+    if normalized in NOTEBOOK_ALIASES:
+        return NOTEBOOK_ALIASES[normalized]
+
+    # Check underscore/space variants
+    variants = [
+        normalized.replace(" ", "_"),
+        normalized.replace("_", " "),
+        normalized.replace("-", "_"),
+    ]
+    for variant in variants:
+        if variant in NOTEBOOK_ALIASES:
+            return NOTEBOOK_ALIASES[variant]
+
+    # No alias found, return original
+    return key
+
+
 def _resolve_store(config: Dict[str, Any], key: Optional[str], vector_store_id: Optional[str]) -> Tuple[str, str]:
     if vector_store_id:
         return vector_store_id, vector_store_id
     if not key:
         raise ValueError("Provide --key or --vector-store-id.")
-    notebook = config.get("notebooks", {}).get(key)
+
+    # Resolve aliases first
+    resolved_key = _resolve_alias(key)
+
+    notebook = config.get("notebooks", {}).get(resolved_key)
     if not notebook:
-        raise KeyError(f"Unknown notebook key: {key}")
+        # Try exact key as fallback (for future notebooks)
+        notebook = config.get("notebooks", {}).get(key)
+        if not notebook:
+            available = list(config.get("notebooks", {}).keys())
+            raise KeyError(f"Unknown notebook key: {key} (resolved to: {resolved_key}). Available: {available}")
+        resolved_key = key
+
     store_id = notebook.get("vector_store_id")
     if not store_id:
-        raise ValueError(f"Missing vector_store_id for key '{key}'.")
-    return store_id, key
+        raise ValueError(f"Missing vector_store_id for key '{resolved_key}'.")
+    return store_id, resolved_key
 
 
 def _apply_query_hints(prompt: str, hints: Optional[List[str]]) -> str:

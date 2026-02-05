@@ -1,6 +1,6 @@
 /**
  * Agentic Flow Statusline for Claude Code
- * Shows model, tokens, cost, swarm status, and memory usage
+ * Shows model, tokens, cost, swarm status, agents, and memory usage
  */
 
 import { execSync } from 'child_process';
@@ -8,7 +8,43 @@ import { execSync } from 'child_process';
 // Cache for expensive operations
 let lastSwarmCheck = 0;
 let cachedSwarmStatus = null;
+let cachedAgentCounts = null;
 const CACHE_TTL = 5000; // 5 seconds
+
+/**
+ * Get agent/swarm counts from running processes
+ */
+function getAgentCounts() {
+  const now = Date.now();
+  if (cachedAgentCounts && (now - lastSwarmCheck) < CACHE_TTL) {
+    return cachedAgentCounts;
+  }
+
+  try {
+    // Count Claude subagent processes (resumed agents = subagents)
+    const psResult = execSync('ps aux | grep -c "claude.*--resume" 2>/dev/null || echo "0"', {
+      encoding: 'utf-8',
+      timeout: 2000
+    }).trim();
+
+    // Subtract 1 for the grep process itself
+    const subagents = Math.max(0, parseInt(psResult, 10) - 1);
+
+    // Count main Claude sessions (interactive terminals)
+    const sessionsResult = execSync('ps aux | grep -E "claude.*--dangerously-skip" | grep -v grep | wc -l 2>/dev/null || echo "0"', {
+      encoding: 'utf-8',
+      timeout: 2000
+    }).trim();
+
+    const sessions = parseInt(sessionsResult, 10) || 0;
+
+    cachedAgentCounts = { subagents, sessions };
+    return cachedAgentCounts;
+  } catch {
+    cachedAgentCounts = { subagents: 0, sessions: 0 };
+    return cachedAgentCounts;
+  }
+}
 
 /**
  * Get swarm status (cached)
@@ -92,6 +128,15 @@ export default function statusline(context) {
 
   // Swarm/MCP status indicator
   parts.push(getSwarmStatus());
+
+  // Agent counts
+  const agents = getAgentCounts();
+  if (agents.subagents > 0 || agents.sessions > 1) {
+    const agentInfo = [];
+    if (agents.sessions > 0) agentInfo.push(`${agents.sessions}🖥️`);
+    if (agents.subagents > 0) agentInfo.push(`${agents.subagents}🤖`);
+    parts.push(agentInfo.join(' '));
+  }
 
   // Session time
   if (context.sessionStartTime) {
