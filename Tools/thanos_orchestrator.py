@@ -1265,6 +1265,48 @@ You maintain a compact daily plan and a scoreboard.
             log_error(e, {"operation": "chat", "agent": agent_obj.name if agent_obj else 'default'})
             return {"content": "", "usage": None}
 
+    def _try_rag_query(self, message: str) -> Optional[str]:
+        """Try to answer a query using RAG if it matches a domain notebook.
+
+        Returns the RAG answer if successful and relevant, None otherwise.
+        Uses rag_natural for domain detection and querying.
+        """
+        try:
+            from Tools.rag_natural import query_natural, detect_notebook
+        except ImportError:
+            return None
+
+        # Detect if this is a domain-specific question
+        notebook, confidence = detect_notebook(message)
+
+        # Only use RAG for questions that clearly match a domain (>0.5 confidence)
+        # Low confidence means it's probably a general question
+        if confidence < 0.5:
+            return None
+
+        # Query RAG
+        try:
+            result = query_natural(message, notebook=notebook)
+
+            # Check if RAG found useful content
+            if result.get("error"):
+                return None
+
+            answer = result.get("answer", "")
+
+            # Don't use RAG response if it says "couldn't find" or is too short
+            if "couldn't find specific information" in answer.lower():
+                return None
+            if len(answer) < 100:
+                return None
+
+            # Return the RAG answer with notebook context
+            return f"[RAG: {notebook}]\n\n{answer}"
+
+        except Exception as e:
+            log_error("rag_query", e, f"RAG query failed for notebook {notebook}")
+            return None
+
     def route(self, message: str, stream: bool = False, model: Optional[str] = None) -> Union[str, Dict]:
         """Route a message through the Operator router and executor.
         
@@ -1313,6 +1355,11 @@ You maintain a compact daily plan and a scoreboard.
                 content = self._maybe_append_epic_learning(message, content)
             return {"content": content, "usage": None}
         
+        # Try RAG lookup for domain-specific questions BEFORE falling back to chat
+        rag_result = self._try_rag_query(message)
+        if rag_result:
+            return {"content": rag_result, "usage": None}
+
         # If router has a fallback response (low confidence), use chat instead
         # for a more natural conversational response
         # Pass agent="default" to prevent chat() from recursing back to route()
