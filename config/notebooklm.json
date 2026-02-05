@@ -25,6 +25,11 @@
       "drive_folder_name": "orders_hod",
       "drive_folder_id": "1ctFNpALb31QY6FeuPMnR16P68vRpl7f-",
       "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/orders_hod",
+      "routing_keywords": [
+        "epic", "order", "orders", "orderset", "order set", "smartset", "smart set",
+        "smartgroup", "smart group", "hod", "panel", "panels", "osq", "preference list",
+        "order composer", "patient list", "workflow", "clindoc"
+      ],
       "query_hints": [
         "Order Set",
         "SmartSet",
@@ -46,6 +51,10 @@
       "drive_folder_name": "versacare",
       "drive_folder_id": "1z0QfsbaMIBSwjC4GhmB1HRscCU8QCFhy",
       "local_cache_dir": "/Users/jeremy/Projects/Thanos/data/galaxy_docs/versacare",
+      "routing_keywords": [
+        "versacare", "scottcare", "scott care", "kentucky", "ky", "cardiac",
+        "cardiac rehab", "telemonitoring", "remote monitoring", "heart monitoring"
+      ],
       "query_hints": [
         "VersaCare",
         "ScottCare",
@@ -92,7 +101,11 @@
       "source_paths": [
         "/Users/jeremy/Projects/Thanos/eml_to_pdf_temp/ncdhhs_output"
       ],
-      "vector_store_id": "vs_6983e6aa31b481919cf6ef1327f7d889"
+      "vector_store_id": "vs_6983e6aa31b481919cf6ef1327f7d889",
+      "routing_keywords": [
+        "ncdhhs", "nc dhhs", "north carolina", "radiology", "imaging",
+        "dhhs", "raleigh", "state health", "medicaid imaging"
+      ]
     }
   },
   "matching": {

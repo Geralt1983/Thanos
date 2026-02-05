@@ -1265,6 +1265,88 @@ You maintain a compact daily plan and a scoreboard.
             log_error(e, {"operation": "chat", "agent": agent_obj.name if agent_obj else 'default'})
             return {"content": "", "usage": None}
 
+    def _should_web_search(self, message: str) -> bool:
+        """Detect if a message would benefit from web search.
+
+        Returns True for current events, general knowledge, or explicit search requests.
+        """
+        message_lower = message.lower()
+
+        # Explicit search triggers
+        explicit_triggers = [
+            "search", "look up", "find out", "what's new", "latest",
+            "current", "today", "this week", "recent", "news about",
+            "trending", "breaking", "announcement"
+        ]
+        for trigger in explicit_triggers:
+            if trigger in message_lower:
+                return True
+
+        # Question patterns that suggest current knowledge
+        current_patterns = [
+            r"\bwhat\s+is\s+happening\b",
+            r"\bwhat's\s+going\s+on\b",
+            r"\bwho\s+is\s+winning\b",
+            r"\bcurrent\s+(?:state|status|situation|price)\b",
+            r"\bstock\s+price\b",
+            r"\bweather\b",
+        ]
+        for pattern in current_patterns:
+            if re.search(pattern, message_lower):
+                return True
+
+        return False
+
+    def _try_web_search(self, message: str) -> Optional[str]:
+        """Try to answer a query using web search (Perplexity/Grok).
+
+        Returns the web search answer if successful, None otherwise.
+        Used as fallback when RAG doesn't match and question seems to need current info.
+        """
+        if not self._should_web_search(message):
+            return None
+
+        try:
+            from Tools.web_search import unified_search
+        except ImportError:
+            try:
+                from Tools.perplexity_search import perplexity_search as unified_search
+            except ImportError:
+                return None
+
+        try:
+            result = unified_search(message)
+
+            # Check for errors
+            if result.get("error") or result.get("perplexity_error"):
+                log_error("web_search", None, f"Web search failed: {result.get('error') or result.get('perplexity_error')}")
+                return None
+
+            # Get content from result
+            content = result.get("content") or result.get("answer")
+            if not content:
+                # Try to extract from combined sources
+                sources = result.get("sources", [])
+                if sources and isinstance(sources[0], dict):
+                    content = sources[0].get("content", "")
+
+            if not content or len(content) < 50:
+                return None
+
+            # Format with citations if available
+            citations = result.get("citations", [])
+            response = f"[Web Search]\n\n{content}"
+
+            if citations and len(citations) > 0:
+                response += "\n\n📚 Sources: "
+                response += ", ".join(citations[:3])
+
+            return response
+
+        except Exception as e:
+            log_error("web_search", e, "Web search failed")
+            return None
+
     def _try_rag_query(self, message: str) -> Optional[str]:
         """Try to answer a query using RAG if it matches a domain notebook.
 
@@ -1359,6 +1441,11 @@ You maintain a compact daily plan and a scoreboard.
         rag_result = self._try_rag_query(message)
         if rag_result:
             return {"content": rag_result, "usage": None}
+
+        # Try web search for current events / general knowledge questions
+        web_result = self._try_web_search(message)
+        if web_result:
+            return {"content": web_result, "usage": None}
 
         # If router has a fallback response (low confidence), use chat instead
         # for a more natural conversational response

@@ -400,7 +400,53 @@ def _download_drive_file(account: str, file_id: str, out_path: Path) -> None:
         raise RuntimeError(result.stderr.strip() or "gog drive download failed")
 
 
-def _create_store(config: Dict[str, Any], key: str, name: Optional[str], timeout: int) -> str:
+def _prompt_for_keywords(notebook_key: str, interactive: bool = True) -> List[str]:
+    """
+    Prompt user for routing keywords when creating a new store.
+    Returns list of keywords for routing decisions.
+    """
+    if not interactive:
+        return []
+
+    print(f"\n📝 Setting up routing keywords for '{notebook_key}'")
+    print("   Keywords help Thanos route questions to the right notebook.")
+    print("   Enter keywords/phrases that should trigger this notebook.")
+    print("   Examples: 'epic', 'order set', 'smartset', 'radiology', 'nc dhhs'")
+    print("   Press Enter with no input when done.\n")
+
+    keywords: List[str] = []
+    while True:
+        try:
+            keyword = input(f"   Keyword {len(keywords) + 1}: ").strip()
+            if not keyword:
+                break
+            # Normalize: lowercase, strip extra whitespace
+            normalized = " ".join(keyword.lower().split())
+            if normalized and normalized not in keywords:
+                keywords.append(normalized)
+                print(f"   ✓ Added: '{normalized}'")
+            elif normalized in keywords:
+                print(f"   ⚠️ Already added: '{normalized}'")
+        except (KeyboardInterrupt, EOFError):
+            print("\n   Cancelled keyword entry.")
+            break
+
+    if keywords:
+        print(f"\n   ✅ Added {len(keywords)} keywords: {', '.join(keywords)}")
+    else:
+        print("\n   ℹ️ No keywords added. You can add them later in config/notebooklm.json")
+
+    return keywords
+
+
+def _create_store(
+    config: Dict[str, Any],
+    key: str,
+    name: Optional[str],
+    timeout: int,
+    keywords: Optional[List[str]] = None,
+    interactive: bool = True,
+) -> str:
     client = _require_client(model="gpt-4.1-mini", timeout=timeout)
     notebook = config.get("notebooks", {}).get(key)
     if not notebook:
@@ -408,6 +454,14 @@ def _create_store(config: Dict[str, Any], key: str, name: Optional[str], timeout
     store_name = name or notebook.get("title") or key
     store = client._client.vector_stores.create(name=store_name)
     notebook["vector_store_id"] = store.id
+
+    # Prompt for keywords if not provided and interactive mode
+    if keywords is None and interactive:
+        keywords = _prompt_for_keywords(key, interactive=True)
+
+    if keywords:
+        notebook["routing_keywords"] = keywords
+
     _save_config(config)
     return store.id
 
@@ -646,6 +700,8 @@ def main() -> None:
     create_parser.add_argument("--key", required=True, help="Notebook key in config/notebooklm.json")
     create_parser.add_argument("--name", help="Optional vector store name override")
     create_parser.add_argument("--timeout", type=int, default=120, help="API timeout in seconds")
+    create_parser.add_argument("--keywords", nargs="+", help="Routing keywords (space-separated)")
+    create_parser.add_argument("--no-prompt", action="store_true", help="Skip interactive keyword prompt")
 
     upload_parser = subparsers.add_parser("upload", help="Upload PDFs to a vector store.")
     upload_parser.add_argument("--key", help="Notebook key in config/notebooklm.json")
@@ -681,7 +737,9 @@ def main() -> None:
     config = _load_config()
 
     if args.command == "create-store":
-        store_id = _create_store(config, args.key, args.name, args.timeout)
+        interactive = not args.no_prompt
+        keywords = args.keywords if args.keywords else None
+        store_id = _create_store(config, args.key, args.name, args.timeout, keywords=keywords, interactive=interactive)
         print(f"Created vector store for '{args.key}': {store_id}")
         return
 

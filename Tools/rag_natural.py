@@ -21,60 +21,68 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from Tools.openai_file_search import OpenAIFileSearchClient, _load_config, _get_defaults
 
-# Notebook routing patterns - order matters (most specific first)
-NOTEBOOK_PATTERNS = [
-    # NCDHHS / Radiology patterns
-    (r"\bncdhhs\b", "ncdhhs_radiology"),
-    (r"\bnc\s*dhhs\b", "ncdhhs_radiology"),
-    (r"\bradiology\b", "ncdhhs_radiology"),
-    (r"\bnorth\s*carolina.*health", "ncdhhs_radiology"),
-
-    # Orders / Epic / HOD patterns
-    (r"\border\s*set", "orders_hod"),
-    (r"\bsmart\s*set", "orders_hod"),
-    (r"\bsmart\s*group", "orders_hod"),
-    (r"\bpreference\s*list", "orders_hod"),
-    (r"\border\s*composer", "orders_hod"),
-    (r"\bhod\b", "orders_hod"),
-    (r"\bepic\b", "orders_hod"),
-    (r"\bpatient\s*list", "orders_hod"),
-    (r"\borders?\b", "orders_hod"),
-    (r"\bpanel", "orders_hod"),
-    (r"\bworkflow", "orders_hod"),
-    (r"\bextension\s*record", "orders_hod"),
-    (r"\bmanage\s*orders", "orders_hod"),
-    (r"\bosq\b", "orders_hod"),
-
-    # VersaCare / ScottCare patterns
-    (r"\bversacare\b", "versacare"),
-    (r"\bscottcare\b", "versacare"),
-    (r"\bkentucky\b", "versacare"),
-    (r"\bcardiac\s*rehab", "versacare"),
-    (r"\btelemonitoring\b", "versacare"),
-
-    # Harry patterns
-    (r"\bharry", "harry"),
-
-    # Drive inbox (default fallback for generic queries)
-    (r"\binbox\b", "drive_inbox"),
-    (r"\bdrive\b", "drive_inbox"),
-]
-
 # Default notebook when no pattern matches
 DEFAULT_NOTEBOOK = "orders_hod"
+
+
+def _build_routing_patterns() -> List[Tuple[str, str, float]]:
+    """
+    Build routing patterns from config routing_keywords.
+    Returns list of (regex_pattern, notebook_key, specificity_score).
+    Sorted by specificity (multi-word patterns first).
+    """
+    config = _load_config()
+    notebooks = config.get("notebooks", {})
+    patterns: List[Tuple[str, str, float]] = []
+
+    for notebook_key, notebook_config in notebooks.items():
+        keywords = notebook_config.get("routing_keywords", [])
+        for keyword in keywords:
+            # Convert keyword to regex pattern
+            # Handle multi-word patterns with flexible spacing
+            escaped = re.escape(keyword.lower())
+            pattern = r"\b" + escaped.replace(r"\ ", r"\s*") + r"\b"
+
+            # Higher specificity for longer/multi-word patterns
+            specificity = len(keyword.split()) + len(keyword) / 20
+            patterns.append((pattern, notebook_key, specificity))
+
+    # Sort by specificity descending (most specific patterns first)
+    patterns.sort(key=lambda x: x[2], reverse=True)
+    return patterns
+
+
+# Cache for routing patterns (rebuilt on first use)
+_ROUTING_PATTERNS_CACHE: Optional[List[Tuple[str, str, float]]] = None
+
+
+def _get_routing_patterns() -> List[Tuple[str, str, float]]:
+    """Get routing patterns, building from config if not cached."""
+    global _ROUTING_PATTERNS_CACHE
+    if _ROUTING_PATTERNS_CACHE is None:
+        _ROUTING_PATTERNS_CACHE = _build_routing_patterns()
+    return _ROUTING_PATTERNS_CACHE
+
+
+def clear_routing_cache() -> None:
+    """Clear the routing patterns cache (call after config changes)."""
+    global _ROUTING_PATTERNS_CACHE
+    _ROUTING_PATTERNS_CACHE = None
 
 
 def detect_notebook(query: str) -> Tuple[str, float]:
     """
     Detect which notebook to query based on natural language input.
+    Uses routing_keywords from config/notebooklm.json.
     Returns (notebook_key, confidence_score).
     """
     query_lower = query.lower()
+    patterns = _get_routing_patterns()
 
-    for pattern, notebook in NOTEBOOK_PATTERNS:
+    for pattern, notebook, specificity in patterns:
         if re.search(pattern, query_lower):
-            # Higher confidence for longer/more specific patterns
-            confidence = min(0.9, 0.5 + len(pattern) / 50)
+            # Higher confidence for more specific patterns
+            confidence = min(0.95, 0.5 + specificity / 10)
             return notebook, confidence
 
     return DEFAULT_NOTEBOOK, 0.3  # Low confidence for default
