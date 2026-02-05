@@ -1358,17 +1358,25 @@ You maintain a compact daily plan and a scoreboard.
         except ImportError:
             return None
 
+        # Check for explicit RAG trigger - bypasses confidence threshold
+        force_rag = bool(re.search(r'\brag\b', message, re.IGNORECASE))
+
         # Detect if this is a domain-specific question
         notebook, confidence = detect_notebook(message)
 
         # Only use RAG for questions that clearly match a domain (>0.5 confidence)
-        # Low confidence means it's probably a general question
-        if confidence < 0.5:
+        # Unless user explicitly says "RAG" to force it
+        if confidence < 0.5 and not force_rag:
             return None
+
+        # Strip "rag" keyword from query to avoid confusing the search
+        clean_message = re.sub(r'\brag\b\s*', '', message, flags=re.IGNORECASE).strip()
+        if not clean_message:
+            clean_message = message  # Fallback if message was just "rag"
 
         # Query RAG
         try:
-            result = query_natural(message, notebook=notebook)
+            result = query_natural(clean_message, notebook=notebook)
 
             # Check if RAG found useful content
             if result.get("error"):
