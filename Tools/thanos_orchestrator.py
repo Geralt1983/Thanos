@@ -846,6 +846,53 @@ You maintain a compact daily plan and a scoreboard.
             # Memory service unavailable - fail silently
             return None
 
+    def _get_relevant_memory_context(self, message: str, limit: int = 5) -> Optional[str]:
+        """Search Memory V2 for memories relevant to the current message.
+
+        This provides active retrieval based on the user's question,
+        enabling personal context for questions like "who are my kids?"
+
+        Args:
+            message: The user's message to search for relevant memories
+            limit: Maximum memories to include
+
+        Returns:
+            Formatted string of relevant memories or None if unavailable
+        """
+        # Skip memory search for very short or command-like messages
+        if len(message) < 10 or message.startswith('/'):
+            return None
+
+        try:
+            from Tools.memory_router import search_memory
+
+            results = search_memory(message, limit=limit)
+
+            if not results:
+                return None
+
+            # Filter for reasonable relevance (score > 0.3)
+            relevant = [r for r in results if r.get('score', 0) > 0.3]
+            if not relevant:
+                return None
+
+            lines = []
+            for mem in relevant:
+                content = mem.get("memory", mem.get("content", ""))
+                score = mem.get("score", 0)
+                # Truncate long memories
+                if len(content) > 200:
+                    content = content[:200] + "..."
+                lines.append(f"• {content}")
+
+            return "\n".join(lines) if lines else None
+
+        except ImportError:
+            return None
+        except Exception as e:
+            log_error("memory_search", e, "Failed to search memory for context")
+            return None
+
     def _ensure_client(self):
         """Ensure API client is initialized."""
         if self.api_client is None:
@@ -1210,6 +1257,11 @@ You maintain a compact daily plan and a scoreboard.
 
         system_prompt = self._build_system_prompt(agent=agent_obj)
         agent_name = agent_obj.name if agent_obj else 'default'
+
+        # Inject relevant memory context based on the user's message
+        memory_context = self._get_relevant_memory_context(message)
+        if memory_context:
+            system_prompt += f"\n\n## Relevant Memory Context\nThe following memories may be relevant to the user's question:\n{memory_context}"
 
         try:
             if stream:
