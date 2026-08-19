@@ -10,14 +10,20 @@ Run Apify Actors through the v2 REST API.
 ## Setup
 
 1. Get an API token from https://console.apify.com/account/integrations.
-2. Set it in the process environment: `export APIFY_TOKEN=your_token`.
+2. Read it without echo: `read -r -s APIFY_TOKEN; printf '\n'; export APIFY_TOKEN`.
 3. Never place the token in a URL, log, saved command, or result.
 
-For shell examples, pass the authorization header through standard input. This
-keeps the token out of process arguments:
+The helper passes its authorization header through standard input:
 
 ```bash
 apify_curl() {
+  local argument
+  for argument in "$@"; do
+    case "$argument" in
+      [a-zA-Z]*://*|--url=*)
+        [[ $argument == https://api.apify.com/v2/* ]] || return 64 ;;
+    esac
+  done
   printf 'Authorization: Bearer %s\n' "$APIFY_TOKEN" |
     curl --header @- --connect-timeout 10 --max-time 30 "$@"
 }
@@ -53,13 +59,9 @@ Add an item cap to the JSON input only when the Actor schema supports it.
 The response contains the run ID at `.data.id`. Check for a terminal status
 before reading results: `SUCCEEDED`, `FAILED`, `ABORTED`, or `TIMED-OUT`.
 
-### Get Run Status
-
 ```bash
 apify_curl -fsS "https://api.apify.com/v2/actor-runs/RUN_ID"
 ```
-
-### Get Run Results
 
 ```bash
 apify_curl -fsS "https://api.apify.com/v2/actor-runs/RUN_ID/dataset/items"
@@ -69,8 +71,6 @@ Confirm the response is a JSON array. Reject cap overruns. Remove rows with
 `resultType: "diagnostic"` before processing them as scraped records.
 
 ## Curated X Actors
-
-Use these Actors for X-specific tasks:
 
 | Actor | Store Listing | API Actor ID | Use It For |
 |-------|---------------|--------------|------------|
@@ -168,9 +168,6 @@ apify_curl -fsS \
   "https://api.apify.com/v2/actor-runs/$RUN_ID/dataset/items"
 ```
 
-## Notes
-
-- LinkedIn scrapers may require cookies or sessions for better results.
-- Follow applicable laws, platform terms, privacy rules, and data rights.
+Follow applicable laws, platform terms, privacy rules, and data rights.
 
 Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.
